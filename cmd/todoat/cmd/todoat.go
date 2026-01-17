@@ -16,6 +16,13 @@ import (
 // Version is set at build time
 var Version = "dev"
 
+// Result codes for CLI output (used in no-prompt mode)
+const (
+	ResultActionCompleted = "ACTION_COMPLETED"
+	ResultInfoOnly        = "INFO_ONLY"
+	ResultError           = "ERROR"
+)
+
 // Config holds application configuration
 type Config struct {
 	NoPrompt     bool
@@ -34,6 +41,10 @@ func Execute(args []string, stdout, stderr io.Writer, cfg *Config) int {
 
 	if err := rootCmd.Execute(); err != nil {
 		_, _ = fmt.Fprintln(stderr, "Error:", err)
+		// Emit ERROR result code in no-prompt mode
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
 		return 1
 	}
 	return 0
@@ -177,10 +188,10 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 	switch action {
 	case "get":
 		statusFilter, _ := cmd.Flags().GetString("status")
-		return doGet(ctx, be, list, statusFilter, stdout)
+		return doGet(ctx, be, list, statusFilter, cfg, stdout)
 	case "add":
 		priority, _ := cmd.Flags().GetInt("priority")
-		return doAdd(ctx, be, list, taskSummary, priority, stdout)
+		return doAdd(ctx, be, list, taskSummary, priority, cfg, stdout)
 	case "update":
 		priority, _ := cmd.Flags().GetInt("priority")
 		status, _ := cmd.Flags().GetString("status")
@@ -196,7 +207,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 }
 
 // doGet lists all tasks in a list, optionally filtering by status
-func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, stdout io.Writer) error {
+func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, cfg *Config, stdout io.Writer) error {
 	tasks, err := be.GetTasks(ctx, list.ID)
 	if err != nil {
 		return err
@@ -216,17 +227,21 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 
 	if len(tasks) == 0 {
 		_, _ = fmt.Fprintf(stdout, "No tasks in list '%s'\n", list.Name)
-		return nil
+	} else {
+		_, _ = fmt.Fprintf(stdout, "Tasks in '%s':\n", list.Name)
+		for _, t := range tasks {
+			statusIcon := getStatusIcon(t.Status)
+			priorityStr := ""
+			if t.Priority > 0 {
+				priorityStr = fmt.Sprintf(" [P%d]", t.Priority)
+			}
+			_, _ = fmt.Fprintf(stdout, "  %s %s%s\n", statusIcon, t.Summary, priorityStr)
+		}
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Tasks in '%s':\n", list.Name)
-	for _, t := range tasks {
-		statusIcon := getStatusIcon(t.Status)
-		priorityStr := ""
-		if t.Priority > 0 {
-			priorityStr = fmt.Sprintf(" [P%d]", t.Priority)
-		}
-		_, _ = fmt.Fprintf(stdout, "  %s %s%s\n", statusIcon, t.Summary, priorityStr)
+	// Emit INFO_ONLY result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
 	return nil
 }
@@ -246,7 +261,7 @@ func getStatusIcon(status backend.TaskStatus) string {
 }
 
 // doAdd creates a new task
-func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, stdout io.Writer) error {
+func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, cfg *Config, stdout io.Writer) error {
 	if summary == "" {
 		return fmt.Errorf("task summary is required")
 	}
@@ -263,6 +278,11 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Created task: %s (ID: %s)\n", created.Summary, created.ID)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
 	return nil
 }
 
@@ -290,6 +310,11 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Updated task: %s\n", updated.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
 	return nil
 }
 
@@ -324,6 +349,11 @@ func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List,
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Completed task: %s\n", updated.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
 	return nil
 }
 
@@ -339,6 +369,11 @@ func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Deleted task: %s\n", task.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
 	return nil
 }
 

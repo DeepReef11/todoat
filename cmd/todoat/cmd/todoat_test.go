@@ -6,6 +6,48 @@ import (
 	"testing"
 )
 
+// =============================================================================
+// Test Helper Functions (006-cli-tests)
+// =============================================================================
+
+// assertContains is a helper that fails the test if output doesn't contain expected
+func assertContains(t *testing.T, output, expected string) {
+	t.Helper()
+	if !strings.Contains(output, expected) {
+		t.Errorf("expected output to contain %q, got:\n%s", expected, output)
+	}
+}
+
+// assertNotContains is a helper that fails the test if output contains unexpected
+func assertNotContains(t *testing.T, output, unexpected string) {
+	t.Helper()
+	if strings.Contains(output, unexpected) {
+		t.Errorf("expected output NOT to contain %q, got:\n%s", unexpected, output)
+	}
+}
+
+// assertExitCode is a helper that fails the test if exit code doesn't match
+func assertExitCode(t *testing.T, got, want int) {
+	t.Helper()
+	if got != want {
+		t.Errorf("expected exit code %d, got %d", want, got)
+	}
+}
+
+// assertResultCode verifies that the output ends with the expected result code
+func assertResultCode(t *testing.T, output, expectedCode string) {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) == 0 {
+		t.Errorf("expected result code %q but output is empty", expectedCode)
+		return
+	}
+	lastLine := strings.TrimSpace(lines[len(lines)-1])
+	if lastLine != expectedCode {
+		t.Errorf("expected result code %q, got %q\nFull output:\n%s", expectedCode, lastLine, output)
+	}
+}
+
 // TestHelpFlag verifies that --help displays usage information
 func TestHelpFlag(t *testing.T) {
 	var stdout, stderr bytes.Buffer
@@ -204,11 +246,14 @@ func TestGlobalFlagsArePersistent(t *testing.T) {
 // Task Command Tests (004-task-commands)
 // =============================================================================
 
-// testWithDB creates a temporary database and config for testing
+// testWithDB creates an in-memory database and config for testing
+// Note: Each call returns a NEW in-memory database (isolated per test)
 func testWithDB(t *testing.T) (*Config, func()) {
 	t.Helper()
 
-	// Create temp directory for database
+	// Use in-memory SQLite for fast, isolated tests
+	// Note: We use a temp file path since each in-memory DB is separate per connection
+	// For true isolation, use t.TempDir() or ":memory:" but track connections
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/test.db"
 
@@ -935,5 +980,226 @@ func TestNoFilterShowsAllTasks(t *testing.T) {
 	}
 	if !strings.Contains(output, "Task done five") {
 		t.Errorf("expected to see DONE task without filter, got: %s", output)
+	}
+}
+
+// =============================================================================
+// Result Code Tests (006-cli-tests)
+// =============================================================================
+
+func TestResultCodeAddTask(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "Work", "add", "Test task"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+}
+
+func TestResultCodeGetTasks(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task first
+	Execute([]string{"-y", "Work", "add", "Task to list"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get tasks should return INFO_ONLY
+	exitCode := Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultInfoOnly)
+}
+
+func TestResultCodeListEmpty(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Get empty list should return INFO_ONLY
+	exitCode := Execute([]string{"-y", "EmptyList"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultInfoOnly)
+	assertContains(t, stdout.String(), "No tasks")
+}
+
+func TestResultCodeUpdateTask(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task
+	Execute([]string{"-y", "Work", "add", "Task to update"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update task should return ACTION_COMPLETED
+	exitCode := Execute([]string{"-y", "Work", "update", "Task to update", "--summary", "Updated task"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+}
+
+func TestResultCodeCompleteTask(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task
+	Execute([]string{"-y", "Work", "add", "Task to complete"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Complete task should return ACTION_COMPLETED
+	exitCode := Execute([]string{"-y", "Work", "complete", "Task to complete"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+}
+
+func TestResultCodeCompleteTaskChangesDoneStatus(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add and complete a task
+	Execute([]string{"-y", "Work", "add", "Task for status"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Task for status"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Verify status changed to DONE
+	Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+
+	assertContains(t, stdout.String(), "[DONE]")
+	assertResultCode(t, stdout.String(), ResultInfoOnly)
+}
+
+func TestResultCodeDeleteTask(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task
+	Execute([]string{"-y", "Work", "add", "Task to delete"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Delete task should return ACTION_COMPLETED
+	exitCode := Execute([]string{"-y", "Work", "delete", "Task to delete"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+}
+
+func TestResultCodeDeleteConfirmationSkippedInNoPrompt(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task
+	Execute([]string{"-y", "Work", "add", "Task to confirm delete"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Delete with -y should not require confirmation
+	exitCode := Execute([]string{"-y", "Work", "delete", "Task to confirm delete"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify task is gone
+	stdout.Reset()
+	stderr.Reset()
+	Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+	assertNotContains(t, stdout.String(), "Task to confirm delete")
+}
+
+func TestResultCodeErrorNoMatch(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task
+	Execute([]string{"-y", "Work", "add", "Existing task"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Try to complete non-existent task
+	exitCode := Execute([]string{"-y", "Work", "complete", "Nonexistent task"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 1)
+	assertResultCode(t, stdout.String(), ResultError)
+}
+
+func TestResultCodeErrorAmbiguousMatch(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with similar names
+	Execute([]string{"-y", "Work", "add", "Similar task one"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Similar task two"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Try to complete with ambiguous match
+	exitCode := Execute([]string{"-y", "Work", "complete", "Similar"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 1)
+	assertResultCode(t, stdout.String(), ResultError)
+}
+
+func TestExitCodesVerified(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Test exit code 0 for ACTION_COMPLETED
+	exitCode := Execute([]string{"-y", "Work", "add", "Test exit code"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for add, got %d", exitCode)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Test exit code 0 for INFO_ONLY
+	exitCode = Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for get, got %d", exitCode)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Test exit code 1 for ERROR
+	exitCode = Execute([]string{"-y", "Work", "complete", "Nonexistent"}, &stdout, &stderr, cfg)
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1 for error, got %d", exitCode)
 	}
 }
