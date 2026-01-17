@@ -2,7 +2,7 @@
 
 ## Overview
 
-gosynctasks provides comprehensive hierarchical task support, allowing users to organize complex projects into parent-child relationships with unlimited nesting depth. This feature enables breaking down large tasks into manageable subtasks while maintaining clear organizational structure and dependencies.
+todoat provides comprehensive hierarchical task support, allowing users to organize complex projects into parent-child relationships with unlimited nesting depth. This feature enables breaking down large tasks into manageable subtasks while maintaining clear organizational structure and dependencies.
 
 **Related Features:**
 - [Task Management](./TASK_MANAGEMENT.md) - Core task operations
@@ -24,7 +24,7 @@ Establish dependency and organizational relationships between tasks, enabling st
 
 1. User creates a subtask using the `-P` or `--parent` flag:
    ```bash
-   gosynctasks MyList add "Review code changes" -P "Release v2.0"
+   todoat MyList add "Review code changes" -P "Release v2.0"
    ```
 
 2. System searches for parent task:
@@ -59,14 +59,14 @@ Establish dependency and organizational relationships between tasks, enabling st
 #### User Journey
 
 1. User identifies complex task requiring breakdown
-2. Creates parent task: `gosynctasks MyList add "Launch new feature"`
+2. Creates parent task: `todoat MyList add "Launch new feature"`
 3. Creates subtasks with `-P` flag:
    ```bash
-   gosynctasks MyList add "Design UI mockups" -P "Launch new feature"
-   gosynctasks MyList add "Implement backend API" -P "Launch new feature"
-   gosynctasks MyList add "Write tests" -P "Launch new feature"
+   todoat MyList add "Design UI mockups" -P "Launch new feature"
+   todoat MyList add "Implement backend API" -P "Launch new feature"
+   todoat MyList add "Write tests" -P "Launch new feature"
    ```
-4. Views hierarchical structure: `gosynctasks MyList`
+4. Views hierarchical structure: `todoat MyList`
 5. Completes subtasks one by one
 6. Completes parent task when all subtasks finished
 
@@ -138,7 +138,7 @@ Streamline creation of multi-level task hierarchies using a single command with 
 
 1. User provides path with slashes:
    ```bash
-   gosynctasks MyList add "Project Alpha/Backend/Database Schema"
+   todoat MyList add "Project Alpha/Backend/Database Schema"
    ```
 
 2. System parses path into components:
@@ -182,10 +182,10 @@ Streamline creation of multi-level task hierarchies using a single command with 
 **Extending Existing Hierarchies:**
 ```bash
 # First command creates initial hierarchy
-gosynctasks MyList add "Project Alpha/Backend/API Endpoints"
+todoat MyList add "Project Alpha/Backend/API Endpoints"
 
 # Second command extends existing "Backend" branch
-gosynctasks MyList add "Project Alpha/Backend/Authentication"
+todoat MyList add "Project Alpha/Backend/Authentication"
 
 # Result:
 # Project Alpha
@@ -197,10 +197,10 @@ gosynctasks MyList add "Project Alpha/Backend/Authentication"
 **Mixed Approach (Path + Parent Flag):**
 ```bash
 # Create nested path
-gosynctasks MyList add "Project Alpha/Frontend/Components"
+todoat MyList add "Project Alpha/Frontend/Components"
 
 # Add sibling using parent flag
-gosynctasks MyList add "Routing" -P "Project Alpha/Frontend"
+todoat MyList add "Routing" -P "Project Alpha/Frontend"
 
 # Result:
 # Project Alpha
@@ -214,10 +214,10 @@ gosynctasks MyList add "Routing" -P "Project Alpha/Frontend"
 1. User plans project with multiple levels of organization
 2. Uses single command with path notation:
    ```bash
-   gosynctasks MyList add "Website Redesign/Design/Wireframes"
-   gosynctasks MyList add "Website Redesign/Design/Visual Mockups"
-   gosynctasks MyList add "Website Redesign/Development/HTML Structure"
-   gosynctasks MyList add "Website Redesign/Development/CSS Styling"
+   todoat MyList add "Website Redesign/Design/Wireframes"
+   todoat MyList add "Website Redesign/Design/Visual Mockups"
+   todoat MyList add "Website Redesign/Development/HTML Structure"
+   todoat MyList add "Website Redesign/Development/CSS Styling"
    ```
 3. System auto-creates hierarchy:
    ```
@@ -342,7 +342,7 @@ fields:
 
 #### User Journey
 
-1. User lists tasks: `gosynctasks MyList`
+1. User lists tasks: `todoat MyList`
 2. System displays hierarchical tree:
    ```
    Release v2.0
@@ -354,7 +354,7 @@ fields:
    ```
 3. User understands structure at glance
 4. User navigates by task summary (can reference any level)
-5. User updates subtasks: `gosynctasks MyList complete "API docs"`
+5. User updates subtasks: `todoat MyList complete "API docs"`
 6. Tree updates to reflect completion status
 
 #### Prerequisites
@@ -476,7 +476,7 @@ Provide comprehensive operations for managing hierarchical task structures, incl
 
 1. User completes a subtask:
    ```bash
-   gosynctasks MyList complete "API docs"
+   todoat MyList complete "API docs"
    ```
 
 2. System updates child task:
@@ -490,7 +490,7 @@ Provide comprehensive operations for managing hierarchical task structures, incl
 
 1. User attempts to complete parent with incomplete children:
    ```bash
-   gosynctasks MyList complete "Release v2.0"
+   todoat MyList complete "Release v2.0"
    ```
 
 2. System checks for incomplete children:
@@ -511,10 +511,10 @@ Provide comprehensive operations for managing hierarchical task structures, incl
 
 ```bash
 # Move subtask to different parent
-gosynctasks MyList update "Database Schema" -P "Infrastructure"
+todoat MyList update "Database Schema" -P "Infrastructure"
 
 # Move subtask to root level (remove parent)
-gosynctasks MyList update "Database Schema" --no-parent
+todoat MyList update "Database Schema" --no-parent
 ```
 
 System process:
@@ -528,7 +528,7 @@ System process:
 
 1. User deletes parent task:
    ```bash
-   gosynctasks MyList delete "Release v2.0"
+   todoat MyList delete "Release v2.0"
    ```
 
 2. System handles children based on configuration:
@@ -550,10 +550,10 @@ System process:
 
 ```bash
 # Complete all subtasks of a parent
-gosynctasks MyList complete "Release v2.0/*"
+todoat MyList complete "Release v2.0/*"
 
 # Update priority for entire branch
-gosynctasks MyList update "Release v2.0/**" --priority 1
+todoat MyList update "Release v2.0/**" --priority 1
 ```
 
 Wildcard patterns:
@@ -566,35 +566,35 @@ Wildcard patterns:
 
 1. Create project structure:
    ```bash
-   gosynctasks Projects add "Q1 Launch/Development/Backend API"
-   gosynctasks Projects add "Q1 Launch/Development/Frontend UI"
-   gosynctasks Projects add "Q1 Launch/Testing/Unit Tests"
+   todoat Projects add "Q1 Launch/Development/Backend API"
+   todoat Projects add "Q1 Launch/Development/Frontend UI"
+   todoat Projects add "Q1 Launch/Testing/Unit Tests"
    ```
 
 2. Work on and complete subtasks:
    ```bash
-   gosynctasks Projects complete "Backend API"
-   gosynctasks Projects complete "Unit Tests"
+   todoat Projects complete "Backend API"
+   todoat Projects complete "Unit Tests"
    ```
 
 3. Update in-progress tasks:
    ```bash
-   gosynctasks Projects update "Frontend UI" -s PROCESSING
+   todoat Projects update "Frontend UI" -s PROCESSING
    ```
 
 4. Realize task is in wrong branch, move it:
    ```bash
-   gosynctasks Projects update "Unit Tests" -P "Q1 Launch/Development"
+   todoat Projects update "Unit Tests" -P "Q1 Launch/Development"
    ```
 
 5. Complete parent when all children done:
    ```bash
-   gosynctasks Projects complete "Q1 Launch"
+   todoat Projects complete "Q1 Launch"
    ```
 
 6. Archive completed project:
    ```bash
-   gosynctasks Projects delete "Q1 Launch"
+   todoat Projects delete "Q1 Launch"
    ```
 
 #### Prerequisites
@@ -777,7 +777,7 @@ fields:
 
 ## Summary
 
-The hierarchical task support in gosynctasks enables:
+The hierarchical task support in todoat enables:
 
 1. **Parent-child relationships** with `-P` flag for explicit subtask creation
 2. **Path-based creation** with `/` notation for rapid hierarchy building

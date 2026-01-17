@@ -1,6 +1,6 @@
 # List Management
 
-This document details all features related to managing task lists in gosynctasks. Lists are containers that organize tasks, similar to calendars in CalDAV or projects in task management systems.
+This document details all features related to managing task lists in todoat. Lists are containers that organize tasks, similar to calendars in CalDAV or projects in task management systems.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ This document details all features related to managing task lists in gosynctasks
 
 ## Overview
 
-Lists in gosynctasks serve as organizational containers for tasks. Each backend (Nextcloud CalDAV, SQLite) manages lists differently:
+Lists in todoat serve as organizational containers for tasks. Each backend (Nextcloud CalDAV, SQLite) manages lists differently:
 - **Nextcloud**: Lists are CalDAV calendars containing VTODO items
 - **SQLite**: Lists are database tables with foreign key relationships to tasks
 
@@ -36,7 +36,7 @@ Allows users to create new task lists to organize tasks by project, category, or
 ### How It Works
 
 **User Actions:**
-1. Execute command: `gosynctasks list create "List Name"`
+1. Execute command: `todoat list create "List Name"`
 2. System validates the name (non-empty, unique within backend)
 3. Backend creates the list structure
 4. Confirmation message displays with list ID
@@ -70,11 +70,11 @@ SQLite: INSERT INTO task_lists → Update sync_metadata
 ```
 User wants to organize work tasks separately from personal tasks
 ↓
-$ gosynctasks list create "Work Tasks"
+$ todoat list create "Work Tasks"
 ↓
 System: "Created list: Work Tasks (ID: abc-123)"
 ↓
-User can now add tasks: gosynctasks "Work Tasks" add "Meeting"
+User can now add tasks: todoat "Work Tasks" add "Meeting"
 ```
 
 ### Prerequisites
@@ -84,7 +84,7 @@ User can now add tasks: gosynctasks "Work Tasks" add "Meeting"
 
 ### Outputs/Results
 - New list created in backend storage
-- List appears in `gosynctasks list` output
+- List appears in `todoat list` output
 - List available for [task operations](./TASK_MANAGEMENT.md)
 - If sync enabled: Create operation queued in `sync_queue` table
 
@@ -124,7 +124,7 @@ Displays all available task lists across enabled backends, allowing users to see
 ### How It Works
 
 **User Actions:**
-1. Execute: `gosynctasks list` (no arguments)
+1. Execute: `todoat list` (no arguments)
 2. View formatted table of all lists
 
 **System Processes:**
@@ -163,7 +163,7 @@ Format as table → Display to stdout
 ```
 User wants to see all available task lists
 ↓
-$ gosynctasks list
+$ todoat list
 ↓
 Output:
 ┌──────────────┬──────────┬────────┬───────┐
@@ -205,7 +205,7 @@ type TaskList struct {
 }
 ```
 
-**Caching**: Results cached in `$XDG_CACHE_HOME/gosynctasks/lists.json` (5-minute TTL)
+**Caching**: Results cached in `$XDG_CACHE_HOME/todoat/lists.json` (5-minute TTL)
 
 ### Related Features
 - [Interactive List Selection](#interactive-list-selection) - Pick from this list
@@ -225,7 +225,7 @@ When a command is executed without specifying a list name, provides an interacti
 ### How It Works
 
 **User Actions:**
-1. Execute command without list name: `gosynctasks`
+1. Execute command without list name: `todoat`
 2. View numbered list of available lists
 3. Enter number corresponding to desired list
 4. System loads tasks from selected list
@@ -270,7 +270,7 @@ Command without list → Check cache → No-Prompt Mode?
 ```
 User wants to add a task but forgets list name
 ↓
-$ gosynctasks add "Buy milk"
+$ todoat add "Buy milk"
 ↓
 System detects missing list, shows menu:
 Select a task list:
@@ -289,7 +289,7 @@ Task added to "Personal" list
 ```
 Script needs to check available lists
 ↓
-$ gosynctasks -y
+$ todoat -y
 ↓
 Available lists:
 ID:abc-123	NAME:Work Tasks	TASKS:12
@@ -299,13 +299,13 @@ INFO_ONLY
 ↓
 Script parses output and specifies list explicitly
 ↓
-$ gosynctasks -y "Work Tasks" add "Buy milk"
+$ todoat -y "Work Tasks" add "Buy milk"
 ACTION_COMPLETED
 ```
 
 **No-Prompt Mode with JSON:**
 ```bash
-$ gosynctasks -y --json
+$ todoat -y --json
 ```
 ```json
 {
@@ -384,15 +384,15 @@ When sync and autosync is enabled:
 
 ```
 First command of the day:
-$ gosynctasks "Work Tasks"
+$ todoat "Work Tasks"
 → Cache miss, sync with backend (300ms)
 
 Second command 1 minute later:
-$ gosynctasks
+$ todoat
 → Cache hit, instant list display (5ms)
 
 After 6 minutes:
-$ gosynctasks
+$ todoat
 → Cache stale, auto-refreshes (300ms)
 ```
 
@@ -430,7 +430,7 @@ Provides safety net for accidentally deleted lists by moving them to a trash/arc
 **Deleting a List:**
 
 **User Actions:**
-1. Execute: `gosynctasks list delete "List Name"`
+1. Execute: `todoat list delete "List Name"`
 2. **Normal Mode**: System prompts for confirmation (unless `--force` flag used)
 3. **No-Prompt Mode** (`-y`): Deletes immediately without confirmation (acts as force mode)
 4. Confirm deletion (if prompted)
@@ -451,13 +451,13 @@ Provides safety net for accidentally deleted lists by moving them to a trash/arc
 **Viewing Trashed Lists:**
 
 **User Actions:**
-1. Execute: `gosynctasks list trash`
+1. Execute: `todoat list trash`
 2. View all deleted lists with deletion timestamps
 
 **Restoring a List:**
 
 **User Actions:**
-1. Execute: `gosynctasks list trash restore "List Name"`
+1. Execute: `todoat list trash restore "List Name"`
 2. List and all tasks restored to active state
 
 **System Processes:**
@@ -490,18 +490,18 @@ Restore: Find in trash → Clear deleted_at → Show in queries
 ```
 User accidentally deletes important list
 ↓
-$ gosynctasks list delete "Work Tasks"
+$ todoat list delete "Work Tasks"
 Confirm deletion of "Work Tasks"? [y/N]: y
 ↓
 List moved to trash
 ↓
 User realizes mistake
 ↓
-$ gosynctasks list trash
+$ todoat list trash
 Deleted Lists:
 - Work Tasks (deleted 2 minutes ago)
 ↓
-$ gosynctasks list trash restore "Work Tasks"
+$ todoat list trash restore "Work Tasks"
 ↓
 List and all 12 tasks restored successfully
 ```
@@ -509,12 +509,12 @@ List and all 12 tasks restored successfully
 **No-Prompt Mode (Scripting):**
 ```bash
 # Delete without confirmation
-$ gosynctasks -y list delete "Temp List"
+$ todoat -y list delete "Temp List"
 List 'Temp List' moved to trash
 ACTION_COMPLETED
 
 # With JSON output
-$ gosynctasks -y --json list delete "Another List"
+$ todoat -y --json list delete "Another List"
 ```
 ```json
 {
@@ -571,12 +571,12 @@ Stores and manages additional information about lists beyond just names, includi
 2. **Description** (optional)
    - Long-form text describing list purpose
    - Displayed in detailed views
-   - Set via: `gosynctasks list update "Name" --description "Text"`
+   - Set via: `todoat list update "Name" --description "Text"`
 
 3. **Color** (optional)
    - Hex color code (e.g., `#FF5733`)
    - Used for visual differentiation in UI
-   - Set via: `gosynctasks list update "Name" --color "#0066cc"`
+   - Set via: `todoat list update "Name" --color "#0066cc"`
    - For nextcloud, synced with CalDAV calendar-color property
 
 4. **CTags** (automatic)
@@ -593,13 +593,13 @@ Stores and manages additional information about lists beyond just names, includi
 **User Actions:**
 ```bash
 # View properties
-gosynctasks list show "Work Tasks"
+todoat list show "Work Tasks"
 
 # Update color
-gosynctasks list update "Work Tasks" --color "#FF5733"
+todoat list update "Work Tasks" --color "#FF5733"
 
 # Update description
-gosynctasks list update "Work Tasks" --description "All work-related tasks"
+todoat list update "Work Tasks" --description "All work-related tasks"
 ```
 
 **System Processes:**
@@ -628,15 +628,15 @@ type TaskList struct {
 ```
 User creates a list and wants to color-code it
 ↓
-$ gosynctasks list create "Urgent"
+$ todoat list create "Urgent"
 ↓
-$ gosynctasks list update "Urgent" --color "#FF0000"
+$ todoat list update "Urgent" --color "#FF0000"
 ↓
 List now displays with red color indicator
 ↓
 User adds description for context
 ↓
-$ gosynctasks list update "Urgent" --description "High-priority tasks requiring immediate attention"
+$ todoat list update "Urgent" --description "High-priority tasks requiring immediate attention"
 ```
 
 ### Prerequisites
@@ -689,7 +689,7 @@ These are advanced features that should be planned at very end. Also, it should 
 
 **1. Calendar Sharing**
 - **Purpose**: Share task lists with other Nextcloud users
-- **Command**: `gosynctasks list share "List Name" --user "username" --permission read`
+- **Command**: `todoat list share "List Name" --user "username" --permission read`
 - **Permissions**: read, write, admin
 - **How It Works**:
   - Uses CalDAV sharing protocol (RFC 5397)
@@ -699,7 +699,7 @@ These are advanced features that should be planned at very end. Also, it should 
 
 **2. Calendar Subscriptions**
 - **Purpose**: Subscribe to read-only task lists via URL
-- **Command**: `gosynctasks list subscribe "https://example.com/calendar/ical"`
+- **Command**: `todoat list subscribe "https://example.com/calendar/ical"`
 - **How It Works**:
   - Adds calendar to Nextcloud via MKCALENDAR
   - Sets source URL property
@@ -707,7 +707,7 @@ These are advanced features that should be planned at very end. Also, it should 
 
 **3. Public Links**
 - **Purpose**: Generate public URLs for list viewing
-- **Command**: `gosynctasks list publish "List Name"`
+- **Command**: `todoat list publish "List Name"`
 - **How It Works**:
   - Creates public share token via OCS Share API
   - Returns URL: `https://nextcloud.example.com/s/abc123`
@@ -717,7 +717,7 @@ These are advanced features that should be planned at very end. Also, it should 
 
 **1. Database Statistics**
 - **Purpose**: View internal database metrics
-- **Command**: `gosynctasks list stats "List Name"`
+- **Command**: `todoat list stats "List Name"`
 - **Output**:
   - Total tasks
   - Tasks by status
@@ -726,7 +726,7 @@ These are advanced features that should be planned at very end. Also, it should 
 
 **2. Vacuum/Optimize**
 - **Purpose**: Reclaim space from deleted lists/tasks
-- **Command**: `gosynctasks list vacuum`
+- **Command**: `todoat list vacuum`
 - **How It Works**:
   - Runs SQLite VACUUM command
   - Rebuilds database file
@@ -734,7 +734,7 @@ These are advanced features that should be planned at very end. Also, it should 
 
 **3. Export/Import**
 - **Purpose**: Backup list as standalone file
-- **Command**: `gosynctasks list export "List Name" --format sqlite`
+- **Command**: `todoat list export "List Name" --format sqlite`
 - **Format Support**: sqlite, json, csv
 - **How It Works**:
   - Creates standalone database/file with list data
@@ -756,11 +756,11 @@ These are advanced features that should be planned at very end. Also, it should 
 ```
 User wants to collaborate on project tasks
 ↓
-$ gosynctasks list share "Project Alpha" --user "colleague@example.com" --permission write
+$ todoat list share "Project Alpha" --user "colleague@example.com" --permission write
 ↓
 System: Shared "Project Alpha" with colleague@example.com
 ↓
-Colleague sees list in their gosynctasks instance
+Colleague sees list in their todoat instance
 ↓
 Both users can add/edit tasks
 ↓
@@ -797,7 +797,7 @@ func (s *SQLiteBackend) ExportList(listID, format string) ([]byte, error) {
 
 ## Summary
 
-List management in gosynctasks provides:
+List management in todoat provides:
 - ✅ Cross-backend list creation and organization
 - ✅ Interactive list selection for improved UX
 - ✅ Performance-optimized caching

@@ -21,7 +21,7 @@ Credential Management solves several critical problems:
 **Purpose**: Automatically locate and retrieve credentials from multiple storage locations.
 
 **How It Works**:
-1. User invokes a command requiring authentication (e.g., `gosynctasks sync`)
+1. User invokes a command requiring authentication (e.g., `todoat sync`)
 2. System checks credential sources in priority order:
    - **Priority 1**: System keyring (most secure)
    - **Priority 2**: Environment variables (good for CI/CD)
@@ -32,7 +32,7 @@ Credential Management solves several critical problems:
 **User Journey**:
 ```bash
 # User runs sync command
-$ gosynctasks sync
+$ todoat sync
 
 # System checks:
 # 1. Keyring for "nextcloud/myuser" - FOUND
@@ -43,7 +43,7 @@ $ gosynctasks sync
 **Technical Details**:
 - Implementation: `internal/credentials/manager.go`
 - Keyring integration: `zalando/go-keyring` library
-- Environment variable pattern: `GOSYNCTASKS_[BACKEND]_[FIELD]`
+- Environment variable pattern: `TODOAT_[BACKEND]_[FIELD]`
 - URL parsing: `net/url` for legacy format extraction
 
 **Related Features**:
@@ -64,18 +64,18 @@ $ gosynctasks sync
    - **macOS**: Keychain
    - **Windows**: Credential Manager
    - **Linux**: Secret Service API (GNOME Keyring, KWallet)
-4. Keyring entry created with service: `gosynctasks-[backend]`, account: `[username]`
+4. Keyring entry created with service: `todoat-[backend]`, account: `[username]`
 5. Future operations automatically retrieve from keyring
 
 **User Journey**:
 ```bash
 # Step 1: Store credentials securely
-$ gosynctasks credentials set nextcloud-prod myuser --prompt
+$ todoat credentials set nextcloud-prod myuser --prompt
 Enter password for nextcloud (user: myuser): [hidden input]
 ✓ Credentials stored in system keyring
 
 # Step 2: Update config to use keyring (remove URL password)
-# Edit ~/.config/gosynctasks/config.yaml:
+# Edit ~/.config/todoat/config.yaml:
 # Change from:
 #   url: "nextcloud://myuser:password123@nextcloud.example.com"
 # To:
@@ -86,13 +86,13 @@ nextcloud-prod:
   username: "myuser"
 
 # Step 3: Verify it works
-$ gosynctasks credentials get nextcloud myuser
+$ todoat credentials get nextcloud myuser
 Source: keyring
 Username: myuser
 Password: ******** (hidden)
 
 # Step 4: Use normally - credentials auto-retrieved
-$ gosynctasks sync
+$ todoat sync
 ✓ Successfully synced with Nextcloud
 ```
 
@@ -107,7 +107,7 @@ $ gosynctasks sync
 
 **Technical Details**:
 - Keyring library: `github.com/zalando/go-keyring`
-- Service name format: `gosynctasks-[backend]` (e.g., `gosynctasks-nextcloud`)
+- Service name format: `todoat-[backend]` (e.g., `todoat-nextcloud`)
 - Account name: username from command
 - Error handling: Fallback to other sources if keyring unavailable
 
@@ -123,11 +123,11 @@ $ gosynctasks sync
 **Purpose**: Support credential injection for CI/CD pipelines, Docker containers, and automated deployments.
 
 **How It Works**:
-1. Administrator sets environment variables before running gosynctasks:
+1. Administrator sets environment variables before running todoat:
    ```bash
-   export GOSYNCTASKS_NEXTCLOUD_HOST=nextcloud.example.com
-   export GOSYNCTASKS_NEXTCLOUD_USERNAME=myuser
-   export GOSYNCTASKS_NEXTCLOUD_PASSWORD=secret123
+   export TODOAT_NEXTCLOUD_HOST=nextcloud.example.com
+   export TODOAT_NEXTCLOUD_USERNAME=myuser
+   export TODOAT_NEXTCLOUD_PASSWORD=secret123
    ```
 2. When command runs, system checks environment variables
 3. Variables override config file settings (but not keyring)
@@ -136,30 +136,30 @@ $ gosynctasks sync
 **User Journey**:
 ```bash
 # Docker deployment scenario
-$ docker run -e GOSYNCTASKS_NEXTCLOUD_USERNAME=apiuser \
-             -e GOSYNCTASKS_NEXTCLOUD_PASSWORD=secret \
-             -e GOSYNCTASKS_NEXTCLOUD_HOST=cloud.company.com \
-             myapp gosynctasks sync
+$ docker run -e TODOAT_NEXTCLOUD_USERNAME=apiuser \
+             -e TODOAT_NEXTCLOUD_PASSWORD=secret \
+             -e TODOAT_NEXTCLOUD_HOST=cloud.company.com \
+             myapp todoat sync
 
 # CI/CD pipeline scenario
 # .gitlab-ci.yml or similar:
 # variables:
-#   GOSYNCTASKS_NEXTCLOUD_USERNAME: $CI_NEXTCLOUD_USER
-#   GOSYNCTASKS_NEXTCLOUD_PASSWORD: $CI_NEXTCLOUD_PASS
+#   TODOAT_NEXTCLOUD_USERNAME: $CI_NEXTCLOUD_USER
+#   TODOAT_NEXTCLOUD_PASSWORD: $CI_NEXTCLOUD_PASS
 ```
 
 **Environment Variable Naming**:
-- Pattern: `GOSYNCTASKS_[BACKEND]_[FIELD]`
+- Pattern: `TODOAT_[BACKEND]_[FIELD]`
 - Examples:
-  - `GOSYNCTASKS_NEXTCLOUD_HOST`
-  - `GOSYNCTASKS_NEXTCLOUD_USERNAME`
-  - `GOSYNCTASKS_NEXTCLOUD_PASSWORD`
-  - `GOSYNCTASKS_TODOIST_TOKEN` 
+  - `TODOAT_NEXTCLOUD_HOST`
+  - `TODOAT_NEXTCLOUD_USERNAME`
+  - `TODOAT_NEXTCLOUD_PASSWORD`
+  - `TODOAT_TODOIST_TOKEN` 
 - Case-insensitive backend names, uppercase field names
 
 **Prerequisites**:
 - Shell or container environment supports environment variables
-- Variables set before gosynctasks execution
+- Variables set before todoat execution
 
 **Outputs/Results**:
 - Credentials resolved without config file changes
@@ -196,7 +196,7 @@ $ docker run -e GOSYNCTASKS_NEXTCLOUD_USERNAME=apiuser \
 **User Journey**:
 ```bash
 # Legacy config format (not recommended for new deployments)
-$ cat ~/.config/gosynctasks/config.yaml
+$ cat ~/.config/todoat/config.yaml
 backends:
   nextcloud-test:
     type: nextcloud
@@ -204,20 +204,20 @@ backends:
     url: "nextcloud://myuser:mypass123@cloud.example.com"
 
 # Check credential source
-$ gosynctasks credentials get nextcloud-test myuser
+$ todoat credentials get nextcloud-test myuser
 Source: config_url
 Username: myuser
 Password: ******** (hidden)
 Warning: Credentials stored in plaintext config file. Consider migrating to keyring.
 
 # Still works, but security warning issued
-$ gosynctasks sync
-⚠ Warning: Using plaintext credentials from config. Run 'gosynctasks credentials set nextcloud myuser --prompt' to migrate.
+$ todoat sync
+⚠ Warning: Using plaintext credentials from config. Run 'todoat credentials set nextcloud myuser --prompt' to migrate.
 ```
 
 **Prerequisites**:
 - Valid URL format: `scheme://username:password@host`
-- Config file readable by gosynctasks
+- Config file readable by todoat
 
 **Outputs/Results**:
 - Authentication succeeds using URL credentials
@@ -239,7 +239,7 @@ $ gosynctasks sync
 **Purpose**: Check which credential source is active and verify credentials are accessible.
 
 **How It Works**:
-1. User runs `gosynctasks credentials get <backend> <username>`
+1. User runs `todoat credentials get <backend> <username>`
 2. System executes credential resolution in priority order
 3. Returns information about credential source and availability
 4. Does not display actual password (security measure)
@@ -247,7 +247,7 @@ $ gosynctasks sync
 **User Journey**:
 ```bash
 # Check where credentials are stored
-$ gosynctasks credentials get nextcloud myuser
+$ todoat credentials get nextcloud myuser
 Source: keyring
 Username: myuser
 Password: ******** (hidden)
@@ -255,14 +255,14 @@ Backend: nextcloud
 Status: Available
 
 # Check when credentials not found
-$ gosynctasks credentials get todoist apiuser
+$ todoat credentials get todoist apiuser
 Error: No credentials found for todoist/apiuser
 Searched:
   - System keyring: Not found
   - Environment variables: Not found
   - Config file URL: Not found
 
-Suggestion: Run 'gosynctasks credentials set todoist apiuser --prompt'
+Suggestion: Run 'todoat credentials set todoist apiuser --prompt'
 ```
 
 **Prerequisites**:
@@ -291,7 +291,7 @@ Suggestion: Run 'gosynctasks credentials set todoist apiuser --prompt'
 **Purpose**: Remove credentials from system keyring when no longer needed or to force re-authentication.
 
 **How It Works**:
-1. User runs `gosynctasks credentials delete <backend> <username>`
+1. User runs `todoat credentials delete <backend> <username>`
 2. System removes entry from system keyring
 3. Future operations will fall back to environment variables or config URL
 4. If no other source available, user will be prompted to provide credentials
@@ -299,20 +299,20 @@ Suggestion: Run 'gosynctasks credentials set todoist apiuser --prompt'
 **User Journey**:
 ```bash
 # Remove stored credentials
-$ gosynctasks credentials delete nextcloud myuser
+$ todoat credentials delete nextcloud myuser
 ✓ Credentials removed from system keyring
 
 # Verify deletion
-$ gosynctasks credentials get nextcloud myuser
+$ todoat credentials get nextcloud myuser
 Source: environment
 Username: myuser
-Password: ******** (from GOSYNCTASKS_NEXTCLOUD_PASSWORD)
+Password: ******** (from TODOAT_NEXTCLOUD_PASSWORD)
 
 # If no other source exists
-$ unset GOSYNCTASKS_NEXTCLOUD_PASSWORD
-$ gosynctasks sync
+$ unset TODOAT_NEXTCLOUD_PASSWORD
+$ todoat sync
 Error: No credentials available for nextcloud
-Run: gosynctasks credentials set nextcloud myuser --prompt
+Run: todoat credentials set nextcloud myuser --prompt
 ```
 
 **Prerequisites**:
@@ -353,7 +353,7 @@ Run: gosynctasks credentials set nextcloud myuser --prompt
 
 **User Journey**:
 ```bash
-$ gosynctasks credentials set nextcloud myuser --prompt
+$ todoat credentials set nextcloud myuser --prompt
 Enter password for nextcloud (user: myuser): [no characters displayed]
 ✓ Credentials stored in system keyring
 
@@ -403,11 +403,11 @@ The system resolves credentials in strict priority order:
 ```bash
 # Setup:
 # - Keyring: myuser / password123
-# - Environment: GOSYNCTASKS_NEXTCLOUD_PASSWORD=different
+# - Environment: TODOAT_NEXTCLOUD_PASSWORD=different
 # - Config: url with embedded password
 
 # Result: Uses keyring password ("password123")
-$ gosynctasks sync
+$ todoat sync
 ✓ Using credentials from keyring
 ```
 
@@ -415,11 +415,11 @@ $ gosynctasks sync
 ```bash
 # Setup:
 # - Keyring: empty
-# - Environment: GOSYNCTASKS_NEXTCLOUD_PASSWORD=envpass
+# - Environment: TODOAT_NEXTCLOUD_PASSWORD=envpass
 # - Config: url with embedded password
 
 # Result: Uses environment password ("envpass")
-$ gosynctasks sync
+$ todoat sync
 ✓ Using credentials from environment variables
 ```
 
@@ -431,7 +431,7 @@ $ gosynctasks sync
 # - Config: url with embedded password
 
 # Result: Uses config URL password
-$ gosynctasks sync
+$ todoat sync
 ⚠ Warning: Using plaintext credentials from config
 ✓ Sync completed
 ```
@@ -467,7 +467,7 @@ $ gosynctasks sync
 **Local Development**:
 ```bash
 # Recommended: Use keyring
-gosynctasks credentials set nextcloud devuser --prompt
+todoat credentials set nextcloud devuser --prompt
 ```
 
 **CI/CD Pipelines**:
@@ -475,15 +475,15 @@ gosynctasks credentials set nextcloud devuser --prompt
 # Recommended: Use environment variables from secret manager
 # .gitlab-ci.yml
 variables:
-  GOSYNCTASKS_NEXTCLOUD_USERNAME: $CI_NEXTCLOUD_USER
-  GOSYNCTASKS_NEXTCLOUD_PASSWORD: $CI_NEXTCLOUD_PASS
+  TODOAT_NEXTCLOUD_USERNAME: $CI_NEXTCLOUD_USER
+  TODOAT_NEXTCLOUD_PASSWORD: $CI_NEXTCLOUD_PASS
 ```
 
 **Docker Containers**:
 ```bash
 # Recommended: Inject via environment
-docker run -e GOSYNCTASKS_NEXTCLOUD_USERNAME=user \
-           -e GOSYNCTASKS_NEXTCLOUD_PASSWORD=pass \
+docker run -e TODOAT_NEXTCLOUD_USERNAME=user \
+           -e TODOAT_NEXTCLOUD_PASSWORD=pass \
            myimage
 ```
 
@@ -492,7 +492,7 @@ docker run -e GOSYNCTASKS_NEXTCLOUD_USERNAME=user \
 **Keyring Update**:
 ```bash
 # Update password without changing config
-$ gosynctasks credentials set nextcloud myuser --prompt
+$ todoat credentials set nextcloud myuser --prompt
 Enter password: [type new password]
 ✓ Credentials updated in keyring
 ```
@@ -505,7 +505,7 @@ Enter password: [type new password]
 
 **Issue: "Keyring not available" error**
 ```bash
-$ gosynctasks credentials set nextcloud user --prompt
+$ todoat credentials set nextcloud user --prompt
 Error: Could not access system keyring
 
 # Solutions:
@@ -523,18 +523,18 @@ systemctl --user start gnome-keyring
 
 **Issue: "No credentials found" error**
 ```bash
-$ gosynctasks sync
+$ todoat sync
 Error: No credentials found for nextcloud/myuser
 
 # Check each source:
-$ gosynctasks credentials get nextcloud myuser
+$ todoat credentials get nextcloud myuser
 # Shows which sources were checked
 
 # Solution 1: Add to keyring
-$ gosynctasks credentials set nextcloud myuser --prompt
+$ todoat credentials set nextcloud myuser --prompt
 
 # Solution 2: Use environment variables
-export GOSYNCTASKS_NEXTCLOUD_PASSWORD=mypass
+export TODOAT_NEXTCLOUD_PASSWORD=mypass
 
 # Solution 3: Update config with URL
 # (least secure, not recommended)
@@ -543,31 +543,31 @@ export GOSYNCTASKS_NEXTCLOUD_PASSWORD=mypass
 **Issue: Wrong credentials being used**
 ```bash
 # Symptom: Authentication fails but credentials exist
-$ gosynctasks sync
+$ todoat sync
 Error: 401 Unauthorized
 
 # Debug: Check credential source
-$ gosynctasks credentials get nextcloud myuser
+$ todoat credentials get nextcloud myuser
 Source: keyring
 Username: myuser
 
 # Solution: Update credentials in keyring
-$ gosynctasks credentials set nextcloud myuser --prompt
+$ todoat credentials set nextcloud myuser --prompt
 Enter password: [type correct password]
 ```
 
 **Issue: Environment variables not recognized**
 ```bash
 # Symptom: Environment variables set but not used
-$ env | grep GOSYNCTASKS_NEXTCLOUD_PASSWORD
-GOSYNCTASKS_NEXTCLOUD_PASSWORD=mypass
-$ gosynctasks credentials get nextcloud myuser
+$ env | grep TODOAT_NEXTCLOUD_PASSWORD
+TODOAT_NEXTCLOUD_PASSWORD=mypass
+$ todoat credentials get nextcloud myuser
 Source: keyring
 
 # Explanation: Keyring has higher priority
 # Solution: If you want to use environment variables:
-$ gosynctasks credentials delete nextcloud myuser
-$ gosynctasks credentials get nextcloud myuser
+$ todoat credentials delete nextcloud myuser
+$ todoat credentials get nextcloud myuser
 Source: environment
 ```
 
@@ -593,7 +593,7 @@ credentials.Manager.Get(backend, username)
         ↓
     1. keyring.Get(service, account)
         ↓ (if not found)
-    2. os.Getenv("GOSYNCTASKS_BACKEND_PASSWORD")
+    2. os.Getenv("TODOAT_BACKEND_PASSWORD")
         ↓ (if not set)
     3. config.ParseURL() → extract password
         ↓ (if not found)
@@ -615,7 +615,7 @@ type CredentialInfo struct {
 }
 
 // Keyring storage format
-// Service: "gosynctasks-{backend}"
+// Service: "todoat-{backend}"
 // Account: "{username}"
 // Secret: "{password}"
 ```

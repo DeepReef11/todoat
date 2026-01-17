@@ -1,6 +1,6 @@
 # CLI Interface Features
 
-This document details the command-line interface features of gosynctasks, including command structure, flags, interactive modes, shell completion, and terminal integration.
+This document details the command-line interface features of todoat, including command structure, flags, interactive modes, shell completion, and terminal integration.
 
 ## Table of Contents
 
@@ -13,10 +13,11 @@ This document details the command-line interface features of gosynctasks, includ
 7. [Argument Parsing and Validation](#argument-parsing-and-validation)
 8. [Verbose Mode](#verbose-mode)
 9. [Backend Selection Flags](#backend-selection-flags)
-10. [Graceful Shutdown](#graceful-shutdown)
-11. [No-Prompt Mode](#no-prompt-mode)
-12. [JSON Output Mode](#json-output-mode)
-13. [Result Codes](#result-codes)
+10. [Notification Commands](#notification-commands)
+11. [Graceful Shutdown](#graceful-shutdown)
+12. [No-Prompt Mode](#no-prompt-mode)
+13. [JSON Output Mode](#json-output-mode)
+14. [Result Codes](#result-codes)
 
 ---
 
@@ -28,7 +29,7 @@ This document details the command-line interface features of gosynctasks, includ
 
 **How It Works:**
 
-1. **Basic Syntax:** `gosynctasks [list-name] [action] [task-summary]`
+1. **Basic Syntax:** `todoat [list-name] [action] [task-summary]`
 2. **Default Actions:** When action is omitted, defaults to `get` (show tasks)
 3. **Action Abbreviations:** Short one-letter aliases for common actions:
    - `g` → `get`
@@ -43,19 +44,19 @@ This document details the command-line interface features of gosynctasks, includ
 
 ```bash
 # No arguments - interactive list selection
-gosynctasks
+todoat
 
 # List name only - show tasks from that list
-gosynctasks MyList
+todoat MyList
 
 # Explicit action
-gosynctasks MyList get
+todoat MyList get
 
 # Action abbreviation
-gosynctasks MyList a "New task"
+todoat MyList a "New task"
 
 # Full command with task summary
-gosynctasks MyList add "Complete the report"
+todoat MyList add "Complete the report"
 ```
 
 **Prerequisites:**
@@ -69,7 +70,7 @@ gosynctasks MyList add "Complete the report"
 
 **Technical Details:**
 - Built on Cobra framework (`github.com/spf13/cobra`)
-- Root command defined in `cmd/gosynctasks/main.go:26-114`
+- Root command defined in `cmd/todoat/main.go:26-114`
 - Action resolution in `internal/app/app.go`
 - Argument parsing handles both full names and abbreviations
 
@@ -91,7 +92,7 @@ gosynctasks MyList add "Complete the report"
 1. **Config Path Flag (`--config`):**
    - Overrides default XDG config location
    - Accepts file path or directory path
-   - Special value `.` uses current directory: `./gosynctasks/config.yaml`
+   - Special value `.` uses current directory: `./todoat/config.yaml`
    - Set before application initialization via `config.SetCustomConfigPath()`
 
 2. **Backend Override (`--backend`, `-b`):**
@@ -132,34 +133,34 @@ gosynctasks MyList add "Complete the report"
 
 ```bash
 # Use custom config file
-gosynctasks --config /path/to/config.yaml MyList
+todoat --config /path/to/config.yaml MyList
 
 # Use config in current directory
-gosynctasks --config . MyList
+todoat --config . MyList
 
 # Force specific backend
-gosynctasks --backend nextcloud-prod WorkTasks
+todoat --backend nextcloud-prod WorkTasks
 
 # List all backends
-gosynctasks --list-backends
+todoat --list-backends
 
 # Check auto-detection
-gosynctasks --detect-backend
+todoat --detect-backend
 
 # Enable debug logging
-gosynctasks --verbose MyList add "Debug this"
-gosynctasks -V MyList add "Debug this"
+todoat --verbose MyList add "Debug this"
+todoat -V MyList add "Debug this"
 
 # No-prompt mode for scripting
-gosynctasks -y MyList delete "Task"           # Delete without confirmation
-gosynctasks --no-prompt MyList complete "Task" # Complete without prompts
+todoat -y MyList delete "Task"           # Delete without confirmation
+todoat --no-prompt MyList complete "Task" # Complete without prompts
 
 # JSON output for automation
-gosynctasks --json MyList                      # List tasks as JSON
-gosynctasks -y --json MyList add "Task"        # Add task, JSON output
+todoat --json MyList                      # List tasks as JSON
+todoat -y --json MyList add "Task"        # Add task, JSON output
 
 # Combined scripting workflow
-gosynctasks -y --json MyList update "review" -s DONE
+todoat -y --json MyList update "review" -s DONE
 ```
 
 **Prerequisites:**
@@ -177,7 +178,7 @@ gosynctasks -y --json MyList update "review" -s DONE
 - `--json`: All outputs in JSON format with structured data
 
 **Technical Details:**
-- Flags registered in `cmd/gosynctasks/main.go:118-122`
+- Flags registered in `cmd/todoat/main.go:118-122`
 - Processed in `PersistentPreRunE` hook before command execution
 - `--config` sets global state via `config.SetCustomConfigPath()`
 - `--verbose` sets global state via `utils.SetVerboseMode(true)`
@@ -266,45 +267,45 @@ gosynctasks -y --json MyList update "review" -s DONE
 
 ```bash
 # Filter tasks by status
-gosynctasks MyList -s TODO,PROCESSING
-gosynctasks MyList -s T,D  # Using abbreviations
+todoat MyList -s TODO,PROCESSING
+todoat MyList -s T,D  # Using abbreviations
 
 # Add task with multiple properties
-gosynctasks MyList add "Complete report" -d "Q4 financial report" -p 1 -s TODO --due-date 2025-01-31
+todoat MyList add "Complete report" -d "Q4 financial report" -p 1 -s TODO --due-date 2025-01-31
 
 # Add task with dates
-gosynctasks MyList add "Project" --start-date 2025-01-15 --due-date 2025-02-28
+todoat MyList add "Project" --start-date 2025-01-15 --due-date 2025-02-28
 
 # Update task status
-gosynctasks MyList update "task name" -s DONE
+todoat MyList update "task name" -s DONE
 
 # Update task priority and description
-gosynctasks MyList update "task" -p 5 -d "Updated notes"
+todoat MyList update "task" -p 5 -d "Updated notes"
 
 # Rename task
-gosynctasks MyList update "old name" --summary "new name"
+todoat MyList update "old name" --summary "new name"
 
 # Add subtask
-gosynctasks MyList add "Subtask" -P "Parent Task"
+todoat MyList add "Subtask" -P "Parent Task"
 
 # Add task with literal slash (disable hierarchy)
-gosynctasks MyList add -l "Design UI/UX mockups"
+todoat MyList add -l "Design UI/UX mockups"
 
 # Use custom view
-gosynctasks MyList -v all
-gosynctasks MyList -v myview
+todoat MyList -v all
+todoat MyList -v myview
 
 # UID-based task selection (for scripting)
-gosynctasks MyList update --uid "550e8400-e29b-41d4-a716-446655440000" -s DONE
-gosynctasks MyList delete --uid "550e8400-e29b-41d4-a716-446655440000"
-gosynctasks MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
+todoat MyList update --uid "550e8400-e29b-41d4-a716-446655440000" -s DONE
+todoat MyList delete --uid "550e8400-e29b-41d4-a716-446655440000"
+todoat MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
 
 # Unsynced task (created locally, not yet synced to remote)
-gosynctasks MyList update --uid "NOT-SYNCED-123" -s DONE  # Uses SQLite internal ID
+todoat MyList update --uid "NOT-SYNCED-123" -s DONE  # Uses SQLite internal ID
 
 # Workflow: search → get UID → operate
-gosynctasks -y --json MyList update "ambiguous" -s DONE  # Returns matches with UIDs
-gosynctasks -y MyList update --uid "returned-uid-here" -s DONE  # Use specific UID
+todoat -y --json MyList update "ambiguous" -s DONE  # Returns matches with UIDs
+todoat -y MyList update --uid "returned-uid-here" -s DONE  # Use specific UID
 ```
 
 **Prerequisites:**
@@ -312,7 +313,7 @@ gosynctasks -y MyList update --uid "returned-uid-here" -s DONE  # Use specific U
 - For `update`: Task must exist (uses intelligent search, or `--uid` for direct selection)
 - For `-P`: Parent task must exist
 - For `--uid`: Valid UID must exist in the task list
-- For custom views: View must be defined in `~/.config/gosynctasks/views/`
+- For custom views: View must be defined in `~/.config/todoat/views/`
 
 **Outputs/Results:**
 - `get` with `-s`: Filtered task list
@@ -322,7 +323,7 @@ gosynctasks -y MyList update --uid "returned-uid-here" -s DONE  # Use specific U
 - Date validation errors for malformed dates
 
 **Technical Details:**
-- Flags registered in `cmd/gosynctasks/main.go:`
+- Flags registered in `cmd/todoat/main.go:`
 - Status flag has shell completion for valid values 
 - View flag has dynamic completion from available views (lines 145-154)
 - Date parsing uses Go's time.Parse with `2006-01-02` format
@@ -362,7 +363,7 @@ gosynctasks -y MyList update --uid "returned-uid-here" -s DONE  # Use specific U
 
 ```bash
 # User invokes without list name
-$ gosynctasks
+$ todoat
 
 # System displays formatted list:
 ┌─ Available Task Lists ──────────────────────────────────┐
@@ -421,13 +422,13 @@ Select a list (1-3, or 'q' to quit): 1
    - Fetches all task lists from backend
    - Filters by prefix match (case-insensitive)
    - Returns matching list names
-   - Example: `gosynctasks Wo<TAB>` → `gosynctasks Work`
+   - Example: `todoat Wo<TAB>` → `todoat Work`
 
 2. **Action Completion (Position 2):**
    - After list name is entered
    - Suggests: `get`, `add`, `update`, `complete`, `delete`
    - Full names only (not abbreviations)
-   - Example: `gosynctasks Work u<TAB>` → `gosynctasks Work update`
+   - Example: `todoat Work u<TAB>` → `todoat Work update`
 
 3. **Task Summary (Position 3):**
    - No completion offered (user enters free text)
@@ -435,12 +436,12 @@ Select a list (1-3, or 'q' to quit): 1
 
 4. **Status Flag Completion (`--status`, `--add-status`):**
    - Suggests: `TODO`, `DONE`, `PROCESSING`, `CANCELLED`
-   - Example: `gosynctasks MyList -s T<TAB>` → `gosynctasks MyList -s TODO`
+   - Example: `todoat MyList -s T<TAB>` → `todoat MyList -s TODO`
 
 5. **View Flag Completion (`--view`):**
-   - Dynamically loads available views from `~/.config/gosynctasks/views/`
+   - Dynamically loads available views from `~/.config/todoat/views/`
    - Includes built-in views: `default`, `all`
-   - Example: `gosynctasks MyList -v my<TAB>` → `gosynctasks MyList -v myview`
+   - Example: `todoat MyList -v my<TAB>` → `todoat MyList -v myview`
 
 **Shell Support:**
 - **Zsh:** Full support with descriptions
@@ -452,38 +453,38 @@ Select a list (1-3, or 'q' to quit): 1
 
 ```bash
 # Zsh (add to .zshrc)
-eval "$(gosynctasks completion zsh)"
+eval "$(todoat completion zsh)"
 
 # Bash (add to .bashrc)
-eval "$(gosynctasks completion bash)"
+eval "$(todoat completion bash)"
 
 # Fish (add to config.fish)
-gosynctasks completion fish | source
+todoat completion fish | source
 
 # PowerShell (add to profile)
-gosynctasks completion powershell | Out-String | Invoke-Expression
+todoat completion powershell | Out-String | Invoke-Expression
 ```
 
 **User Journey:**
 
 ```bash
 # User starts typing list name
-$ gosynctasks Wo<TAB>
+$ todoat Wo<TAB>
 
 # Shell completes to matching list
-$ gosynctasks Work
+$ todoat Work
 
 # User types action prefix
-$ gosynctasks Work u<TAB>
+$ todoat Work u<TAB>
 
 # Shell shows options: update
-$ gosynctasks Work update
+$ todoat Work update
 
 # User sets status flag
-$ gosynctasks Work -s T<TAB>
+$ todoat Work -s T<TAB>
 
 # Shell completes
-$ gosynctasks Work -s TODO
+$ todoat Work -s TODO
 ```
 
 **Prerequisites:**
@@ -538,22 +539,22 @@ $ gosynctasks Work -s TODO
 
 ```bash
 # Wide terminal (120 chars)
-$ gosynctasks
+$ todoat
 ┌─ Available Task Lists ──────────────────────────────────────────────────────────────────────────┐
   # Border extends to 100 chars (max)
 
 # Narrow terminal (60 chars)
-$ gosynctasks
+$ todoat
 ┌─ Available Task Lists ──────────────────────────────┐
   # Border fits 58 chars
 
 # Very narrow terminal (30 chars)
-$ gosynctasks
+$ todoat
 ┌─ Available Task Lists ──────────┐
   # Border uses minimum 40 chars
 
 # Redirected output (not a TTY)
-$ gosynctasks | less
+$ todoat | less
   # Uses default 80 chars
 ```
 
@@ -625,29 +626,29 @@ $ gosynctasks | less
 
 ```bash
 # Too many arguments
-$ gosynctasks MyList add "Task" extra
+$ todoat MyList add "Task" extra
 Error: accepts at most 3 arg(s), received 4
 
 # Invalid action
-$ gosynctasks MyList show
+$ todoat MyList show
 Error: unknown action "show". Valid actions: get, add, update, complete, delete
 
 # Invalid status
-$ gosynctasks MyList add "Task" -s RUNNING
+$ todoat MyList add "Task" -s RUNNING
 Error: invalid status "RUNNING". Valid: TODO/T, DONE/D, PROCESSING/P, CANCELLED/C
 
 # Invalid date format
-$ gosynctasks MyList add "Task" --due-date 01/31/2025
+$ todoat MyList add "Task" --due-date 01/31/2025
 Error: invalid date format. Use YYYY-MM-DD
 
 # Invalid priority
-$ gosynctasks MyList add "Task" -p 10
+$ todoat MyList add "Task" -p 10
 Error: priority must be 0-9 (0=undefined, 1=highest, 9=lowest)
 
 # Valid commands
-$ gosynctasks MyList add "Task"  # OK
-$ gosynctasks MyList a "Task"    # OK (abbreviation)
-$ gosynctasks MyList              # OK (default to get)
+$ todoat MyList add "Task"  # OK
+$ todoat MyList a "Task"    # OK (abbreviation)
+$ todoat MyList              # OK (default to get)
 ```
 
 **Prerequisites:**
@@ -995,26 +996,26 @@ The key is making your default output clean and useful, with verbosity flags tha
 
 ```bash
 # List all configured backends
-$ gosynctasks --list-backends
+$ todoat --list-backends
 
 Available Backends:
   nextcloud-prod (enabled)  - Nextcloud CalDAV @ nextcloud.example.com
   nextcloud-test (enabled)  - Nextcloud CalDAV @ localhost:8080
-  sqlite (enabled)          - SQLite @ ~/.local/share/gosynctasks/tasks.db
+  sqlite (enabled)          - SQLite @ ~/.local/share/todoat/tasks.db
   git (disabled)            - Git Markdown @ TODO.md
   todoist (enabled)         - Todoist API
 
 # Detect backends in current directory
-$ gosynctasks --detect-backend
+$ todoat --detect-backend
 
 Auto-Detection Results:
   git: Detected (TODO.md with marker found)
 
 # Use specific backend for one command
-$ gosynctasks --backend nextcloud-test MyList
+$ todoat --backend nextcloud-test MyList
 
 # Use specific backend with other flags
-$ gosynctasks --backend git --verbose ProjectTasks add "Fix bug"
+$ todoat --backend git --verbose ProjectTasks add "Fix bug"
 ```
 
 **Prerequisites:**
@@ -1032,6 +1033,75 @@ $ gosynctasks --backend git --verbose ProjectTasks add "Fix bug"
 - [Backend System](./BACKEND_SYSTEM.md) - Full backend selection details
 - [Backend Auto-Detection](./BACKEND_SYSTEM.md#auto-detection) - Git detection logic
 - [Configuration](./CONFIGURATION.md) - Backend configuration
+
+---
+
+## Notification Commands
+
+### Feature: Notification System Testing and Management
+
+**Purpose:** Provides commands to test, view, and manage the notification system, enabling users to verify their notification configuration and review notification history.
+
+**How It Works:**
+
+**Notification Commands:**
+
+1. **Test Notification (`notification test`):**
+   - Sends a test notification through the configured notification system
+   - Verifies that notification settings are correct
+   - Confirms delivery to configured channels
+   - Example: `todoat notification test`
+
+2. **View Notification Log (`notification log`):**
+   - Displays recent notifications from the log file
+   - Shows timestamp, type, and message for each notification
+   - Useful for debugging notification issues
+   - Example: `todoat notification log`
+
+3. **Clear Notification Log (`notification log clear`):**
+   - Clears the notification log file
+   - Removes all historical notification entries
+   - Useful for cleaning up old logs
+   - Example: `todoat notification log clear`
+
+**User Journey:**
+
+```bash
+# Test notification system
+$ todoat notification test
+Sending test notification...
+Test notification sent successfully
+
+# View notification log
+$ todoat notification log
+2026-01-17 10:30:00 [INFO] Test notification sent
+2026-01-17 09:15:00 [INFO] Task completed: Review PR #456
+2026-01-17 08:00:00 [INFO] Daily summary: 5 tasks due today
+
+# Clear notification log
+$ todoat notification log clear
+Notification log cleared successfully
+```
+
+**Prerequisites:**
+- Notification system configured (see [Configuration](./CONFIGURATION.md))
+- For `notification test`: Valid notification backend configured
+- For `notification log`: Log file exists (created automatically)
+
+**Outputs/Results:**
+- `notification test`: Confirmation message and test notification delivered
+- `notification log`: List of recent notifications with timestamps
+- `notification log clear`: Confirmation of log clearance
+
+**Technical Details:**
+- Notification commands are subcommands under `notification`
+- Log file location typically: `~/.local/share/todoat/notifications.log`
+- Test notification sends a predefined message to verify configuration
+- Log viewing shows last N entries (configurable)
+
+**Related Features:**
+- [Configuration](./CONFIGURATION.md) - Notification system configuration
+- [Task Management](./TASK_MANAGEMENT.md) - Task-triggered notifications
 
 ---
 
@@ -1072,7 +1142,7 @@ $ gosynctasks --backend git --verbose ProjectTasks add "Fix bug"
 
 ```bash
 # User starts long-running operation
-$ gosynctasks sync
+$ todoat sync
 
 Syncing with remote backend...
 [=============>          ] 60% complete
@@ -1113,7 +1183,7 @@ $ echo $?
 
 ### Feature: Non-Interactive Operation for Scripting
 
-**Purpose:** Enables fully non-interactive operation of gosynctasks for use in scripts, automation, CI/CD pipelines, and programmatic task management. When enabled, all interactive prompts are bypassed with deterministic behavior.
+**Purpose:** Enables fully non-interactive operation of todoat for use in scripts, automation, CI/CD pipelines, and programmatic task management. When enabled, all interactive prompts are bypassed with deterministic behavior.
 
 **How It Works:**
 
@@ -1144,7 +1214,7 @@ $ echo $?
 
 ```bash
 # Script: Complete all tasks matching "review"
-$ gosynctasks -y --json MyList complete "review"
+$ todoat -y --json MyList complete "review"
 
 # If single match: Task completed
 {
@@ -1164,7 +1234,7 @@ $ gosynctasks -y --json MyList complete "review"
 }
 
 # Script then uses specific UID
-$ gosynctasks -y MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
+$ todoat -y MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
 ACTION_COMPLETED
 ```
 
@@ -1183,7 +1253,7 @@ Note: `NOT-SYNCED-<id>` indicates a task created locally but not yet synced to t
 **No List Specified Output:**
 
 ```bash
-$ gosynctasks -y
+$ todoat -y
 Available lists:
 ID:abc-123	NAME:Work	TASKS:12
 ID:def-456	NAME:Personal	TASKS:5
@@ -1235,7 +1305,7 @@ rootCmd.PersistentFlags().BoolP("no-prompt", "y", false, "Disable interactive pr
 
 ### Feature: Machine-Parseable JSON Output
 
-**Purpose:** Provides structured JSON output for all operations, enabling robust integration with scripts, automation tools, and other programs that consume gosynctasks output.
+**Purpose:** Provides structured JSON output for all operations, enabling robust integration with scripts, automation tools, and other programs that consume todoat output.
 
 **How It Works:**
 
@@ -1254,7 +1324,7 @@ rootCmd.PersistentFlags().BoolP("no-prompt", "y", false, "Disable interactive pr
 
 **List Tasks (JSON):**
 ```bash
-$ gosynctasks --json MyList
+$ todoat --json MyList
 ```
 ```json
 {
@@ -1286,7 +1356,7 @@ $ gosynctasks --json MyList
 
 **Add Task (JSON):**
 ```bash
-$ gosynctasks --json MyList add "New task" -p 1 --due-date 2026-01-25
+$ todoat --json MyList add "New task" -p 1 --due-date 2026-01-25
 ```
 ```json
 {
@@ -1305,7 +1375,7 @@ $ gosynctasks --json MyList add "New task" -p 1 --due-date 2026-01-25
 
 **Update Task (JSON):**
 ```bash
-$ gosynctasks --json MyList update "PR" -s DONE
+$ todoat --json MyList update "PR" -s DONE
 ```
 ```json
 {
@@ -1322,7 +1392,7 @@ $ gosynctasks --json MyList update "PR" -s DONE
 
 **List Available Lists (JSON):**
 ```bash
-$ gosynctasks --json
+$ todoat --json
 ```
 ```json
 {
@@ -1337,7 +1407,7 @@ $ gosynctasks --json
 
 **Multiple Matches (JSON with no-prompt):**
 ```bash
-$ gosynctasks -y --json MyList complete "review"
+$ todoat -y --json MyList complete "review"
 ```
 ```json
 {
@@ -1376,7 +1446,7 @@ Note: Tasks with `"synced": false` have `uid` in `NOT-SYNCED-<sqlite-id>` format
 
 **Error Response (JSON):**
 ```bash
-$ gosynctasks --json NonExistentList
+$ todoat --json NonExistentList
 ```
 ```json
 {
@@ -1387,7 +1457,7 @@ $ gosynctasks --json NonExistentList
 
 **Error with Context (JSON):**
 ```bash
-$ gosynctasks --json Work update "task" --due-date "bad-date"
+$ todoat --json Work update "task" --due-date "bad-date"
 ```
 ```json
 {
@@ -1513,7 +1583,7 @@ ERROR
 
 **Successful Operation:**
 ```bash
-$ gosynctasks -y MyList complete "unique task"
+$ todoat -y MyList complete "unique task"
 Task 'unique task' marked as DONE
 ACTION_COMPLETED
 
@@ -1523,7 +1593,7 @@ $ echo $?
 
 **Ambiguous Operation:**
 ```bash
-$ gosynctasks -y MyList complete "review"
+$ todoat -y MyList complete "review"
 Multiple tasks match "review":
 UID:550e8400...	TASK:Review PR #456	PARENT:Project Alpha
 UID:660e8400...	TASK:Code review	PARENT:
@@ -1535,7 +1605,7 @@ $ echo $?
 
 **Display-Only Operation:**
 ```bash
-$ gosynctasks -y MyList
+$ todoat -y MyList
 Tasks in "MyList" (5 tasks):
 [TODO] Task 1
 [DONE] Task 2
@@ -1547,7 +1617,7 @@ $ echo $?
 
 **Error (Text Mode):**
 ```bash
-$ gosynctasks -y NonExistent
+$ todoat -y NonExistent
 Error 1: List 'NonExistent' not found
 ERROR
 
@@ -1557,7 +1627,7 @@ $ echo $?
 
 **Error (JSON Mode):**
 ```bash
-$ gosynctasks -y --json NonExistent
+$ todoat -y --json NonExistent
 ```
 ```json
 {
@@ -1568,7 +1638,7 @@ $ gosynctasks -y --json NonExistent
 
 **Multiple Errors:**
 ```bash
-$ gosynctasks -y Work update "task" --due-date "invalid"
+$ todoat -y Work update "task" --due-date "invalid"
 Error 2: Invalid date format 'invalid', expected YYYY-MM-DD
 ERROR
 ```
@@ -1579,7 +1649,7 @@ ERROR
 #!/bin/bash
 # Complete a task and handle results
 
-output=$(gosynctasks -y MyList complete "$1" 2>&1)
+output=$(todoat -y MyList complete "$1" 2>&1)
 result=$(echo "$output" | tail -1)
 
 case "$result" in
@@ -1605,7 +1675,7 @@ esac
 #!/bin/bash
 # Complete a task using JSON output
 
-response=$(gosynctasks -y --json MyList complete "$1")
+response=$(todoat -y --json MyList complete "$1")
 result=$(echo "$response" | jq -r '.result')
 
 case "$result" in
@@ -1702,7 +1772,7 @@ ELSE (read-only operation):
 
 ## Summary
 
-The CLI interface of gosynctasks provides a comprehensive command-line experience with:
+The CLI interface of todoat provides a comprehensive command-line experience with:
 
 - **Flexible syntax** supporting full commands and abbreviations
 - **Rich flag system** for fine-grained control over operations
@@ -1712,6 +1782,7 @@ The CLI interface of gosynctasks provides a comprehensive command-line experienc
 - **Robust validation** with helpful error messages
 - **Verbose mode** for troubleshooting
 - **Backend discovery** for multi-backend environments
+- **Notification commands** for testing and managing notifications
 - **Graceful shutdown** ensuring data integrity
 - **No-prompt mode** for scripting and automation (`-y`, `--no-prompt`)
 - **JSON output** for machine-parseable results (`--json`)

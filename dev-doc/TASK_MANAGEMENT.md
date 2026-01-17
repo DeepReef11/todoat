@@ -1,6 +1,6 @@
 # Task Management
 
-Task Management encompasses all core CRUD (Create, Read, Update, Delete) operations for individual tasks within gosynctasks. These operations form the foundation of daily task management workflows.
+Task Management encompasses all core CRUD (Create, Read, Update, Delete) operations for individual tasks within todoat. These operations form the foundation of daily task management workflows.
 
 ---
 
@@ -26,16 +26,16 @@ Task Management encompasses all core CRUD (Create, Read, Update, Delete) operati
 **Display Tasks from a Task List**
 
 ### Purpose
-Allows users to view all tasks within a specific task list, providing a quick overview of pending work, completed items, and task status. This is the default and most frequently used operation in gosynctasks.
+Allows users to view all tasks within a specific task list, providing a quick overview of pending work, completed items, and task status. This is the default and most frequently used operation in todoat.
 
 ### How It Works
 
 **User Actions:**
 1. User executes one of the following commands:
-   - `gosynctasks` - Interactive list selection via terminal UI
-   - `gosynctasks MyList` - Direct list name specification
-   - `gosynctasks MyList get` - Explicit get action (optional)
-   - `gosynctasks MyList g` - Using abbreviation
+   - `todoat` - Interactive list selection via terminal UI
+   - `todoat MyList` - Direct list name specification
+   - `todoat MyList get` - Explicit get action (optional)
+   - `todoat MyList g` - Using abbreviation
 
 **System Processes:**
 1. **Backend Selection**: System identifies which backend to use based on:
@@ -75,13 +75,13 @@ View Formatter → Terminal Display
 
 **Edge Cases:**
 - Empty list: Displays message "No tasks found in list 'MyList'"
-- List not found: Error message with suggestion to use `gosynctasks list` to see available lists
-- No lists exist: Prompts user to create first list with `gosynctasks list create "Name"`
+- List not found: Error message with suggestion to use `todoat list` to see available lists
+- No lists exist: Prompts user to create first list with `todoat list create "Name"`
 - Network failure (remote backend): Falls back to cached data if sync is enabled
 
 ### User Journey
 1. User opens terminal
-2. Types `gosynctasks MyList`
+2. Types `todoat MyList`
 3. System displays formatted task list with status indicators, priorities, and hierarchical relationships
 4. User reviews tasks and decides next actions
 
@@ -122,7 +122,7 @@ Tasks in "Work" (5 tasks):
   }
   ```
 - **Status Translation**:
-  - **Internal Status**: gosynctasks uses standardized internal statuses (TODO, DONE, PROCESSING, CANCELLED) for all application logic
+  - **Internal Status**: todoat uses standardized internal statuses (TODO, DONE, PROCESSING, CANCELLED) for all application logic
   - **Backend Status**: Each backend's native status format (e.g., NEEDS-ACTION, COMPLETED, IN-PROCESS for CalDAV) is automatically translated to/from internal status at storage boundaries
   - This dual-status system ensures consistent behavior across all backends while respecting each backend's protocol
 - **Caching**: When sync is enabled, tasks are served from local SQLite cache for instant display
@@ -147,13 +147,13 @@ Enables users to add new tasks to a task list with optional metadata (descriptio
 
 **User Actions:**
 1. Execute one of the following commands:
-   - `gosynctasks MyList add "Task summary"` - Basic task creation
-   - `gosynctasks MyList a "Task summary"` - Using abbreviation
-   - `gosynctasks MyList add` - Prompts for summary interactively
-   - `gosynctasks MyList add "Task" -d "Details" -p 1` - With metadata
-   - `gosynctasks MyList add "Subtask" -P "Parent"` - Create subtask (see [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md))
-   - `gosynctasks MyList add "parent/child/grandchild"` - Auto-create hierarchy
-   - `gosynctasks MyList add -l "literal/text"` - Disable path parsing with `-l` flag
+   - `todoat MyList add "Task summary"` - Basic task creation
+   - `todoat MyList a "Task summary"` - Using abbreviation
+   - `todoat MyList add` - Prompts for summary interactively
+   - `todoat MyList add "Task" -d "Details" -p 1` - With metadata
+   - `todoat MyList add "Subtask" -P "Parent"` - Create subtask (see [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md))
+   - `todoat MyList add "parent/child/grandchild"` - Auto-create hierarchy
+   - `todoat MyList add -l "literal/text"` - Disable path parsing with `-l` flag
 
 **System Processes:**
 1. **Input Validation**:
@@ -231,12 +231,12 @@ Sync Queue (if enabled) → Success Confirmation
 
 ### User Journey
 1. User identifies task to add
-2. Types command: `gosynctasks Work add "Review PR #456" -p 2 --due-date 2026-01-20`
+2. Types command: `todoat Work add "Review PR #456" -p 2 --due-date 2026-01-20`
 3. System validates input and generates UID
 4. Task is created in backend storage
 5. Confirmation message: "Task 'Review PR #456' added to list 'Work'"
 6. If sync enabled, task is queued for synchronization
-7. User can immediately see task with `gosynctasks Work`
+7. User can immediately see task with `todoat Work`
 
 ### Prerequisites
 - Target task list must exist (see [List Management](./LIST_MANAGEMENT.md))
@@ -299,13 +299,13 @@ Allows users to change task attributes including summary (rename), description, 
 
 **User Actions:**
 1. Execute update command with task identifier and new values:
-   - `gosynctasks MyList update "Task name" -s DONE` - Change status
-   - `gosynctasks MyList u "partial" -p 5` - Using abbreviation, partial match
-   - `gosynctasks MyList update "old" --summary "New name"` - Rename task
-   - `gosynctasks MyList update "task" -d "New description"` - Update description
-   - `gosynctasks MyList update "task" --due-date 2026-02-15` - Change due date
-   - `gosynctasks MyList update "task" --due-date ""` - Clear due date (empty string)
-   - `gosynctasks MyList update "task" -p 0` - Clear priority (0 = undefined)
+   - `todoat MyList update "Task name" -s DONE` - Change status
+   - `todoat MyList u "partial" -p 5` - Using abbreviation, partial match
+   - `todoat MyList update "old" --summary "New name"` - Rename task
+   - `todoat MyList update "task" -d "New description"` - Update description
+   - `todoat MyList update "task" --due-date 2026-02-15` - Change due date
+   - `todoat MyList update "task" --due-date ""` - Clear due date (empty string)
+   - `todoat MyList update "task" -p 0` - Clear priority (0 = undefined)
 
 **System Processes:**
 1. **Task Search** (see [Task Search and Selection](#task-search-and-selection)):
@@ -365,7 +365,7 @@ Sync Queue (if enabled) → Success Confirmation
 
 ### User Journey
 1. User realizes task needs modification
-2. Types: `gosynctasks Work update "groceries" -s DONE --summary "Buy milk and eggs"`
+2. Types: `todoat Work update "groceries" -s DONE --summary "Buy milk and eggs"`
 3. If multiple tasks match "groceries", system presents selection menu
 4. User confirms selection (or task is auto-selected if unique)
 5. System updates task with new values
@@ -444,9 +444,9 @@ Provides a convenient shortcut to mark tasks as DONE without requiring the full 
 
 **User Actions:**
 1. Execute complete command:
-   - `gosynctasks MyList complete "Task name"` - Mark as DONE
-   - `gosynctasks MyList c "partial"` - Using abbreviation
-   - `gosynctasks MyList complete "task"` - Partial match supported
+   - `todoat MyList complete "Task name"` - Mark as DONE
+   - `todoat MyList c "partial"` - Using abbreviation
+   - `todoat MyList complete "task"` - Partial match supported
 
 **System Processes:**
 1. **Task Search**: Uses same intelligent search as update (see [Task Search and Selection](#task-search-and-selection))
@@ -474,7 +474,7 @@ Completed Timestamp → Backend Update → Sync Queue → Success
 
 ### User Journey
 1. User finishes a task
-2. Types: `gosynctasks Work complete "Review PR"`
+2. Types: `todoat Work complete "Review PR"`
 3. System finds task and marks as DONE
 4. Confirmation: "Task 'Review PR #456' marked as DONE"
 5. Completed timestamp recorded
@@ -516,8 +516,8 @@ Allows users to delete tasks from a task list. Note that deletion is permanent a
 
 **User Actions:**
 1. Execute delete command:
-   - `gosynctasks MyList delete "Task name"` - Delete task
-   - `gosynctasks MyList d "partial"` - Using abbreviation
+   - `todoat MyList delete "Task name"` - Delete task
+   - `todoat MyList d "partial"` - Using abbreviation
 
 **System Processes:**
 1. **Task Search**: Uses intelligent search to identify task (see [Task Search and Selection](#task-search-and-selection))
@@ -553,7 +553,7 @@ Sync Queue (if enabled) → Success Confirmation
 
 ### User Journey
 1. User decides task is no longer needed
-2. Types: `gosynctasks Work delete "outdated task"`
+2. Types: `todoat Work delete "outdated task"`
 3. System finds task
 4. Optional confirmation prompt
 5. Task deleted from backend
@@ -598,10 +598,10 @@ Allows users to narrow down displayed tasks based on status, reducing visual clu
 
 **User Actions:**
 1. Execute get command with filter flag:
-   - `gosynctasks MyList -s TODO` - Show only TODO tasks
-   - `gosynctasks MyList -s TODO,PROCESSING` - Multiple statuses
-   - `gosynctasks MyList -s T,D,P` - Using abbreviations
-   - `gosynctasks MyList -s D` - Show only completed tasks
+   - `todoat MyList -s TODO` - Show only TODO tasks
+   - `todoat MyList -s TODO,PROCESSING` - Multiple statuses
+   - `todoat MyList -s T,D,P` - Using abbreviations
+   - `todoat MyList -s D` - Show only completed tasks
 
 **System Processes:**
 1. **Flag Parsing**: System parses `-s` / `--status` flag value(s)
@@ -629,7 +629,7 @@ Client Filtering → View Rendering → Terminal Display
 
 ### User Journey
 1. User has large task list, wants to focus on incomplete work
-2. Types: `gosynctasks Work -s TODO,PROCESSING`
+2. Types: `todoat Work -s TODO,PROCESSING`
 3. System retrieves tasks and filters by status
 4. Only TODO and PROCESSING tasks displayed
 5. User reviews focused task list
@@ -717,7 +717,7 @@ Provides smart, user-friendly task lookup that handles exact matches, partial ma
 
 5. **No Match Handling**:
    - Display error: "Task not found matching 'search term'"
-   - Suggest: "Use 'gosynctasks MyList' to see all tasks"
+   - Suggest: "Use 'todoat MyList' to see all tasks"
    - List similar tasks if any exist (fuzzy matching)
 
 **Data Flow:**
@@ -757,7 +757,7 @@ Search String → Exact Match → Found? → Return Task
 ### User Journey
 
 **UID-Based Selection (Scripting):**
-1. User runs: `gosynctasks -y Work complete "review"`
+1. User runs: `todoat -y Work complete "review"`
 2. Multiple matches found, returns:
    ```
    Multiple tasks match "review":
@@ -766,34 +766,34 @@ Search String → Exact Match → Found? → Return Task
    UID:NOT-SYNCED-42	TASK:Review notes	PARENT:Documentation
    ACTION_INCOMPLETE
    ```
-3. User/script re-runs with UID: `gosynctasks Work complete --uid "550e8400-e29b-41d4-a716-446655440000"`
+3. User/script re-runs with UID: `todoat Work complete --uid "550e8400-e29b-41d4-a716-446655440000"`
 4. Task completed immediately (no prompts)
 5. Output: `ACTION_COMPLETED`
 
 **Unsynced Task Selection:**
-1. User creates task locally while offline: `gosynctasks -y Work add "Draft proposal"`
+1. User creates task locally while offline: `todoat -y Work add "Draft proposal"`
 2. Task created with SQLite ID (no remote UID yet)
-3. User lists tasks: `gosynctasks -y --json Work`
+3. User lists tasks: `todoat -y --json Work`
 4. Output shows: `"uid": "NOT-SYNCED-42", "synced": false`
-5. User can operate on it: `gosynctasks Work update --uid "NOT-SYNCED-42" -p 1`
+5. User can operate on it: `todoat Work update --uid "NOT-SYNCED-42" -p 1`
 6. After sync, UID becomes backend-assigned UUID
 
 **Single Partial Match (Normal Mode):**
-1. User types: `gosynctasks Work update "PR" -s DONE`
+1. User types: `todoat Work update "PR" -s DONE`
 2. System finds one task: "Review PR #456"
 3. Prompt: "Found: Review PR #456 [TODO, Priority: 2]. Is this correct? (y/n)"
 4. User types: `y`
 5. Task updated
 
 **Single Partial Match (No-Prompt Mode):**
-1. User types: `gosynctasks -y Work update "PR" -s DONE`
+1. User types: `todoat -y Work update "PR" -s DONE`
 2. System finds one task: "Review PR #456"
 3. Auto-confirms (no prompt)
 4. Task updated
 5. Output: `ACTION_COMPLETED`
 
 **Multiple Matches (Normal Mode):**
-1. User types: `gosynctasks Work complete "review"`
+1. User types: `todoat Work complete "review"`
 2. System finds three matches:
    ```
    Multiple tasks found matching "review":
@@ -806,7 +806,7 @@ Search String → Exact Match → Found? → Return Task
 4. Task "Review PR #456" marked as DONE
 
 **Multiple Matches (No-Prompt Mode with JSON):**
-1. User types: `gosynctasks -y --json Work complete "review"`
+1. User types: `todoat -y --json Work complete "review"`
 2. System returns:
    ```json
    {
@@ -820,7 +820,7 @@ Search String → Exact Match → Found? → Return Task
    }
    ```
 3. Script parses JSON, selects appropriate UID (note: third task uses `NOT-SYNCED-<id>` format)
-4. Script re-runs: `gosynctasks -y Work complete --uid "550e8400..."` or `--uid "NOT-SYNCED-42"`
+4. Script re-runs: `todoat -y Work complete --uid "550e8400..."` or `--uid "NOT-SYNCED-42"`
 
 ### Prerequisites
 - Task list must contain tasks
@@ -905,12 +905,12 @@ Provides standardized status values to track task progress through its lifecycle
 
 **Important: Internal vs Backend Status**
 
-gosynctasks uses a **dual status system** to maintain consistency across different backends while respecting each backend's native format:
+todoat uses a **dual status system** to maintain consistency across different backends while respecting each backend's native format:
 
-- **Internal Status** (Application Level): The canonical status used throughout gosynctasks for all operations, filtering, and logic (TODO, DONE, PROCESSING, CANCELLED)
+- **Internal Status** (Application Level): The canonical status used throughout todoat for all operations, filtering, and logic (TODO, DONE, PROCESSING, CANCELLED)
 - **Backend-Specific Status** (Storage Level): The native status format used by each backend's protocol or API
 
-This separation allows gosynctasks to provide a consistent user experience while working with multiple backend systems that have different status vocabularies.
+This separation allows todoat to provide a consistent user experience while working with multiple backend systems that have different status vocabularies.
 
 ### How It Works
 
@@ -1066,7 +1066,7 @@ Display Rendering (with color)
 - Backend doesn't support priority: Stored but may not be used
 
 ### User Journey
-1. User creates urgent task: `gosynctasks Work add "Fix production bug" -p 1`
+1. User creates urgent task: `todoat Work add "Fix production bug" -p 1`
 2. Task displayed with high-priority indicator (red color)
 3. User creates low-priority task: `add "Clean up docs" -p 8`
 4. Task displayed with low-priority indicator (gray color)
@@ -1188,9 +1188,9 @@ Backend Translation → Storage Format → Display Rendering
 - Start date after due date: Accepted without warning (validation could be added)
 
 ### User Journey
-1. User creates task with deadline: `gosynctasks Work add "Submit report" --due-date 2026-01-20`
+1. User creates task with deadline: `todoat Work add "Submit report" --due-date 2026-01-20`
 2. Task stored with due date
-3. View with dates: `gosynctasks Work -v all` shows due date
+3. View with dates: `todoat Work -v all` shows due date
 4. User extends deadline: `update "report" --due-date 2026-01-25`
 5. User completes task: `complete "report"`
 6. System sets Completed timestamp automatically
@@ -1276,7 +1276,7 @@ type Task struct {
 ```
 
 **Viewing All Metadata:**
-- Command: `gosynctasks MyList -v all`
+- Command: `todoat MyList -v all`
 - Shows all fields for all tasks
 - Or create custom view with desired fields (see [Views & Customization](./VIEWS_CUSTOMIZATION.md))
 
@@ -1301,7 +1301,7 @@ Retrieval → View Formatting → Display
 
 ### User Journey
 1. User wants to see all task details
-2. Types: `gosynctasks Work -v all`
+2. Types: `todoat Work -v all`
 3. System displays comprehensive task information including all metadata
 4. User sees creation dates, modification history, due dates, priorities, etc.
 
@@ -1354,7 +1354,7 @@ Task: Fix production bug
 
 ## Summary
 
-Task Management in gosynctasks provides comprehensive CRUD operations with intelligent search, flexible filtering, and rich metadata support. Key capabilities include:
+Task Management in todoat provides comprehensive CRUD operations with intelligent search, flexible filtering, and rich metadata support. Key capabilities include:
 
 - **CRUD Operations**: Create, read, update, delete tasks with validation and error handling
 - **Intelligent Search**: Partial matching with confirmation, multi-select menus

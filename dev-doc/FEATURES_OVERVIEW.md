@@ -1,6 +1,6 @@
-# gosynctasks Feature Overview
+# todoat Feature Overview
 
-This document provides a high-level summary of all features in gosynctasks, organized by functional category. Each feature includes a brief description and links to detailed documentation.
+This document provides a high-level summary of all features in todoat, organized by functional category. Each feature includes a brief description and links to detailed documentation.
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@ This document provides a high-level summary of all features in gosynctasks, orga
 
 **Purpose**: Core task operations for creating, modifying, and managing individual tasks.
 
-**Status System**: gosynctasks uses internal status values (TODO, DONE, PROCESSING, CANCELLED) for all operations. These are automatically translated to/from backend-specific status formats (e.g., CalDAV uses NEEDS-ACTION, COMPLETED, IN-PROCESS).
+**Status System**: todoat uses internal status values (TODO, DONE, PROCESSING, CANCELLED) for all operations. These are automatically translated to/from backend-specific status formats (e.g., CalDAV uses NEEDS-ACTION, COMPLETED, IN-PROCESS).
 
 | Feature | Description | Status | Documentation |
 |---------|-------------|--------|---------------|
@@ -140,7 +140,7 @@ This document provides a high-level summary of all features in gosynctasks, orga
 | **Bidirectional Sync** | Sync local and remote changes in both directions | ✅ Stable | [Synchronization](./SYNCHRONIZATION.md#bidirectional-sync) |
 | **Automatic Caching** | Each remote backend gets its own SQLite cache database | ✅ Stable | [Synchronization](./SYNCHRONIZATION.md#automatic-caching) |
 | **Offline Mode** | Queue operations when remote backend unavailable | ✅ Stable | [Synchronization](./SYNCHRONIZATION.md#offline-mode) |
-| **Manual Sync** | Trigger sync with `gosynctasks sync` command | ✅ Stable | [Synchronization](./SYNCHRONIZATION.md#manual-sync) |
+| **Manual Sync** | Trigger sync with `todoat sync` command | ✅ Stable | [Synchronization](./SYNCHRONIZATION.md#manual-sync) |
 | **Auto-Sync Daemon** | Background process for automatic syncing | 🚧 Being Redesigned | [Synchronization](./SYNCHRONIZATION.md#auto-sync-daemon) |
 | **Conflict Resolution** | Handle conflicts with configurable strategies | ✅ Stable | [Synchronization](./SYNCHRONIZATION.md#conflict-resolution) |
 | **Server Wins Strategy** | Remote changes override local changes (default) | ✅ Stable | [Synchronization](./SYNCHRONIZATION.md#server-wins-strategy) |
@@ -164,6 +164,18 @@ This document provides a high-level summary of all features in gosynctasks, orga
 - Batch syncing after offline work sessions
 
 **Related Features**: [Backend System](#backend-system-features), [Task Management](#task-management-features), [Configuration](#configuration-features)
+
+---
+
+## Background Operations
+
+### Notification System
+
+- **Desktop Notifications**: OS-native notifications for sync events
+- **Log Notifications**: Persistent log file for background operations
+- **Configurable Events**: Choose which events trigger notifications
+
+See [Notification Manager](./NOTIFICATION_MANAGER.md) for configuration details.
 
 ---
 
@@ -215,7 +227,7 @@ This document provides a high-level summary of all features in gosynctasks, orga
 | **Priority Formatters** | Customize priority display (numbers, emojis, colors) | ✅ Stable | [Views & Customization](./VIEWS_CUSTOMIZATION.md#priority-formatters) |
 | **Status Formatters** | Customize status display with emojis or text | ✅ Stable | [Views & Customization](./VIEWS_CUSTOMIZATION.md#status-formatters) |
 | **Interactive View Builder** | TUI for creating views without editing YAML | ✅ Stable | [Views & Customization](./VIEWS_CUSTOMIZATION.md#interactive-view-builder) |
-| **View Storage** | YAML-based view definitions in `~/.config/gosynctasks/views/` | ✅ Stable | [Views & Customization](./VIEWS_CUSTOMIZATION.md#view-storage) |
+| **View Storage** | YAML-based view definitions in `~/.config/todoat/views/` | ✅ Stable | [Views & Customization](./VIEWS_CUSTOMIZATION.md#view-storage) |
 | **List Views** | Display all available views | ✅ Stable | [Views & Customization](./VIEWS_CUSTOMIZATION.md#list-views) |
 | **Show View Definition** | Display view YAML configuration | ✅ Stable | [Views & Customization](./VIEWS_CUSTOMIZATION.md#show-view-definition) |
 | **Plugin Script Support** | Bash, Python, Ruby, and other language support for plugins | ✅ Stable | [Views & Customization](./VIEWS_CUSTOMIZATION.md#plugin-script-support) |

@@ -114,7 +114,7 @@ fields:
 
 **How to Use:**
 ```bash
-gosynctasks MyList -v all
+todoat MyList -v all
 ```
 
 **Output Includes:**
@@ -148,7 +148,7 @@ Custom views enable users to create specialized display configurations tailored 
 
 **Command:**
 ```bash
-gosynctasks view create myview
+todoat view create myview
 ```
 
 **Builder Features:**
@@ -162,14 +162,14 @@ gosynctasks view create myview
 
 **User Journey:**
 ```
-1. Run: gosynctasks view create work_today
+1. Run: todoat view create work_today
 2. TUI displays available fields
 3. User selects: status, summary, due_date, priority
 4. User adds filter: due_date = today, status != DONE
 5. User sets sort: due_date ASC, priority ASC
 6. User saves configuration
-7. View saved to ~/.config/gosynctasks/views/work_today.yaml
-8. User runs: gosynctasks MyList -v work_today
+7. View saved to ~/.config/todoat/views/work_today.yaml
+8. User runs: todoat MyList -v work_today
 ```
 
 #### Method 2: Manual YAML Creation
@@ -177,12 +177,12 @@ gosynctasks view create myview
 **Purpose:** Direct view configuration for advanced users or automation
 
 **Steps:**
-1. Create YAML file in `~/.config/gosynctasks/views/`
+1. Create YAML file in `~/.config/todoat/views/`
 2. Define view configuration (see [Field Selection](#field-selection-and-ordering))
 3. Save file with `.yaml` extension
 4. View becomes immediately available
 
-**Example File:** `~/.config/gosynctasks/views/urgent.yaml`
+**Example File:** `~/.config/todoat/views/urgent.yaml`
 ```yaml
 name: urgent
 description: "High priority tasks due soon"
@@ -212,14 +212,14 @@ sort:
 
 ### Prerequisites
 
-- Gosynctasks configuration directory must exist (`~/.config/gosynctasks/`)
+- Todoat configuration directory must exist (`~/.config/todoat/`)
 - Views directory is auto-created if missing
 - Valid YAML syntax required for manual creation
 
 ### Outputs/Results
 
-- YAML view file saved to `~/.config/gosynctasks/views/`
-- View appears in `gosynctasks view list` output
+- YAML view file saved to `~/.config/todoat/views/`
+- View appears in `todoat view list` output
 - View can be used with `-v` or `--view` flag
 - Validation errors shown if configuration is invalid
 
@@ -450,7 +450,7 @@ filters:
 ### User Journey: Creating Filtered View
 
 1. User wants to see only urgent work tasks due this week
-2. User runs: `gosynctasks view create urgent_work`
+2. User runs: `todoat view create urgent_work`
 3. TUI builder opens
 4. User selects fields: status, summary, due_date, priority
 5. User clicks "Add Filter" button
@@ -462,7 +462,7 @@ filters:
 11. User clicks "Add Filter" again
 12. User selects: field=status, operator=ne, value=DONE
 13. User saves view
-14. User runs: `gosynctasks MyList -v urgent_work`
+14. User runs: `todoat MyList -v urgent_work`
 15. Output shows only matching tasks
 
 ---
@@ -691,7 +691,7 @@ esac
 fields:
   - name: status
     plugin:
-      command: "/home/user/.config/gosynctasks/plugins/status-emoji.sh"
+      command: "~/.config/todoat/plugins/status-emoji.sh"
 ```
 
 **Output:**
@@ -730,7 +730,7 @@ else:
 fields:
   - name: priority
     plugin:
-      command: "/home/user/.config/gosynctasks/plugins/priority-color.py"
+      command: "~/.config/todoat/plugins/priority-color.py"
 ```
 
 #### Ruby: Relative Date Formatter
@@ -771,7 +771,7 @@ end
 fields:
   - name: due_date
     plugin:
-      command: "/home/user/.config/gosynctasks/plugins/relative-date.rb"
+      command: "~/.config/todoat/plugins/relative-date.rb"
 ```
 
 **Output:**
@@ -809,7 +809,7 @@ File taxes            Due in 14 days
 
 **Recommended Structure:**
 ```
-~/.config/gosynctasks/plugins/
+~/.config/todoat/plugins/
 ├── status-emoji.sh
 ├── priority-color.py
 ├── relative-date.rb
@@ -839,7 +839,7 @@ The Terminal UI (TUI) builder provides a user-friendly interface for creating cu
 
 **Launch:**
 ```bash
-gosynctasks view create myview
+todoat view create myview
 ```
 
 **Interface Components:**
@@ -885,7 +885,7 @@ gosynctasks view create myview
 
 **Creating "Due This Week" View:**
 
-1. Run: `gosynctasks view create due_this_week`
+1. Run: `todoat view create due_this_week`
 2. TUI displays field selection panel
 3. User navigates with arrow keys to "status" field
 4. User presses Space to select
@@ -915,9 +915,9 @@ gosynctasks view create myview
 28. Preview shows sample output
 29. User presses Tab to action buttons
 30. User clicks "Save"
-31. Success message: "View saved to ~/.config/gosynctasks/views/due_this_week.yaml"
+31. Success message: "View saved to ~/.config/todoat/views/due_this_week.yaml"
 32. TUI exits
-33. User runs: `gosynctasks MyList -v due_this_week`
+33. User runs: `todoat MyList -v due_this_week`
 
 ### Keyboard Shortcuts
 
@@ -950,13 +950,13 @@ gosynctasks view create myview
 
 ### Prerequisites
 
-- Gosynctasks installed and configured
+- Todoat installed and configured
 - Terminal with minimum 80x24 character size
 - Arrow key and color support (most modern terminals)
 
 ### Outputs/Results
 
-- YAML view file created in `~/.config/gosynctasks/views/`
+- YAML view file created in `~/.config/todoat/views/`
 - View immediately available for use
 - Success message with file path shown
 
@@ -966,7 +966,7 @@ gosynctasks view create myview
 
 ### Storage Location
 
-**Path:** `~/.config/gosynctasks/views/`
+**Path:** `~/.config/todoat/views/`
 
 **File Format:** YAML files with `.yaml` extension
 
@@ -976,7 +976,7 @@ gosynctasks view create myview
 
 **Command:**
 ```bash
-gosynctasks view list
+todoat view list
 ```
 
 **Output:**
@@ -990,7 +990,7 @@ Available views:
 ```
 
 **How It Works:**
-1. Scans `~/.config/gosynctasks/views/` directory
+1. Scans `~/.config/todoat/views/` directory
 2. Parses each `.yaml` file
 3. Validates view configuration
 4. Lists valid views with type (built-in vs. custom)
@@ -1000,7 +1000,7 @@ Available views:
 
 **Manual Deletion:**
 ```bash
-rm ~/.config/gosynctasks/views/urgent.yaml
+rm ~/.config/todoat/views/urgent.yaml
 ```
 
 **Effect:** View no longer appears in `view list`, cannot be used with `-v` flag
@@ -1011,7 +1011,7 @@ rm ~/.config/gosynctasks/views/urgent.yaml
 
 **Manual Editing:**
 ```bash
-nano ~/.config/gosynctasks/views/urgent.yaml
+nano ~/.config/todoat/views/urgent.yaml
 ```
 
 **Changes take effect immediately** (no restart required).
@@ -1024,16 +1024,16 @@ nano ~/.config/gosynctasks/views/urgent.yaml
 ### View Sharing
 
 **Export:**
-1. Copy view file from `~/.config/gosynctasks/views/`
+1. Copy view file from `~/.config/todoat/views/`
 2. Share file with team (email, git repo, shared drive)
 3. Document any required plugins (if view uses custom formatters)
 
 **Import:**
 1. Receive view YAML file
-2. Copy to `~/.config/gosynctasks/views/` directory
+2. Copy to `~/.config/todoat/views/` directory
 3. Install any required plugins (if applicable)
-4. Run `gosynctasks view list` to verify
-5. Use with `gosynctasks MyList -v imported_view`
+4. Run `todoat view list` to verify
+5. Use with `todoat MyList -v imported_view`
 
 **Team Workflow:**
 ```
@@ -1100,7 +1100,7 @@ team-views/
 **Using a View:**
 ```
 1. CLI parses -v flag
-2. Load view YAML from ~/.config/gosynctasks/views/
+2. Load view YAML from ~/.config/todoat/views/
 3. Parse YAML into View struct
 4. Fetch tasks from backend (see Task Management)
 5. Apply filters: FilterTask() on each task
@@ -1125,7 +1125,7 @@ team-views/
    ├─ Validate configuration
    ├─ Convert TUI state to View struct
    ├─ Marshal to YAML
-   ├─ Write to ~/.config/gosynctasks/views/[name].yaml
+   ├─ Write to ~/.config/todoat/views/[name].yaml
    └─ Show success message
 5. Exit TUI
 ```

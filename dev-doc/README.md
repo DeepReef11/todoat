@@ -1,12 +1,12 @@
-# gosynctasks Complete Feature Inventory
+# todoat Complete Feature Inventory
 
 **Version:** Based on current codebase (January 2026)
 
-This documentation provides a comprehensive inventory of all features available in gosynctasks, a fast, flexible, multi-backend task synchronization tool written in Go.
+This documentation provides a comprehensive inventory of all features available in todoat, a fast, flexible, multi-backend task synchronization tool written in Go.
 
-## What is gosynctasks?
+## What is todoat?
 
-gosynctasks is a command-line task management tool that allows you to:
+todoat is a command-line task management tool that allows you to:
 
 - Manage tasks seamlessly from your terminal
 - Work with multiple storage backends (Nextcloud CalDAV, Todoist, Git/Markdown, SQLite)
@@ -15,86 +15,28 @@ gosynctasks is a command-line task management tool that allows you to:
 - Customize task views with flexible formatters
 - Store credentials securely using OS keyrings
 
-## Documentation Structure
+## Documentation Files
 
-This feature inventory is organized into logical categories. Each document provides detailed explanations of how features work, including user journeys, prerequisites, and technical details.
-
-### Core Features
-
-1. **[Task Management](./TASK_MANAGEMENT.md)** - Creating, reading, updating, and deleting tasks
-   - Add tasks with metadata (priority, dates, descriptions)
-   - Update task properties
-   - Complete and delete tasks
-   - Filter tasks by status, priority, tags, and dates
-   - Interactive task selection for partial matches
-
-2. **[List Management](./LIST_MANAGEMENT.md)** - Organizing tasks into lists
-   - Create and configure task lists
-   - Rename and delete lists
-   - Trash management (soft delete, restore, permanent deletion)
-   - List information and metadata
-   - Color coding and descriptions
-
-3. **[Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md)** - Nested task organization
-   - Create subtasks under parent tasks
-   - Path-based hierarchy creation (e.g., "parent/child/grandchild")
-   - Tree visualization with box-drawing characters
-   - Parent task references and navigation
+### Core Concepts
+- [Features Overview](./FEATURES_OVERVIEW.md)
+- [CLI Interface](./CLI_INTERFACE.md)
+- [Configuration](./CONFIGURATION.md)
+- [Task Management](./TASK_MANAGEMENT.md)
+- [List Management](./LIST_MANAGEMENT.md)
 
 ### Backend & Sync
+- [Backend System](./BACKEND_SYSTEM.md)
+- [Synchronization](./SYNCHRONIZATION.md)
+- [Credential Management](./CREDENTIAL_MANAGEMENT.md)
 
-4. **[Backend System](./BACKEND_SYSTEM.md)** - Multi-backend architecture
-   - Nextcloud CalDAV backend
-   - Todoist REST API backend
-   - Git/Markdown file backend
-   - SQLite local database backend
-   - Backend selection priority and auto-detection
-   - Pluggable TaskManager interface
+### Advanced Features
+- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md)
+- [Views Customization](./VIEWS_CUSTOMIZATION.md)
+- [Notification Manager](./NOTIFICATION_MANAGER.md)
 
-5. **[Synchronization](./SYNCHRONIZATION.md)** - Offline sync and conflict resolution
-   - Bidirectional sync between local and remote backends
-   - Automatic caching for remote backends
-   - Offline mode with operation queuing
-   - Conflict resolution strategies (server_wins, local_wins, merge, keep_both)
-   - Background auto-sync daemon
-   - Sync queue management and retry logic
-
-### Customization & Security
-
-6. **[Credential Management](./CREDENTIAL_MANAGEMENT.md)** - Secure credential storage
-   - System keyring integration (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-   - Environment variable support for CI/CD
-   - Legacy config URL support
-   - Credential priority resolution
-   - Per-backend credential management
-
-7. **[Views & Customization](./VIEWS_CUSTOMIZATION.md)** - Custom display formats
-   - Built-in views (default, all)
-   - Custom field selection and ordering
-   - Plugin-based formatters (external scripts)
-   - Filtering and sorting
-   - Interactive view builder TUI
-   - Date, priority, and status formatters
-
-### Interface & Configuration
-
-8. **[CLI Interface](./CLI_INTERFACE.md)** - Command-line interface features
-   - Cobra framework with subcommands
-   - Shell completion (Bash, Zsh, Fish, PowerShell)
-   - Interactive list selection
-   - Intelligent task matching (exact, partial, multiple)
-   - Terminal width detection for dynamic formatting
-   - Verbose/debug logging
-   - Action abbreviations (a=add, u=update, c=complete, d=delete, g=get)
-
-9. **[Configuration System](./CONFIGURATION.md)** - Application configuration
-   - XDG Base Directory compliance
-   - YAML configuration format
-   - Multi-backend configuration
-   - Sync configuration (global and per-backend)
-   - Path expansion (~, $HOME, environment variables)
-   - Config file auto-initialization from embedded sample
-   - Custom config path support
+### Development
+- [Test-Driven Development](./TEST_DRIVEN_DEV.md)
+- [README Planner](./README_PLANNER.md)
 
 ## Quick Feature Reference
 
@@ -126,41 +68,9 @@ For detailed sync documentation, see [SYNC_GUIDE.md](../SYNC_GUIDE.md).
 
 For development guidance, see [CLAUDE.md](../CLAUDE.md).
 
-## Feature Category Details
-
-Click on any category below to explore detailed documentation:
-
-### 📝 [Task Management](./TASK_MANAGEMENT.md)
-Learn how to create, update, filter, and manage individual tasks with all available metadata fields and operations.
-
-### 📋 [List Management](./LIST_MANAGEMENT.md)
-Discover how to organize tasks into lists, manage list properties, and use the trash system for safe deletion.
-
-### 🌳 [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md)
-Understand hierarchical task organization with parent-child relationships and path-based shortcuts.
-
-### 🔌 [Backend System](./BACKEND_SYSTEM.md)
-Explore the multi-backend architecture, backend selection logic, and how each backend type works.
-
-### 🔄 [Synchronization](./SYNCHRONIZATION.md)
-Master offline synchronization, conflict resolution, and the background sync daemon system.
-
-### 🔐 [Credential Management](./CREDENTIAL_MANAGEMENT.md)
-Learn secure credential storage using OS keyrings, environment variables, and credential resolution.
-
-### 🎨 [Views & Customization](./VIEWS_CUSTOMIZATION.md)
-Customize task display with views, formatters, plugins, and filtering/sorting options.
-
-### 💻 [CLI Interface](./CLI_INTERFACE.md)
-Understand the command-line interface, shell completion, interactive features, and usage patterns.
-
-### ⚙️ [Configuration System](./CONFIGURATION.md)
-Configure gosynctasks with YAML files, manage multiple backends, and customize application behavior.
-
-
 ## Status Mappings
 
-gosynctasks uses different status representations for different backends:
+todoat uses different status representations for different backends:
 
 | Internal Status | CalDAV Status | CLI Abbreviation | Display |
 |----------------|---------------|------------------|---------|
@@ -196,25 +106,25 @@ Task lists/calendars with these properties:
 
 ## XDG Base Directory Compliance
 
-gosynctasks follows the XDG Base Directory Specification:
+todoat follows the XDG Base Directory Specification:
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| **Config** | `$XDG_CONFIG_HOME/gosynctasks/` | Configuration files (`config.yaml`) |
-| **Data** | `$XDG_DATA_HOME/gosynctasks/` | SQLite databases, sync state |
-| **Cache** | `$XDG_CACHE_HOME/gosynctasks/` | Task list cache (`lists.json`) |
-| **Views** | `$XDG_CONFIG_HOME/gosynctasks/views/` | Custom view definitions |
+| **Config** | `$XDG_CONFIG_HOME/todoat/` | Configuration files (`config.yaml`) |
+| **Data** | `$XDG_DATA_HOME/todoat/` | SQLite databases, sync state |
+| **Cache** | `$XDG_CACHE_HOME/todoat/` | Task list cache (`lists.json`) |
+| **Views** | `$XDG_CONFIG_HOME/todoat/views/` | Custom view definitions |
 
 Default locations (if XDG variables not set):
-- Config: `~/.config/gosynctasks/`
-- Data: `~/.local/share/gosynctasks/`
-- Cache: `~/.cache/gosynctasks/`
+- Config: `~/.config/todoat/`
+- Data: `~/.local/share/todoat/`
+- Cache: `~/.cache/todoat/`
 
 ## Support & Resources
 
-- **Project Repository**: https://github.com/DeepReef11/gosynctasks
-- **Issue Tracker**: https://github.com/DeepReef11/gosynctasks/issues
-- **Discussions**: https://github.com/DeepReef11/gosynctasks/discussions
+- **Project Repository**: https://github.com/DeepReef11/todoat
+- **Issue Tracker**: https://github.com/DeepReef11/todoat/issues
+- **Discussions**: https://github.com/DeepReef11/todoat/discussions
 - **License**: BSD-2-Clause
 
 ## Contributing
@@ -225,4 +135,4 @@ For testing procedures, see [TESTING.md](../TESTING.md).
 
 ---
 
-**Note**: This documentation reflects the current state of gosynctasks. Some features may be under active development. Check the project repository for the latest updates.
+**Note**: This documentation reflects the current state of todoat. Some features may be under active development. Check the project repository for the latest updates.

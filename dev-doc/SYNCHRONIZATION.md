@@ -60,7 +60,7 @@ User → CLI Command → Sync Manager →  Database (SQLite)
   2. Updates the local cache database (SQLite)
   3. Queues the operation in `sync_queue` table for later synchronization
   4. Optionally triggers background sync (when auto-sync is re-enabled)
-- For sync operations (`gosynctasks sync`):
+- For sync operations (`todoat sync`):
   1. Sync Manager pulls changes from remote backend
   2. Merges with local cache, resolving conflicts
   3. Pushes queued operations from `sync_queue` to remote backend
@@ -76,16 +76,16 @@ User → CLI Command → Sync Manager →  Database (SQLite)
 - When sync is enabled, CLI operations are routed through the Sync Manager
 - Sync Manager updates cache databases and queues operations
 - Changes are persisted locally immediately (offline-capable)
-- User manually triggers sync with `gosynctasks sync` to push/pull changes with remote backends
+- User manually triggers sync with `todoat sync` to push/pull changes with remote backends
 
 ### User Journey
 
 1. Enable sync in config: `sync.enabled = true`
 2. Configure remote backends (e.g., Nextcloud)
-3. Use CLI normally: `gosynctasks MyList add "Task"`
+3. Use CLI normally: `todoat MyList add "Task"`
 4. Changes are saved to local cache and queued
-5. Run `gosynctasks sync` when online to synchronize
-6. Check sync status: `gosynctasks sync status`
+5. Run `todoat sync` when online to synchronize
+6. Check sync status: `todoat sync status`
 
 ### Prerequisites
 - [Backend configured](./BACKEND_SYSTEM.md#configuration) with valid credentials
@@ -140,16 +140,16 @@ backends:
   nextcloud:
     type: nextcloud
     enabled: true
-    # Auto-cached at: ~/.local/share/gosynctasks/caches/nextcloud.db
+    # Auto-cached at: ~/.local/share/todoat/caches/nextcloud.db
 
   todoist:
     type: todoist
     enabled: true
-    # Auto-cached at: ~/.local/share/gosynctasks/caches/todoist.db
+    # Auto-cached at: ~/.local/share/todoat/caches/todoist.db
 ```
 
 **2. Cache Path Generation**
-- Base directory: `$XDG_DATA_HOME/gosynctasks/caches/` (default: `~/.local/share/gosynctasks/caches/`)
+- Base directory: `$XDG_DATA_HOME/todoat/caches/` (default: `~/.local/share/todoat/caches/`)
 - Cache filename: `[backend-name].db`
 - Automatic directory creation if missing
 
@@ -175,12 +175,12 @@ backends:
 1. Enable global sync in config
 2. Add remote backend configuration
 3. First CLI operation triggers cache creation
-4. Perform initial sync: `gosynctasks sync`
+4. Perform initial sync: `todoat sync`
 
 **Daily Usage:**
-1. Work with tasks: `gosynctasks MyList add "Task"`
+1. Work with tasks: `todoat MyList add "Task"`
 2. Changes saved to cache instantly
-3. Sync when convenient: `gosynctasks sync`
+3. Sync when convenient: `todoat sync`
 
 ### Outputs/Results
 - Local cache database created automatically
@@ -256,13 +256,13 @@ Synchronize local changes with remote backends and fetch remote updates to local
 **Manual Sync:**
 ```bash
 # Trigger full sync (pull then push)
-gosynctasks sync
+todoat sync
 
 # View what will be synced
-gosynctasks sync status
+todoat sync status
 
 # View pending operations
-gosynctasks sync queue
+todoat sync queue
 ```
 
 **Sync Output:**
@@ -385,9 +385,9 @@ switch strategy:
 ### User Journey
 
 **Automatic Resolution:**
-1. User modifies task offline: `gosynctasks MyList update "Task" -s DONE`
+1. User modifies task offline: `todoat MyList update "Task" -s DONE`
 2. Same task modified remotely by another device
-3. User runs sync: `gosynctasks sync`
+3. User runs sync: `todoat sync`
 4. Conflict detected and auto-resolved based on strategy
 5. User sees: "Conflicts: 1 (resolved with server_wins)"
 
@@ -457,7 +457,7 @@ sync:
 **User Action:**
 ```bash
 # Add task while offline
-gosynctasks MyList add "Buy groceries"
+todoat MyList add "Buy groceries"
 ```
 
 **Behind the Scenes:**
@@ -474,7 +474,7 @@ gosynctasks MyList add "Buy groceries"
 **4. Coming Back Online**
 ```bash
 # When network restored
-gosynctasks sync
+todoat sync
 
 # Output:
 # Processing queued operations: 5 pending
@@ -488,15 +488,15 @@ gosynctasks sync
 **Working Offline:**
 1. User on plane/train without internet
 2. Performs normal task operations:
-   - `gosynctasks Work add "Review code"`
-   - `gosynctasks Work complete "Bug fix"`
-   - `gosynctasks Personal update "Call mom" -p 1`
+   - `todoat Work add "Review code"`
+   - `todoat Work complete "Bug fix"`
+   - `todoat Personal update "Call mom" -p 1`
 3. All operations complete instantly (no network wait)
 4. Changes stored locally
 
 **Synchronizing Later:**
 1. User connects to internet
-2. Runs `gosynctasks sync`
+2. Runs `todoat sync`
 3. All queued changes pushed to remote
 4. Remote changes pulled to local
 5. User now up-to-date across all devices
@@ -508,8 +508,8 @@ gosynctasks sync
 
 ### Outputs/Results
 - Instant operation confirmation (no network latency)
-- Queued operations visible with `gosynctasks sync queue`
-- Sync status shows pending count: `gosynctasks sync status`
+- Queued operations visible with `todoat sync queue`
+- Sync status shows pending count: `todoat sync status`
 
 ### Technical Details
 
@@ -602,17 +602,17 @@ type SyncQueueEntry struct {
 **2. Operation Types**
 
 **Create:**
-- Triggered by: `gosynctasks MyList add "Task"`
+- Triggered by: `todoat MyList add "Task"`
 - Action: Create new task on remote
 - Success: Store remote UID, clear queue entry
 
 **Update:**
-- Triggered by: `gosynctasks MyList update "Task" -s DONE`
+- Triggered by: `todoat MyList update "Task" -s DONE`
 - Action: Update existing task on remote
 - Success: Update etag, clear queue entry
 
 **Delete:**
-- Triggered by: `gosynctasks MyList delete "Task"`
+- Triggered by: `todoat MyList delete "Task"`
 - Action: Delete task from remote
 - Success: Remove from local DB, clear queue entry
 
@@ -643,7 +643,7 @@ if entry.RetryCount >= maxRetries {  // maxRetries = 5
 
 View pending operations:
 ```bash
-gosynctasks sync queue
+todoat sync queue
 
 # Output:
 # Pending Operations: 5
@@ -662,7 +662,7 @@ gosynctasks sync queue
 **Normal Flow:**
 1. User performs operations while offline/online
 2. Operations queued automatically
-3. User runs `gosynctasks sync`
+3. User runs `todoat sync`
 4. Queue processed, entries removed on success
 
 **Retry Flow:**
@@ -675,10 +675,10 @@ gosynctasks sync queue
 **Failure Investigation:**
 ```bash
 # Check queue status
-gosynctasks sync queue
+todoat sync queue
 
 # See specific failures
-gosynctasks sync status --verbose
+todoat sync status --verbose
 
 # Manual resolution if needed
 # (e.g., fix network issue, update credentials, then sync again)
@@ -737,6 +737,18 @@ func calculateBackoff(retryCount int) time.Duration {
 
 ---
 
+### Sync Notifications
+
+When background sync is enabled, the [Notification Manager](./NOTIFICATION_MANAGER.md)
+can alert users to:
+- Sync completion (optional)
+- Sync failures and errors
+- Conflict detection requiring user attention
+
+Configure notifications via the `notification` section in config.yaml.
+
+---
+
 ## Manual Sync Workflow
 
 ### Purpose
@@ -754,7 +766,7 @@ Provide explicit user control over synchronization timing, replacing automatic b
 
 **Full Sync:**
 ```bash
-gosynctasks sync
+todoat sync
 ```
 - Pulls changes from all enabled remote backends
 - Pushes all queued local changes
@@ -762,7 +774,7 @@ gosynctasks sync
 
 **Sync Status:**
 ```bash
-gosynctasks sync status
+todoat sync status
 ```
 Output:
 ```
@@ -785,7 +797,7 @@ Backend: todoist (cache: todoist.db)
 
 **View Queue:**
 ```bash
-gosynctasks sync queue
+todoat sync queue
 ```
 Shows all pending operations across all backends.
 
@@ -794,43 +806,43 @@ Shows all pending operations across all backends.
 **Daily Workflow:**
 1. **Morning**: Sync to get latest changes
    ```bash
-   gosynctasks sync
+   todoat sync
    ```
 
 2. **Throughout Day**: Work normally
    ```bash
-   gosynctasks Work add "New task"
-   gosynctasks Personal complete "Old task"
+   todoat Work add "New task"
+   todoat Personal complete "Old task"
    # Changes queued automatically
    ```
 
 3. **Before Meetings**: Quick sync to share updates
    ```bash
-   gosynctasks sync
+   todoat sync
    ```
 
 4. **Evening**: Final sync before closing laptop
    ```bash
-   gosynctasks sync status  # Check what will sync
-   gosynctasks sync         # Push all changes
+   todoat sync status  # Check what will sync
+   todoat sync         # Push all changes
    ```
 
 **Troubleshooting Workflow:**
 1. Check sync status for issues:
    ```bash
-   gosynctasks sync status --verbose
+   todoat sync status --verbose
    ```
 
 2. Inspect failed operations:
    ```bash
-   gosynctasks sync queue
+   todoat sync queue
    ```
 
 3. Fix underlying issue (network, credentials, etc.)
 
 4. Retry sync:
    ```bash
-   gosynctasks sync
+   todoat sync
    ```
 
 ### Prerequisites
@@ -978,7 +990,7 @@ backends:
 **Initial Setup:**
 1. Edit config file:
    ```bash
-   vim ~/.config/gosynctasks/config.yaml
+   vim ~/.config/todoat/config.yaml
    ```
 
 2. Enable sync:
@@ -990,7 +1002,7 @@ backends:
 
 3. Save and perform initial sync:
    ```bash
-   gosynctasks sync
+   todoat sync
    ```
 
 **Changing Conflict Resolution:**
@@ -1014,13 +1026,13 @@ backends:
 2. Backend used directly without cache
 
 ### Prerequisites
-- Config file exists at `~/.config/gosynctasks/config.yaml`
+- Config file exists at `~/.config/todoat/config.yaml`
 - Valid backend configuration (see [Backend System](./BACKEND_SYSTEM.md))
 
 ### Outputs/Results
 - Cache databases created/updated based on settings
 - Sync behavior changes according to configuration
-- `gosynctasks sync status` reflects current config
+- `todoat sync status` reflects current config
 
 ### Technical Details
 
@@ -1048,7 +1060,7 @@ func getCachePath(backendName string) string {
     if xdgData == "" {
         xdgData = filepath.Join(os.Getenv("HOME"), ".local/share")
     }
-    return filepath.Join(xdgData, "gosynctasks", "caches", backendName+".db")
+    return filepath.Join(xdgData, "todoat", "caches", backendName+".db")
 }
 ```
 
@@ -1231,7 +1243,7 @@ Understand synchronization performance to set expectations and optimize usage pa
 **Initial Sync (Heavy):**
 User enables sync for first time with large Nextcloud calendar:
 ```bash
-gosynctasks sync
+todoat sync
 # Syncing nextcloud...
 # Pull: 1000 new tasks (15s)
 # Building local indexes...
@@ -1241,7 +1253,7 @@ gosynctasks sync
 **Daily Sync (Light):**
 User syncs after making few changes:
 ```bash
-gosynctasks sync
+todoat sync
 # Syncing nextcloud...
 # Pull: 2 updated, 0 new (1s)
 # Push: 3 updates (1s)

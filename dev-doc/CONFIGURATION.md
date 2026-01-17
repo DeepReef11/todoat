@@ -1,6 +1,6 @@
 # Configuration System
 
-This document provides comprehensive documentation for gosynctasks' configuration system, covering all aspects of the YAML-based configuration, XDG compliance, path expansion, and configuration management.
+This document provides comprehensive documentation for todoat' configuration system, covering all aspects of the YAML-based configuration, XDG compliance, path expansion, and configuration management.
 
 ## Table of Contents
 
@@ -26,6 +26,7 @@ This document provides comprehensive documentation for gosynctasks' configuratio
   - [No-Prompt Mode Configuration](#no-prompt-mode-configuration)
   - [Output Format Configuration](#output-format-configuration)
   - [Singleton Pattern](#singleton-pattern)
+- [Notification Configuration](#notification-configuration)
 - [Configuration Examples](#configuration-examples)
 - [Environment Variables](#environment-variables)
 - [Related Features](#related-features)
@@ -34,7 +35,7 @@ This document provides comprehensive documentation for gosynctasks' configuratio
 
 ## Overview
 
-**Purpose**: The configuration system provides flexible, standards-compliant configuration management for gosynctasks, allowing users to customize backend connections, sync behavior, credentials, and application settings through a human-readable YAML file.
+**Purpose**: The configuration system provides flexible, standards-compliant configuration management for todoat, allowing users to customize backend connections, sync behavior, credentials, and application settings through a human-readable YAML file.
 
 **Key Characteristics**:
 - **Standards-Compliant**: Follows XDG Base Directory Specification
@@ -52,16 +53,16 @@ The configuration file follows the XDG Base Directory Specification:
 | Priority | Location | Description |
 |----------|----------|-------------|
 | **1. Custom Path** | `--config` flag | Explicit path specified via command-line |
-| **2. XDG Config** | `$XDG_CONFIG_HOME/gosynctasks/config.yaml` | User-specific configuration |
-| **3. Default** | `~/.config/gosynctasks/config.yaml` | Fallback if XDG_CONFIG_HOME not set |
+| **2. XDG Config** | `$XDG_CONFIG_HOME/todoat/config.yaml` | User-specific configuration |
+| **3. Default** | `~/.config/todoat/config.yaml` | Fallback if XDG_CONFIG_HOME not set |
 
 **Related XDG Directories**:
 
 | Type | Variable | Default | Purpose |
 |------|----------|---------|---------|
-| Config | `XDG_CONFIG_HOME` | `~/.config/gosynctasks/` | Configuration files, custom views |
-| Data | `XDG_DATA_HOME` | `~/.local/share/gosynctasks/` | SQLite databases, cache files |
-| Cache | `XDG_CACHE_HOME` | `~/.cache/gosynctasks/` | Task list cache (`lists.json`) |
+| Config | `XDG_CONFIG_HOME` | `~/.config/todoat/` | Configuration files, custom views |
+| Data | `XDG_DATA_HOME` | `~/.local/share/todoat/` | SQLite databases, cache files |
+| Cache | `XDG_CACHE_HOME` | `~/.cache/todoat/` | Task list cache (`lists.json`) |
 
 ---
 
@@ -131,9 +132,9 @@ output_format: text        # Output format: text | json (--json flag)
 
 **User Journey**:
 
-1. User creates or edits `~/.config/gosynctasks/config.yaml`
+1. User creates or edits `~/.config/todoat/config.yaml`
 2. User structures configuration using YAML syntax (maps, lists, strings, booleans)
-3. gosynctasks loads and parses the YAML on startup
+3. todoat loads and parses the YAML on startup
 4. Validation errors are reported with helpful messages
 5. Valid configuration is used throughout the application
 
@@ -180,10 +181,10 @@ type Config struct {
 
 **User Journey**:
 
-1. User installs gosynctasks
-2. On first run, gosynctasks checks `XDG_CONFIG_HOME` environment variable
-3. If set, uses `$XDG_CONFIG_HOME/gosynctasks/`
-4. If not set, uses `~/.config/gosynctasks/`
+1. User installs todoat
+2. On first run, todoat checks `XDG_CONFIG_HOME` environment variable
+3. If set, uses `$XDG_CONFIG_HOME/todoat/`
+4. If not set, uses `~/.config/todoat/`
 5. Creates directory structure automatically
 6. Places config, data, and cache files in appropriate locations
 
@@ -192,10 +193,10 @@ type Config struct {
 
 **Outputs/Results**:
 - Standard directory structure:
-  - Config: `~/.config/gosynctasks/config.yaml`
-  - Data: `~/.local/share/gosynctasks/tasks.db`
-  - Cache: `~/.cache/gosynctasks/lists.json`
-  - Views: `~/.config/gosynctasks/views/`
+  - Config: `~/.config/todoat/config.yaml`
+  - Data: `~/.local/share/todoat/tasks.db`
+  - Cache: `~/.cache/todoat/lists.json`
+  - Views: `~/.config/todoat/views/`
 
 **Technical Details**:
 
@@ -211,7 +212,7 @@ func GetConfigPath() (string, error) {
 
 // Directory permissions
 const (
-    CONFIG_DIR_PATH  = "gosynctasks"
+    CONFIG_DIR_PATH  = "todoat"
     CONFIG_FILE_PATH = "config.yaml"
     CONFIG_DIR_PERM  = 0755  // rwxr-xr-x
     CONFIG_FILE_PERM = 0644  // rw-r--r--
@@ -248,7 +249,7 @@ const (
 3. User provides type-specific configuration (host, username, db_path, etc.)
 4. User sets `enabled: true` to activate backend
 5. User saves config file
-6. gosynctasks validates backend configuration on next run
+6. todoat validates backend configuration on next run
 7. User accesses backend via `--backend` flag or selection priority
 
 **Prerequisites**:
@@ -294,14 +295,14 @@ git:
   auto_detect: true
   fallback_files:
     - "todo.md"
-    - ".gosynctasks.md"
+    - ".todoat.md"
   auto_commit: false
 
 # File 
 file:
   type: file
   enabled: false
-  url: "file://~/.config/gosynctasks/tasks.md"
+  url: "file://~/.config/todoat/tasks.md"
 ```
 
 **Validation Rules**:
@@ -326,7 +327,7 @@ file:
 1. **Global Sync Setting**: `sync.enabled` controls automatic caching for all remote backends
 2. **Shared Cache Database**: All remote backends share a single cache database
 3. **Per-Backend Isolation**: Tasks from different backends are isolated via `backend_name` column
-4. **Auto-Sync**: Background sync can be enabled/disabled. When disabled, user must launch the command `gosynctasks sync` to sync with backend
+4. **Auto-Sync**: Background sync can be enabled/disabled. When disabled, user must launch the command `todoat sync` to sync with backend
 5. **Conflict Resolution**: Global strategy applies to all backends (individual backends can have its own conflict resolution)
 6. **Opt-Out**: Individual backends can disable caching with `sync: {enabled: false}`
 
@@ -334,10 +335,10 @@ file:
 
 1. User enables sync in config: `sync.enabled: true`
 2. User configures sync settings (conflict resolution, interval, offline mode)
-3. gosynctasks creates shared cache database on startup
+3. todoat creates shared cache database on startup
 4. Each enabled remote backend is automatically cached
 5. User performs task operations (local-first, instant response)
-6. Sync happens manually (`gosynctasks sync`) or in background (if auto_sync: true)
+6. Sync happens manually (`todoat sync`) or in background (if auto_sync: true)
 7. Changes propagate between local cache and remote backends
 
 **Prerequisites**:
@@ -345,7 +346,7 @@ file:
 - See [Synchronization](./SYNCHRONIZATION.md) for detailed sync requirements
 
 **Outputs/Results**:
-- Shared cache database: `~/.local/share/gosynctasks/cache.db`
+- Shared cache database: `~/.local/share/todoat/cache.db`
 - All task operations use local cache (fast)
 - Sync operations propagate changes to/from remotes
 - Conflicts resolved according to configured strategy
@@ -388,7 +389,7 @@ func (c *Config) GetCacheDatabasePath() (string, error) {
         homeDir, _ := os.UserHomeDir()
         dataDir = filepath.Join(homeDir, ".local", "share")
     }
-    return filepath.Join(dataDir, "gosynctasks", "cache.db"), nil
+    return filepath.Join(dataDir, "todoat", "cache.db"), nil
 }
 ```
 
@@ -398,6 +399,25 @@ func (c *Config) GetCacheDatabasePath() (string, error) {
 - [Backend System](./BACKEND_SYSTEM.md) - Backend architecture
 - [Conflict Resolution Configuration](#conflict-resolution-configuration) - Conflict strategies
 - [Offline Mode Configuration](#offline-mode-configuration) - Offline behavior
+
+---
+
+## Notification Configuration
+
+The notification system provides alerts for background sync operations.
+
+```yaml
+notification:
+  enabled: true
+  os_notification:
+    enabled: true
+    on_sync_error: true
+    on_conflict: true
+  log_notification:
+    enabled: true
+```
+
+See [Notification Manager](./NOTIFICATION_MANAGER.md) for full configuration options.
 
 ---
 
@@ -417,7 +437,7 @@ func (c *Config) GetCacheDatabasePath() (string, error) {
 
 1. User writes config with portable paths using `~` or `$HOME`
 2. User saves config file
-3. On load, gosynctasks expands paths to absolute paths
+3. On load, todoat expands paths to absolute paths
 4. Application uses fully-resolved paths for all operations
 5. Config remains portable across different users/systems
 
@@ -518,11 +538,11 @@ func expandPath(path string) string {
 
 **User Journey**:
 
-1. User runs gosynctasks for first time
-2. gosynctasks detects no config file exists
-3. User sees prompt: "Do you want to copy config sample to ~/.config/gosynctasks/config.yaml?"
+1. User runs todoat for first time
+2. todoat detects no config file exists
+3. User sees prompt: "Do you want to copy config sample to ~/.config/todoat/config.yaml?"
 4. User selects "yes"
-5. Config directory is created: `~/.config/gosynctasks/`
+5. Config directory is created: `~/.config/todoat/`
 6. Sample config is written: `config.yaml`
 7. Built-in views are copied: `views/default.yaml`, `views/all.yaml`
 8. User sees: "Built-in views copied to user config directory"
@@ -532,8 +552,8 @@ func expandPath(path string) string {
 - Write permissions to config directory (usually `~/.config/`)
 
 **Outputs/Results**:
-- New config file created: `~/.config/gosynctasks/config.yaml`
-- Built-in views installed: `~/.config/gosynctasks/views/`
+- New config file created: `~/.config/todoat/config.yaml`
+- Built-in views installed: `~/.config/todoat/views/`
 - Sample includes:
   - All backend types with examples
   - Commented-out credential options
@@ -612,8 +632,8 @@ func createConfigFromSample(configPath string) []byte {
 **User Journey**:
 
 1. User wants to use different config for testing/project
-2. User specifies config path: `gosynctasks --config /path/to/config.yaml [command]`
-3. gosynctasks loads config from specified path instead of default
+2. User specifies config path: `todoat --config /path/to/config.yaml [command]`
+3. todoat loads config from specified path instead of default
 4. All operations use custom config for this session
 5. Default config location remains unchanged
 
@@ -636,17 +656,17 @@ func createConfigFromSample(configPath string) []byte {
 
 ```bash
 # Specify config file directly
-gosynctasks --config /path/to/config.yaml MyList
+todoat --config /path/to/config.yaml MyList
 
 # Specify config directory (looks for config.yaml inside)
-gosynctasks --config /path/to/config-dir/ MyList
+todoat --config /path/to/config-dir/ MyList
 
 # Use current directory
-gosynctasks --config . MyList
-# Looks for: ./gosynctasks/config.yaml
+todoat --config . MyList
+# Looks for: ./todoat/config.yaml
 
 # Relative path
-gosynctasks --config ../other-project/config.yaml MyList
+todoat --config ../other-project/config.yaml MyList
 ```
 
 **Path Resolution Logic**:
@@ -654,7 +674,7 @@ gosynctasks --config ../other-project/config.yaml MyList
 ```go
 func SetCustomConfigPath(path string) {
     if path == "" || path == "." {
-        // Current directory: ./gosynctasks/config.yaml
+        // Current directory: ./todoat/config.yaml
         customConfigPath = filepath.Join(".", CONFIG_DIR_PATH, CONFIG_FILE_PATH)
     } else {
         info, err := os.Stat(path)
@@ -685,10 +705,10 @@ func SetCustomConfigPath(path string) {
 
 ```bash
 # Test config for Docker test server
-gosynctasks --config ./gosynctasks/config MyList
+todoat --config ./todoat/config MyList
 
 # CI/CD config
-gosynctasks --config /etc/gosynctasks/ci-config.yaml sync
+todoat --config /etc/todoat/ci-config.yaml sync
 ```
 
 **Related Features**:
@@ -712,7 +732,7 @@ gosynctasks --config /etc/gosynctasks/ci-config.yaml sync
 **User Journey**:
 
 1. User edits config file with invalid values
-2. User runs gosynctasks command
+2. User runs todoat command
 3. Config is loaded and parsed
 4. Validation detects error
 5. Application exits with error message explaining problem
@@ -823,10 +843,10 @@ func (c Config) Validate() error {
 **Error Message Examples**:
 
 ```
-Invalid YAML in config file ~/.config/gosynctasks/config.yaml:
+Invalid YAML in config file ~/.config/todoat/config.yaml:
   yaml: line 5: mapping values are not allowed in this context
 
-Missing field(s) in YAML config file ~/.config/gosynctasks/config.yaml:
+Missing field(s) in YAML config file ~/.config/todoat/config.yaml:
   backend "nextcloud": URL, host, or username is required for nextcloud backend
 
 default backend "sqlite-cache" not found in configured backends
@@ -860,7 +880,7 @@ sync.conflict_resolution must be server_wins, local_wins, merge, or keep_both, g
 1. User configures multiple backends in config file
 2. User sets `default_backend: nextcloud-prod`
 3. User runs commands without `--backend` flag
-4. gosynctasks uses nextcloud-prod backend automatically
+4. todoat uses nextcloud-prod backend automatically
 5. User can override with `--backend sqlite` for specific commands
 
 **Prerequisites**:
@@ -905,13 +925,13 @@ Note: When **Sync enabled**: Uses sync manager if remote backend is selected
 
 ```bash
 # Uses default backend (nextcloud-prod)
-gosynctasks MyList
+todoat MyList
 
 # Override with explicit backend
-gosynctasks --backend sqlite MyList
+todoat --backend sqlite MyList
 
 # List all backends to see default
-gosynctasks --list-backends
+todoat --list-backends
 ```
 
 **Common Patterns**:
@@ -968,7 +988,7 @@ backends:
 2. User enables auto-detection: `auto_detect_backend: enabled: true`
 3. User sets priority order: `backend_priority: [git, nextcloud-prod, sqlite]`
 4. User runs command in git repository
-5. gosynctasks detects git backend available (finds TODO.md)
+5. todoat detects git backend available (finds TODO.md)
 6. Uses git backend automatically
 7. If not in git repo, falls back to nextcloud-prod.
 8. If nextcloud-prod not responding, warn user, fallback to sqlite.
@@ -1070,9 +1090,9 @@ RETURN default_backend OR first enabled backend
 
 **User Journey**:
 
-1. User edits task in gosynctasks (local change)
+1. User edits task in todoat (local change)
 2. Task is also edited in Nextcloud web interface (remote change)
-3. User runs `gosynctasks sync` or autosync is enabled so it sync in background
+3. User runs `todoat sync` or autosync is enabled so it sync in background
 4. Sync manager detects conflict (ETags don't match)
 5. Configured strategy is applied to resolve conflict
 6. Result is synced to both local and remote
@@ -1221,7 +1241,7 @@ Use keep_both if:
 
 ### Offline Mode Configuration
 
-**Purpose**: Controls how gosynctasks behaves when remote backends are unavailable, enabling continued operation offline with automatic operation queueing and retry.
+**Purpose**: Controls how todoat behaves when remote backends are unavailable, enabling continued operation offline with automatic operation queueing and retry.
 
 **How It Works**:
 
@@ -1238,9 +1258,9 @@ Use keep_both if:
 2. Network connection is lost (plane, tunnel, etc.)
 3. User continues performing operations
 4. Operations are queued locally
-5. User runs `gosynctasks sync status` to see queue
+5. User runs `todoat sync status` to see queue
 6. Connection returns
-7. User runs `gosynctasks sync` or waits for auto-sync
+7. User runs `todoat sync` or waits for auto-sync
 8. Queued operations are pushed to remote
 
 **Online Mode**:
@@ -1345,14 +1365,14 @@ CREATE TABLE sync_queue (
 
 ```bash
 # View sync status and queue
-gosynctasks sync status
+todoat sync status
 # Output:
 #   Offline mode: auto
 #   Remote status: Unavailable
 #   Queued operations: 5
 
 # View queued operations
-gosynctasks sync queue
+todoat sync queue
 # Output:
 #   1. create "New task" (2 retries)
 #   2. update "Updated task" (0 retries)
@@ -1375,11 +1395,11 @@ gosynctasks sync queue
 1. **Configuration Field**: (Currently not in Config struct - feature planned)
 2. **Default View**: Uses "default" view if not specified
 3. **Override**: Can be overridden with `-v` flag on command line
-4. **View Resolution**: Loads view definition from user config `~/.config/gosynctasks/views/`. If default and all are not defined, use builtin all and default view
+4. **View Resolution**: Loads view definition from user config `~/.config/todoat/views/`. If default and all are not defined, use builtin all and default view
 
 **User Journey** (Planned):
 
-1. User creates custom view: `gosynctasks view create myview`
+1. User creates custom view: `todoat view create myview`
 2. User configures as default: `default_view: myview` in config
 3. User runs commands without `-v` flag
 4. Tasks displayed using custom view automatically
@@ -1387,7 +1407,7 @@ gosynctasks sync queue
 
 **Prerequisites**:
 - [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Custom views
-- View file exists: `~/.config/gosynctasks/views/{view-name}.yaml`
+- View file exists: `~/.config/todoat/views/{view-name}.yaml`
 
 **Outputs/Results**:
 - Consistent task display across commands
@@ -1421,18 +1441,18 @@ default_view: all     # Show all fields by default
 
 ```bash
 # Uses configured default view
-gosynctasks MyList
+todoat MyList
 
 # Override with specific view
-gosynctasks MyList -v all
+todoat MyList -v all
 
 # Override with custom view
-gosynctasks MyList -v minimal
+todoat MyList -v minimal
 ```
 
 **View Storage Location**:
 - Built-in views: Embedded in binary
-- User views: `~/.config/gosynctasks/views/`
+- User views: `~/.config/todoat/views/`
 - Custom default view must exist in user views directory
 
 **Related Features**:
@@ -1443,7 +1463,7 @@ gosynctasks MyList -v minimal
 
 ### No-Prompt Mode Configuration
 
-**Purpose**: Configures non-interactive mode for scripting and automation, allowing gosynctasks to be used in scripts, CI/CD pipelines, and other automated environments without requiring user input.
+**Purpose**: Configures non-interactive mode for scripting and automation, allowing todoat to be used in scripts, CI/CD pipelines, and other automated environments without requiring user input.
 
 **How It Works**:
 
@@ -1485,7 +1505,7 @@ no_prompt: true
 
 ```bash
 # Or override per-command with flag
-gosynctasks -y MyList delete "Task"
+todoat -y MyList delete "Task"
 
 # Both produce same non-interactive behavior
 ```
@@ -1567,10 +1587,10 @@ output_format: json
 
 ```bash
 # Or override per-command with flag
-gosynctasks --json MyList
+todoat --json MyList
 
 # Parse output with jq
-gosynctasks --json MyList | jq '.tasks[].summary'
+todoat --json MyList | jq '.tasks[].summary'
 ```
 
 **JSON Output Examples**:
@@ -1763,7 +1783,7 @@ func SetConfigForTest(cfg *Config) {
 
 ```go
 // Anywhere in application
-import "gosynctasks/internal/config"
+import "todoat/internal/config"
 
 func someFunction() {
     cfg := config.GetConfig()  // Always returns same instance
@@ -1795,7 +1815,7 @@ func anotherFunction() {
 
 **Comparison with Alternatives**:
 
-| Approach | Pros | Cons | gosynctasks Choice |
+| Approach | Pros | Cons | todoat Choice |
 |----------|------|------|-------------------|
 | **Singleton** | Simple, efficient, consistent | Global state | ✅ Used |
 | **Dependency Injection** | Testable, flexible | Complex, verbose | Not needed |
@@ -1833,7 +1853,7 @@ backends:
     enabled: true
     host: "nextcloud.example.com"
     username: "myuser"
-    # Password in keyring: gosynctasks credentials set nextcloud myuser --prompt
+    # Password in keyring: todoat credentials set nextcloud myuser --prompt
 
 default_backend: nextcloud-prod
 
@@ -1888,7 +1908,7 @@ backends:
     auto_detect: true
     fallback_files:
       - "todo.md"
-      - ".gosynctasks.md"
+      - ".todoat.md"
     auto_commit: false
 
   nextcloud-work:
@@ -1977,18 +1997,18 @@ Configuration can be supplemented or overridden with environment variables:
 
 ### Backend Credentials
 
-Format: `GOSYNCTASKS_{BACKEND}_{FIELD}`
+Format: `TODOAT_{BACKEND}_{FIELD}`
 
 **Nextcloud**:
 ```bash
-export GOSYNCTASKS_NEXTCLOUD_HOST="nextcloud.example.com"
-export GOSYNCTASKS_NEXTCLOUD_USERNAME="myuser"
-export GOSYNCTASKS_NEXTCLOUD_PASSWORD="secret"
+export TODOAT_NEXTCLOUD_HOST="nextcloud.example.com"
+export TODOAT_NEXTCLOUD_USERNAME="myuser"
+export TODOAT_NEXTCLOUD_PASSWORD="secret"
 ```
 
 **Todoist**:
 ```bash
-export GOSYNCTASKS_TODOIST_TOKEN="api-token-here"
+export TODOAT_TODOIST_TOKEN="api-token-here"
 ```
 
 **Environment Variable Priority**:

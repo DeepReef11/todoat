@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Backend System in gosynctasks provides a pluggable architecture that allows the application to store and retrieve tasks from multiple different storage providers. This design enables users to work with tasks in Nextcloud (CalDAV), local SQLite databases, Git repositories with markdown files, or plain files - all through a unified interface.
+The Backend System in todoat provides a pluggable architecture that allows the application to store and retrieve tasks from multiple different storage providers. This design enables users to work with tasks in Nextcloud (CalDAV), local SQLite databases, Git repositories with markdown files, or plain files - all through a unified interface.
 
 **Related Features:**
 - [Synchronization](./SYNCHRONIZATION.md) - Syncing between local and remote backends
@@ -72,7 +72,7 @@ The Backend System in gosynctasks provides a pluggable architecture that allows 
 2. **Authentication:**
    - Supports three credential sources (priority order):
      1. System keyring (most secure)
-     2. Environment variables (`GOSYNCTASKS_NEXTCLOUD_USERNAME`, `GOSYNCTASKS_NEXTCLOUD_PASSWORD`)
+     2. Environment variables (`TODOAT_NEXTCLOUD_USERNAME`, `TODOAT_NEXTCLOUD_PASSWORD`)
      3. URL-embedded credentials (legacy, deprecated)
    - Basic auth credentials cached after first resolution
 
@@ -96,8 +96,8 @@ The Backend System in gosynctasks provides a pluggable architecture that allows 
 
 **User Journey:**
 1. User configures Nextcloud backend in `config.yaml` with host and username
-2. User stores credentials: `gosynctasks credentials set nextcloud myuser --prompt`
-3. User runs: `gosynctasks --backend=nextcloud MyTasks` to access Nextcloud tasks
+2. User stores credentials: `todoat credentials set nextcloud myuser --prompt`
+3. User runs: `todoat --backend=nextcloud MyTasks` to access Nextcloud tasks
 4. Backend establishes HTTPS connection, authenticates, and fetches task lists
 5. User performs task operations; changes immediately sync to Nextcloud server
 
@@ -128,7 +128,7 @@ The Backend System in gosynctasks provides a pluggable architecture that allows 
 **How It Works:**
 
 1. **Database Initialization:**
-   - Database path determined by `db_path` config or default: `$XDG_DATA_HOME/gosynctasks/tasks.db`
+   - Database path determined by `db_path` config or default: `$XDG_DATA_HOME/todoat/tasks.db`
    - Schema creation with 5 tables (`backend/sqlite/schema.go:11`):
      - `tasks`: Task data (UID, Summary, Description, Status, Priority, Dates, Parent UID)
      - `sync_metadata`: Per-task sync state (ETag, sync flags, timestamps)
@@ -139,7 +139,7 @@ The Backend System in gosynctasks provides a pluggable architecture that allows 
 
 2. **Multi-Backend Support:**
    - Each backend (Nextcloud, Todoist) gets isolated storage via `backend_name` field
-   - Separate cache databases per remote: `~/.local/share/gosynctasks/caches/nextcloud.db`
+   - Separate cache databases per remote: `~/.local/share/todoat/caches/nextcloud.db`
    - Tasks from different backends never mix
 
 3. **CRUD Operations (via Sync Manager when sync enabled):**
@@ -162,10 +162,10 @@ The Backend System in gosynctasks provides a pluggable architecture that allows 
 **User Journey:**
 1. User enables sync in config: `sync.enabled: true`
 2. User configures Nextcloud as remote backend
-3. System automatically creates `~/.local/share/gosynctasks/caches/nextcloud.db`
-4. User runs: `gosynctasks sync` to pull remote tasks into local cache
-5. User works offline: `gosynctasks MyList add "Task"` - changes queued locally
-6. User syncs when online: `gosynctasks sync` - pushes queued changes to remote
+3. System automatically creates `~/.local/share/todoat/caches/nextcloud.db`
+4. User runs: `todoat sync` to pull remote tasks into local cache
+5. User works offline: `todoat MyList add "Task"` - changes queued locally
+6. User syncs when online: `todoat sync` - pushes queued changes to remote
 
 **Prerequisites:**
 - Write access to data directory (`$XDG_DATA_HOME` or `~/.local/share`)
@@ -203,11 +203,11 @@ The Backend System in gosynctasks provides a pluggable architecture that allows 
    - Identifies repository root path
 
 2. **Task File Location:**
-   - Searches for markdown file with special marker: `<!-- gosynctasks:enabled -->`
+   - Searches for markdown file with special marker: `<!-- todoat:enabled -->`
    - Search order (configurable via `file` and `fallback_files`):
      1. Configured file path
      2. Fallback files from config
-     3. Defaults: `TODO.md`, `todo.md`, `.gosynctasks.md`
+     3. Defaults: `TODO.md`, `todo.md`, `.todoat.md`
    - File must exist and contain marker to be recognized
 
 3. **Markdown Format:**
@@ -229,16 +229,16 @@ The Backend System in gosynctasks provides a pluggable architecture that allows 
 
 **User Journey:**
 1. User creates Git repository: `git init myproject && cd myproject`
-2. User creates `TODO.md` with marker: `echo "<!-- gosynctasks:enabled -->" > TODO.md`
+2. User creates `TODO.md` with marker: `echo "<!-- todoat:enabled -->" > TODO.md`
 3. User enables Git backend in config with `auto_detect: true`
-4. User runs: `gosynctasks` (no backend flag needed)
+4. User runs: `todoat` (no backend flag needed)
 5. System auto-detects Git backend and shows tasks from TODO.md
-6. User adds task: `gosynctasks "Project Tasks" add "Implement feature"`
+6. User adds task: `todoat "Project Tasks" add "Implement feature"`
 7. Task added to TODO.md; if auto-commit enabled, automatically committed
 
 **Prerequisites:**
 - Git repository (`.git` directory in current path or ancestors)
-- Markdown file with `<!-- gosynctasks:enabled -->` marker
+- Markdown file with `<!-- todoat:enabled -->` marker
 - Read/write permissions to repository and task file
 
 **Outputs/Results:**
@@ -286,7 +286,7 @@ The Backend System in gosynctasks provides a pluggable architecture that allows 
 The system follows this priority order to select a backend:
 
 1. **Explicit Flag (`--backend=name`):**
-   - User specifies backend on command line: `gosynctasks --backend=nextcloud MyTasks`
+   - User specifies backend on command line: `todoat --backend=nextcloud MyTasks`
    - Highest priority - always overrides other methods
    - Returns error if specified backend not found or disabled
 
@@ -320,7 +320,7 @@ The system follows this priority order to select a backend:
 **User Journey - Auto-Detection:**
 1. User is in Git repository with TODO.md file
 2. User enables auto-detection: `auto_detect_backend: true`
-3. User runs: `gosynctasks` (no arguments)
+3. User runs: `todoat` (no arguments)
 4. System checks for detectable backends
 5. Git backend's `CanDetect()` finds repository and marked file
 6. System uses Git backend automatically
@@ -329,7 +329,7 @@ The system follows this priority order to select a backend:
 **User Journey - Explicit Selection:**
 1. User has multiple backends configured (Nextcloud, Git)
 2. User wants to use Nextcloud specifically
-3. User runs: `gosynctasks --backend=nextcloud MyTasks`
+3. User runs: `todoat --backend=nextcloud MyTasks`
 4. System bypasses auto-detection and priority
 5. Nextcloud backend used for this command
 
@@ -420,11 +420,11 @@ connector:
 - **SQLite (with sync):** `[sqlite → nextcloud]`
   - Shows cache syncing to remote
 - **Git:** `[git:repo-name/TODO.md]`
-  - Example: `[git:gosynctasks/TODO.md]`
+  - Example: `[git:todoat/TODO.md]`
 - **File:** `[file:/path/to/file]`
 
 **User Journey:**
-1. User runs: `gosynctasks MyTasks`
+1. User runs: `todoat MyTasks`
 2. Task list header displays: `┌─ MyTasks ──── [nextcloud:admin@localhost:8080] ┐`
 3. User knows exactly which backend and account is active
 4. Helpful when switching between multiple Nextcloud accounts or backends
@@ -757,7 +757,7 @@ var statusToCalDAV = map[string]string{
 ```
 
 **User Journey:**
-1. User runs: `gosynctasks MyTasks update "task" -s D`
+1. User runs: `todoat MyTasks update "task" -s D`
 2. CLI parses abbreviation: `D`
 3. Backend translates: `D` → `COMPLETED` (Nextcloud) or `DONE` (SQLite)
 4. Backend stores task with backend-specific status
