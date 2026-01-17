@@ -2,40 +2,41 @@
 
 A command-line task manager with multiple backend support.
 
-## Status
-
-**Early Development** - todoat is currently in early development. The CLI framework is in place, but task management features are still being implemented.
-
-## Installation
-
-### From Source
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/todoat.git
-cd todoat
-
-# Build
-make build
-
-# Or install to $GOPATH/bin
-go install ./cmd/todoat
-```
-
-### Requirements
-
-- Go 1.21 or later
-
 ## Quick Start
 
-Once fully implemented, todoat will support:
+1. Install todoat (see [installation.md](./installation.md))
+2. Add your first task:
+   ```bash
+   todoat MyList add "My first task"
+   ```
+3. View your tasks:
+   ```bash
+   todoat MyList
+   ```
+4. Complete a task:
+   ```bash
+   todoat MyList complete "My first task"
+   ```
+
+## Features
+
+- **Task Management**: Add, view, update, complete, and delete tasks
+- **Task Lists**: Organize tasks into named lists (created automatically)
+- **Priority Support**: Set task priority (0-9, where 1 is highest)
+- **Status Tracking**: Track task status (TODO, IN-PROGRESS, DONE, CANCELLED)
+- **SQLite Backend**: Local task storage in `~/.todoat/todoat.db`
+
+## Basic Usage
 
 ```bash
+# View tasks in a list
+todoat MyList
+
 # Add a task
 todoat MyList add "Buy groceries"
 
-# View tasks
-todoat MyList
+# Add a task with priority
+todoat MyList add "Urgent task" -p 1
 
 # Complete a task
 todoat MyList complete "Buy groceries"
@@ -44,21 +45,14 @@ todoat MyList complete "Buy groceries"
 todoat MyList delete "Buy groceries"
 ```
 
-## Current Features
+## Documentation
 
-### CLI Framework
+- [Installation](./installation.md) - How to install todoat
+- [Commands](./commands.md) - Complete command reference
+- [Backends](./backends.md) - Backend setup and configuration
+- [Examples](./examples.md) - Usage examples and workflows
 
-The command-line interface is built with [Cobra](https://github.com/spf13/cobra) and supports:
-
-```bash
-# Show help
-todoat --help
-
-# Show version
-todoat --version
-```
-
-### Global Flags
+## Global Flags
 
 | Flag | Short | Description |
 |------|-------|-------------|
@@ -67,36 +61,6 @@ todoat --version
 | `--no-prompt` | `-y` | Disable interactive prompts |
 | `--verbose` | `-V` | Enable debug output |
 | `--json` | | Output in JSON format |
-
-## Planned Features
-
-The following features are planned for upcoming releases:
-
-- **Task Commands**: add, get, update, complete, delete
-- **SQLite Backend**: Local task storage
-- **List Management**: Create and organize task lists
-- **Priority and Status**: Task prioritization and status tracking
-
-## Development
-
-```bash
-# Run tests
-make test
-
-# Build
-make build
-
-# Clean build artifacts
-make clean
-```
-
-## Documentation
-
-As features are implemented, additional documentation will be added:
-
-- [Commands Reference](./commands.md) - Coming soon
-- [Configuration Guide](./configuration.md) - Coming soon
-- [Backends Guide](./backends.md) - Coming soon
 
 ## License
 

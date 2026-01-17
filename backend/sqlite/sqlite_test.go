@@ -1,0 +1,584 @@
+package sqlite
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"todoat/backend"
+)
+
+// helper to create a list and fail if nil
+func mustCreateList(t *testing.T, b *Backend, ctx context.Context, name string) *backend.List {
+	t.Helper()
+	list, err := b.CreateList(ctx, name)
+	if err != nil {
+		t.Fatalf("CreateList error: %v", err)
+	}
+	if list == nil {
+		t.Fatal("CreateList returned nil list")
+	}
+	return list
+}
+
+// helper to create a task and fail if nil
+func mustCreateTask(t *testing.T, b *Backend, ctx context.Context, listID string, task *backend.Task) *backend.Task {
+	t.Helper()
+	created, err := b.CreateTask(ctx, listID, task)
+	if err != nil {
+		t.Fatalf("CreateTask error: %v", err)
+	}
+	if created == nil {
+		t.Fatal("CreateTask returned nil task")
+	}
+	return created
+}
+
+// TestNewBackend verifies that New creates a backend with the given path.
+func TestNewBackend(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	if b == nil {
+		t.Fatal("New(:memory:) returned nil backend")
+	}
+}
+
+// TestBackendImplementsInterface verifies the Backend type implements TaskManager.
+func TestBackendImplementsInterface(t *testing.T) {
+	var _ backend.TaskManager = (*Backend)(nil)
+}
+
+// TestCreateAndGetList tests creating and retrieving a task list.
+func TestCreateAndGetList(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	// Create a list
+	list := mustCreateList(t, b, ctx, "Work Tasks")
+	if list.Name != "Work Tasks" {
+		t.Errorf("list.Name = %q, want %q", list.Name, "Work Tasks")
+	}
+	if list.ID == "" {
+		t.Error("list.ID is empty")
+	}
+
+	// Get the list by ID
+	retrieved, err := b.GetList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("GetList error: %v", err)
+	}
+	if retrieved == nil {
+		t.Fatal("GetList returned nil")
+	}
+	if retrieved.Name != "Work Tasks" {
+		t.Errorf("retrieved.Name = %q, want %q", retrieved.Name, "Work Tasks")
+	}
+}
+
+// TestGetLists tests retrieving all lists.
+func TestGetLists(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	// Initially empty
+	lists, err := b.GetLists(ctx)
+	if err != nil {
+		t.Fatalf("GetLists error: %v", err)
+	}
+	if len(lists) != 0 {
+		t.Errorf("initial GetLists returned %d lists, want 0", len(lists))
+	}
+
+	// Create some lists
+	mustCreateList(t, b, ctx, "List One")
+	mustCreateList(t, b, ctx, "List Two")
+
+	// Now should have 2 lists
+	lists, err = b.GetLists(ctx)
+	if err != nil {
+		t.Fatalf("GetLists error: %v", err)
+	}
+	if len(lists) != 2 {
+		t.Errorf("GetLists returned %d lists, want 2", len(lists))
+	}
+}
+
+// TestDeleteList tests deleting a list.
+func TestDeleteList(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	// Create and then delete a list
+	list := mustCreateList(t, b, ctx, "Temporary")
+
+	err = b.DeleteList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("DeleteList error: %v", err)
+	}
+
+	// Should no longer exist
+	retrieved, err := b.GetList(ctx, list.ID)
+	if err == nil && retrieved != nil {
+		t.Error("GetList should return nil or error for deleted list")
+	}
+}
+
+// TestCreateAndGetTask tests creating and retrieving a task.
+func TestCreateAndGetTask(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	// First create a list
+	list := mustCreateList(t, b, ctx, "My Tasks")
+
+	// Create a task
+	task := &backend.Task{
+		Summary:  "Buy groceries",
+		Status:   backend.StatusNeedsAction,
+		Priority: 5,
+	}
+
+	created := mustCreateTask(t, b, ctx, list.ID, task)
+	if created.ID == "" {
+		t.Error("created.ID is empty (should be auto-generated)")
+	}
+	if created.Summary != "Buy groceries" {
+		t.Errorf("created.Summary = %q, want %q", created.Summary, "Buy groceries")
+	}
+	if created.Status != backend.StatusNeedsAction {
+		t.Errorf("created.Status = %v, want %v", created.Status, backend.StatusNeedsAction)
+	}
+	if created.Priority != 5 {
+		t.Errorf("created.Priority = %d, want %d", created.Priority, 5)
+	}
+	if created.Created.IsZero() {
+		t.Error("created.Created is zero (should be auto-set)")
+	}
+	if created.Modified.IsZero() {
+		t.Error("created.Modified is zero (should be auto-set)")
+	}
+
+	// Retrieve by ID
+	retrieved, err := b.GetTask(ctx, list.ID, created.ID)
+	if err != nil {
+		t.Fatalf("GetTask error: %v", err)
+	}
+	if retrieved == nil {
+		t.Fatal("GetTask returned nil")
+	}
+	if retrieved.Summary != "Buy groceries" {
+		t.Errorf("retrieved.Summary = %q, want %q", retrieved.Summary, "Buy groceries")
+	}
+}
+
+// TestGetTasks tests retrieving all tasks in a list.
+func TestGetTasks(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Project")
+
+	// Initially empty
+	tasks, err := b.GetTasks(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("GetTasks error: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("initial GetTasks returned %d tasks, want 0", len(tasks))
+	}
+
+	// Create multiple tasks
+	mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Task 1"})
+	mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Task 2"})
+	mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Task 3"})
+
+	tasks, err = b.GetTasks(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("GetTasks error: %v", err)
+	}
+	if len(tasks) != 3 {
+		t.Errorf("GetTasks returned %d tasks, want 3", len(tasks))
+	}
+}
+
+// TestUpdateTask tests updating a task.
+func TestUpdateTask(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Work")
+
+	created := mustCreateTask(t, b, ctx, list.ID, &backend.Task{
+		Summary:  "Original title",
+		Status:   backend.StatusNeedsAction,
+		Priority: 3,
+	})
+
+	// Update the task
+	created.Summary = "Updated title"
+	created.Status = backend.StatusCompleted
+	created.Priority = 1
+
+	updated, err := b.UpdateTask(ctx, list.ID, created)
+	if err != nil {
+		t.Fatalf("UpdateTask error: %v", err)
+	}
+	if updated == nil {
+		t.Fatal("UpdateTask returned nil")
+	}
+	if updated.Summary != "Updated title" {
+		t.Errorf("updated.Summary = %q, want %q", updated.Summary, "Updated title")
+	}
+	if updated.Status != backend.StatusCompleted {
+		t.Errorf("updated.Status = %v, want %v", updated.Status, backend.StatusCompleted)
+	}
+	if updated.Priority != 1 {
+		t.Errorf("updated.Priority = %d, want %d", updated.Priority, 1)
+	}
+
+	// Verify the update persisted
+	retrieved, err := b.GetTask(ctx, list.ID, created.ID)
+	if err != nil {
+		t.Fatalf("GetTask error: %v", err)
+	}
+	if retrieved.Summary != "Updated title" {
+		t.Errorf("after update, retrieved.Summary = %q, want %q", retrieved.Summary, "Updated title")
+	}
+}
+
+// TestDeleteTask tests deleting a task.
+func TestDeleteTask(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Cleanup")
+
+	task := mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Delete me"})
+
+	err = b.DeleteTask(ctx, list.ID, task.ID)
+	if err != nil {
+		t.Fatalf("DeleteTask error: %v", err)
+	}
+
+	// Should no longer exist
+	retrieved, err := b.GetTask(ctx, list.ID, task.ID)
+	if err == nil && retrieved != nil {
+		t.Error("GetTask should return nil or error for deleted task")
+	}
+
+	// GetTasks should not include it
+	tasks, err := b.GetTasks(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("GetTasks error: %v", err)
+	}
+	for _, tk := range tasks {
+		if tk.ID == task.ID {
+			t.Error("deleted task still appears in GetTasks")
+		}
+	}
+}
+
+// TestTaskTimestamps verifies Created and Modified are properly set.
+func TestTaskTimestamps(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Timestamps")
+
+	before := time.Now().Add(-time.Second)
+	task := mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Timestamped task"})
+	after := time.Now().Add(time.Second)
+
+	if task.Created.Before(before) || task.Created.After(after) {
+		t.Errorf("Created timestamp %v not in expected range", task.Created)
+	}
+	if task.Modified.Before(before) || task.Modified.After(after) {
+		t.Errorf("Modified timestamp %v not in expected range", task.Modified)
+	}
+
+	// Update should change Modified but not Created
+	originalCreated := task.Created
+	time.Sleep(10 * time.Millisecond) // ensure time difference
+
+	task.Summary = "Updated summary"
+	updated, err := b.UpdateTask(ctx, list.ID, task)
+	if err != nil {
+		t.Fatalf("UpdateTask error: %v", err)
+	}
+	if updated == nil {
+		t.Fatal("UpdateTask returned nil")
+	}
+
+	if !updated.Created.Equal(originalCreated) {
+		t.Errorf("Created changed after update: was %v, now %v", originalCreated, updated.Created)
+	}
+	if !updated.Modified.After(originalCreated) {
+		t.Error("Modified should be after original Created time after update")
+	}
+}
+
+// TestClose tests closing the database connection.
+func TestClose(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+
+	err = b.Close()
+	if err != nil {
+		t.Fatalf("Close error: %v", err)
+	}
+
+	// After close, operations should fail or the backend should handle gracefully
+	ctx := context.Background()
+	_, err = b.GetLists(ctx)
+	// We expect an error or graceful handling after close
+	// The specific behavior depends on implementation
+	_ = err // Some implementations may return an error, others may not
+}
+
+// TestTasksIsolatedByList verifies tasks are isolated to their lists.
+func TestTasksIsolatedByList(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list1 := mustCreateList(t, b, ctx, "List 1")
+	list2 := mustCreateList(t, b, ctx, "List 2")
+
+	// Add tasks to list1
+	mustCreateTask(t, b, ctx, list1.ID, &backend.Task{Summary: "List1 Task"})
+
+	// Add tasks to list2
+	mustCreateTask(t, b, ctx, list2.ID, &backend.Task{Summary: "List2 Task A"})
+	mustCreateTask(t, b, ctx, list2.ID, &backend.Task{Summary: "List2 Task B"})
+
+	// Get tasks from each list
+	tasks1, err := b.GetTasks(ctx, list1.ID)
+	if err != nil {
+		t.Fatalf("GetTasks error: %v", err)
+	}
+	if len(tasks1) != 1 {
+		t.Errorf("list1 has %d tasks, want 1", len(tasks1))
+	}
+
+	tasks2, err := b.GetTasks(ctx, list2.ID)
+	if err != nil {
+		t.Fatalf("GetTasks error: %v", err)
+	}
+	if len(tasks2) != 2 {
+		t.Errorf("list2 has %d tasks, want 2", len(tasks2))
+	}
+}
+
+// TestDeleteListCascadesToTasks verifies that deleting a list removes its tasks.
+func TestDeleteListCascadesToTasks(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Doomed List")
+
+	task := mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Doomed Task"})
+	taskID := task.ID
+
+	// Delete the list
+	err = b.DeleteList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("DeleteList error: %v", err)
+	}
+
+	// The task should be gone too (cascade delete)
+	retrieved, err := b.GetTask(ctx, list.ID, taskID)
+	if err == nil && retrieved != nil {
+		t.Error("task should be deleted when list is deleted (cascade)")
+	}
+}
+
+// TestGetNonExistentList tests getting a list that doesn't exist.
+func TestGetNonExistentList(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list, err := b.GetList(ctx, "nonexistent-id")
+	// Should return nil or an error for non-existent list
+	if list != nil && err == nil {
+		t.Error("GetList should return nil or error for nonexistent list")
+	}
+}
+
+// TestGetNonExistentTask tests getting a task that doesn't exist.
+func TestGetNonExistentTask(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Test List")
+
+	task, err := b.GetTask(ctx, list.ID, "nonexistent-task-id")
+	// Should return nil or an error for non-existent task
+	if task != nil && err == nil {
+		t.Error("GetTask should return nil or error for nonexistent task")
+	}
+}
+
+// TestTaskDescription tests that task description is properly stored.
+func TestTaskDescription(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Test")
+
+	task := mustCreateTask(t, b, ctx, list.ID, &backend.Task{
+		Summary:     "Task with description",
+		Description: "This is a detailed description of the task.",
+	})
+
+	retrieved, err := b.GetTask(ctx, list.ID, task.ID)
+	if err != nil {
+		t.Fatalf("GetTask error: %v", err)
+	}
+	if retrieved == nil {
+		t.Fatal("GetTask returned nil")
+	}
+	if retrieved.Description != "This is a detailed description of the task." {
+		t.Errorf("Description = %q, want %q", retrieved.Description, "This is a detailed description of the task.")
+	}
+}
+
+// TestTaskDueDate tests that task due date is properly stored.
+func TestTaskDueDate(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Test")
+
+	dueDate := time.Date(2025, 12, 31, 23, 59, 0, 0, time.UTC)
+	task := mustCreateTask(t, b, ctx, list.ID, &backend.Task{
+		Summary: "Task with due date",
+		DueDate: &dueDate,
+	})
+
+	retrieved, err := b.GetTask(ctx, list.ID, task.ID)
+	if err != nil {
+		t.Fatalf("GetTask error: %v", err)
+	}
+	if retrieved == nil {
+		t.Fatal("GetTask returned nil")
+	}
+	if retrieved.DueDate == nil {
+		t.Fatal("DueDate is nil")
+	}
+	if !retrieved.DueDate.Equal(dueDate) {
+		t.Errorf("DueDate = %v, want %v", *retrieved.DueDate, dueDate)
+	}
+}
+
+// TestAllTaskStatuses tests all task statuses are properly stored.
+func TestAllTaskStatuses(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "Status Test")
+
+	statuses := []backend.TaskStatus{
+		backend.StatusNeedsAction,
+		backend.StatusCompleted,
+		backend.StatusInProgress,
+		backend.StatusCancelled,
+	}
+
+	for _, status := range statuses {
+		task := mustCreateTask(t, b, ctx, list.ID, &backend.Task{
+			Summary: "Task with status " + string(status),
+			Status:  status,
+		})
+
+		retrieved, err := b.GetTask(ctx, list.ID, task.ID)
+		if err != nil {
+			t.Fatalf("GetTask error: %v", err)
+		}
+		if retrieved == nil {
+			t.Fatalf("GetTask returned nil for status %v", status)
+		}
+		if retrieved.Status != status {
+			t.Errorf("status = %v, want %v", retrieved.Status, status)
+		}
+	}
+}

@@ -2,76 +2,326 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
+	"time"
+
+	"github.com/google/uuid"
+	_ "modernc.org/sqlite"
 	"todoat/backend"
 )
 
 // Backend implements backend.TaskManager using SQLite
 type Backend struct {
-	path string
+	db *sql.DB
 }
 
-// New creates a new SQLite backend
+// New creates a new SQLite backend and initializes the database schema
 func New(path string) (*Backend, error) {
-	return &Backend{path: path}, nil
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, err
+	}
+
+	b := &Backend{db: db}
+	if err := b.initSchema(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// initSchema creates the database tables if they don't exist
+func (b *Backend) initSchema() error {
+	schema := `
+		CREATE TABLE IF NOT EXISTS task_lists (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			color TEXT DEFAULT '',
+			modified TEXT NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			list_id TEXT NOT NULL,
+			summary TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
+			priority INTEGER DEFAULT 0,
+			due_date TEXT,
+			created TEXT NOT NULL,
+			modified TEXT NOT NULL,
+			parent_id TEXT DEFAULT '',
+			FOREIGN KEY (list_id) REFERENCES task_lists(id) ON DELETE CASCADE
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks(list_id);
+		CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+	`
+
+	// Enable foreign keys
+	if _, err := b.db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return err
+	}
+
+	_, err := b.db.Exec(schema)
+	return err
 }
 
 // GetLists returns all task lists
 func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
-	// TODO: implement
-	return nil, nil
+	rows, err := b.db.QueryContext(ctx, "SELECT id, name, color, modified FROM task_lists")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var lists []backend.List
+	for rows.Next() {
+		var l backend.List
+		var modifiedStr string
+		if err := rows.Scan(&l.ID, &l.Name, &l.Color, &modifiedStr); err != nil {
+			return nil, err
+		}
+		l.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr)
+		lists = append(lists, l)
+	}
+
+	if lists == nil {
+		lists = []backend.List{}
+	}
+	return lists, rows.Err()
 }
 
 // GetList returns a specific list by ID
 func (b *Backend) GetList(ctx context.Context, listID string) (*backend.List, error) {
-	// TODO: implement
-	return nil, nil
+	var l backend.List
+	var modifiedStr string
+	err := b.db.QueryRowContext(ctx,
+		"SELECT id, name, color, modified FROM task_lists WHERE id = ?",
+		listID,
+	).Scan(&l.ID, &l.Name, &l.Color, &modifiedStr)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	l.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr)
+	return &l, nil
 }
 
 // CreateList creates a new task list
 func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, error) {
-	// TODO: implement
-	return nil, nil
+	id := uuid.New().String()
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
+
+	_, err := b.db.ExecContext(ctx,
+		"INSERT INTO task_lists (id, name, color, modified) VALUES (?, ?, '', ?)",
+		id, name, nowStr,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &backend.List{
+		ID:       id,
+		Name:     name,
+		Color:    "",
+		Modified: now,
+	}, nil
 }
 
-// DeleteList removes a task list
+// DeleteList removes a task list and all its tasks (via cascade)
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
-	// TODO: implement
-	return nil
+	// First delete all tasks in this list (since cascade may not work in all SQLite configs)
+	_, err := b.db.ExecContext(ctx, "DELETE FROM tasks WHERE list_id = ?", listID)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.db.ExecContext(ctx, "DELETE FROM task_lists WHERE id = ?", listID)
+	return err
 }
 
 // GetTasks returns all tasks in a list
 func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
-	// TODO: implement
-	return nil, nil
+	rows, err := b.db.QueryContext(ctx,
+		`SELECT id, list_id, summary, description, status, priority, due_date, created, modified, parent_id
+		 FROM tasks WHERE list_id = ?`,
+		listID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var tasks []backend.Task
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, *t)
+	}
+
+	if tasks == nil {
+		tasks = []backend.Task{}
+	}
+	return tasks, rows.Err()
 }
 
 // GetTask returns a specific task
 func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.Task, error) {
-	// TODO: implement
-	return nil, nil
+	row := b.db.QueryRowContext(ctx,
+		`SELECT id, list_id, summary, description, status, priority, due_date, created, modified, parent_id
+		 FROM tasks WHERE list_id = ? AND id = ?`,
+		listID, taskID,
+	)
+
+	t, err := scanTaskRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return t, err
+}
+
+// scanTask scans a task from a Rows result
+func scanTask(rows *sql.Rows) (*backend.Task, error) {
+	var t backend.Task
+	var dueDateStr, createdStr, modifiedStr sql.NullString
+
+	err := rows.Scan(
+		&t.ID, &t.ListID, &t.Summary, &t.Description, &t.Status,
+		&t.Priority, &dueDateStr, &createdStr, &modifiedStr, &t.ParentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if createdStr.Valid {
+		t.Created, _ = time.Parse(time.RFC3339Nano, createdStr.String)
+	}
+	if modifiedStr.Valid {
+		t.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr.String)
+	}
+	if dueDateStr.Valid && dueDateStr.String != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, dueDateStr.String)
+		if err == nil {
+			t.DueDate = &parsed
+		}
+	}
+
+	return &t, nil
+}
+
+// scanTaskRow scans a task from a Row result
+func scanTaskRow(row *sql.Row) (*backend.Task, error) {
+	var t backend.Task
+	var dueDateStr, createdStr, modifiedStr sql.NullString
+
+	err := row.Scan(
+		&t.ID, &t.ListID, &t.Summary, &t.Description, &t.Status,
+		&t.Priority, &dueDateStr, &createdStr, &modifiedStr, &t.ParentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if createdStr.Valid {
+		t.Created, _ = time.Parse(time.RFC3339Nano, createdStr.String)
+	}
+	if modifiedStr.Valid {
+		t.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr.String)
+	}
+	if dueDateStr.Valid && dueDateStr.String != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, dueDateStr.String)
+		if err == nil {
+			t.DueDate = &parsed
+		}
+	}
+
+	return &t, nil
 }
 
 // CreateTask adds a new task to a list
 func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
-	// TODO: implement
-	return nil, nil
+	id := uuid.New().String()
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
+
+	var dueDateStr sql.NullString
+	if task.DueDate != nil {
+		dueDateStr = sql.NullString{String: task.DueDate.Format(time.RFC3339Nano), Valid: true}
+	}
+
+	status := task.Status
+	if status == "" {
+		status = backend.StatusNeedsAction
+	}
+
+	_, err := b.db.ExecContext(ctx,
+		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, created, modified, parent_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, listID, task.Summary, task.Description, status, task.Priority,
+		dueDateStr, nowStr, nowStr, task.ParentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &backend.Task{
+		ID:          id,
+		ListID:      listID,
+		Summary:     task.Summary,
+		Description: task.Description,
+		Status:      status,
+		Priority:    task.Priority,
+		DueDate:     task.DueDate,
+		Created:     now,
+		Modified:    now,
+		ParentID:    task.ParentID,
+	}, nil
 }
 
 // UpdateTask modifies an existing task
 func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
-	// TODO: implement
-	return nil, nil
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
+
+	var dueDateStr sql.NullString
+	if task.DueDate != nil {
+		dueDateStr = sql.NullString{String: task.DueDate.Format(time.RFC3339Nano), Valid: true}
+	}
+
+	_, err := b.db.ExecContext(ctx,
+		`UPDATE tasks SET summary = ?, description = ?, status = ?, priority = ?, due_date = ?, modified = ?, parent_id = ?
+		 WHERE id = ? AND list_id = ?`,
+		task.Summary, task.Description, task.Status, task.Priority, dueDateStr, nowStr, task.ParentID,
+		task.ID, listID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch the updated task to get all fields including Created
+	return b.GetTask(ctx, listID, task.ID)
 }
 
 // DeleteTask removes a task
 func (b *Backend) DeleteTask(ctx context.Context, listID, taskID string) error {
-	// TODO: implement
-	return nil
+	_, err := b.db.ExecContext(ctx, "DELETE FROM tasks WHERE id = ? AND list_id = ?", taskID, listID)
+	return err
 }
 
 // Close closes the database connection
 func (b *Backend) Close() error {
-	// TODO: implement
+	if b.db != nil {
+		return b.db.Close()
+	}
 	return nil
 }
 
