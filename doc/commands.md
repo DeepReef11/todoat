@@ -35,21 +35,32 @@ todoat MyList g
 
 # Default action (get is implied when only list name provided)
 todoat MyList
+
+# Filter by status
+todoat MyList get -s TODO
+todoat MyList get -s IN-PROGRESS
+todoat MyList get -s DONE
 ```
+
+### Get Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--status` | `-s` | Filter tasks by status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 
 **Output format:**
 ```
 Tasks in 'MyList':
-  [ ] Buy groceries
-  [>] Write report [P1]
-  [x] Call dentist
+  [TODO] Buy groceries
+  [IN-PROGRESS] Write report [P1]
+  [DONE] Call dentist
 ```
 
-Status icons:
-- `[ ]` - TODO (needs action)
-- `[>]` - IN-PROGRESS
-- `[x]` - COMPLETED
-- `[-]` - CANCELLED
+Status indicators:
+- `[TODO]` - Needs action
+- `[IN-PROGRESS]` - Currently being worked on
+- `[DONE]` - Completed
+- `[CANCELLED]` - No longer needed
 
 ## Adding Tasks
 

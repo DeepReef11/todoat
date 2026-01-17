@@ -643,3 +643,297 @@ func TestTaskMatchingCaseInsensitive(t *testing.T) {
 		t.Fatalf("expected exit code 0 for case-insensitive match, got %d: stderr=%s", exitCode, stderr.String())
 	}
 }
+
+// --- Status System Tests ---
+
+func TestStatusDisplayFormat(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task (default status is TODO)
+	Execute([]string{"-y", "Work", "add", "Task one"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get tasks and check status format
+	exitCode := Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "[TODO]") {
+		t.Errorf("expected [TODO] status indicator, got: %s", output)
+	}
+}
+
+func TestStatusDisplayFormatDone(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add and complete a task
+	Execute([]string{"-y", "Work", "add", "Task done"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Task done"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get tasks and check status format
+	exitCode := Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "[DONE]") {
+		t.Errorf("expected [DONE] status indicator, got: %s", output)
+	}
+}
+
+func TestStatusAbbreviationT(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task and set it to DONE first
+	Execute([]string{"-y", "Work", "add", "Task abbrev"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Task abbrev"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update status using abbreviation T (should set to TODO)
+	exitCode := Execute([]string{"-y", "Work", "update", "Task abbrev", "-s", "T"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Verify status is TODO
+	Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+	output := stdout.String()
+	if !strings.Contains(output, "[TODO]") {
+		t.Errorf("expected [TODO] after using -s T abbreviation, got: %s", output)
+	}
+}
+
+func TestStatusAbbreviationD(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task
+	Execute([]string{"-y", "Work", "add", "Task abbrev D"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update status using abbreviation D (should set to DONE)
+	exitCode := Execute([]string{"-y", "Work", "update", "Task abbrev D", "-s", "D"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Verify status is DONE
+	Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+	output := stdout.String()
+	if !strings.Contains(output, "[DONE]") {
+		t.Errorf("expected [DONE] after using -s D abbreviation, got: %s", output)
+	}
+}
+
+func TestStatusCaseInsensitive(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task
+	Execute([]string{"-y", "Work", "add", "Task case"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update status using lowercase
+	exitCode := Execute([]string{"-y", "Work", "update", "Task case", "-s", "done"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Verify status is DONE
+	Execute([]string{"-y", "Work", "get"}, &stdout, &stderr, cfg)
+	output := stdout.String()
+	if !strings.Contains(output, "[DONE]") {
+		t.Errorf("expected [DONE] after using lowercase status, got: %s", output)
+	}
+}
+
+func TestFilterByStatusTodo(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different statuses
+	Execute([]string{"-y", "Work", "add", "Task todo one"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Task done one"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Task done one"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter to show only TODO tasks
+	exitCode := Execute([]string{"-y", "Work", "-s", "TODO"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Task todo one") {
+		t.Errorf("expected to see TODO task, got: %s", output)
+	}
+	if strings.Contains(output, "Task done one") {
+		t.Errorf("should NOT see DONE task when filtering for TODO, got: %s", output)
+	}
+}
+
+func TestFilterByStatusDone(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different statuses
+	Execute([]string{"-y", "Work", "add", "Task todo two"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Task done two"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Task done two"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter to show only DONE tasks
+	exitCode := Execute([]string{"-y", "Work", "-s", "DONE"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Task done two") {
+		t.Errorf("expected to see DONE task, got: %s", output)
+	}
+	if strings.Contains(output, "Task todo two") {
+		t.Errorf("should NOT see TODO task when filtering for DONE, got: %s", output)
+	}
+}
+
+func TestFilterByStatusAbbreviation(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different statuses
+	Execute([]string{"-y", "Work", "add", "Task todo three"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Task done three"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Task done three"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter using abbreviation T
+	exitCode := Execute([]string{"-y", "Work", "-s", "T"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Task todo three") {
+		t.Errorf("expected to see TODO task with -s T, got: %s", output)
+	}
+	if strings.Contains(output, "Task done three") {
+		t.Errorf("should NOT see DONE task with -s T, got: %s", output)
+	}
+}
+
+func TestFilterByStatusLongFlag(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different statuses
+	Execute([]string{"-y", "Work", "add", "Task todo four"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Task done four"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Task done four"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter using --status long flag
+	exitCode := Execute([]string{"-y", "Work", "--status", "D"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Task done four") {
+		t.Errorf("expected to see DONE task with --status D, got: %s", output)
+	}
+	if strings.Contains(output, "Task todo four") {
+		t.Errorf("should NOT see TODO task with --status D, got: %s", output)
+	}
+}
+
+func TestNoFilterShowsAllTasks(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different statuses
+	Execute([]string{"-y", "Work", "add", "Task todo five"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Task done five"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Task done five"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get without filter should show all
+	exitCode := Execute([]string{"-y", "Work"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Task todo five") {
+		t.Errorf("expected to see TODO task without filter, got: %s", output)
+	}
+	if !strings.Contains(output, "Task done five") {
+		t.Errorf("expected to see DONE task without filter, got: %s", output)
+	}
+}

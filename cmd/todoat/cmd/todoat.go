@@ -176,7 +176,8 @@ func getOrCreateList(ctx context.Context, be backend.TaskManager, name string) (
 func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManager, list *backend.List, action, taskSummary string, cfg *Config, stdout io.Writer) error {
 	switch action {
 	case "get":
-		return doGet(ctx, be, list, stdout)
+		statusFilter, _ := cmd.Flags().GetString("status")
+		return doGet(ctx, be, list, statusFilter, stdout)
 	case "add":
 		priority, _ := cmd.Flags().GetInt("priority")
 		return doAdd(ctx, be, list, taskSummary, priority, stdout)
@@ -194,11 +195,23 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 	}
 }
 
-// doGet lists all tasks in a list
-func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stdout io.Writer) error {
+// doGet lists all tasks in a list, optionally filtering by status
+func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, stdout io.Writer) error {
 	tasks, err := be.GetTasks(ctx, list.ID)
 	if err != nil {
 		return err
+	}
+
+	// Filter by status if specified
+	if statusFilter != "" {
+		filterStatus := parseStatus(statusFilter)
+		var filteredTasks []backend.Task
+		for _, t := range tasks {
+			if t.Status == filterStatus {
+				filteredTasks = append(filteredTasks, t)
+			}
+		}
+		tasks = filteredTasks
 	}
 
 	if len(tasks) == 0 {
@@ -222,13 +235,13 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stdo
 func getStatusIcon(status backend.TaskStatus) string {
 	switch status {
 	case backend.StatusCompleted:
-		return "[x]"
+		return "[DONE]"
 	case backend.StatusInProgress:
-		return "[>]"
+		return "[IN-PROGRESS]"
 	case backend.StatusCancelled:
-		return "[-]"
+		return "[CANCELLED]"
 	default:
-		return "[ ]"
+		return "[TODO]"
 	}
 }
 
@@ -283,12 +296,14 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 // parseStatus converts a status string to TaskStatus
 func parseStatus(s string) backend.TaskStatus {
 	switch strings.ToUpper(s) {
-	case "DONE", "COMPLETED":
+	case "DONE", "COMPLETED", "D":
 		return backend.StatusCompleted
 	case "IN-PROGRESS", "INPROGRESS", "PROGRESS":
 		return backend.StatusInProgress
 	case "CANCELLED", "CANCELED":
 		return backend.StatusCancelled
+	case "TODO", "NEEDS-ACTION", "T":
+		return backend.StatusNeedsAction
 	default:
 		return backend.StatusNeedsAction
 	}

@@ -49,6 +49,7 @@ todoat MyList delete "Buy groceries"
 
 - [Installation](./installation.md) - How to install todoat
 - [Commands](./commands.md) - Complete command reference
+- [Configuration](./configuration.md) - Configuration options
 - [Backends](./backends.md) - Backend setup and configuration
 - [Examples](./examples.md) - Usage examples and workflows
 
