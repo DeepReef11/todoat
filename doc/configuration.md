@@ -25,7 +25,6 @@ todoat is primarily configured through command-line flags rather than configurat
 |------|-------|-------------|---------|
 | `--no-prompt` | `-y` | Disable interactive prompts | `false` |
 | `--verbose` | `-V` | Enable verbose/debug output | `false` |
-| `--json` | | Output in JSON format | `false` |
 
 ### Example Usage
 
@@ -35,9 +34,6 @@ todoat -y MyList add "Task"
 
 # Get verbose output
 todoat -V MyList
-
-# Get JSON output for parsing
-todoat --json MyList
 ```
 
 ## Environment

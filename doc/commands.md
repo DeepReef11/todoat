@@ -178,7 +178,6 @@ These flags work with any command:
 | `--version` | | Show version information |
 | `--no-prompt` | `-y` | Disable interactive prompts (for scripting) |
 | `--verbose` | `-V` | Enable debug/verbose output |
-| `--json` | | Output results in JSON format |
 
 ### No-Prompt Mode
 
@@ -192,13 +191,6 @@ todoat -y MyList delete "task"
 todoat --no-prompt MyList add "Automated task"
 ```
 
-### JSON Output
-
-Use `--json` for machine-readable output:
-
-```bash
-todoat --json MyList
-```
 
 ## Examples
 

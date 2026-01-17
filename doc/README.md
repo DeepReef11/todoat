@@ -61,7 +61,6 @@ todoat MyList delete "Buy groceries"
 | `--version` | | Show version |
 | `--no-prompt` | `-y` | Disable interactive prompts |
 | `--verbose` | `-V` | Enable debug output |
-| `--json` | | Output in JSON format |
 
 ## License
 
