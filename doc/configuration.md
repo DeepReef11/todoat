@@ -165,6 +165,15 @@ Backend authentication can be configured via environment variables. See [Backend
 |----------|-------------|
 | `TODOAT_TODOIST_TOKEN` | Todoist API token |
 
+**Google Tasks:**
+
+| Variable | Description |
+|----------|-------------|
+| `TODOAT_GOOGLE_ACCESS_TOKEN` | Google OAuth2 access token |
+| `TODOAT_GOOGLE_REFRESH_TOKEN` | Google OAuth2 refresh token (optional) |
+| `TODOAT_GOOGLE_CLIENT_ID` | Google OAuth2 client ID (optional) |
+| `TODOAT_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret (optional) |
+
 Note: For better security, consider using the credential manager instead of environment variables. See [Credential Management](./commands.md#credential-management).
 
 ## Validation

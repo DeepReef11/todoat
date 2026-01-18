@@ -359,6 +359,92 @@ The File backend is ideal for:
 - Editing tasks directly in a text editor
 - Portable task files that work without special software
 
+## Google Tasks Backend
+
+The Google Tasks backend syncs tasks with Google Tasks using the Google Tasks API v1. Tasks are stored as Google Tasks within task lists.
+
+### Configuration
+
+Configure the Google Tasks backend using environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `TODOAT_GOOGLE_ACCESS_TOKEN` | Google OAuth2 access token |
+| `TODOAT_GOOGLE_REFRESH_TOKEN` | Google OAuth2 refresh token (optional, for automatic token refresh) |
+| `TODOAT_GOOGLE_CLIENT_ID` | Google OAuth2 client ID (optional, required for token refresh) |
+| `TODOAT_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret (optional, required for token refresh) |
+
+### Getting API Credentials
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project or select an existing one
+3. Enable the Google Tasks API
+4. Create OAuth 2.0 credentials (Desktop application type)
+5. Use the OAuth flow to obtain access and refresh tokens
+
+### Example Setup
+
+```bash
+# Set environment variables
+export TODOAT_GOOGLE_ACCESS_TOKEN="your-access-token"
+export TODOAT_GOOGLE_REFRESH_TOKEN="your-refresh-token"
+export TODOAT_GOOGLE_CLIENT_ID="your-client-id"
+export TODOAT_GOOGLE_CLIENT_SECRET="your-client-secret"
+```
+
+### Features
+
+The Google Tasks backend supports:
+- Listing task lists
+- Creating, updating, and deleting task lists
+- Creating, updating, and deleting tasks
+- Task properties: summary (title), notes (description), status, due date
+- Subtasks via parent task ID
+- Automatic OAuth2 token refresh
+
+### Google Tasks Mapping
+
+| todoat Concept | Google Tasks Concept |
+|----------------|----------------------|
+| List | Task List |
+| Task | Task |
+| Summary | Title |
+| Description | Notes |
+| Status | Status (needsAction/completed) |
+| Due Date | Due (RFC3339 format) |
+| Subtask | Task with parent |
+
+### Status Mapping
+
+Google Tasks only supports two status values:
+
+| todoat Status | Google Tasks Status |
+|---------------|---------------------|
+| TODO | needsAction |
+| IN-PROGRESS | needsAction |
+| DONE | completed |
+| CANCELLED | completed |
+
+### Limitations
+
+Some features work differently with Google Tasks compared to the SQLite backend:
+
+| Feature | SQLite | Google Tasks |
+|---------|--------|--------------|
+| Soft delete lists | Yes | No (permanent) |
+| Trash/restore lists | Yes | No |
+| Priority | Yes | No |
+| Start date | Yes | No |
+| Tags/categories | Yes | No |
+| Custom status values | Yes | No (only completed/needsAction) |
+
+### Notes
+
+- Google Tasks API requires OAuth2 authentication
+- Access tokens expire; provide a refresh token for automatic renewal
+- Rate limits apply to the Google Tasks API
+- Task descriptions are stored in the "notes" field
+
 ## Git/Markdown Backend
 
 The Git backend stores tasks in markdown files within Git repositories. This allows you to manage tasks alongside your code and use Git for version control and collaboration.
