@@ -17,6 +17,7 @@ import (
 	"todoat/backend"
 	"todoat/backend/sqlite"
 	"todoat/internal/credentials"
+	"todoat/internal/notification"
 	"todoat/internal/views"
 )
 
@@ -32,13 +33,15 @@ const (
 
 // Config holds application configuration
 type Config struct {
-	NoPrompt     bool
-	Verbose      bool
-	OutputFormat string
-	DBPath       string // Path to database file (for testing)
-	ViewsPath    string // Path to views directory (for testing)
-	ConfigPath   string // Path to config file (for testing)
-	SyncEnabled  bool   // Whether sync is enabled (caches config setting)
+	NoPrompt            bool
+	Verbose             bool
+	OutputFormat        string
+	DBPath              string // Path to database file (for testing)
+	ViewsPath           string // Path to views directory (for testing)
+	ConfigPath          string // Path to config file (for testing)
+	SyncEnabled         bool   // Whether sync is enabled (caches config setting)
+	NotificationLogPath string // Path to notification log file (for testing)
+	NotificationMock    bool   // Use mock executor for OS notifications (for testing)
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -171,6 +174,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add sync subcommand
 	cmd.AddCommand(newSyncCmd(stdout, stderr, cfg))
+
+	// Add notification subcommand
+	cmd.AddCommand(newNotificationCmd(stdout, stderr, cfg))
 
 	return cmd
 }
@@ -2667,4 +2673,202 @@ func (sm *SyncManager) AddConflict(c *SyncConflict) error {
 		localMod, remoteMod, now)
 
 	return err
+}
+
+// =============================================================================
+// Notification Commands
+// =============================================================================
+
+// newNotificationCmd creates the 'notification' subcommand for notification management
+func newNotificationCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	notificationCmd := &cobra.Command{
+		Use:   "notification",
+		Short: "Manage notifications",
+		Long:  "Manage the notification system for background sync events.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	notificationCmd.AddCommand(newNotificationTestCmd(stdout, cfg))
+	notificationCmd.AddCommand(newNotificationLogCmd(stdout, cfg))
+
+	return notificationCmd
+}
+
+// newNotificationTestCmd creates the 'notification test' subcommand
+func newNotificationTestCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "test",
+		Short: "Send a test notification",
+		Long:  "Send a test notification through all enabled notification channels.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doNotificationTest(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doNotificationTest sends a test notification
+func doNotificationTest(cfg *Config, stdout io.Writer) error {
+	// Get notification log path
+	logPath := cfg.NotificationLogPath
+	if logPath == "" {
+		logPath = getDefaultNotificationLogPath()
+	}
+
+	// Create notification config
+	notifCfg := &notification.Config{
+		Enabled: true,
+		OSNotification: notification.OSNotificationConfig{
+			Enabled:        true,
+			OnSyncComplete: true,
+			OnSyncError:    true,
+			OnConflict:     true,
+		},
+		LogNotification: notification.LogNotificationConfig{
+			Enabled:       true,
+			Path:          logPath,
+			MaxSizeMB:     10,
+			RetentionDays: 30,
+		},
+	}
+
+	var opts []notification.Option
+	if cfg.NotificationMock {
+		opts = append(opts, notification.WithCommandExecutor(&notification.MockCommandExecutor{}))
+	}
+
+	manager, err := notification.NewManager(notifCfg, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create notification manager: %w", err)
+	}
+	defer func() { _ = manager.Close() }()
+
+	// Send test notification
+	n := notification.Notification{
+		Type:      notification.NotifyTest,
+		Title:     "todoat",
+		Message:   "Test notification from todoat",
+		Timestamp: time.Now(),
+	}
+
+	err = manager.Send(n)
+	if err != nil {
+		return fmt.Errorf("failed to send test notification: %w", err)
+	}
+
+	_, _ = fmt.Fprintln(stdout, "Test notification sent")
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newNotificationLogCmd creates the 'notification log' subcommand
+func newNotificationLogCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	logCmd := &cobra.Command{
+		Use:   "log",
+		Short: "View notification log",
+		Long:  "Display the notification history from the log file.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doNotificationLogView(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	logCmd.AddCommand(newNotificationLogClearCmd(stdout, cfg))
+
+	return logCmd
+}
+
+// doNotificationLogView displays the notification log
+func doNotificationLogView(cfg *Config, stdout io.Writer) error {
+	logPath := cfg.NotificationLogPath
+	if logPath == "" {
+		logPath = getDefaultNotificationLogPath()
+	}
+
+	entries, err := notification.ReadLog(logPath)
+	if err != nil {
+		return fmt.Errorf("failed to read notification log: %w", err)
+	}
+
+	if len(entries) == 0 {
+		_, _ = fmt.Fprintln(stdout, "No notifications in log")
+	} else {
+		_, _ = fmt.Fprintln(stdout, "Notification Log:")
+		_, _ = fmt.Fprintln(stdout, "")
+		for _, entry := range entries {
+			_, _ = fmt.Fprintln(stdout, entry)
+		}
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// newNotificationLogClearCmd creates the 'notification log clear' subcommand
+func newNotificationLogClearCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "clear",
+		Short: "Clear notification log",
+		Long:  "Clear all entries from the notification log file.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doNotificationLogClear(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doNotificationLogClear clears the notification log
+func doNotificationLogClear(cfg *Config, stdout io.Writer) error {
+	logPath := cfg.NotificationLogPath
+	if logPath == "" {
+		logPath = getDefaultNotificationLogPath()
+	}
+
+	err := notification.ClearLog(logPath)
+	if err != nil {
+		return fmt.Errorf("failed to clear notification log: %w", err)
+	}
+
+	_, _ = fmt.Fprintln(stdout, "Notification log cleared")
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// getDefaultNotificationLogPath returns the default path for the notification log
+func getDefaultNotificationLogPath() string {
+	// Use XDG_DATA_HOME or default to ~/.local/share/todoat
+	dataDir := os.Getenv("XDG_DATA_HOME")
+	if dataDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		dataDir = filepath.Join(homeDir, ".local", "share")
+	}
+	return filepath.Join(dataDir, "todoat", "notifications.log")
 }

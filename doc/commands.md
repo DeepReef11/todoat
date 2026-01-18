@@ -758,6 +758,86 @@ todoat completion powershell | Out-String | Invoke-Expression
 todoat completion powershell >> $PROFILE
 ```
 
+## Notifications
+
+Manage the notification system for background sync events.
+
+```bash
+# Send a test notification
+todoat notification test
+
+# View notification history
+todoat notification log
+
+# Clear notification log
+todoat notification log clear
+```
+
+### Notification Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `notification test` | Send a test notification through all enabled channels |
+| `notification log` | View notification history from the log file |
+| `notification log clear` | Clear all entries from the notification log |
+
+### Test Command
+
+Send a test notification to verify your notification setup is working:
+
+```bash
+$ todoat notification test
+Test notification sent
+```
+
+This sends a notification through all enabled channels (OS notifications and log file).
+
+### Log Commands
+
+View and manage the notification log:
+
+```bash
+# View all logged notifications
+$ todoat notification log
+Notification Log:
+
+[2026-01-18 14:30:00] sync_complete: Sync completed successfully
+[2026-01-18 14:35:00] conflict: Conflict detected for task "Report"
+
+# Clear the notification log
+$ todoat notification log clear
+Notification log cleared
+```
+
+### Notification Configuration
+
+Notifications are configured in the config file (`~/.config/todoat/config.yaml`):
+
+```yaml
+notifications:
+  enabled: true
+  os:
+    enabled: true
+    on_sync_complete: true
+    on_sync_error: true
+    on_conflict: true
+  log:
+    enabled: true
+    path: ~/.local/share/todoat/notifications.log
+    max_size_mb: 10
+    retention_days: 30
+```
+
+### Notification Types
+
+| Type | Description |
+|------|-------------|
+| `sync_complete` | Synchronization completed successfully |
+| `sync_error` | An error occurred during synchronization |
+| `conflict` | A sync conflict was detected |
+| `reminder` | Task reminder notification |
+| `test` | Test notification |
+
 ## Examples
 
 ```bash

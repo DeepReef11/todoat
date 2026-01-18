@@ -45,6 +45,20 @@ sync:
   enabled: false
   local_backend: sqlite
   conflict_resolution: local
+
+# Notification configuration
+notifications:
+  enabled: true
+  os:
+    enabled: true
+    on_sync_complete: true
+    on_sync_error: true
+    on_conflict: true
+  log:
+    enabled: true
+    path: ~/.local/share/todoat/notifications.log
+    max_size_mb: 10
+    retention_days: 30
 ```
 
 ### Configuration Fields
@@ -59,6 +73,15 @@ sync:
 | `sync.enabled` | boolean | `false` | Enable synchronization with remote backends |
 | `sync.local_backend` | string | `sqlite` | Local backend to use for caching |
 | `sync.conflict_resolution` | string | `local` | Conflict resolution strategy (`local` or `remote`) |
+| `notifications.enabled` | boolean | `true` | Enable notification system |
+| `notifications.os.enabled` | boolean | `true` | Enable OS desktop notifications |
+| `notifications.os.on_sync_complete` | boolean | `true` | Notify when sync completes |
+| `notifications.os.on_sync_error` | boolean | `true` | Notify when sync fails |
+| `notifications.os.on_conflict` | boolean | `true` | Notify when conflicts are detected |
+| `notifications.log.enabled` | boolean | `true` | Enable logging notifications to file |
+| `notifications.log.path` | string | `~/.local/share/todoat/notifications.log` | Path to notification log file |
+| `notifications.log.max_size_mb` | integer | `10` | Maximum log file size in MB |
+| `notifications.log.retention_days` | integer | `30` | Days to retain log entries |
 
 ### Path Expansion
 

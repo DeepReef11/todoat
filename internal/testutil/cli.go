@@ -62,6 +62,28 @@ func NewCLITestWithViews(t *testing.T) (*CLITest, string) {
 	}, viewsDir
 }
 
+// NewCLITestWithNotification creates a new CLI test helper with notification support.
+func NewCLITestWithNotification(t *testing.T) *CLITest {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+	notificationLogPath := tmpDir + "/notifications.log"
+
+	cfg := &cmd.Config{
+		NoPrompt:            true,
+		DBPath:              dbPath,
+		NotificationLogPath: notificationLogPath,
+		NotificationMock:    true, // Use mock executor for OS notifications
+	}
+
+	return &CLITest{
+		t:      t,
+		cfg:    cfg,
+		tmpDir: tmpDir,
+	}
+}
+
 // Config returns the test configuration.
 func (c *CLITest) Config() *cmd.Config {
 	return c.cfg
