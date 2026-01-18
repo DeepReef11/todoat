@@ -445,6 +445,99 @@ Some features work differently with Google Tasks compared to the SQLite backend:
 - Rate limits apply to the Google Tasks API
 - Task descriptions are stored in the "notes" field
 
+## Microsoft To-Do Backend
+
+The Microsoft To-Do backend syncs tasks with Microsoft To-Do using the Microsoft Graph API. Tasks are stored as Microsoft To-Do tasks within task lists.
+
+### Configuration
+
+Configure the Microsoft To-Do backend using environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `TODOAT_MSTODO_ACCESS_TOKEN` | Microsoft OAuth2 access token |
+| `TODOAT_MSTODO_REFRESH_TOKEN` | Microsoft OAuth2 refresh token (optional, for automatic token refresh) |
+| `TODOAT_MSTODO_CLIENT_ID` | Microsoft OAuth2 client ID (optional, required for token refresh) |
+| `TODOAT_MSTODO_CLIENT_SECRET` | Microsoft OAuth2 client secret (optional, required for token refresh) |
+
+### Getting API Credentials
+
+1. Go to the [Azure Portal](https://portal.azure.com)
+2. Navigate to Azure Active Directory > App registrations
+3. Create a new registration or select an existing one
+4. Add the "Tasks.ReadWrite" permission under Microsoft Graph API
+5. Create a client secret under Certificates & secrets
+6. Use the OAuth flow to obtain access and refresh tokens
+
+### Example Setup
+
+```bash
+# Set environment variables
+export TODOAT_MSTODO_ACCESS_TOKEN="your-access-token"
+export TODOAT_MSTODO_REFRESH_TOKEN="your-refresh-token"
+export TODOAT_MSTODO_CLIENT_ID="your-client-id"
+export TODOAT_MSTODO_CLIENT_SECRET="your-client-secret"
+```
+
+### Features
+
+The Microsoft To-Do backend supports:
+- Listing task lists
+- Creating, updating, and deleting task lists
+- Creating, updating, and deleting tasks
+- Task properties: title, body (description), status, importance (priority), due date
+- Automatic OAuth2 token refresh
+
+### Microsoft To-Do Mapping
+
+| todoat Concept | Microsoft To-Do Concept |
+|----------------|-------------------------|
+| List | Task List |
+| Task | To Do Item |
+| Summary | Title |
+| Description | Body content |
+| Status | Status (notStarted/inProgress/completed) |
+| Priority | Importance (low/normal/high) |
+| Due Date | Due DateTime |
+
+### Status Mapping
+
+| todoat Status | Microsoft To-Do Status |
+|---------------|------------------------|
+| TODO | notStarted |
+| IN-PROGRESS | inProgress |
+| DONE | completed |
+| CANCELLED | completed |
+
+### Priority Mapping
+
+Microsoft To-Do uses three importance levels while todoat uses 1-9:
+
+| todoat Priority | Microsoft To-Do Importance |
+|-----------------|----------------------------|
+| 1-3 | high |
+| 4-6 | normal |
+| 7-9 | low |
+
+### Limitations
+
+Some features work differently with Microsoft To-Do compared to the SQLite backend:
+
+| Feature | SQLite | Microsoft To-Do |
+|---------|--------|-----------------|
+| Soft delete lists | Yes | No (permanent) |
+| Trash/restore lists | Yes | No |
+| Subtasks | Yes | No (checklist items only) |
+| Start date | Yes | No |
+| Tags/categories | Yes | No |
+
+### Notes
+
+- Microsoft To-Do API requires OAuth2 authentication with Microsoft identity platform
+- Access tokens expire; provide a refresh token for automatic renewal
+- Rate limits apply to the Microsoft Graph API
+- Task descriptions are stored in the "body" field with text content type
+
 ## Git/Markdown Backend
 
 The Git backend stores tasks in markdown files within Git repositories. This allows you to manage tasks alongside your code and use Git for version control and collaboration.

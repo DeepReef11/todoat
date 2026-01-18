@@ -930,7 +930,7 @@ todoat migrate --from sqlite --to file --dry-run
 | `--list` | Migrate only the specified list (optional) |
 | `--dry-run` | Show what would be migrated without making changes |
 
-### Supported Backends
+### Supported Backends for Migration
 
 | Backend | Description |
 |---------|-------------|
@@ -938,6 +938,8 @@ todoat migrate --from sqlite --to file --dry-run
 | `nextcloud` | Nextcloud CalDAV server |
 | `todoist` | Todoist REST API |
 | `file` | Plain text markdown file |
+
+Note: Google Tasks, Microsoft To-Do, and Git backends are available for task management but do not yet support migration.
 
 ### Migration Examples
 

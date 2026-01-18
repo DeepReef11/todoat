@@ -174,6 +174,15 @@ Backend authentication can be configured via environment variables. See [Backend
 | `TODOAT_GOOGLE_CLIENT_ID` | Google OAuth2 client ID (optional) |
 | `TODOAT_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret (optional) |
 
+**Microsoft To-Do:**
+
+| Variable | Description |
+|----------|-------------|
+| `TODOAT_MSTODO_ACCESS_TOKEN` | Microsoft OAuth2 access token |
+| `TODOAT_MSTODO_REFRESH_TOKEN` | Microsoft OAuth2 refresh token (optional) |
+| `TODOAT_MSTODO_CLIENT_ID` | Microsoft OAuth2 client ID (optional) |
+| `TODOAT_MSTODO_CLIENT_SECRET` | Microsoft OAuth2 client secret (optional) |
+
 Note: For better security, consider using the credential manager instead of environment variables. See [Credential Management](./commands.md#credential-management).
 
 ## Validation
