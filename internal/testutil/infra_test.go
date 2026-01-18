@@ -183,3 +183,222 @@ func TestMakefileTestTodoist(t *testing.T) {
 		t.Error("test-todoist target should target backend/todoist package")
 	}
 }
+
+// =============================================================================
+// CI/CD Integration Tests (031-cicd-integration)
+// =============================================================================
+
+// TestGitHubWorkflowExists verifies .github/workflows/ci.yml file exists
+func TestGitHubWorkflowExists(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "ci.yml")
+
+	if _, err := os.Stat(workflowPath); os.IsNotExist(err) {
+		t.Errorf("ci.yml not found at %s", workflowPath)
+	}
+}
+
+// TestWorkflowRunsUnitTests verifies workflow includes go test step
+func TestWorkflowRunsUnitTests(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "ci.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read ci.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "go test") {
+		t.Error("ci.yml should contain 'go test' step")
+	}
+}
+
+// TestWorkflowRunsLint verifies workflow includes golangci-lint step
+func TestWorkflowRunsLint(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "ci.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read ci.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "golangci-lint") {
+		t.Error("ci.yml should contain golangci-lint step")
+	}
+}
+
+// TestWorkflowBuild verifies workflow includes go build step
+func TestWorkflowBuild(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "ci.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read ci.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "go build") {
+		t.Error("ci.yml should contain 'go build' step")
+	}
+}
+
+// TestWorkflowTriggersOnPR verifies workflow triggers on pull requests to main
+func TestWorkflowTriggersOnPR(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "ci.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read ci.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "pull_request") {
+		t.Error("ci.yml should trigger on pull_request")
+	}
+}
+
+// TestWorkflowTriggersOnPush verifies workflow triggers on pushes to main
+func TestWorkflowTriggersOnPush(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "ci.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read ci.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "push:") {
+		t.Error("ci.yml should trigger on push")
+	}
+}
+
+// TestWorkflowUsesGoSetup verifies workflow uses actions/setup-go with Go 1.22+
+func TestWorkflowUsesGoSetup(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "ci.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read ci.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "actions/setup-go") {
+		t.Error("ci.yml should use actions/setup-go")
+	}
+
+	// Check for Go 1.22 or higher
+	if !regexp.MustCompile(`go-version:.*1\.(2[2-9]|[3-9][0-9])`).MatchString(contentStr) {
+		t.Error("ci.yml should use Go 1.22 or higher")
+	}
+}
+
+// TestWorkflowCachesModules verifies workflow caches Go modules
+func TestWorkflowCachesModules(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "ci.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read ci.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// actions/setup-go v5 has built-in caching enabled by default
+	// or explicit cache: true, or actions/cache
+	if !strings.Contains(contentStr, "cache") && !strings.Contains(contentStr, "setup-go@v5") && !strings.Contains(contentStr, "setup-go@v4") {
+		t.Error("ci.yml should cache Go modules (via setup-go v4+/v5+ or explicit cache)")
+	}
+}
+
+// TestIntegrationWorkflowExists verifies separate workflow for integration tests exists
+func TestIntegrationWorkflowExists(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "integration.yml")
+
+	if _, err := os.Stat(workflowPath); os.IsNotExist(err) {
+		t.Errorf("integration.yml not found at %s", workflowPath)
+	}
+}
+
+// TestIntegrationUsesNextcloudService verifies integration workflow uses Nextcloud service container
+func TestIntegrationUsesNextcloudService(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "integration.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read integration.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "services:") {
+		t.Error("integration.yml should define services")
+	}
+
+	if !strings.Contains(contentStr, "nextcloud") {
+		t.Error("integration.yml should include nextcloud service")
+	}
+}
+
+// TestIntegrationWaitsForHealth verifies integration workflow waits for Nextcloud health check
+func TestIntegrationWaitsForHealth(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "integration.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read integration.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Should have either health check options or explicit wait step
+	hasHealthCheck := strings.Contains(contentStr, "options:") && strings.Contains(contentStr, "--health")
+	hasWaitStep := strings.Contains(contentStr, "wait") || strings.Contains(contentStr, "health")
+
+	if !hasHealthCheck && !hasWaitStep {
+		t.Error("integration.yml should wait for Nextcloud health check")
+	}
+}
+
+// TestIntegrationRunsOnMainOnly verifies integration tests only run on main branch merges
+func TestIntegrationRunsOnMainOnly(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	workflowPath := filepath.Join(projectRoot, ".github", "workflows", "integration.yml")
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("failed to read integration.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Should trigger on push to main only (not on pull_request)
+	if !strings.Contains(contentStr, "push:") {
+		t.Error("integration.yml should trigger on push")
+	}
+
+	if !strings.Contains(contentStr, "main") {
+		t.Error("integration.yml should target main branch")
+	}
+
+	// Should NOT trigger on pull_request (to avoid running expensive integration tests on PRs)
+	if strings.Contains(contentStr, "pull_request:") {
+		t.Error("integration.yml should NOT trigger on pull_request (only on main merge)")
+	}
+}
