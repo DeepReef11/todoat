@@ -34,6 +34,7 @@ A command-line task manager with multiple backend support.
 - **Synchronization**: Sync tasks with remote backends with conflict resolution
 - **Secure Credentials**: System keyring integration for secure credential storage
 - **Notifications**: Desktop and log notifications for sync events
+- **Reminders**: Configurable task due date reminders
 
 ## Basic Usage
 

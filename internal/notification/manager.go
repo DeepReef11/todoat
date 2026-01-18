@@ -7,6 +7,7 @@ type manager struct {
 	channels        []NotificationChannel
 	enabled         bool
 	commandExecutor CommandExecutor
+	sendCallback    func(Notification)
 	wg              sync.WaitGroup
 }
 
@@ -30,6 +31,9 @@ func NewManager(cfg *Config, opts ...Option) (NotificationManager, error) {
 		var osOpts []Option
 		if m.commandExecutor != nil {
 			osOpts = append(osOpts, WithCommandExecutor(m.commandExecutor))
+		}
+		if m.sendCallback != nil {
+			osOpts = append(osOpts, WithSendCallback(m.sendCallback))
 		}
 		osChannel := NewOSNotificationChannel(&cfg.OSNotification, osOpts...)
 		m.channels = append(m.channels, osChannel)

@@ -758,6 +758,98 @@ The daemon automatically:
 - Fetches remote changes and applies them locally
 - Sends notifications for sync events and conflicts
 
+## Reminders
+
+Manage task reminders that notify you when tasks are approaching their due dates.
+
+```bash
+# Show reminder configuration status
+todoat reminder status
+
+# Check for due reminders and send notifications
+todoat reminder check
+
+# List upcoming reminders
+todoat reminder list
+
+# Disable reminders for a specific task
+todoat reminder disable "Task name"
+
+# Dismiss current reminder for a task (will trigger at next interval)
+todoat reminder dismiss "Task name"
+```
+
+### Reminder Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `reminder status` | Show current reminder configuration and status |
+| `reminder check` | Check all tasks and send reminders for those within configured intervals |
+| `reminder list` | List all tasks with upcoming reminders |
+| `reminder disable <task>` | Permanently disable reminders for a specific task |
+| `reminder dismiss <task>` | Dismiss current reminder (will trigger again at next interval) |
+
+### Reminder Configuration
+
+Reminders are configured in the config file (`~/.config/todoat/config.yaml`):
+
+```yaml
+notifications:
+  reminder:
+    enabled: true
+    intervals:
+      - "1 day"
+      - "1 hour"
+      - "at due time"
+    os_notification: true
+    log_notification: true
+```
+
+### Interval Formats
+
+| Format | Description |
+|--------|-------------|
+| `N day` / `N days` | N days before due date |
+| `N hour` / `N hours` | N hours before due date |
+| `N week` / `N weeks` | N weeks before due date |
+| `at due time` | On the due date itself |
+
+### Examples
+
+```bash
+# Check reminder status
+$ todoat reminder status
+Reminder Status:
+  Status: enabled
+  Intervals:
+    - 1 day
+    - 1 hour
+    - at due time
+  OS Notification: true
+  Log Notification: true
+
+# Run a reminder check
+$ todoat reminder check
+Triggered 2 reminder(s):
+  - Submit report (due: 2026-01-19)
+  - Review PR (due: 2026-01-18)
+
+# List upcoming reminders
+$ todoat reminder list
+Upcoming reminders (3):
+  - Submit report (due: 2026-01-19)
+  - Review PR (due: 2026-01-18)
+  - Team meeting (due: 2026-01-20)
+
+# Disable reminders for a task permanently
+$ todoat reminder disable "Review PR"
+Disabled reminders for task: Review PR
+
+# Dismiss current reminder (snooze until next interval)
+$ todoat reminder dismiss "Submit report"
+Dismissed reminders for task: Submit report
+```
+
 ## Notifications
 
 Manage the notification system for background sync events.

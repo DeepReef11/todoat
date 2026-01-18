@@ -110,5 +110,8 @@ func WithSendCallback(callback func(Notification)) Option {
 		if ch, ok := c.(*osNotificationChannel); ok {
 			ch.sendCallback = callback
 		}
+		if mgr, ok := c.(*manager); ok {
+			mgr.sendCallback = callback
+		}
 	}
 }

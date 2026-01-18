@@ -19,6 +19,7 @@ import (
 	"todoat/backend/sqlite"
 	"todoat/internal/credentials"
 	"todoat/internal/notification"
+	"todoat/internal/reminder"
 	"todoat/internal/tui"
 	"todoat/internal/views"
 )
@@ -54,6 +55,9 @@ type Config struct {
 	MigrateTargetDir      string // Directory for file-mock backend target
 	MigrateMockMode       bool   // Enable mock backends for testing
 	MockNextcloudDataPath string // Path to mock nextcloud data file
+	// Reminder-related config fields (for testing)
+	ReminderConfigPath   string      // Path to reminder config file
+	NotificationCallback interface{} // Callback for notification testing
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -192,6 +196,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add migrate subcommand
 	cmd.AddCommand(newMigrateCmd(stdout, stderr, cfg))
+
+	// Add reminder subcommand
+	cmd.AddCommand(newReminderCmd(stdout, stderr, cfg))
 
 	// Add TUI subcommand
 	cmd.AddCommand(newTUICmd(stdout, stderr, cfg))
@@ -652,16 +659,21 @@ func doListPurge(ctx context.Context, be backend.TaskManager, name string, cfg *
 	return nil
 }
 
+// getDefaultDBPath returns the default database path
+func getDefaultDBPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "todoat.db"
+	}
+	return filepath.Join(home, ".todoat", "todoat.db")
+}
+
 // getBackend creates or returns the backend connection
 func getBackend(cfg *Config) (backend.TaskManager, error) {
 	dbPath := cfg.DBPath
 	if dbPath == "" {
 		// Use default path in user's home directory
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("could not find home directory: %w", err)
-		}
-		dbPath = filepath.Join(home, ".todoat", "todoat.db")
+		dbPath = getDefaultDBPath()
 
 		// Ensure directory exists
 		if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
@@ -4178,4 +4190,494 @@ func (a *tuiBackendAdapter) UpdateTask(ctx context.Context, listID string, task 
 
 func (a *tuiBackendAdapter) DeleteTask(ctx context.Context, listID, taskID string) error {
 	return a.TaskManager.DeleteTask(ctx, listID, taskID)
+}
+
+// =============================================================================
+// Reminder Command
+// =============================================================================
+
+// newReminderCmd creates the 'reminder' subcommand
+func newReminderCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	reminderCmd := &cobra.Command{
+		Use:   "reminder",
+		Short: "Manage task reminders",
+		Long:  "Manage reminder notifications for tasks with due dates.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	reminderCmd.AddCommand(newReminderStatusCmd(stdout, cfg))
+	reminderCmd.AddCommand(newReminderCheckCmd(stdout, cfg))
+	reminderCmd.AddCommand(newReminderListCmd(stdout, cfg))
+	reminderCmd.AddCommand(newReminderDisableCmd(stdout, cfg))
+	reminderCmd.AddCommand(newReminderDismissCmd(stdout, cfg))
+
+	return reminderCmd
+}
+
+// newReminderStatusCmd creates the 'reminder status' subcommand
+func newReminderStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show reminder configuration status",
+		Long:  "Display the current reminder configuration and status.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doReminderStatus(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doReminderStatus displays the reminder configuration status
+func doReminderStatus(cfg *Config, stdout io.Writer) error {
+	reminderCfg, err := loadReminderConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintln(stdout, "Reminder Status:")
+	if reminderCfg.Enabled {
+		_, _ = fmt.Fprintln(stdout, "  Status: enabled")
+	} else {
+		_, _ = fmt.Fprintln(stdout, "  Status: disabled")
+	}
+	_, _ = fmt.Fprintln(stdout, "  Intervals:")
+	for _, interval := range reminderCfg.Intervals {
+		_, _ = fmt.Fprintf(stdout, "    - %s\n", interval)
+	}
+	_, _ = fmt.Fprintf(stdout, "  OS Notification: %v\n", reminderCfg.OSNotification)
+	_, _ = fmt.Fprintf(stdout, "  Log Notification: %v\n", reminderCfg.LogNotification)
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// newReminderCheckCmd creates the 'reminder check' subcommand
+func newReminderCheckCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "check",
+		Short: "Check for due reminders",
+		Long:  "Check all tasks with due dates and send reminders for those within the configured intervals.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doReminderCheck(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doReminderCheck checks for due reminders and sends notifications
+func doReminderCheck(cfg *Config, stdout io.Writer) error {
+	reminderCfg, err := loadReminderConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	// Get database path
+	dbPath := cfg.DBPath
+	if dbPath == "" {
+		dbPath = getDefaultDBPath()
+	}
+
+	// Create reminder service
+	service, err := reminder.NewService(reminderCfg, dbPath+".reminders")
+	if err != nil {
+		return fmt.Errorf("failed to create reminder service: %w", err)
+	}
+	defer func() { _ = service.Close() }()
+
+	// Set up notification manager
+	notifier, err := createReminderNotifier(cfg, reminderCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create notifier: %w", err)
+	}
+	if notifier != nil {
+		defer func() { _ = notifier.Close() }()
+		service.SetNotifier(notifier)
+	}
+
+	// Get backend and tasks
+	be, err := getBackend(cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+	tasks, err := getAllTasks(ctx, be)
+	if err != nil {
+		return err
+	}
+
+	// Convert to pointer slice
+	taskPtrs := make([]*backend.Task, len(tasks))
+	for i := range tasks {
+		taskPtrs[i] = &tasks[i]
+	}
+
+	// Check reminders
+	triggered, err := service.CheckReminders(taskPtrs)
+	if err != nil {
+		return err
+	}
+
+	if len(triggered) == 0 {
+		_, _ = fmt.Fprintln(stdout, "No reminders triggered")
+	} else {
+		_, _ = fmt.Fprintf(stdout, "Triggered %d reminder(s):\n", len(triggered))
+		for _, task := range triggered {
+			_, _ = fmt.Fprintf(stdout, "  - %s (due: %s)\n", task.Summary, task.DueDate.Format("2006-01-02"))
+		}
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newReminderListCmd creates the 'reminder list' subcommand
+func newReminderListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List upcoming reminders",
+		Long:  "List all tasks with upcoming reminders within the configured intervals.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doReminderList(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doReminderList lists upcoming reminders
+func doReminderList(cfg *Config, stdout io.Writer) error {
+	reminderCfg, err := loadReminderConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	// Get database path
+	dbPath := cfg.DBPath
+	if dbPath == "" {
+		dbPath = getDefaultDBPath()
+	}
+
+	// Create reminder service
+	service, err := reminder.NewService(reminderCfg, dbPath+".reminders")
+	if err != nil {
+		return fmt.Errorf("failed to create reminder service: %w", err)
+	}
+	defer func() { _ = service.Close() }()
+
+	// Get backend and tasks
+	be, err := getBackend(cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+	tasks, err := getAllTasks(ctx, be)
+	if err != nil {
+		return err
+	}
+
+	// Convert to pointer slice
+	taskPtrs := make([]*backend.Task, len(tasks))
+	for i := range tasks {
+		taskPtrs[i] = &tasks[i]
+	}
+
+	// Get upcoming reminders
+	upcoming, err := service.GetUpcomingReminders(taskPtrs)
+	if err != nil {
+		return err
+	}
+
+	if len(upcoming) == 0 {
+		_, _ = fmt.Fprintln(stdout, "No upcoming reminders")
+	} else {
+		_, _ = fmt.Fprintf(stdout, "Upcoming reminders (%d):\n", len(upcoming))
+		for _, task := range upcoming {
+			_, _ = fmt.Fprintf(stdout, "  - %s (due: %s)\n", task.Summary, task.DueDate.Format("2006-01-02"))
+		}
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// newReminderDisableCmd creates the 'reminder disable' subcommand
+func newReminderDisableCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "disable <task>",
+		Short: "Disable reminders for a task",
+		Long:  "Permanently disable all reminders for a specific task.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doReminderDisable(cfg, args[0], stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doReminderDisable disables reminders for a task
+func doReminderDisable(cfg *Config, taskSummary string, stdout io.Writer) error {
+	reminderCfg, err := loadReminderConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	// Get database path
+	dbPath := cfg.DBPath
+	if dbPath == "" {
+		dbPath = getDefaultDBPath()
+	}
+
+	// Create reminder service
+	service, err := reminder.NewService(reminderCfg, dbPath+".reminders")
+	if err != nil {
+		return fmt.Errorf("failed to create reminder service: %w", err)
+	}
+	defer func() { _ = service.Close() }()
+
+	// Get backend and find task
+	be, err := getBackend(cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+	tasks, err := getAllTasks(ctx, be)
+	if err != nil {
+		return err
+	}
+
+	// Find task by summary
+	var task *backend.Task
+	for i := range tasks {
+		if strings.EqualFold(tasks[i].Summary, taskSummary) {
+			task = &tasks[i]
+			break
+		}
+	}
+
+	if task == nil {
+		return fmt.Errorf("task not found: %s", taskSummary)
+	}
+
+	// Disable reminder
+	err = service.DisableReminder(task.ID)
+	if err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Disabled reminders for task: %s\n", task.Summary)
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newReminderDismissCmd creates the 'reminder dismiss' subcommand
+func newReminderDismissCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "dismiss <task>",
+		Short: "Dismiss current reminder for a task",
+		Long:  "Dismiss the current reminder for a specific task. It will trigger again at the next interval.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doReminderDismiss(cfg, args[0], stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doReminderDismiss dismisses the current reminder for a task
+func doReminderDismiss(cfg *Config, taskSummary string, stdout io.Writer) error {
+	reminderCfg, err := loadReminderConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	// Get database path
+	dbPath := cfg.DBPath
+	if dbPath == "" {
+		dbPath = getDefaultDBPath()
+	}
+
+	// Create reminder service
+	service, err := reminder.NewService(reminderCfg, dbPath+".reminders")
+	if err != nil {
+		return fmt.Errorf("failed to create reminder service: %w", err)
+	}
+	defer func() { _ = service.Close() }()
+
+	// Get backend and find task
+	be, err := getBackend(cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+	tasks, err := getAllTasks(ctx, be)
+	if err != nil {
+		return err
+	}
+
+	// Find task by summary
+	var task *backend.Task
+	for i := range tasks {
+		if strings.EqualFold(tasks[i].Summary, taskSummary) {
+			task = &tasks[i]
+			break
+		}
+	}
+
+	if task == nil {
+		return fmt.Errorf("task not found: %s", taskSummary)
+	}
+
+	// Dismiss all intervals for this task
+	for _, interval := range reminderCfg.Intervals {
+		_ = service.DismissReminder(task.ID, interval)
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Dismissed reminders for task: %s\n", task.Summary)
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// loadReminderConfig loads the reminder configuration
+func loadReminderConfig(cfg *Config) (*reminder.Config, error) {
+	// Check for test config path
+	if cfg.ReminderConfigPath != "" {
+		data, err := os.ReadFile(cfg.ReminderConfigPath)
+		if err != nil {
+			// Return default config if file doesn't exist
+			return &reminder.Config{
+				Enabled: false,
+			}, nil
+		}
+
+		var reminderCfg reminder.Config
+		if err := json.Unmarshal(data, &reminderCfg); err != nil {
+			return nil, fmt.Errorf("failed to parse reminder config: %w", err)
+		}
+		return &reminderCfg, nil
+	}
+
+	// Return default config
+	return &reminder.Config{
+		Enabled:         true,
+		Intervals:       []string{"1 day", "at due time"},
+		OSNotification:  true,
+		LogNotification: true,
+	}, nil
+}
+
+// createReminderNotifier creates a notification manager for reminders
+func createReminderNotifier(cfg *Config, reminderCfg *reminder.Config) (notification.NotificationManager, error) {
+	if !reminderCfg.OSNotification && !reminderCfg.LogNotification {
+		return nil, nil
+	}
+
+	// Get notification log path
+	logPath := cfg.NotificationLogPath
+	if logPath == "" {
+		logPath = getDefaultNotificationLogPath()
+	}
+
+	notifCfg := &notification.Config{
+		Enabled: true,
+		OSNotification: notification.OSNotificationConfig{
+			Enabled:        reminderCfg.OSNotification,
+			OnSyncComplete: false,
+			OnSyncError:    false,
+			OnConflict:     false,
+		},
+		LogNotification: notification.LogNotificationConfig{
+			Enabled:       reminderCfg.LogNotification,
+			Path:          logPath,
+			MaxSizeMB:     10,
+			RetentionDays: 30,
+		},
+	}
+
+	var opts []notification.Option
+	if cfg.NotificationMock {
+		opts = append(opts, notification.WithCommandExecutor(&notification.MockCommandExecutor{}))
+	}
+
+	// Add notification callback if configured (for testing)
+	if cfg.NotificationCallback != nil {
+		if callback, ok := cfg.NotificationCallback.(func(interface{})); ok {
+			opts = append(opts, notification.WithSendCallback(func(n notification.Notification) {
+				callback(n)
+			}))
+		}
+	}
+
+	return notification.NewManager(notifCfg, opts...)
+}
+
+// getAllTasks gets all tasks from all lists
+func getAllTasks(ctx context.Context, be backend.TaskManager) ([]backend.Task, error) {
+	lists, err := be.GetLists(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var allTasks []backend.Task
+	for _, list := range lists {
+		tasks, err := be.GetTasks(ctx, list.ID)
+		if err != nil {
+			return nil, err
+		}
+		allTasks = append(allTasks, tasks...)
+	}
+
+	return allTasks, nil
 }

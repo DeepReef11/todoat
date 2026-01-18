@@ -294,3 +294,65 @@ func (m *MigrateCLITest) SetupMockNextcloudTasks(listName string, tasks []string
 	_ = os.WriteFile(mockDataPath, jsonData, 0644)
 	m.cfg.MockNextcloudDataPath = mockDataPath
 }
+
+// ReminderCLITest extends CLITest with reminder-specific helpers.
+type ReminderCLITest struct {
+	*CLITest
+	reminderConfigPath   string
+	notificationLogPath  string
+	notificationCallback func(n interface{})
+}
+
+// NewCLITestWithReminder creates a new CLI test helper with reminder support.
+func NewCLITestWithReminder(t *testing.T) *ReminderCLITest {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	notificationLogPath := filepath.Join(tmpDir, "notifications.log")
+	reminderConfigPath := filepath.Join(tmpDir, "reminder-config.json")
+
+	cfg := &cmd.Config{
+		NoPrompt:            true,
+		DBPath:              dbPath,
+		NotificationLogPath: notificationLogPath,
+		NotificationMock:    true,
+		ReminderConfigPath:  reminderConfigPath,
+	}
+
+	return &ReminderCLITest{
+		CLITest: &CLITest{
+			t:      t,
+			cfg:    cfg,
+			tmpDir: tmpDir,
+		},
+		reminderConfigPath:  reminderConfigPath,
+		notificationLogPath: notificationLogPath,
+	}
+}
+
+// SetReminderConfig configures reminder settings for the test.
+func (r *ReminderCLITest) SetReminderConfig(cfg interface{}) {
+	jsonData, _ := json.Marshal(cfg)
+	_ = os.WriteFile(r.reminderConfigPath, jsonData, 0644)
+}
+
+// SetNotificationCallback sets a callback to be called when notifications are sent.
+func (r *ReminderCLITest) SetNotificationCallback(callback func(n interface{})) {
+	r.notificationCallback = callback
+	r.cfg.NotificationCallback = callback
+}
+
+// GetNotificationLog returns the contents of the notification log.
+func (r *ReminderCLITest) GetNotificationLog() string {
+	data, err := os.ReadFile(r.notificationLogPath)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// ClearNotificationLog clears the notification log file.
+func (r *ReminderCLITest) ClearNotificationLog() {
+	_ = os.WriteFile(r.notificationLogPath, []byte{}, 0644)
+}

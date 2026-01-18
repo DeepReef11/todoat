@@ -59,6 +59,14 @@ notifications:
     path: ~/.local/share/todoat/notifications.log
     max_size_mb: 10
     retention_days: 30
+  reminder:
+    enabled: true
+    intervals:
+      - "1 day"
+      - "1 hour"
+      - "at due time"
+    os_notification: true
+    log_notification: true
 ```
 
 ### Configuration Fields
@@ -82,6 +90,10 @@ notifications:
 | `notifications.log.path` | string | `~/.local/share/todoat/notifications.log` | Path to notification log file |
 | `notifications.log.max_size_mb` | integer | `10` | Maximum log file size in MB |
 | `notifications.log.retention_days` | integer | `30` | Days to retain log entries |
+| `notifications.reminder.enabled` | boolean | `true` | Enable task due date reminders |
+| `notifications.reminder.intervals` | list | `["1 day", "1 hour", "at due time"]` | When to send reminders before due date |
+| `notifications.reminder.os_notification` | boolean | `true` | Send reminder via OS notification |
+| `notifications.reminder.log_notification` | boolean | `true` | Log reminders to notification log |
 
 ### Path Expansion
 
