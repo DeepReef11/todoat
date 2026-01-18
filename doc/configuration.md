@@ -39,6 +39,12 @@ no_prompt: false
 
 # Default output format (text or json)
 output_format: text
+
+# Synchronization configuration
+sync:
+  enabled: false
+  local_backend: sqlite
+  conflict_resolution: local
 ```
 
 ### Configuration Fields
@@ -50,6 +56,9 @@ output_format: text
 | `default_backend` | string | `sqlite` | Which backend to use |
 | `no_prompt` | boolean | `false` | Disable interactive prompts |
 | `output_format` | string | `text` | Default output format (`text` or `json`) |
+| `sync.enabled` | boolean | `false` | Enable synchronization with remote backends |
+| `sync.local_backend` | string | `sqlite` | Local backend to use for caching |
+| `sync.conflict_resolution` | string | `local` | Conflict resolution strategy (`local` or `remote`) |
 
 ### Path Expansion
 

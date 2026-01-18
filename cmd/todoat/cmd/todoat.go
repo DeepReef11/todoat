@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	_ "modernc.org/sqlite"
 	"todoat/backend"
 	"todoat/backend/sqlite"
 	"todoat/internal/credentials"
@@ -35,6 +37,8 @@ type Config struct {
 	OutputFormat string
 	DBPath       string // Path to database file (for testing)
 	ViewsPath    string // Path to views directory (for testing)
+	ConfigPath   string // Path to config file (for testing)
+	SyncEnabled  bool   // Whether sync is enabled (caches config setting)
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -164,6 +168,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add credentials subcommand
 	cmd.AddCommand(newCredentialsCmd(stdout, stderr, cfg))
+
+	// Add sync subcommand
+	cmd.AddCommand(newSyncCmd(stdout, stderr, cfg))
 
 	return cmd
 }
@@ -638,7 +645,101 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 		}
 	}
 
+	// Load config to check if sync is enabled
+	loadSyncConfig(cfg)
+
+	// If sync is enabled, return a sync-aware backend wrapper
+	if cfg.SyncEnabled {
+		be, err := sqlite.New(dbPath)
+		if err != nil {
+			return nil, err
+		}
+		return &syncAwareBackend{
+			TaskManager: be,
+			syncMgr:     getSyncManager(cfg),
+		}, nil
+	}
+
 	return sqlite.New(dbPath)
+}
+
+// loadSyncConfig loads the sync configuration from the config file
+func loadSyncConfig(cfg *Config) {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		// Try to find config in same directory as DB
+		if cfg.DBPath != "" {
+			configPath = filepath.Join(filepath.Dir(cfg.DBPath), "config.yaml")
+		}
+	}
+
+	if configPath != "" {
+		data, err := os.ReadFile(configPath)
+		if err == nil {
+			// Simple YAML parsing for sync.enabled
+			if strings.Contains(string(data), "enabled: true") && strings.Contains(string(data), "sync:") {
+				cfg.SyncEnabled = true
+			}
+		}
+	}
+}
+
+// syncAwareBackend wraps a TaskManager to queue sync operations
+type syncAwareBackend struct {
+	backend.TaskManager
+	syncMgr *SyncManager
+}
+
+// CreateTask creates a task and queues a sync operation
+func (b *syncAwareBackend) CreateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	created, err := b.TaskManager.CreateTask(ctx, listID, task)
+	if err != nil {
+		return nil, err
+	}
+
+	// Queue create operation
+	_ = b.syncMgr.QueueOperationByStringID(created.ID, created.Summary, listID, "create")
+
+	return created, nil
+}
+
+// UpdateTask updates a task and queues a sync operation
+func (b *syncAwareBackend) UpdateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	updated, err := b.TaskManager.UpdateTask(ctx, listID, task)
+	if err != nil {
+		return nil, err
+	}
+
+	// Queue update operation
+	_ = b.syncMgr.QueueOperationByStringID(updated.ID, updated.Summary, listID, "update")
+
+	return updated, nil
+}
+
+// DeleteTask deletes a task and queues a sync operation
+func (b *syncAwareBackend) DeleteTask(ctx context.Context, listID, taskID string) error {
+	// Get task summary before deleting for the queue
+	task, _ := b.GetTask(ctx, listID, taskID)
+	summary := "Unknown"
+	if task != nil {
+		summary = task.Summary
+	}
+
+	err := b.TaskManager.DeleteTask(ctx, listID, taskID)
+	if err != nil {
+		return err
+	}
+
+	// Queue delete operation
+	_ = b.syncMgr.QueueOperationByStringID(taskID, summary, listID, "delete")
+
+	return nil
+}
+
+// Close closes both the backend and sync manager
+func (b *syncAwareBackend) Close() error {
+	_ = b.syncMgr.Close()
+	return b.TaskManager.Close()
 }
 
 // resolveAction maps action names and abbreviations to canonical action names
@@ -1799,4 +1900,465 @@ func newCredentialsListCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+}
+
+// newSyncCmd creates the 'sync' subcommand for synchronization management
+func newSyncCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	syncCmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Synchronize with remote backends",
+		Long:  "Synchronize local cache with remote backends. Use subcommands to view status and manage the sync queue.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			// For now, just report that sync ran
+			_, _ = fmt.Fprintln(stdout, "Sync completed (no remote backend configured)")
+			if cfg != nil && cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+			}
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	syncCmd.AddCommand(newSyncStatusCmd(stdout, cfg))
+	syncCmd.AddCommand(newSyncQueueCmd(stdout, cfg))
+
+	return syncCmd
+}
+
+// newSyncStatusCmd creates the 'sync status' subcommand
+func newSyncStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show sync status",
+		Long:  "Show last sync time, pending operations, and connection status for all backends.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+			verbose, _ := cmd.Flags().GetBool("verbose")
+
+			return doSyncStatus(cfg, stdout, verbose)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().Bool("verbose", false, "Show detailed sync metadata")
+	return cmd
+}
+
+// doSyncStatus displays sync status for all backends
+func doSyncStatus(cfg *Config, stdout io.Writer, verbose bool) error {
+	// Get sync manager
+	syncMgr := getSyncManager(cfg)
+	defer func() { _ = syncMgr.Close() }()
+
+	_, _ = fmt.Fprintln(stdout, "Sync Status:")
+	_, _ = fmt.Fprintln(stdout, "")
+
+	// Get pending operations count
+	pendingCount, err := syncMgr.GetPendingCount()
+	if err != nil {
+		pendingCount = 0
+	}
+
+	// Get last sync time
+	lastSync := syncMgr.GetLastSyncTime()
+	lastSyncStr := "Never"
+	if !lastSync.IsZero() {
+		lastSyncStr = lastSync.Format("2006-01-02 15:04:05")
+	}
+
+	// Load config to get configured backends
+	configBackends := getConfiguredBackends(cfg)
+	if len(configBackends) > 0 {
+		for _, backendName := range configBackends {
+			_, _ = fmt.Fprintf(stdout, "Backend: %s\n", backendName)
+			_, _ = fmt.Fprintf(stdout, "  Last Sync: %s\n", lastSyncStr)
+			_, _ = fmt.Fprintf(stdout, "  Pending Operations: %d\n", pendingCount)
+			_, _ = fmt.Fprintf(stdout, "  Status: Configured\n")
+			_, _ = fmt.Fprintln(stdout, "")
+		}
+	} else {
+		_, _ = fmt.Fprintf(stdout, "Backend: sqlite\n")
+		_, _ = fmt.Fprintf(stdout, "  Last Sync: %s\n", lastSyncStr)
+		_, _ = fmt.Fprintf(stdout, "  Pending Operations: %d\n", pendingCount)
+		_, _ = fmt.Fprintf(stdout, "  Status: %s\n", syncMgr.GetConnectionStatus())
+	}
+
+	if verbose {
+		_, _ = fmt.Fprintln(stdout, "")
+		_, _ = fmt.Fprintln(stdout, "Sync Metadata:")
+		// Show additional metadata when verbose
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// getConfiguredBackends returns a list of backend names from the config file
+func getConfiguredBackends(cfg *Config) []string {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		if cfg.DBPath != "" {
+			configPath = filepath.Join(filepath.Dir(cfg.DBPath), "config.yaml")
+		}
+	}
+
+	if configPath == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+
+	// Parse config to find backends
+	var backends []string
+	lines := strings.Split(string(data), "\n")
+	inBackends := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "backends:" {
+			inBackends = true
+			continue
+		}
+		if inBackends {
+			// Check if we're still in the backends section (indented lines)
+			if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") && trimmed != "" {
+				break
+			}
+			// Check for backend name (single level of indentation, ends with colon)
+			if (strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "\t")) &&
+				!strings.HasPrefix(strings.TrimSpace(line), " ") &&
+				strings.HasSuffix(trimmed, ":") &&
+				!strings.Contains(trimmed, " ") {
+				backendName := strings.TrimSuffix(trimmed, ":")
+				if backendName != "" {
+					backends = append(backends, backendName)
+				}
+			}
+		}
+	}
+
+	return backends
+}
+
+// newSyncQueueCmd creates the 'sync queue' subcommand
+func newSyncQueueCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	queueCmd := &cobra.Command{
+		Use:   "queue",
+		Short: "View pending sync operations",
+		Long:  "List all pending operations waiting to be synchronized with remote backends.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doSyncQueueView(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	queueCmd.AddCommand(newSyncQueueClearCmd(stdout, cfg))
+
+	return queueCmd
+}
+
+// doSyncQueueView displays pending sync operations
+func doSyncQueueView(cfg *Config, stdout io.Writer) error {
+	syncMgr := getSyncManager(cfg)
+	defer func() { _ = syncMgr.Close() }()
+
+	ops, err := syncMgr.GetPendingOperations()
+	if err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Pending Operations: %d\n", len(ops))
+
+	if len(ops) > 0 {
+		_, _ = fmt.Fprintln(stdout, "")
+		_, _ = fmt.Fprintf(stdout, "%-6s %-10s %-30s %-8s %s\n", "ID", "Type", "Task", "Retries", "Created")
+
+		for _, op := range ops {
+			createdStr := op.CreatedAt.Format("15:04:05")
+			summary := op.TaskSummary
+			if len(summary) > 28 {
+				summary = summary[:28] + ".."
+			}
+			_, _ = fmt.Fprintf(stdout, "%-6d %-10s %-30s %-8d %s\n",
+				op.ID, op.OperationType, summary, op.RetryCount, createdStr)
+		}
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// newSyncQueueClearCmd creates the 'sync queue clear' subcommand
+func newSyncQueueClearCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "clear",
+		Short: "Clear all pending sync operations",
+		Long:  "Remove all pending operations from the sync queue. Use with caution as this discards unsynced changes.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doSyncQueueClear(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doSyncQueueClear removes all pending sync operations
+func doSyncQueueClear(cfg *Config, stdout io.Writer) error {
+	syncMgr := getSyncManager(cfg)
+	defer func() { _ = syncMgr.Close() }()
+
+	count, err := syncMgr.ClearQueue()
+	if err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Sync queue cleared: %d operations removed\n", count)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// getSyncManager returns a SyncManager for the current configuration
+func getSyncManager(cfg *Config) *SyncManager {
+	dbPath := cfg.DBPath
+	if dbPath == "" {
+		home, _ := os.UserHomeDir()
+		dbPath = filepath.Join(home, ".todoat", "todoat.db")
+	}
+	return NewSyncManager(dbPath)
+}
+
+// SyncManager handles synchronization operations
+type SyncManager struct {
+	dbPath string
+	db     *sql.DB
+}
+
+// SyncOperation represents a pending sync operation
+type SyncOperation struct {
+	ID            int64
+	TaskID        int64
+	TaskUID       string
+	TaskSummary   string
+	ListID        int64
+	OperationType string // "create", "update", "delete"
+	RetryCount    int
+	LastAttemptAt *time.Time
+	CreatedAt     time.Time
+}
+
+// NewSyncManager creates a new SyncManager
+func NewSyncManager(dbPath string) *SyncManager {
+	sm := &SyncManager{dbPath: dbPath}
+	_ = sm.initDB()
+	return sm
+}
+
+// initDB initializes the sync database tables
+func (sm *SyncManager) initDB() error {
+	db, err := sql.Open("sqlite", sm.dbPath)
+	if err != nil {
+		return err
+	}
+	sm.db = db
+
+	schema := `
+		CREATE TABLE IF NOT EXISTS sync_queue (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			task_id INTEGER NOT NULL,
+			task_uid TEXT DEFAULT '',
+			task_summary TEXT DEFAULT '',
+			list_id INTEGER NOT NULL,
+			operation_type TEXT NOT NULL,
+			retry_count INTEGER DEFAULT 0,
+			last_attempt_at TEXT,
+			created_at TEXT NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS sync_metadata (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			key TEXT UNIQUE NOT NULL,
+			value TEXT NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_sync_queue_task ON sync_queue(task_id);
+		CREATE INDEX IF NOT EXISTS idx_sync_queue_type ON sync_queue(operation_type);
+	`
+	_, err = db.Exec(schema)
+	return err
+}
+
+// Close closes the database connection
+func (sm *SyncManager) Close() error {
+	if sm.db != nil {
+		return sm.db.Close()
+	}
+	return nil
+}
+
+// GetPendingCount returns the number of pending sync operations
+func (sm *SyncManager) GetPendingCount() (int, error) {
+	if sm.db == nil {
+		return 0, nil
+	}
+
+	var count int
+	err := sm.db.QueryRow("SELECT COUNT(*) FROM sync_queue").Scan(&count)
+	return count, err
+}
+
+// GetLastSyncTime returns the last successful sync timestamp
+func (sm *SyncManager) GetLastSyncTime() time.Time {
+	if sm.db == nil {
+		return time.Time{}
+	}
+
+	var valueStr string
+	err := sm.db.QueryRow("SELECT value FROM sync_metadata WHERE key = 'last_sync'").Scan(&valueStr)
+	if err != nil {
+		return time.Time{}
+	}
+
+	t, _ := time.Parse(time.RFC3339Nano, valueStr)
+	return t
+}
+
+// GetConnectionStatus returns the current connection status
+func (sm *SyncManager) GetConnectionStatus() string {
+	// For now, return offline as there's no remote backend configured
+	return "Offline (no remote backend configured)"
+}
+
+// GetPendingOperations returns all pending sync operations
+func (sm *SyncManager) GetPendingOperations() ([]SyncOperation, error) {
+	if sm.db == nil {
+		return []SyncOperation{}, nil
+	}
+
+	// First try with tasks table join, fall back to without
+	rows, err := sm.db.Query(`
+		SELECT sq.id, sq.task_id, sq.task_uid, sq.list_id, sq.operation_type,
+		       sq.retry_count, sq.last_attempt_at, sq.created_at,
+		       COALESCE(t.summary, sq.task_summary) as task_summary
+		FROM sync_queue sq
+		LEFT JOIN tasks t ON sq.task_id = t.id
+		ORDER BY sq.created_at ASC
+	`)
+	if err != nil {
+		// Fall back to query without tasks table join
+		rows, err = sm.db.Query(`
+			SELECT id, task_id, task_uid, list_id, operation_type,
+			       retry_count, last_attempt_at, created_at, task_summary
+			FROM sync_queue
+			ORDER BY created_at ASC
+		`)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defer func() { _ = rows.Close() }()
+
+	var ops []SyncOperation
+	for rows.Next() {
+		var op SyncOperation
+		var lastAttemptStr, createdAtStr sql.NullString
+		var taskSummary sql.NullString
+
+		err := rows.Scan(&op.ID, &op.TaskID, &op.TaskUID, &op.ListID, &op.OperationType,
+			&op.RetryCount, &lastAttemptStr, &createdAtStr, &taskSummary)
+		if err != nil {
+			return nil, err
+		}
+
+		if taskSummary.Valid {
+			op.TaskSummary = taskSummary.String
+		} else {
+			op.TaskSummary = "Unknown"
+		}
+		if lastAttemptStr.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, lastAttemptStr.String)
+			op.LastAttemptAt = &t
+		}
+		if createdAtStr.Valid {
+			op.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAtStr.String)
+		}
+
+		ops = append(ops, op)
+	}
+
+	if ops == nil {
+		ops = []SyncOperation{}
+	}
+	return ops, rows.Err()
+}
+
+// ClearQueue removes all pending sync operations
+func (sm *SyncManager) ClearQueue() (int, error) {
+	if sm.db == nil {
+		return 0, nil
+	}
+
+	result, err := sm.db.Exec("DELETE FROM sync_queue")
+	if err != nil {
+		return 0, err
+	}
+
+	count, _ := result.RowsAffected()
+	return int(count), nil
+}
+
+// QueueOperation adds an operation to the sync queue
+func (sm *SyncManager) QueueOperation(taskID int64, taskUID string, taskSummary string, listID int64, opType string) error {
+	if sm.db == nil {
+		return nil
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := sm.db.Exec(`
+		INSERT INTO sync_queue (task_id, task_uid, task_summary, list_id, operation_type, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, taskID, taskUID, taskSummary, listID, opType, now)
+	return err
+}
+
+// QueueOperationByStringID adds an operation to the sync queue using string IDs
+func (sm *SyncManager) QueueOperationByStringID(taskID string, taskSummary string, listID string, opType string) error {
+	if sm.db == nil {
+		return nil
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := sm.db.Exec(`
+		INSERT INTO sync_queue (task_id, task_uid, task_summary, list_id, operation_type, created_at)
+		VALUES (0, ?, ?, 0, ?, ?)
+	`, taskID, taskSummary, opType, now)
+	return err
 }

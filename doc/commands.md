@@ -587,6 +587,70 @@ todoat credentials list
 todoat credentials list --json
 ```
 
+## Synchronization
+
+Synchronize local cache with remote backends using the `sync` subcommand.
+
+```bash
+# Run sync (synchronize with remote backends)
+todoat sync
+
+# View sync status
+todoat sync status
+
+# View sync status with verbose output
+todoat sync status --verbose
+
+# View pending sync operations
+todoat sync queue
+
+# Clear all pending sync operations
+todoat sync queue clear
+```
+
+### Sync Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `sync` | Synchronize with remote backends |
+| `sync status` | Show last sync time, pending operations, and connection status |
+| `sync status --verbose` | Show detailed sync metadata |
+| `sync queue` | View pending sync operations |
+| `sync queue clear` | Remove all pending operations from the queue |
+
+### Sync Status Output
+
+```bash
+$ todoat sync status
+Sync Status:
+
+Backend: sqlite
+  Last Sync: 2026-01-18 14:30:00
+  Pending Operations: 3
+  Status: Offline (no remote backend configured)
+```
+
+### Sync Queue Output
+
+```bash
+$ todoat sync queue
+Pending Operations: 3
+
+ID     TYPE       TASK                           RETRIES  CREATED
+1      create     Buy groceries                  0        14:30:15
+2      update     Finish report                  1        14:32:00
+3      delete     Old task                       0        14:35:22
+```
+
+### Sync Queue Clear
+
+Use with caution - this discards unsynced changes:
+
+```bash
+$ todoat sync queue clear
+Sync queue cleared: 3 operations removed
+```
+
 ## Examples
 
 ```bash

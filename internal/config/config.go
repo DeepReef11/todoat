@@ -17,6 +17,14 @@ type Config struct {
 	DefaultBackend string         `yaml:"default_backend"`
 	NoPrompt       bool           `yaml:"no_prompt"`
 	OutputFormat   string         `yaml:"output_format"`
+	Sync           SyncConfig     `yaml:"sync"`
+}
+
+// SyncConfig holds synchronization settings
+type SyncConfig struct {
+	Enabled            bool   `yaml:"enabled"`
+	LocalBackend       string `yaml:"local_backend"`
+	ConflictResolution string `yaml:"conflict_resolution"`
 }
 
 // BackendsConfig holds configuration for all backends
@@ -150,6 +158,33 @@ func (c *Config) ApplyFlags(noPrompt bool, outputFormat string) {
 // GetDatabasePath returns the path to the SQLite database
 func (c *Config) GetDatabasePath() string {
 	return c.Backends.SQLite.Path
+}
+
+// IsSyncEnabled returns true if synchronization is enabled
+func (c *Config) IsSyncEnabled() bool {
+	return c.Sync.Enabled
+}
+
+// LoadFromPath loads configuration from a specific path without creating defaults
+func LoadFromPath(configPath string) (*Config, error) {
+	if configPath == "" {
+		return nil, fmt.Errorf("config path is required")
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // File doesn't exist, return nil config
+		}
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	cfg := &Config{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("invalid YAML in config file: %w", err)
+	}
+
+	return cfg, nil
 }
 
 // getXDGDir returns a directory path following XDG spec.
