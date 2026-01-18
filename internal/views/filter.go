@@ -402,9 +402,9 @@ func toString(v any) string {
 		if val == nil {
 			return ""
 		}
-		return val.Format("2006-01-02")
+		return val.Format(DefaultDateFormat)
 	case time.Time:
-		return val.Format("2006-01-02")
+		return val.Format(DefaultDateFormat)
 	default:
 		return fmt.Sprintf("%v", val)
 	}
@@ -429,7 +429,7 @@ func toTime(v any) *time.Time {
 	case time.Time:
 		return &val
 	case string:
-		if t, err := time.Parse("2006-01-02", val); err == nil {
+		if t, err := time.Parse(DefaultDateFormat, val); err == nil {
 			return &t
 		}
 	}
@@ -481,7 +481,7 @@ func parseFilterDate(v any) *time.Time {
 	}
 
 	// Try to parse as absolute date
-	if t, err := time.Parse("2006-01-02", str); err == nil {
+	if t, err := time.Parse(DefaultDateFormat, str); err == nil {
 		return &t
 	}
 

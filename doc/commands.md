@@ -617,6 +617,8 @@ todoat sync queue clear
 | `sync status --verbose` | Show detailed sync metadata |
 | `sync queue` | View pending sync operations |
 | `sync queue clear` | Remove all pending operations from the queue |
+| `sync conflicts` | View unresolved sync conflicts |
+| `sync conflicts resolve [uid]` | Resolve a specific conflict with a strategy |
 
 ### Sync Status Output
 
@@ -649,6 +651,54 @@ Use with caution - this discards unsynced changes:
 ```bash
 $ todoat sync queue clear
 Sync queue cleared: 3 operations removed
+```
+
+### Sync Conflicts
+
+View and manage synchronization conflicts that occur when local and remote changes are incompatible.
+
+```bash
+# View all conflicts
+todoat sync conflicts
+
+# View conflicts in JSON format
+todoat sync conflicts --json
+
+# Resolve a specific conflict
+todoat sync conflicts resolve [task-uid] --strategy server_wins
+```
+
+### Sync Conflicts Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `sync conflicts` | List all unresolved sync conflicts |
+| `sync conflicts resolve [task-uid]` | Resolve a specific conflict using a strategy |
+
+### Resolution Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `server_wins` | Remote/server version overwrites local (default) |
+| `local_wins` | Local version overwrites remote |
+| `merge` | Attempt to merge both versions |
+| `keep_both` | Keep both versions as separate tasks |
+
+### Sync Conflicts Output
+
+```bash
+$ todoat sync conflicts
+Conflicts: 1
+
+UID                                  Task                           Detected             Status
+abc123-def456                        Update report                  2026-01-18 14:30:00  pending
+```
+
+### Resolve Example
+
+```bash
+$ todoat sync conflicts resolve abc123-def456 --strategy local_wins
+Conflict resolved for task abc123-def456 using strategy local_wins
 ```
 
 ## Examples

@@ -18,6 +18,9 @@ import (
 	"todoat/backend"
 )
 
+// iCalendarDateFormat is the standard iCalendar date-time format (UTC)
+const iCalendarDateFormat = "20060102T150405Z"
+
 // Config holds Nextcloud connection settings
 type Config struct {
 	Host               string
@@ -477,7 +480,7 @@ func extractProperty(content, property string) string {
 func parseCalendarDate(dateStr string) (time.Time, error) {
 	// Try different formats
 	formats := []string{
-		"20060102T150405Z",
+		iCalendarDateFormat,
 		"20060102T150405",
 		"20060102",
 	}
@@ -494,7 +497,7 @@ func parseCalendarDate(dateStr string) (time.Time, error) {
 // generateVTODO generates a VTODO iCalendar component from a Task
 func generateVTODO(task *backend.Task) string {
 	now := time.Now().UTC()
-	dtstamp := now.Format("20060102T150405Z")
+	dtstamp := now.Format(iCalendarDateFormat)
 
 	var lines []string
 	lines = append(lines, "BEGIN:VCALENDAR")
@@ -523,27 +526,27 @@ func generateVTODO(task *backend.Task) string {
 	}
 
 	if task.DueDate != nil {
-		lines = append(lines, fmt.Sprintf("DUE:%s", task.DueDate.UTC().Format("20060102T150405Z")))
+		lines = append(lines, fmt.Sprintf("DUE:%s", task.DueDate.UTC().Format(iCalendarDateFormat)))
 	}
 
 	if task.StartDate != nil {
-		lines = append(lines, fmt.Sprintf("DTSTART:%s", task.StartDate.UTC().Format("20060102T150405Z")))
+		lines = append(lines, fmt.Sprintf("DTSTART:%s", task.StartDate.UTC().Format(iCalendarDateFormat)))
 	}
 
 	if !task.Created.IsZero() {
-		lines = append(lines, fmt.Sprintf("CREATED:%s", task.Created.UTC().Format("20060102T150405Z")))
+		lines = append(lines, fmt.Sprintf("CREATED:%s", task.Created.UTC().Format(iCalendarDateFormat)))
 	} else {
 		lines = append(lines, fmt.Sprintf("CREATED:%s", dtstamp))
 	}
 
 	if !task.Modified.IsZero() {
-		lines = append(lines, fmt.Sprintf("LAST-MODIFIED:%s", task.Modified.UTC().Format("20060102T150405Z")))
+		lines = append(lines, fmt.Sprintf("LAST-MODIFIED:%s", task.Modified.UTC().Format(iCalendarDateFormat)))
 	} else {
 		lines = append(lines, fmt.Sprintf("LAST-MODIFIED:%s", dtstamp))
 	}
 
 	if task.Completed != nil {
-		lines = append(lines, fmt.Sprintf("COMPLETED:%s", task.Completed.UTC().Format("20060102T150405Z")))
+		lines = append(lines, fmt.Sprintf("COMPLETED:%s", task.Completed.UTC().Format(iCalendarDateFormat)))
 	}
 
 	lines = append(lines, "END:VTODO")

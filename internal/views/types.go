@@ -1,5 +1,8 @@
 package views
 
+// DefaultDateFormat is the standard date format used throughout the views package
+const DefaultDateFormat = "2006-01-02"
+
 // View represents a task display configuration
 type View struct {
 	Name        string     `yaml:"name"`

@@ -1927,6 +1927,7 @@ func newSyncCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	syncCmd.AddCommand(newSyncStatusCmd(stdout, cfg))
 	syncCmd.AddCommand(newSyncQueueCmd(stdout, cfg))
+	syncCmd.AddCommand(newSyncConflictsCmd(stdout, cfg))
 
 	return syncCmd
 }
@@ -2146,6 +2147,139 @@ func doSyncQueueClear(cfg *Config, stdout io.Writer) error {
 	return nil
 }
 
+// newSyncConflictsCmd creates the 'sync conflicts' subcommand
+func newSyncConflictsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	conflictsCmd := &cobra.Command{
+		Use:   "conflicts",
+		Short: "View and manage sync conflicts",
+		Long:  "List all unresolved sync conflicts and manage their resolution.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doSyncConflictsView(cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	conflictsCmd.AddCommand(newSyncConflictsResolveCmd(stdout, cfg))
+
+	return conflictsCmd
+}
+
+// doSyncConflictsView displays sync conflicts
+func doSyncConflictsView(cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	syncMgr := getSyncManager(cfg)
+	defer func() { _ = syncMgr.Close() }()
+
+	conflicts, err := syncMgr.GetConflicts()
+	if err != nil {
+		return err
+	}
+
+	// Handle JSON output
+	if jsonOutput {
+		output := struct {
+			Conflicts []SyncConflict `json:"conflicts"`
+		}{
+			Conflicts: conflicts,
+		}
+		data, err := json.MarshalIndent(output, "", "  ")
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(data))
+		return nil
+	}
+
+	// Text output
+	_, _ = fmt.Fprintf(stdout, "Conflicts: %d\n", len(conflicts))
+
+	if len(conflicts) > 0 {
+		_, _ = fmt.Fprintln(stdout, "")
+		_, _ = fmt.Fprintf(stdout, "%-36s %-30s %-20s %s\n", "UID", "Task", "Detected", "Status")
+
+		for _, c := range conflicts {
+			detectedStr := c.DetectedAt.Format("2006-01-02 15:04:05")
+			summary := c.TaskSummary
+			if len(summary) > 28 {
+				summary = summary[:25] + "..."
+			}
+			_, _ = fmt.Fprintf(stdout, "%-36s %-30s %-20s %s\n",
+				c.TaskUID, summary, detectedStr, c.Status)
+		}
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// newSyncConflictsResolveCmd creates the 'sync conflicts resolve' subcommand
+func newSyncConflictsResolveCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	var strategy string
+
+	cmd := &cobra.Command{
+		Use:   "resolve [task-uid]",
+		Short: "Resolve a sync conflict",
+		Long:  "Resolve a specific sync conflict using the specified strategy.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			taskUID := args[0]
+			return doSyncConflictResolve(cfg, stdout, taskUID, strategy)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().StringVar(&strategy, "strategy", "server_wins", "Resolution strategy: server_wins, local_wins, merge, keep_both")
+
+	return cmd
+}
+
+// doSyncConflictResolve resolves a specific sync conflict
+func doSyncConflictResolve(cfg *Config, stdout io.Writer, taskUID string, strategy string) error {
+	syncMgr := getSyncManager(cfg)
+	defer func() { _ = syncMgr.Close() }()
+
+	// Validate strategy
+	validStrategies := map[string]bool{
+		"server_wins": true,
+		"local_wins":  true,
+		"merge":       true,
+		"keep_both":   true,
+	}
+	if !validStrategies[strategy] {
+		return fmt.Errorf("invalid strategy: %s (valid: server_wins, local_wins, merge, keep_both)", strategy)
+	}
+
+	// Try to resolve the conflict
+	err := syncMgr.ResolveConflict(taskUID, strategy)
+	if err != nil {
+		_, _ = fmt.Fprintf(stdout, "Failed to resolve conflict: %v\n", err)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Conflict resolved for task %s using strategy %s\n", taskUID, strategy)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
 // getSyncManager returns a SyncManager for the current configuration
 func getSyncManager(cfg *Config) *SyncManager {
 	dbPath := cfg.DBPath
@@ -2173,6 +2307,20 @@ type SyncOperation struct {
 	RetryCount    int
 	LastAttemptAt *time.Time
 	CreatedAt     time.Time
+}
+
+// SyncConflict represents a sync conflict between local and remote versions
+type SyncConflict struct {
+	ID             int64     `json:"id"`
+	TaskUID        string    `json:"task_uid"`
+	TaskSummary    string    `json:"task_summary"`
+	ListID         int64     `json:"list_id"`
+	LocalVersion   string    `json:"local_version"`  // JSON serialized local task state
+	RemoteVersion  string    `json:"remote_version"` // JSON serialized remote task state
+	LocalModified  time.Time `json:"local_modified"`
+	RemoteModified time.Time `json:"remote_modified"`
+	DetectedAt     time.Time `json:"detected_at"`
+	Status         string    `json:"status"` // "pending", "resolved"
 }
 
 // NewSyncManager creates a new SyncManager
@@ -2209,8 +2357,23 @@ func (sm *SyncManager) initDB() error {
 			value TEXT NOT NULL
 		);
 
+		CREATE TABLE IF NOT EXISTS sync_conflicts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			task_uid TEXT NOT NULL,
+			task_summary TEXT DEFAULT '',
+			list_id INTEGER NOT NULL,
+			local_version TEXT DEFAULT '',
+			remote_version TEXT DEFAULT '',
+			local_modified TEXT NOT NULL,
+			remote_modified TEXT NOT NULL,
+			detected_at TEXT NOT NULL,
+			status TEXT DEFAULT 'pending'
+		);
+
 		CREATE INDEX IF NOT EXISTS idx_sync_queue_task ON sync_queue(task_id);
 		CREATE INDEX IF NOT EXISTS idx_sync_queue_type ON sync_queue(operation_type);
+		CREATE INDEX IF NOT EXISTS idx_sync_conflicts_uid ON sync_conflicts(task_uid);
+		CREATE INDEX IF NOT EXISTS idx_sync_conflicts_status ON sync_conflicts(status);
 	`
 	_, err = db.Exec(schema)
 	return err
@@ -2360,5 +2523,148 @@ func (sm *SyncManager) QueueOperationByStringID(taskID string, taskSummary strin
 		INSERT INTO sync_queue (task_id, task_uid, task_summary, list_id, operation_type, created_at)
 		VALUES (0, ?, ?, 0, ?, ?)
 	`, taskID, taskSummary, opType, now)
+	return err
+}
+
+// GetConflicts returns all pending sync conflicts
+func (sm *SyncManager) GetConflicts() ([]SyncConflict, error) {
+	if sm.db == nil {
+		return []SyncConflict{}, nil
+	}
+
+	rows, err := sm.db.Query(`
+		SELECT id, task_uid, task_summary, list_id, local_version, remote_version,
+		       local_modified, remote_modified, detected_at, status
+		FROM sync_conflicts
+		WHERE status = 'pending'
+		ORDER BY detected_at DESC
+	`)
+	if err != nil {
+		return []SyncConflict{}, nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var conflicts []SyncConflict
+	for rows.Next() {
+		var c SyncConflict
+		var localModStr, remoteModStr, detectedStr sql.NullString
+
+		err := rows.Scan(&c.ID, &c.TaskUID, &c.TaskSummary, &c.ListID,
+			&c.LocalVersion, &c.RemoteVersion, &localModStr, &remoteModStr,
+			&detectedStr, &c.Status)
+		if err != nil {
+			continue
+		}
+
+		if localModStr.Valid {
+			c.LocalModified, _ = time.Parse(time.RFC3339Nano, localModStr.String)
+		}
+		if remoteModStr.Valid {
+			c.RemoteModified, _ = time.Parse(time.RFC3339Nano, remoteModStr.String)
+		}
+		if detectedStr.Valid {
+			c.DetectedAt, _ = time.Parse(time.RFC3339Nano, detectedStr.String)
+		}
+
+		conflicts = append(conflicts, c)
+	}
+
+	if conflicts == nil {
+		conflicts = []SyncConflict{}
+	}
+	return conflicts, rows.Err()
+}
+
+// GetConflictCount returns the number of pending conflicts
+func (sm *SyncManager) GetConflictCount() (int, error) {
+	if sm.db == nil {
+		return 0, nil
+	}
+
+	var count int
+	err := sm.db.QueryRow("SELECT COUNT(*) FROM sync_conflicts WHERE status = 'pending'").Scan(&count)
+	if err != nil {
+		return 0, nil
+	}
+	return count, nil
+}
+
+// GetConflictByUID returns a conflict by task UID
+func (sm *SyncManager) GetConflictByUID(taskUID string) (*SyncConflict, error) {
+	if sm.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var c SyncConflict
+	var localModStr, remoteModStr, detectedStr sql.NullString
+
+	err := sm.db.QueryRow(`
+		SELECT id, task_uid, task_summary, list_id, local_version, remote_version,
+		       local_modified, remote_modified, detected_at, status
+		FROM sync_conflicts
+		WHERE task_uid = ? AND status = 'pending'
+	`, taskUID).Scan(&c.ID, &c.TaskUID, &c.TaskSummary, &c.ListID,
+		&c.LocalVersion, &c.RemoteVersion, &localModStr, &remoteModStr,
+		&detectedStr, &c.Status)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("conflict not found: %s", taskUID)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if localModStr.Valid {
+		c.LocalModified, _ = time.Parse(time.RFC3339Nano, localModStr.String)
+	}
+	if remoteModStr.Valid {
+		c.RemoteModified, _ = time.Parse(time.RFC3339Nano, remoteModStr.String)
+	}
+	if detectedStr.Valid {
+		c.DetectedAt, _ = time.Parse(time.RFC3339Nano, detectedStr.String)
+	}
+
+	return &c, nil
+}
+
+// ResolveConflict marks a conflict as resolved with the given strategy
+func (sm *SyncManager) ResolveConflict(taskUID string, strategy string) error {
+	if sm.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	result, err := sm.db.Exec(`
+		UPDATE sync_conflicts SET status = 'resolved'
+		WHERE task_uid = ? AND status = 'pending'
+	`, taskUID)
+	if err != nil {
+		return err
+	}
+
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("conflict not found: %s", taskUID)
+	}
+
+	return nil
+}
+
+// AddConflict adds a new conflict to the database
+func (sm *SyncManager) AddConflict(c *SyncConflict) error {
+	if sm.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	localMod := c.LocalModified.Format(time.RFC3339Nano)
+	remoteMod := c.RemoteModified.Format(time.RFC3339Nano)
+
+	_, err := sm.db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+	`, c.TaskUID, c.TaskSummary, c.ListID, c.LocalVersion, c.RemoteVersion,
+		localMod, remoteMod, now)
+
 	return err
 }

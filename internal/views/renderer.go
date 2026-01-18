@@ -193,7 +193,7 @@ func formatDate(t *time.Time, format string) string {
 		return ""
 	}
 	if format == "" {
-		format = "2006-01-02"
+		format = DefaultDateFormat
 	}
 	return t.Format(format)
 }
@@ -204,7 +204,7 @@ func formatDateTime(t time.Time, format string) string {
 		return ""
 	}
 	if format == "" {
-		format = "2006-01-02"
+		format = DefaultDateFormat
 	}
 	return t.Format(format)
 }
