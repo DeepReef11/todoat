@@ -2290,3 +2290,185 @@ func TestFilterTagCombined(t *testing.T) {
 	assertNotContains(t, output, "Home TODO task")
 	assertResultCode(t, output, ResultInfoOnly)
 }
+
+// =============================================================================
+// List Management Tests (013-list-management)
+// =============================================================================
+
+// TestListDelete verifies that `todoat -y list delete "ListName"` soft-deletes a list
+func TestListDelete(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list
+	Execute([]string{"-y", "list", "create", "ToDelete"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Delete the list
+	exitCode := Execute([]string{"-y", "list", "delete", "ToDelete"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertContains(t, stdout.String(), "ToDelete")
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify list is no longer visible in normal list view
+	stdout.Reset()
+	stderr.Reset()
+	Execute([]string{"-y", "list"}, &stdout, &stderr, cfg)
+	assertNotContains(t, stdout.String(), "ToDelete")
+}
+
+// TestListDeleteNotFound verifies that deleting a non-existent list returns ERROR
+func TestListDeleteNotFound(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Try to delete non-existent list
+	exitCode := Execute([]string{"-y", "list", "delete", "NonExistent"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 1)
+	assertResultCode(t, stdout.String(), ResultError)
+}
+
+// TestListTrash verifies that `todoat -y list trash` displays deleted lists
+func TestListTrash(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create and delete a list
+	Execute([]string{"-y", "list", "create", "TrashTest"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "list", "delete", "TrashTest"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// View trash
+	exitCode := Execute([]string{"-y", "list", "trash"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertContains(t, stdout.String(), "TrashTest")
+	assertResultCode(t, stdout.String(), ResultInfoOnly)
+}
+
+// TestListTrashEmpty verifies that viewing empty trash returns INFO_ONLY
+func TestListTrashEmpty(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// View trash with no deleted lists
+	exitCode := Execute([]string{"-y", "list", "trash"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultInfoOnly)
+}
+
+// TestListRestore verifies that `todoat -y list trash restore "Name"` restores a deleted list
+func TestListRestore(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create, delete, then restore a list
+	Execute([]string{"-y", "list", "create", "RestoreTest"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "list", "delete", "RestoreTest"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Restore the list
+	exitCode := Execute([]string{"-y", "list", "trash", "restore", "RestoreTest"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertContains(t, stdout.String(), "RestoreTest")
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify list is visible in normal list view again
+	stdout.Reset()
+	stderr.Reset()
+	Execute([]string{"-y", "list"}, &stdout, &stderr, cfg)
+	assertContains(t, stdout.String(), "RestoreTest")
+}
+
+// TestListRestoreNotInTrash verifies that restoring an active list returns ERROR
+func TestListRestoreNotInTrash(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list but don't delete it
+	Execute([]string{"-y", "list", "create", "ActiveList"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Try to restore an active list
+	exitCode := Execute([]string{"-y", "list", "trash", "restore", "ActiveList"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 1)
+	assertResultCode(t, stdout.String(), ResultError)
+}
+
+// TestListPurge verifies that `todoat -y list trash purge "Name"` permanently deletes
+func TestListPurge(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create, delete, then purge a list
+	Execute([]string{"-y", "list", "create", "PurgeTest"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "list", "delete", "PurgeTest"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Purge the list
+	exitCode := Execute([]string{"-y", "list", "trash", "purge", "PurgeTest"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify list is not in trash anymore
+	stdout.Reset()
+	stderr.Reset()
+	Execute([]string{"-y", "list", "trash"}, &stdout, &stderr, cfg)
+	assertNotContains(t, stdout.String(), "PurgeTest")
+}
+
+// TestListInfo verifies that `todoat -y list info "Name"` shows list details
+func TestListInfo(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and add some tasks
+	Execute([]string{"-y", "list", "create", "InfoTest"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "InfoTest", "add", "Task 1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "InfoTest", "add", "Task 2"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get list info
+	exitCode := Execute([]string{"-y", "list", "info", "InfoTest"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "InfoTest")
+	// Should show task count (2 tasks)
+	assertContains(t, output, "2")
+	assertResultCode(t, output, ResultInfoOnly)
+}

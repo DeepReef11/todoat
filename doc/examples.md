@@ -295,7 +295,7 @@ echo "Created task with ID: $TASK_ID"
 
 ## List Management
 
-View and create task lists:
+View and manage task lists:
 
 ```bash
 # View all lists
@@ -304,8 +304,50 @@ todoat list
 # Create a new list
 todoat list create "Projects"
 
+# Get list info
+todoat list info "Projects"
+
 # Lists as JSON
 todoat list --json | jq '.[] | {name, tasks}'
+```
+
+### Deleting and Restoring Lists
+
+Lists can be soft-deleted (moved to trash) and restored:
+
+```bash
+# Delete a list (moves to trash)
+todoat list delete "OldProjects"
+
+# View deleted lists
+todoat list trash
+
+# Restore a deleted list
+todoat list trash restore "OldProjects"
+
+# Permanently delete a list
+todoat list trash purge "OldProjects"
+```
+
+### List Cleanup Example
+
+```bash
+# Create some lists
+todoat list create "Temp"
+todoat list create "Archive"
+
+# Delete old lists
+todoat list delete "Temp"
+todoat list delete "Archive"
+
+# Check trash
+todoat list trash
+
+# Restore one
+todoat list trash restore "Archive"
+
+# Purge the other
+todoat list trash purge "Temp"
 ```
 
 ## Renaming Tasks

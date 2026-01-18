@@ -34,10 +34,11 @@ const (
 
 // List represents a task list
 type List struct {
-	ID       string
-	Name     string
-	Color    string
-	Modified time.Time
+	ID        string
+	Name      string
+	Color     string
+	Modified  time.Time
+	DeletedAt *time.Time // nil if not deleted, timestamp if in trash
 }
 
 // TaskManager defines the interface for task storage backends
@@ -45,8 +46,15 @@ type TaskManager interface {
 	// List operations
 	GetLists(ctx context.Context) ([]List, error)
 	GetList(ctx context.Context, listID string) (*List, error)
+	GetListByName(ctx context.Context, name string) (*List, error)
 	CreateList(ctx context.Context, name string) (*List, error)
-	DeleteList(ctx context.Context, listID string) error
+	DeleteList(ctx context.Context, listID string) error // Soft-delete (move to trash)
+
+	// Trash operations
+	GetDeletedLists(ctx context.Context) ([]List, error)
+	GetDeletedListByName(ctx context.Context, name string) (*List, error)
+	RestoreList(ctx context.Context, listID string) error
+	PurgeList(ctx context.Context, listID string) error // Permanent delete
 
 	// Task operations
 	GetTasks(ctx context.Context, listID string) ([]Task, error)

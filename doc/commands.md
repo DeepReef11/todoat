@@ -32,7 +32,34 @@ todoat list
 
 # Create a new list
 todoat list create "MyList"
+
+# Get information about a list
+todoat list info "MyList"
+
+# Delete a list (moves to trash)
+todoat list delete "MyList"
+
+# View deleted lists in trash
+todoat list trash
+
+# Restore a list from trash
+todoat list trash restore "MyList"
+
+# Permanently delete a list from trash
+todoat list trash purge "MyList"
 ```
+
+### List Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `list` | View all lists with task counts |
+| `list create [name]` | Create a new list |
+| `list info [name]` | Show list details (name, ID, task count) |
+| `list delete [name]` | Soft-delete a list (moves to trash) |
+| `list trash` | View lists in trash |
+| `list trash restore [name]` | Restore a list from trash |
+| `list trash purge [name]` | Permanently delete a list from trash |
 
 ### Output Example
 
@@ -42,6 +69,22 @@ Available lists (2):
 NAME                 TASKS
 Work                 5
 Personal             3
+```
+
+### Trash Example
+
+```bash
+$ todoat list delete "OldProject"
+Deleted list: OldProject
+
+$ todoat list trash
+Deleted lists (1):
+
+NAME                 DELETED
+OldProject           2026-01-18 14:30
+
+$ todoat list trash restore "OldProject"
+Restored list: OldProject
 ```
 
 ## Viewing Tasks

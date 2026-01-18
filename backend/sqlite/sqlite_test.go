@@ -419,7 +419,7 @@ func TestTasksIsolatedByList(t *testing.T) {
 	}
 }
 
-// TestDeleteListCascadesToTasks verifies that deleting a list removes its tasks.
+// TestDeleteListCascadesToTasks verifies that purging a list removes its tasks.
 func TestDeleteListCascadesToTasks(t *testing.T) {
 	b, err := New(":memory:")
 	if err != nil {
@@ -434,16 +434,115 @@ func TestDeleteListCascadesToTasks(t *testing.T) {
 	task := mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Doomed Task"})
 	taskID := task.ID
 
-	// Delete the list
+	// Soft-delete the list first
 	err = b.DeleteList(ctx, list.ID)
 	if err != nil {
 		t.Fatalf("DeleteList error: %v", err)
 	}
 
+	// Purge the list (permanent delete)
+	err = b.PurgeList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("PurgeList error: %v", err)
+	}
+
 	// The task should be gone too (cascade delete)
 	retrieved, err := b.GetTask(ctx, list.ID, taskID)
 	if err == nil && retrieved != nil {
-		t.Error("task should be deleted when list is deleted (cascade)")
+		t.Error("task should be deleted when list is purged (cascade)")
+	}
+}
+
+// TestDeleteListSoftDelete verifies that DeleteList is a soft-delete.
+func TestDeleteListSoftDelete(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "ToTrash")
+	_ = mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Task in list"})
+
+	// Soft-delete the list
+	err = b.DeleteList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("DeleteList error: %v", err)
+	}
+
+	// List should not be in active lists
+	lists, err := b.GetLists(ctx)
+	if err != nil {
+		t.Fatalf("GetLists error: %v", err)
+	}
+	for _, l := range lists {
+		if l.ID == list.ID {
+			t.Error("deleted list should not appear in GetLists")
+		}
+	}
+
+	// List should be in deleted lists
+	deleted, err := b.GetDeletedLists(ctx)
+	if err != nil {
+		t.Fatalf("GetDeletedLists error: %v", err)
+	}
+	found := false
+	for _, l := range deleted {
+		if l.ID == list.ID {
+			found = true
+			if l.DeletedAt == nil {
+				t.Error("deleted_at should be set")
+			}
+		}
+	}
+	if !found {
+		t.Error("list should be in deleted lists")
+	}
+}
+
+// TestRestoreList verifies that RestoreList restores a soft-deleted list.
+func TestRestoreList(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	ctx := context.Background()
+
+	list := mustCreateList(t, b, ctx, "ToRestore")
+
+	// Soft-delete and restore
+	err = b.DeleteList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("DeleteList error: %v", err)
+	}
+
+	err = b.RestoreList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("RestoreList error: %v", err)
+	}
+
+	// List should be back in active lists
+	restored, err := b.GetList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("GetList error: %v", err)
+	}
+	if restored == nil {
+		t.Error("restored list should exist")
+	}
+
+	// List should not be in deleted lists
+	deleted, err := b.GetDeletedLists(ctx)
+	if err != nil {
+		t.Fatalf("GetDeletedLists error: %v", err)
+	}
+	for _, l := range deleted {
+		if l.ID == list.ID {
+			t.Error("restored list should not be in deleted lists")
+		}
 	}
 }
 

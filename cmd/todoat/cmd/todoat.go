@@ -181,8 +181,11 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 		SilenceErrors: true,
 	}
 
-	// Add 'create' subcommand
+	// Add subcommands
 	listCmd.AddCommand(newListCreateCmd(stdout, cfg))
+	listCmd.AddCommand(newListDeleteCmd(stdout, cfg))
+	listCmd.AddCommand(newListInfoCmd(stdout, cfg))
+	listCmd.AddCommand(newListTrashCmd(stdout, cfg))
 
 	return listCmd
 }
@@ -318,6 +321,287 @@ func doListCreate(ctx context.Context, be backend.TaskManager, name string, cfg 
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Created list: %s\n", list.Name)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListDeleteCmd creates the 'list delete' subcommand
+func newListDeleteCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete [name]",
+		Short: "Delete a list (move to trash)",
+		Long:  "Soft-delete a task list by moving it to trash.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			return doListDelete(context.Background(), be, args[0], cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doListDelete soft-deletes a list by name
+func doListDelete(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer) error {
+	// Find the list by name
+	list, err := be.GetListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		_, _ = fmt.Fprintf(stdout, "Error: list '%s' not found\n", name)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return fmt.Errorf("list '%s' not found", name)
+	}
+
+	// Delete the list
+	if err := be.DeleteList(ctx, list.ID); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Deleted list: %s\n", list.Name)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListInfoCmd creates the 'list info' subcommand
+func newListInfoCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "info [name]",
+		Short: "Show list details",
+		Long:  "Display detailed information about a task list.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			return doListInfo(context.Background(), be, args[0], cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doListInfo displays details about a list
+func doListInfo(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer) error {
+	// Find the list by name
+	list, err := be.GetListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		_, _ = fmt.Fprintf(stdout, "Error: list '%s' not found\n", name)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return fmt.Errorf("list '%s' not found", name)
+	}
+
+	// Get task count
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Name:  %s\n", list.Name)
+	_, _ = fmt.Fprintf(stdout, "ID:    %s\n", list.ID)
+	if list.Color != "" {
+		_, _ = fmt.Fprintf(stdout, "Color: %s\n", list.Color)
+	}
+	_, _ = fmt.Fprintf(stdout, "Tasks: %d\n", len(tasks))
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// newListTrashCmd creates the 'list trash' subcommand
+func newListTrashCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	trashCmd := &cobra.Command{
+		Use:   "trash",
+		Short: "View and manage deleted lists",
+		Long:  "View lists in trash or use subcommands to restore/purge.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			return doListTrashView(context.Background(), be, cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	trashCmd.AddCommand(newListTrashRestoreCmd(stdout, cfg))
+	trashCmd.AddCommand(newListTrashPurgeCmd(stdout, cfg))
+
+	return trashCmd
+}
+
+// doListTrashView displays deleted lists
+func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout io.Writer) error {
+	lists, err := be.GetDeletedLists(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(lists) == 0 {
+		_, _ = fmt.Fprintln(stdout, "Trash is empty.")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Deleted lists (%d):\n\n", len(lists))
+	_, _ = fmt.Fprintf(stdout, "%-20s %s\n", "NAME", "DELETED")
+
+	for _, l := range lists {
+		deletedStr := ""
+		if l.DeletedAt != nil {
+			deletedStr = l.DeletedAt.Format("2006-01-02 15:04")
+		}
+		_, _ = fmt.Fprintf(stdout, "%-20s %s\n", l.Name, deletedStr)
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// newListTrashRestoreCmd creates the 'list trash restore' subcommand
+func newListTrashRestoreCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "restore [name]",
+		Short: "Restore a list from trash",
+		Long:  "Restore a deleted task list from trash.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			return doListRestore(context.Background(), be, args[0], cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doListRestore restores a list from trash
+func doListRestore(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer) error {
+	// Find the deleted list by name
+	list, err := be.GetDeletedListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		_, _ = fmt.Fprintf(stdout, "Error: list '%s' not found in trash\n", name)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return fmt.Errorf("list '%s' not found in trash", name)
+	}
+
+	// Restore the list
+	if err := be.RestoreList(ctx, list.ID); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Restored list: %s\n", list.Name)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListTrashPurgeCmd creates the 'list trash purge' subcommand
+func newListTrashPurgeCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "purge [name]",
+		Short: "Permanently delete a list from trash",
+		Long:  "Permanently delete a task list and all its tasks from trash.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			return doListPurge(context.Background(), be, args[0], cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doListPurge permanently deletes a list from trash
+func doListPurge(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer) error {
+	// Find the deleted list by name
+	list, err := be.GetDeletedListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		_, _ = fmt.Fprintf(stdout, "Error: list '%s' not found in trash\n", name)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return fmt.Errorf("list '%s' not found in trash", name)
+	}
+
+	// Purge the list
+	if err := be.PurgeList(ctx, list.ID); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Permanently deleted list: %s\n", list.Name)
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
