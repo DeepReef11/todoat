@@ -29,7 +29,7 @@ A command-line task manager with multiple backend support.
 - **Due Dates**: Set start and due dates for tasks
 - **Views**: Customizable task display with built-in and custom views
 - **JSON Output**: Machine-readable JSON output for scripting
-- **SQLite Backend**: Local task storage in `~/.todoat/todoat.db`
+- **Multiple Backends**: SQLite (local), Nextcloud CalDAV (sync)
 
 ## Basic Usage
 

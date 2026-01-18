@@ -2,3 +2,4 @@ ralph/
 log.txt
 stats.txt
 bin/
+*.test

@@ -47,11 +47,17 @@ todoat --help
 
 ## Data Location
 
-todoat stores data in:
+todoat stores data following XDG conventions:
 
-- **Database**: `~/.todoat/todoat.db` (SQLite database)
+- **Configuration**: `~/.config/todoat/config.yaml`
+- **Database**: `~/.local/share/todoat/tasks.db` (SQLite database)
+- **Custom Views**: `~/.config/todoat/views/`
 
-The directory is created automatically on first use.
+If XDG environment variables are set, those paths are used instead:
+- `$XDG_CONFIG_HOME/todoat/` for configuration
+- `$XDG_DATA_HOME/todoat/` for data
+
+The directories are created automatically on first use.
 
 ## Uninstall
 
@@ -61,8 +67,9 @@ To uninstall todoat:
 # Remove the binary
 rm $(which todoat)
 
-# Optionally remove data
-rm -rf ~/.todoat
+# Optionally remove configuration and data
+rm -rf ~/.config/todoat
+rm -rf ~/.local/share/todoat
 ```
 
 ---

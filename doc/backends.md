@@ -1,18 +1,26 @@
 # Backends
 
-todoat supports multiple storage backends. Currently, SQLite is the default and only implemented backend.
+todoat supports multiple storage backends for task management.
 
-## SQLite Backend
+## SQLite Backend (Default)
 
-The SQLite backend stores tasks locally in a database file.
+The SQLite backend stores tasks locally in a database file. This is the default backend.
 
 ### Location
 
-By default, the database is stored at:
+By default, the database is stored following XDG conventions:
 
 ```
-~/.todoat/todoat.db
+~/.local/share/todoat/tasks.db
 ```
+
+Or if `XDG_DATA_HOME` is set:
+
+```
+$XDG_DATA_HOME/todoat/tasks.db
+```
+
+Note: The legacy location `~/.todoat/todoat.db` is also supported for backwards compatibility.
 
 The directory and database file are created automatically on first use.
 
@@ -83,7 +91,7 @@ todoat list trash purge "OldProject"
 To backup your tasks, copy the database file:
 
 ```bash
-cp ~/.todoat/todoat.db ~/backup/todoat-backup.db
+cp ~/.local/share/todoat/tasks.db ~/backup/todoat-backup.db
 ```
 
 ### Reset
@@ -91,15 +99,66 @@ cp ~/.todoat/todoat.db ~/backup/todoat-backup.db
 To start fresh, delete the database:
 
 ```bash
-rm ~/.todoat/todoat.db
+rm ~/.local/share/todoat/tasks.db
 ```
 
 A new database will be created on the next use.
 
+## Nextcloud CalDAV Backend
+
+The Nextcloud backend syncs tasks with a Nextcloud server using the CalDAV protocol. Tasks are stored as VTODO items in your Nextcloud calendars.
+
+### Configuration
+
+Configure the Nextcloud backend using environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `TODOAT_NEXTCLOUD_HOST` | Nextcloud server hostname (e.g., `cloud.example.com`) |
+| `TODOAT_NEXTCLOUD_USERNAME` | Your Nextcloud username |
+| `TODOAT_NEXTCLOUD_PASSWORD` | Your Nextcloud password or app password |
+
+### Example Setup
+
+```bash
+# Set environment variables
+export TODOAT_NEXTCLOUD_HOST="cloud.example.com"
+export TODOAT_NEXTCLOUD_USERNAME="youruser"
+export TODOAT_NEXTCLOUD_PASSWORD="your-app-password"
+```
+
+For security, consider using an app password instead of your main Nextcloud password. You can generate an app password in Nextcloud under Settings > Security > Devices & sessions.
+
+### Features
+
+The Nextcloud backend supports:
+- Listing calendars as task lists
+- Creating, updating, and deleting tasks (VTODOs)
+- Task properties: summary, description, status, priority, due date, start date, categories
+- Task completion tracking
+
+### Limitations
+
+Some features work differently with CalDAV compared to the SQLite backend:
+
+| Feature | SQLite | Nextcloud |
+|---------|--------|-----------|
+| Create lists | ✓ | Not supported |
+| Delete lists | ✓ (soft delete) | Not supported |
+| Trash/restore lists | ✓ | Not supported |
+| Subtasks | ✓ | Not supported |
+
+### Security Options
+
+| Option | Description |
+|--------|-------------|
+| HTTPS | Used by default for secure connections |
+| Allow HTTP | Can be enabled for testing (not recommended) |
+| Skip TLS verification | Can be enabled for self-signed certificates |
+
 ## Future Backends
 
-Additional backends are planned for future releases:
-- Nextcloud CalDAV
+Additional backends planned for future releases:
 - Todoist API
 - Git/Markdown files
 
