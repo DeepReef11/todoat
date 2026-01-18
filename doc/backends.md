@@ -2,6 +2,39 @@
 
 todoat supports multiple storage backends for task management.
 
+## Backend Usage Overview
+
+**Primary Backend (Day-to-Day Operations)**
+
+Currently, only **SQLite** is supported as the primary backend for everyday task operations (add, update, delete, get). This is configured via the `default_backend` setting in your config file:
+
+```yaml
+default_backend: sqlite
+```
+
+**Migration Backends**
+
+The following backends are available as **migration targets** using the `todoat migrate` command. This allows you to import tasks from external services into your local SQLite database, or export tasks to external services:
+
+- Todoist
+- Nextcloud CalDAV
+- Google Tasks
+- Microsoft To-Do
+- File (markdown)
+- Git/Markdown
+
+Example migration commands:
+
+```bash
+# Import all tasks from Todoist to local SQLite
+todoat migrate --from todoist --to sqlite
+
+# Export tasks from a specific list to Todoist
+todoat migrate --from sqlite --to todoist --list "Work"
+```
+
+> **Note**: There is no `--backend` flag to select a backend per-command. Backend selection is determined by configuration for primary operations, or by the `--from` and `--to` flags for migration operations.
+
 ## SQLite Backend (Default)
 
 The SQLite backend stores tasks locally in a database file. This is the default backend.

@@ -105,6 +105,100 @@ func TestVerboseFlagCoreCLI(t *testing.T) {
 	}
 }
 
+// TestVerboseModeEnabled verifies that -V flag outputs debug messages to stderr
+// CLI Test for 034-logging-utilities
+func TestVerboseModeEnabled(t *testing.T) {
+	// Create temp directory for test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Initialize database
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	_ = db.Close()
+
+	// Capture real stderr (logger writes to os.Stderr)
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	var stdout, stderrBuf bytes.Buffer
+
+	cfg := &Config{
+		DBPath: dbPath,
+	}
+
+	// Execute with verbose flag
+	exitCode := Execute([]string{"-V", "list"}, &stdout, &stderrBuf, cfg)
+
+	// Close write pipe and capture output
+	_ = w.Close()
+	var capturedStderr bytes.Buffer
+	_, _ = capturedStderr.ReadFrom(r)
+	os.Stderr = oldStderr
+
+	// Should succeed (list command)
+	if exitCode != 0 {
+		t.Logf("stdout: %s", stdout.String())
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, capturedStderr.String())
+	}
+
+	// Debug messages should be in captured stderr (from os.Stderr)
+	stderrOutput := capturedStderr.String()
+	if !strings.Contains(stderrOutput, "[DEBUG]") {
+		t.Errorf("verbose mode should output [DEBUG] messages to stderr, got: %s", stderrOutput)
+	}
+}
+
+// TestVerboseModeDisabled verifies that without -V flag, no debug messages output
+// CLI Test for 034-logging-utilities
+func TestVerboseModeDisabled(t *testing.T) {
+	// Create temp directory for test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Initialize database
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	_ = db.Close()
+
+	// Capture real stderr (logger writes to os.Stderr)
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	var stdout, stderrBuf bytes.Buffer
+
+	cfg := &Config{
+		DBPath: dbPath,
+	}
+
+	// Execute without verbose flag
+	exitCode := Execute([]string{"list"}, &stdout, &stderrBuf, cfg)
+
+	// Close write pipe and capture output
+	_ = w.Close()
+	var capturedStderr bytes.Buffer
+	_, _ = capturedStderr.ReadFrom(r)
+	os.Stderr = oldStderr
+
+	// Should succeed
+	if exitCode != 0 {
+		t.Logf("stdout: %s", stdout.String())
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, capturedStderr.String())
+	}
+
+	// No debug messages should be in captured stderr
+	stderrOutput := capturedStderr.String()
+	if strings.Contains(stderrOutput, "[DEBUG]") {
+		t.Errorf("without verbose mode, should not output [DEBUG] messages, got: %s", stderrOutput)
+	}
+}
+
 // TestGlobalFlagsArePersistent verifies global flags work with subcommands
 func TestGlobalFlagsArePersistentCoreCLI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
@@ -664,5 +758,142 @@ func TestSchemaInitializedOnNewDBSQLiteCLI(t *testing.T) {
 		if err != nil {
 			t.Errorf("expected index %s to exist: %v", indexName, err)
 		}
+	}
+}
+
+// =============================================================================
+// Issue Regression Tests
+// These tests verify fixes for issues tracked in issues/
+// =============================================================================
+
+// TestEmptyListNameRejectedCLI verifies that empty list names are rejected.
+// Regression test for issue #001: Empty list name is accepted when creating tasks.
+func TestEmptyListNameRejectedCLI(t *testing.T) {
+	// Create temp directory for test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	cfg := &Config{
+		DBPath: dbPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Try to add a task with empty list name
+	exitCode := Execute([]string{"", "add", "Test task"}, &stdout, &stderr, cfg)
+
+	// Should fail with exit code 1
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1 for empty list name, got %d", exitCode)
+	}
+
+	// Should have an error message about empty list name
+	combinedOutput := stderr.String() + stdout.String()
+	if !strings.Contains(strings.ToLower(combinedOutput), "list name") || !strings.Contains(strings.ToLower(combinedOutput), "empty") {
+		t.Errorf("expected error message about empty list name, got: %s", combinedOutput)
+	}
+}
+
+// TestWhitespaceOnlyListNameRejectedCLI verifies that whitespace-only list names are rejected.
+// Related to issue #001: Empty list name is accepted when creating tasks.
+func TestWhitespaceOnlyListNameRejectedCLI(t *testing.T) {
+	// Create temp directory for test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	cfg := &Config{
+		DBPath: dbPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Try to add a task with whitespace-only list name
+	exitCode := Execute([]string{"   ", "add", "Test task"}, &stdout, &stderr, cfg)
+
+	// Should fail with exit code 1
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1 for whitespace-only list name, got %d", exitCode)
+	}
+
+	// Should have an error message about empty list name
+	combinedOutput := stderr.String() + stdout.String()
+	if !strings.Contains(strings.ToLower(combinedOutput), "list name") || !strings.Contains(strings.ToLower(combinedOutput), "empty") {
+		t.Errorf("expected error message about empty list name, got: %s", combinedOutput)
+	}
+}
+
+// TestInvalidStatusRejectedCLI verifies that invalid status values are rejected on update.
+// Regression test for issue #002: Invalid status value silently ignored on add.
+func TestInvalidStatusRejectedCLI(t *testing.T) {
+	// Create temp directory for test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	cfg := &Config{
+		DBPath: dbPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// First create a task
+	exitCode := Execute([]string{"TestList", "add", "Status test task"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create task: %s", stderr.String())
+	}
+
+	// Reset buffers
+	stdout.Reset()
+	stderr.Reset()
+
+	// Try to update with invalid status
+	exitCode = Execute([]string{"TestList", "update", "Status test task", "-s", "INVALID"}, &stdout, &stderr, cfg)
+
+	// Should fail with exit code 1
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1 for invalid status, got %d", exitCode)
+	}
+
+	// Should have an error message about invalid status
+	combinedOutput := stderr.String() + stdout.String()
+	if !strings.Contains(strings.ToLower(combinedOutput), "invalid") && !strings.Contains(strings.ToLower(combinedOutput), "status") {
+		t.Errorf("expected error message about invalid status, got: %s", combinedOutput)
+	}
+}
+
+// TestValidStatusesAcceptedCLI verifies that all valid status values are accepted.
+// Validates that fix for issue #002 doesn't break valid statuses.
+func TestValidStatusesAcceptedCLI(t *testing.T) {
+	validStatuses := []string{"TODO", "IN-PROGRESS", "DONE", "CANCELLED", "todo", "in-progress", "done", "cancelled"}
+
+	for _, status := range validStatuses {
+		t.Run(status, func(t *testing.T) {
+			// Create temp directory for test database
+			tmpDir := t.TempDir()
+			dbPath := filepath.Join(tmpDir, "test.db")
+
+			cfg := &Config{
+				DBPath: dbPath,
+			}
+
+			var stdout, stderr bytes.Buffer
+
+			// First create a task
+			exitCode := Execute([]string{"TestList", "add", "Task for " + status}, &stdout, &stderr, cfg)
+			if exitCode != 0 {
+				t.Fatalf("failed to create task: %s", stderr.String())
+			}
+
+			// Reset buffers
+			stdout.Reset()
+			stderr.Reset()
+
+			// Update with valid status
+			exitCode = Execute([]string{"TestList", "update", "Task for " + status, "-s", status}, &stdout, &stderr, cfg)
+
+			// Should succeed
+			if exitCode != 0 {
+				t.Errorf("expected exit code 0 for valid status %q, got %d: %s", status, exitCode, stderr.String())
+			}
+		})
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"todoat/internal/notification"
 	"todoat/internal/reminder"
 	"todoat/internal/tui"
+	"todoat/internal/utils"
 	"todoat/internal/views"
 )
 
@@ -108,6 +110,15 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 		Long:    "todoat is a command-line task manager supporting multiple backends.",
 		Version: Version,
 		Args:    cobra.MaximumNArgs(3),
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Set verbose mode from flag
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			if verbose {
+				utils.SetVerboseMode(true)
+				utils.Debugf("Verbose mode enabled")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Update config from flags
 			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
@@ -129,6 +140,11 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 			ctx := context.Background()
 			listName := args[0]
+
+			// Validate list name is not empty or whitespace-only
+			if strings.TrimSpace(listName) == "" {
+				return errors.New("list name cannot be empty")
+			}
 
 			// Determine action - default is "get" if only list name provided
 			action := "get"
@@ -926,7 +942,10 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 
 	// Filter by status if specified
 	if statusFilter != "" {
-		filterStatus := parseStatus(statusFilter)
+		filterStatus, err := parseStatusWithValidation(statusFilter)
+		if err != nil {
+			return err
+		}
 		var filteredTasks []backend.Task
 		for _, t := range tasks {
 			if t.Status == filterStatus {
@@ -1479,7 +1498,11 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 		task.Summary = newSummary
 	}
 	if status != "" {
-		task.Status = parseStatus(status)
+		parsedStatus, err := parseStatusWithValidation(status)
+		if err != nil {
+			return err
+		}
+		task.Status = parsedStatus
 	}
 	if priority > 0 {
 		task.Priority = priority
@@ -1575,19 +1598,20 @@ func checkCircularReference(ctx context.Context, be backend.TaskManager, list *b
 	return nil
 }
 
-// parseStatus converts a status string to TaskStatus
-func parseStatus(s string) backend.TaskStatus {
+// parseStatusWithValidation converts a status string to TaskStatus, returning an error for invalid values.
+// Valid values: TODO, IN-PROGRESS, DONE, CANCELLED (and their aliases)
+func parseStatusWithValidation(s string) (backend.TaskStatus, error) {
 	switch strings.ToUpper(s) {
 	case "DONE", "COMPLETED", "D":
-		return backend.StatusCompleted
+		return backend.StatusCompleted, nil
 	case "IN-PROGRESS", "INPROGRESS", "PROGRESS":
-		return backend.StatusInProgress
+		return backend.StatusInProgress, nil
 	case "CANCELLED", "CANCELED":
-		return backend.StatusCancelled
+		return backend.StatusCancelled, nil
 	case "TODO", "NEEDS-ACTION", "T":
-		return backend.StatusNeedsAction
+		return backend.StatusNeedsAction, nil
 	default:
-		return backend.StatusNeedsAction
+		return backend.StatusNeedsAction, fmt.Errorf("invalid status %q: valid values are TODO, IN-PROGRESS, DONE, CANCELLED", s)
 	}
 }
 
