@@ -402,6 +402,45 @@ In no-prompt mode, todoat outputs result codes to help with scripting:
 | `INFO_ONLY` | Read-only operation (get, list view) |
 | `ERROR` | An error occurred |
 
+## Views
+
+Views allow you to customize how tasks are displayed. You can use built-in views or create custom views with specific fields, filters, and sorting.
+
+### Using Views
+
+```bash
+# Use a built-in view
+todoat MyList get --view default
+todoat MyList get -v all
+
+# Use a custom view
+todoat MyList get --view my-custom-view
+```
+
+### Built-in Views
+
+| View | Description |
+|------|-------------|
+| `default` | Standard task display showing status, summary, and priority |
+| `all` | Comprehensive display showing all task metadata |
+
+### View Management Commands
+
+```bash
+# List all available views (built-in and custom)
+todoat view list
+```
+
+### View Flag
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--view` | `-v` | View to use for displaying tasks |
+
+### Creating Custom Views
+
+Custom views are YAML files stored in `~/.config/todoat/views/`. See [views.md](./views.md) for details on creating custom views.
+
 ## JSON Output
 
 Use `--json` flag to get machine-readable JSON output:

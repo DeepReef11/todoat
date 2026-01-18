@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"todoat/backend"
 	"todoat/backend/sqlite"
+	"todoat/internal/views"
 )
 
 // Version is set at build time
@@ -32,6 +33,7 @@ type Config struct {
 	Verbose      bool
 	OutputFormat string
 	DBPath       string // Path to database file (for testing)
+	ViewsPath    string // Path to views directory (for testing)
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -151,9 +153,13 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().StringP("parent", "P", "", "Parent task summary (for add/update subtasks)")
 	cmd.Flags().BoolP("literal", "l", false, "Treat task summary literally (don't parse / as hierarchy separator)")
 	cmd.Flags().Bool("no-parent", false, "Remove parent relationship (for update, makes task root-level)")
+	cmd.Flags().StringP("view", "v", "", "View to use for displaying tasks (default, all, or custom view name)")
 
 	// Add list subcommand
 	cmd.AddCommand(newListCmd(stdout, cfg))
+
+	// Add view subcommand
+	cmd.AddCommand(newViewCmd(stdout, cfg))
 
 	return cmd
 }
@@ -679,7 +685,8 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		}
 		tagFilter, _ := cmd.Flags().GetStringSlice("tag")
 		tagFilter = normalizeTagSlice(tagFilter)
-		return doGet(ctx, be, list, statusFilter, priorityFilter, tagFilter, cfg, stdout, jsonOutput)
+		viewName, _ := cmd.Flags().GetString("view")
+		return doGet(ctx, be, list, statusFilter, priorityFilter, tagFilter, viewName, cfg, stdout, jsonOutput)
 	case "add":
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		priority, err := parsePrioritySingle(priorityStr)
@@ -762,10 +769,15 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 }
 
 // doGet lists all tasks in a list, optionally filtering by status, priority, and/or tags
-func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	tasks, err := be.GetTasks(ctx, list.ID)
 	if err != nil {
 		return err
+	}
+
+	// Load and apply view if specified
+	if viewName != "" {
+		return doGetWithView(ctx, tasks, list, viewName, cfg, stdout, jsonOutput)
 	}
 
 	// Filter by status if specified
@@ -814,6 +826,111 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 	}
 
 	// Emit INFO_ONLY result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// doGetWithView lists tasks using a view configuration
+func doGetWithView(ctx context.Context, tasks []backend.Task, list *backend.List, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Load view
+	viewsDir := getViewsDir(cfg)
+	loader := views.NewLoader(viewsDir)
+	view, err := loader.LoadView(viewName)
+	if err != nil {
+		return err
+	}
+
+	// Apply view filters and sorting
+	filteredTasks := views.FilterTasks(tasks, view.Filters)
+	sortedTasks := views.SortTasks(filteredTasks, view.Sort)
+
+	if jsonOutput {
+		return outputTaskListJSON(sortedTasks, list, stdout)
+	}
+
+	if len(sortedTasks) == 0 {
+		_, _ = fmt.Fprintf(stdout, "No tasks in list '%s'\n", list.Name)
+	} else {
+		_, _ = fmt.Fprintf(stdout, "Tasks in '%s':\n", list.Name)
+		views.RenderTasksWithView(sortedTasks, view, stdout)
+	}
+
+	// Emit INFO_ONLY result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// getViewsDir returns the path to the views directory
+func getViewsDir(cfg *Config) string {
+	if cfg != nil && cfg.ViewsPath != "" {
+		return cfg.ViewsPath
+	}
+
+	// Default to XDG config directory
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config", "todoat", "views")
+}
+
+// newViewCmd creates the 'view' subcommand for view management
+func newViewCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	viewCmd := &cobra.Command{
+		Use:           "view",
+		Short:         "Manage views",
+		Long:          "View management commands for listing and working with views.",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	viewCmd.AddCommand(newViewListCmd(stdout, cfg))
+
+	return viewCmd
+}
+
+// newViewListCmd creates the 'view list' subcommand
+func newViewListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List available views",
+		Long:  "List all available views including built-in and custom views.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doViewList(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doViewList displays all available views
+func doViewList(cfg *Config, stdout io.Writer) error {
+	viewsDir := getViewsDir(cfg)
+	loader := views.NewLoader(viewsDir)
+
+	viewList, err := loader.ListViews()
+	if err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintln(stdout, "Available views:")
+	for _, v := range viewList {
+		viewType := "custom"
+		if v.BuiltIn {
+			viewType = "built-in"
+		}
+		_, _ = fmt.Fprintf(stdout, "  - %s (%s)\n", v.Name, viewType)
+	}
+
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}

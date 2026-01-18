@@ -1,0 +1,2001 @@
+package sqlite_test
+
+import (
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"todoat/internal/testutil"
+)
+
+// =============================================================================
+// Task Command Tests (004-task-commands)
+// =============================================================================
+
+// --- Add Command Tests ---
+
+func TestAddCommandSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Review PR")
+
+	testutil.AssertContains(t, stdout, "Review PR")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestAddCommandAbbreviationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// 'a' is abbreviation for 'add'
+	stdout := cli.MustExecute("-y", "Work", "a", "New task")
+
+	testutil.AssertContains(t, stdout, "New task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestAddCommandWithPrioritySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	cli.MustExecute("-y", "Work", "add", "Urgent task", "-p", "1")
+
+	// List tasks to verify priority
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	// Should show priority indicator
+	testutil.AssertContains(t, stdout, "Urgent task")
+}
+
+// --- Get Command Tests ---
+
+func TestGetCommandExplicitSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// First add a task
+	cli.MustExecute("-y", "Work", "add", "Task 1")
+
+	// Explicit get command
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertContains(t, stdout, "Task 1")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestGetCommandDefaultSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// First add a task
+	cli.MustExecute("-y", "Work", "add", "Task for default")
+
+	// Default action (just list name, no action) should show tasks
+	stdout := cli.MustExecute("-y", "Work")
+
+	testutil.AssertContains(t, stdout, "Task for default")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestGetCommandAbbreviationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task first
+	cli.MustExecute("-y", "Work", "add", "Task G")
+
+	// 'g' is abbreviation for 'get'
+	stdout := cli.MustExecute("-y", "Work", "g")
+
+	testutil.AssertContains(t, stdout, "Task G")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// --- Update Command Tests ---
+
+func TestUpdateCommandSummarySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Old name")
+
+	// Update the summary
+	cli.MustExecute("-y", "Work", "update", "Old name", "--summary", "New name")
+
+	// Verify the update
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertNotContains(t, stdout, "Old name")
+	testutil.AssertContains(t, stdout, "New name")
+}
+
+func TestUpdateCommandPrioritySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task to update")
+
+	// Update priority using abbreviation
+	stdout := cli.MustExecute("-y", "Work", "u", "Task to update", "-p", "5")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestUpdateCommandStatusSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task status")
+
+	// Update status
+	stdout := cli.MustExecute("-y", "Work", "update", "Task status", "-s", "IN-PROGRESS")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// --- Complete Command Tests ---
+
+func TestCompleteCommandSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task to complete")
+
+	// Complete the task
+	stdout := cli.MustExecute("-y", "Work", "complete", "Task to complete")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestCompleteCommandAbbreviationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Another task")
+
+	// 'c' is abbreviation for 'complete'
+	stdout := cli.MustExecute("-y", "Work", "c", "Another task")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// --- Delete Command Tests ---
+
+func TestDeleteCommandSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task to delete")
+
+	// Delete the task (with -y for no prompt)
+	stdout := cli.MustExecute("-y", "Work", "delete", "Task to delete")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify deletion
+	stdout = cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertNotContains(t, stdout, "Task to delete")
+}
+
+func TestDeleteCommandAbbreviationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Delete me")
+
+	// 'd' is abbreviation for 'delete'
+	stdout := cli.MustExecute("-y", "Work", "d", "Delete me")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// --- Task Matching Tests ---
+
+func TestTaskMatchingExactSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with similar names
+	cli.MustExecute("-y", "Work", "add", "Review PR")
+	cli.MustExecute("-y", "Work", "add", "Review PR #123")
+
+	// Exact match should find "Review PR"
+	stdout := cli.MustExecute("-y", "Work", "complete", "Review PR")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestTaskMatchingPartialSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Review PR #456")
+
+	// Partial match should work when only one task matches
+	stdout := cli.MustExecute("-y", "Work", "complete", "#456")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestTaskMatchingNoMatchSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Some task")
+
+	// No match should error
+	stdout, stderr := cli.ExecuteAndFail("-y", "Work", "complete", "Nonexistent")
+
+	errOutput := stderr
+	if !strings.Contains(strings.ToLower(errOutput), "no") && !strings.Contains(strings.ToLower(errOutput), "match") && !strings.Contains(strings.ToLower(errOutput), "found") {
+		t.Errorf("error should mention no match found, got: %s", errOutput)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+func TestTaskMatchingMultipleMatchesSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with similar names
+	cli.MustExecute("-y", "Work", "add", "Review code")
+	cli.MustExecute("-y", "Work", "add", "Review docs")
+
+	// Multiple matches in no-prompt mode should error
+	stdout, stderr := cli.ExecuteAndFail("-y", "Work", "complete", "Review")
+
+	errOutput := stderr
+	if !strings.Contains(strings.ToLower(errOutput), "multiple") && !strings.Contains(strings.ToLower(errOutput), "matches") && !strings.Contains(strings.ToLower(errOutput), "ambiguous") {
+		t.Errorf("error should mention multiple matches, got: %s", errOutput)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+func TestTaskMatchingCaseInsensitiveSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with mixed case
+	cli.MustExecute("-y", "Work", "add", "Review PR")
+
+	// Lowercase search should match
+	stdout := cli.MustExecute("-y", "Work", "complete", "review pr")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// --- Status System Tests ---
+
+func TestStatusDisplayFormatSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task (default status is TODO)
+	cli.MustExecute("-y", "Work", "add", "Task one")
+
+	// Get tasks and check status format
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertContains(t, stdout, "[TODO]")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestStatusDisplayFormatDoneSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add and complete a task
+	cli.MustExecute("-y", "Work", "add", "Task done")
+	cli.MustExecute("-y", "Work", "complete", "Task done")
+
+	// Get tasks and check status format
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertContains(t, stdout, "[DONE]")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestStatusAbbreviationTSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task and set it to DONE first
+	cli.MustExecute("-y", "Work", "add", "Task abbrev")
+	cli.MustExecute("-y", "Work", "complete", "Task abbrev")
+
+	// Update status using abbreviation T (should set to TODO)
+	cli.MustExecute("-y", "Work", "update", "Task abbrev", "-s", "T")
+
+	// Verify status is TODO
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertContains(t, stdout, "[TODO]")
+}
+
+func TestStatusAbbreviationDSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task abbrev D")
+
+	// Update status using abbreviation D (should set to DONE)
+	cli.MustExecute("-y", "Work", "update", "Task abbrev D", "-s", "D")
+
+	// Verify status is DONE
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertContains(t, stdout, "[DONE]")
+}
+
+func TestStatusCaseInsensitiveSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task case")
+
+	// Update status using lowercase
+	cli.MustExecute("-y", "Work", "update", "Task case", "-s", "done")
+
+	// Verify status is DONE
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertContains(t, stdout, "[DONE]")
+}
+
+func TestFilterByStatusTodoSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different statuses
+	cli.MustExecute("-y", "Work", "add", "Task todo one")
+	cli.MustExecute("-y", "Work", "add", "Task done one")
+	cli.MustExecute("-y", "Work", "complete", "Task done one")
+
+	// Filter to show only TODO tasks
+	stdout := cli.MustExecute("-y", "Work", "-s", "TODO")
+
+	testutil.AssertContains(t, stdout, "Task todo one")
+	testutil.AssertNotContains(t, stdout, "Task done one")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestFilterByStatusDoneSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different statuses
+	cli.MustExecute("-y", "Work", "add", "Task todo two")
+	cli.MustExecute("-y", "Work", "add", "Task done two")
+	cli.MustExecute("-y", "Work", "complete", "Task done two")
+
+	// Filter to show only DONE tasks
+	stdout := cli.MustExecute("-y", "Work", "-s", "DONE")
+
+	testutil.AssertContains(t, stdout, "Task done two")
+	testutil.AssertNotContains(t, stdout, "Task todo two")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestFilterByStatusAbbreviationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different statuses
+	cli.MustExecute("-y", "Work", "add", "Task todo three")
+	cli.MustExecute("-y", "Work", "add", "Task done three")
+	cli.MustExecute("-y", "Work", "complete", "Task done three")
+
+	// Filter using abbreviation T
+	stdout := cli.MustExecute("-y", "Work", "-s", "T")
+
+	testutil.AssertContains(t, stdout, "Task todo three")
+	testutil.AssertNotContains(t, stdout, "Task done three")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestFilterByStatusLongFlagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different statuses
+	cli.MustExecute("-y", "Work", "add", "Task todo four")
+	cli.MustExecute("-y", "Work", "add", "Task done four")
+	cli.MustExecute("-y", "Work", "complete", "Task done four")
+
+	// Filter using --status long flag
+	stdout := cli.MustExecute("-y", "Work", "--status", "D")
+
+	testutil.AssertContains(t, stdout, "Task done four")
+	testutil.AssertNotContains(t, stdout, "Task todo four")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestNoFilterShowsAllTasksSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different statuses
+	cli.MustExecute("-y", "Work", "add", "Task todo five")
+	cli.MustExecute("-y", "Work", "add", "Task done five")
+	cli.MustExecute("-y", "Work", "complete", "Task done five")
+
+	// Get without filter should show all
+	stdout := cli.MustExecute("-y", "Work")
+
+	testutil.AssertContains(t, stdout, "Task todo five")
+	testutil.AssertContains(t, stdout, "Task done five")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// =============================================================================
+// Result Code Tests (006-cli-tests)
+// =============================================================================
+
+func TestResultCodeAddTaskSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Test task")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestResultCodeGetTasksSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task first
+	cli.MustExecute("-y", "Work", "add", "Task to list")
+
+	// Get tasks should return INFO_ONLY
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestResultCodeListEmptySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Get empty list should return INFO_ONLY
+	stdout := cli.MustExecute("-y", "EmptyList")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+	testutil.AssertContains(t, stdout, "No tasks")
+}
+
+func TestResultCodeUpdateTaskSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task to update")
+
+	// Update task should return ACTION_COMPLETED
+	stdout := cli.MustExecute("-y", "Work", "update", "Task to update", "--summary", "Updated task")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestResultCodeCompleteTaskSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task to complete")
+
+	// Complete task should return ACTION_COMPLETED
+	stdout := cli.MustExecute("-y", "Work", "complete", "Task to complete")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestResultCodeCompleteTaskChangesDoneStatusSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add and complete a task
+	cli.MustExecute("-y", "Work", "add", "Task for status")
+	cli.MustExecute("-y", "Work", "complete", "Task for status")
+
+	// Verify status changed to DONE
+	stdout := cli.MustExecute("-y", "Work", "get")
+
+	testutil.AssertContains(t, stdout, "[DONE]")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+func TestResultCodeDeleteTaskSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task to delete")
+
+	// Delete task should return ACTION_COMPLETED
+	stdout := cli.MustExecute("-y", "Work", "delete", "Task to delete")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+func TestResultCodeDeleteConfirmationSkippedInNoPromptSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task to confirm delete")
+
+	// Delete with -y should not require confirmation
+	stdout := cli.MustExecute("-y", "Work", "delete", "Task to confirm delete")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify task is gone
+	stdout = cli.MustExecute("-y", "Work", "get")
+	testutil.AssertNotContains(t, stdout, "Task to confirm delete")
+}
+
+func TestResultCodeErrorNoMatchSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Existing task")
+
+	// Try to complete non-existent task
+	stdout, _, exitCode := cli.Execute("-y", "Work", "complete", "Nonexistent task")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+func TestResultCodeErrorAmbiguousMatchSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with similar names
+	cli.MustExecute("-y", "Work", "add", "Similar task one")
+	cli.MustExecute("-y", "Work", "add", "Similar task two")
+
+	// Try to complete with ambiguous match
+	stdout, _, exitCode := cli.Execute("-y", "Work", "complete", "Similar")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+func TestExitCodesVerifiedSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Test exit code 0 for ACTION_COMPLETED
+	_, _, exitCode := cli.Execute("-y", "Work", "add", "Test exit code")
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for add, got %d", exitCode)
+	}
+
+	// Test exit code 0 for INFO_ONLY
+	_, _, exitCode = cli.Execute("-y", "Work", "get")
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for get, got %d", exitCode)
+	}
+
+	// Test exit code 1 for ERROR
+	_, _, exitCode = cli.Execute("-y", "Work", "complete", "Nonexistent")
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1 for error, got %d", exitCode)
+	}
+}
+
+// =============================================================================
+// List Management Tests (007-list-commands)
+// =============================================================================
+
+// TestListCreate verifies that `todoat -y list create "MyList"` creates a new list
+func TestListCreateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "list", "create", "MyList")
+
+	testutil.AssertContains(t, stdout, "MyList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// TestListCreateDuplicate verifies that creating a duplicate list returns ERROR
+func TestListCreateDuplicateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create first list
+	cli.MustExecute("-y", "list", "create", "ExistingList")
+
+	// Try to create duplicate
+	stdout, _, exitCode := cli.Execute("-y", "list", "create", "ExistingList")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestListView verifies that `todoat -y list` displays all lists with task counts
+func TestListViewSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create lists and add tasks
+	cli.MustExecute("-y", "list", "create", "Work")
+	cli.MustExecute("-y", "list", "create", "Personal")
+	cli.MustExecute("-y", "Work", "add", "Task 1")
+	cli.MustExecute("-y", "Work", "add", "Task 2")
+	cli.MustExecute("-y", "Personal", "add", "Task 3")
+
+	// View lists
+	stdout := cli.MustExecute("-y", "list")
+
+	testutil.AssertContains(t, stdout, "Work")
+	testutil.AssertContains(t, stdout, "Personal")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListViewEmpty verifies that viewing lists with no lists shows INFO_ONLY message
+func TestListViewEmptySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// View lists when none exist
+	stdout := cli.MustExecute("-y", "list")
+
+	// Should contain a helpful message about no lists
+	if !strings.Contains(strings.ToLower(stdout), "no") || !strings.Contains(strings.ToLower(stdout), "list") {
+		t.Errorf("expected message about no lists, got: %s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListViewJSON verifies that `todoat -y --json list` returns valid JSON
+func TestListViewJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "JSONTest")
+
+	// View lists with JSON output
+	stdout := cli.MustExecute("-y", "--json", "list")
+
+	// Should contain JSON array indicators
+	testutil.AssertContains(t, stdout, "[")
+	testutil.AssertContains(t, stdout, "]")
+	testutil.AssertContains(t, stdout, "JSONTest")
+}
+
+// TestListCreateJSON verifies that `todoat -y --json list create "Test"` returns JSON
+func TestListCreateJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list with JSON output
+	stdout := cli.MustExecute("-y", "--json", "list", "create", "JSONCreate")
+
+	// Should contain JSON object indicators
+	testutil.AssertContains(t, stdout, "{")
+	testutil.AssertContains(t, stdout, "}")
+	testutil.AssertContains(t, stdout, "JSONCreate")
+}
+
+// =============================================================================
+// JSON Output Tests for Task Commands (008-json-output)
+// =============================================================================
+
+// TestJSONFlagParsing verifies that --json flag is recognized and sets output mode
+func TestJSONFlagParsingSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list first
+	cli.MustExecute("-y", "list", "create", "FlagTest")
+
+	// Test that --json flag is accepted without error
+	stdout := cli.MustExecute("-y", "--json", "FlagTest")
+
+	// JSON output should contain JSON structure, not plain text
+	testutil.AssertContains(t, stdout, "{")
+	testutil.AssertNotContains(t, stdout, "Tasks in 'FlagTest'")
+}
+
+// TestListTasksJSON verifies that `todoat -y --json MyList` returns valid JSON with tasks array
+func TestListTasksJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add tasks
+	cli.MustExecute("-y", "list", "create", "TaskListJSON")
+	cli.MustExecute("-y", "TaskListJSON", "add", "First Task")
+	cli.MustExecute("-y", "TaskListJSON", "add", "Second Task")
+
+	// List tasks with JSON output
+	stdout := cli.MustExecute("-y", "--json", "TaskListJSON")
+
+	// Should contain JSON with tasks array
+	testutil.AssertContains(t, stdout, `"tasks"`)
+	testutil.AssertContains(t, stdout, `"list"`)
+	testutil.AssertContains(t, stdout, `"TaskListJSON"`)
+	testutil.AssertContains(t, stdout, `"First Task"`)
+	testutil.AssertContains(t, stdout, `"Second Task"`)
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"INFO_ONLY"`)
+}
+
+// TestAddTaskJSON verifies that `todoat -y --json MyList add "Task"` returns JSON with task info and result
+func TestAddTaskJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list first
+	cli.MustExecute("-y", "list", "create", "AddJSON")
+
+	// Add task with JSON output
+	stdout := cli.MustExecute("-y", "--json", "AddJSON", "add", "New JSON Task")
+
+	// Should contain JSON with action and task
+	testutil.AssertContains(t, stdout, `"action"`)
+	testutil.AssertContains(t, stdout, `"add"`)
+	testutil.AssertContains(t, stdout, `"task"`)
+	testutil.AssertContains(t, stdout, `"New JSON Task"`)
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+}
+
+// TestUpdateTaskJSON verifies that `todoat -y --json MyList update "Task" -s DONE` returns JSON with updated task
+func TestUpdateTaskJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add a task
+	cli.MustExecute("-y", "list", "create", "UpdateJSON")
+	cli.MustExecute("-y", "UpdateJSON", "add", "Task To Update")
+
+	// Update task with JSON output
+	stdout := cli.MustExecute("-y", "--json", "UpdateJSON", "update", "Task To Update", "-s", "DONE")
+
+	// Should contain JSON with action and updated task
+	testutil.AssertContains(t, stdout, `"action"`)
+	testutil.AssertContains(t, stdout, `"update"`)
+	testutil.AssertContains(t, stdout, `"task"`)
+	testutil.AssertContains(t, stdout, `"Task To Update"`)
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+}
+
+// TestDeleteTaskJSON verifies that `todoat -y --json MyList delete "Task"` returns JSON with result
+func TestDeleteTaskJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add a task
+	cli.MustExecute("-y", "list", "create", "DeleteJSON")
+	cli.MustExecute("-y", "DeleteJSON", "add", "Task To Delete")
+
+	// Delete task with JSON output
+	stdout := cli.MustExecute("-y", "--json", "DeleteJSON", "delete", "Task To Delete")
+
+	// Should contain JSON with action and result
+	testutil.AssertContains(t, stdout, `"action"`)
+	testutil.AssertContains(t, stdout, `"delete"`)
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+}
+
+// TestErrorJSON verifies that error conditions return JSON error with result: "ERROR"
+func TestErrorJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list first
+	cli.MustExecute("-y", "list", "create", "ErrorTestList")
+
+	// Try to delete a non-existent task with JSON output (this triggers an error)
+	stdout, _, exitCode := cli.Execute("-y", "--json", "ErrorTestList", "delete", "NonExistentTask")
+
+	// Should return non-zero exit code
+	if exitCode == 0 {
+		t.Errorf("expected non-zero exit code for error, got 0")
+	}
+
+	// Should contain JSON error
+	testutil.AssertContains(t, stdout, `"error"`)
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ERROR"`)
+}
+
+// TestJSONResultCodes verifies that all JSON responses include "result" field
+func TestJSONResultCodesSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list
+	cli.MustExecute("-y", "list", "create", "ResultCodeTest")
+
+	// Test INFO_ONLY result for listing tasks
+	stdout := cli.MustExecute("-y", "--json", "ResultCodeTest")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"INFO_ONLY"`)
+
+	// Test ACTION_COMPLETED result for add
+	stdout = cli.MustExecute("-y", "--json", "ResultCodeTest", "add", "Test Task")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+
+	// Test ACTION_COMPLETED result for update
+	stdout = cli.MustExecute("-y", "--json", "ResultCodeTest", "update", "Test Task", "-s", "DONE")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+
+	// Test ACTION_COMPLETED result for delete
+	cli.MustExecute("-y", "ResultCodeTest", "add", "Delete Me")
+	stdout = cli.MustExecute("-y", "--json", "ResultCodeTest", "delete", "Delete Me")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+}
+
+// =============================================================================
+// Priority Filtering Tests (009-priority-filtering)
+// =============================================================================
+
+// TestPriorityFilterSingle verifies that `todoat -y MyList -p 1` shows only priority 1 tasks
+func TestPriorityFilterSingleSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different priorities
+	cli.MustExecute("-y", "Work", "add", "Priority 1 task", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "Priority 2 task", "-p", "2")
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+
+	// Filter to show only priority 1 tasks
+	stdout := cli.MustExecute("-y", "Work", "-p", "1")
+
+	testutil.AssertContains(t, stdout, "Priority 1 task")
+	testutil.AssertNotContains(t, stdout, "Priority 2 task")
+	testutil.AssertNotContains(t, stdout, "Priority 5 task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPriorityFilterRange verifies that `todoat -y MyList -p 1,2,3` shows tasks with priority 1, 2, or 3
+func TestPriorityFilterRangeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different priorities
+	cli.MustExecute("-y", "Work", "add", "Priority 1 task", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "Priority 2 task", "-p", "2")
+	cli.MustExecute("-y", "Work", "add", "Priority 3 task", "-p", "3")
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+	cli.MustExecute("-y", "Work", "add", "Priority 7 task", "-p", "7")
+
+	// Filter to show priorities 1, 2, 3
+	stdout := cli.MustExecute("-y", "Work", "-p", "1,2,3")
+
+	testutil.AssertContains(t, stdout, "Priority 1 task")
+	testutil.AssertContains(t, stdout, "Priority 2 task")
+	testutil.AssertContains(t, stdout, "Priority 3 task")
+	testutil.AssertNotContains(t, stdout, "Priority 5 task")
+	testutil.AssertNotContains(t, stdout, "Priority 7 task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPriorityFilterHigh verifies that `todoat -y MyList -p high` shows priorities 1-4
+func TestPriorityFilterHighSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different priorities
+	cli.MustExecute("-y", "Work", "add", "Priority 1 task", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "Priority 4 task", "-p", "4")
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+	cli.MustExecute("-y", "Work", "add", "Priority 9 task", "-p", "9")
+
+	// Filter using 'high' alias
+	stdout := cli.MustExecute("-y", "Work", "-p", "high")
+
+	testutil.AssertContains(t, stdout, "Priority 1 task")
+	testutil.AssertContains(t, stdout, "Priority 4 task")
+	testutil.AssertNotContains(t, stdout, "Priority 5 task")
+	testutil.AssertNotContains(t, stdout, "Priority 9 task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPriorityFilterMedium verifies that `todoat -y MyList -p medium` shows priority 5
+func TestPriorityFilterMediumSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different priorities
+	cli.MustExecute("-y", "Work", "add", "Priority 1 task", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+	cli.MustExecute("-y", "Work", "add", "Priority 6 task", "-p", "6")
+
+	// Filter using 'medium' alias
+	stdout := cli.MustExecute("-y", "Work", "-p", "medium")
+
+	testutil.AssertNotContains(t, stdout, "Priority 1 task")
+	testutil.AssertContains(t, stdout, "Priority 5 task")
+	testutil.AssertNotContains(t, stdout, "Priority 6 task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPriorityFilterLow verifies that `todoat -y MyList -p low` shows priorities 6-9
+func TestPriorityFilterLowSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different priorities
+	cli.MustExecute("-y", "Work", "add", "Priority 1 task", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+	cli.MustExecute("-y", "Work", "add", "Priority 6 task", "-p", "6")
+	cli.MustExecute("-y", "Work", "add", "Priority 9 task", "-p", "9")
+
+	// Filter using 'low' alias
+	stdout := cli.MustExecute("-y", "Work", "-p", "low")
+
+	testutil.AssertNotContains(t, stdout, "Priority 1 task")
+	testutil.AssertNotContains(t, stdout, "Priority 5 task")
+	testutil.AssertContains(t, stdout, "Priority 6 task")
+	testutil.AssertContains(t, stdout, "Priority 9 task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPriorityFilterUndefined verifies that `todoat -y MyList -p 0` shows tasks with no priority set
+func TestPriorityFilterUndefinedSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with and without priority
+	cli.MustExecute("-y", "Work", "add", "No priority task")
+	cli.MustExecute("-y", "Work", "add", "Priority 1 task", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+
+	// Filter to show only tasks with no priority (priority 0)
+	stdout := cli.MustExecute("-y", "Work", "-p", "0")
+
+	testutil.AssertContains(t, stdout, "No priority task")
+	testutil.AssertNotContains(t, stdout, "Priority 1 task")
+	testutil.AssertNotContains(t, stdout, "Priority 5 task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPriorityFilterNoMatch verifies that `todoat -y MyList -p 1` with no matching tasks returns INFO_ONLY with message
+func TestPriorityFilterNoMatchSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with priority 5 only
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+
+	// Filter for priority 1 (no matches)
+	stdout := cli.MustExecute("-y", "Work", "-p", "1")
+
+	// Should show a message about no tasks matching
+	if !strings.Contains(strings.ToLower(stdout), "no") || !strings.Contains(strings.ToLower(stdout), "task") {
+		t.Errorf("expected message about no matching tasks, got: %s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPriorityFilterJSON verifies that `todoat -y --json MyList -p 1` returns filtered JSON result
+func TestPriorityFilterJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different priorities
+	cli.MustExecute("-y", "Work", "add", "Priority 1 task", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+
+	// Filter with JSON output
+	stdout := cli.MustExecute("-y", "--json", "Work", "-p", "1")
+
+	// Should contain JSON with only priority 1 task
+	testutil.AssertContains(t, stdout, `"Priority 1 task"`)
+	testutil.AssertNotContains(t, stdout, `"Priority 5 task"`)
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"INFO_ONLY"`)
+}
+
+// TestPriorityFilterInvalid verifies that `todoat -y MyList -p 10` returns ERROR for invalid priority
+func TestPriorityFilterInvalidSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a task
+	cli.MustExecute("-y", "Work", "add", "Some task")
+
+	// Try invalid priority filter
+	stdout, _, exitCode := cli.Execute("-y", "Work", "-p", "10")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestPriorityFilterCombinedWithStatus verifies combined status and priority filters work
+func TestPriorityFilterCombinedWithStatusSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different priorities and statuses
+	cli.MustExecute("-y", "Work", "add", "High priority TODO", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "High priority DONE", "-p", "1")
+	cli.MustExecute("-y", "Work", "complete", "High priority DONE")
+	cli.MustExecute("-y", "Work", "add", "Low priority TODO", "-p", "7")
+
+	// Filter for TODO tasks with high priority
+	stdout := cli.MustExecute("-y", "Work", "-s", "TODO", "-p", "high")
+
+	testutil.AssertContains(t, stdout, "High priority TODO")
+	testutil.AssertNotContains(t, stdout, "High priority DONE")
+	testutil.AssertNotContains(t, stdout, "Low priority TODO")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// =============================================================================
+// Task Dates Tests (011-task-dates)
+// =============================================================================
+
+// TestAddTaskWithDueDate verifies that `todoat -y MyList add "Task" --due-date 2026-01-31` sets due date
+func TestAddTaskWithDueDateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task with due", "--due-date", "2026-01-31")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Task with due")
+	testutil.AssertContains(t, stdout, "2026-01-31")
+}
+
+// TestAddTaskWithStartDate verifies that `todoat -y MyList add "Task" --start-date 2026-01-15` sets start date
+func TestAddTaskWithStartDateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task with start", "--start-date", "2026-01-15")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check start_date
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Task with start")
+	testutil.AssertContains(t, stdout, "2026-01-15")
+}
+
+// TestAddTaskWithBothDates verifies that both --due-date and --start-date can be set together
+func TestAddTaskWithBothDatesSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task with both dates", "--due-date", "2026-01-31", "--start-date", "2026-01-15")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check both dates
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Task with both dates")
+	testutil.AssertContains(t, stdout, "2026-01-31")
+	testutil.AssertContains(t, stdout, "2026-01-15")
+}
+
+// TestUpdateTaskDueDate verifies that `todoat -y MyList update "Task" --due-date 2026-02-15` updates due date
+func TestUpdateTaskDueDateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with a due date
+	cli.MustExecute("-y", "Work", "add", "Update date task", "--due-date", "2026-01-31")
+
+	// Update the due date
+	stdout := cli.MustExecute("-y", "Work", "update", "Update date task", "--due-date", "2026-02-15")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify updated due date
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Update date task")
+	testutil.AssertContains(t, stdout, "2026-02-15")
+	testutil.AssertNotContains(t, stdout, "2026-01-31")
+}
+
+// TestClearTaskDueDate verifies that `todoat -y MyList update "Task" --due-date ""` clears due date
+func TestClearTaskDueDateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with a due date
+	cli.MustExecute("-y", "Work", "add", "Clear date task", "--due-date", "2026-01-31")
+
+	// Clear the due date
+	stdout := cli.MustExecute("-y", "Work", "update", "Clear date task", "--due-date", "")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify due date is cleared - JSON output should not have the date
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Clear date task")
+	// Due date should be empty or null in JSON
+	testutil.AssertNotContains(t, stdout, "2026-01-31")
+}
+
+// TestInvalidDateFormat verifies that `todoat -y MyList add "Task" --due-date "invalid"` returns ERROR
+func TestInvalidDateFormatSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout, _, exitCode := cli.Execute("-y", "Work", "add", "Invalid date task", "--due-date", "invalid")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestDateFormatValidation verifies that `todoat -y MyList add "Task" --due-date "01-31-2026"` returns ERROR (wrong format)
+func TestDateFormatValidationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Wrong format: MM-DD-YYYY instead of YYYY-MM-DD
+	stdout, _, exitCode := cli.Execute("-y", "Work", "add", "Wrong format task", "--due-date", "01-31-2026")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestTaskDatesInJSON verifies that `todoat -y --json MyList` includes due_date and start_date fields
+func TestTaskDatesInJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with both dates
+	cli.MustExecute("-y", "Work", "add", "JSON date task", "--due-date", "2026-01-31", "--start-date", "2026-01-15")
+
+	// Get tasks as JSON
+	stdout := cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, `"due_date"`)
+	testutil.AssertContains(t, stdout, `"start_date"`)
+	testutil.AssertContains(t, stdout, "2026-01-31")
+	testutil.AssertContains(t, stdout, "2026-01-15")
+}
+
+// TestCompletedTimestamp verifies that `todoat -y MyList complete "Task"` sets completed timestamp automatically
+func TestCompletedTimestampSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Task to complete")
+
+	// Complete the task
+	stdout := cli.MustExecute("-y", "Work", "complete", "Task to complete")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Get tasks as JSON and verify completed timestamp is set
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Task to complete")
+	testutil.AssertContains(t, stdout, `"completed"`)
+}
+
+// =============================================================================
+// Tag Filtering Tests (012-tag-filtering)
+// =============================================================================
+
+// TestAddTaskWithTag verifies that `todoat -y MyList add "Task" --tag work` adds task with tag
+func TestAddTaskWithTagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Tagged task", "--tag", "work")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check tags
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Tagged task")
+	testutil.AssertContains(t, stdout, "work")
+}
+
+// TestAddTaskMultipleTags verifies that `todoat -y MyList add "Task" --tag work --tag urgent` adds task with multiple tags
+func TestAddTaskMultipleTagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Multi-tagged task", "--tag", "work", "--tag", "urgent")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check tags
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Multi-tagged task")
+	testutil.AssertContains(t, stdout, "work")
+	testutil.AssertContains(t, stdout, "urgent")
+}
+
+// TestAddTaskCommaSeparatedTags verifies that `todoat -y MyList add "Task" --tag "work,urgent"` adds task with comma-separated tags
+func TestAddTaskCommaSeparatedTagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Comma-tagged task", "--tag", "work,urgent")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check tags
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Comma-tagged task")
+	testutil.AssertContains(t, stdout, "work")
+	testutil.AssertContains(t, stdout, "urgent")
+}
+
+// TestUpdateTaskTags verifies that `todoat -y MyList update "Task" --tag home` updates task tags
+func TestUpdateTaskTagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with a tag
+	cli.MustExecute("-y", "Work", "add", "Update tag task", "--tag", "work")
+
+	// Update the tag
+	stdout := cli.MustExecute("-y", "Work", "update", "Update tag task", "--tag", "home")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify updated tag
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Update tag task")
+	testutil.AssertContains(t, stdout, "home")
+	testutil.AssertNotContains(t, stdout, `"work"`)
+}
+
+// TestClearTaskTags verifies that `todoat -y MyList update "Task" --tag ""` clears task tags
+func TestClearTaskTagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with a tag
+	cli.MustExecute("-y", "Work", "add", "Clear tag task", "--tag", "work")
+
+	// Clear the tag
+	stdout := cli.MustExecute("-y", "Work", "update", "Clear tag task", "--tag", "")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify tag is cleared
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Clear tag task")
+	// The tags field should be empty or not contain "work"
+	// We check that the specific tag value is no longer present
+	if strings.Contains(stdout, `"tags":["work"]`) {
+		t.Errorf("expected tags to be cleared, but still found work tag in output: %s", stdout)
+	}
+}
+
+// TestFilterByTag verifies that `todoat -y MyList --tag work` shows only tasks with "work" tag
+func TestFilterByTagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different tags
+	cli.MustExecute("-y", "Work", "add", "Work task", "--tag", "work")
+	cli.MustExecute("-y", "Work", "add", "Home task", "--tag", "home")
+	cli.MustExecute("-y", "Work", "add", "No tag task")
+
+	// Filter by work tag
+	stdout := cli.MustExecute("-y", "Work", "--tag", "work")
+
+	testutil.AssertContains(t, stdout, "Work task")
+	testutil.AssertNotContains(t, stdout, "Home task")
+	testutil.AssertNotContains(t, stdout, "No tag task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterByMultipleTags verifies that `todoat -y MyList --tag work --tag urgent` shows tasks with ANY of the tags (OR logic)
+func TestFilterByMultipleTagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different tags
+	cli.MustExecute("-y", "Work", "add", "Work task", "--tag", "work")
+	cli.MustExecute("-y", "Work", "add", "Urgent task", "--tag", "urgent")
+	cli.MustExecute("-y", "Work", "add", "Home task", "--tag", "home")
+
+	// Filter by work OR urgent tag
+	stdout := cli.MustExecute("-y", "Work", "--tag", "work", "--tag", "urgent")
+
+	testutil.AssertContains(t, stdout, "Work task")
+	testutil.AssertContains(t, stdout, "Urgent task")
+	testutil.AssertNotContains(t, stdout, "Home task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterTagNoMatch verifies that `todoat -y MyList --tag nonexistent` returns INFO_ONLY with message
+func TestFilterTagNoMatchSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with a different tag
+	cli.MustExecute("-y", "Work", "add", "Some task", "--tag", "work")
+
+	// Filter by non-existent tag
+	stdout := cli.MustExecute("-y", "Work", "--tag", "nonexistent")
+
+	// Should show a message about no matching tasks
+	if !strings.Contains(strings.ToLower(stdout), "no") || !strings.Contains(strings.ToLower(stdout), "task") {
+		t.Errorf("expected message about no matching tasks, got: %s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterTagJSON verifies that `todoat -y --json MyList --tag work` returns filtered JSON result with tags array
+func TestFilterTagJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different tags
+	cli.MustExecute("-y", "Work", "add", "Work task", "--tag", "work")
+	cli.MustExecute("-y", "Work", "add", "Home task", "--tag", "home")
+
+	// Filter with JSON output
+	stdout := cli.MustExecute("-y", "--json", "Work", "--tag", "work")
+
+	// Should contain JSON with only work-tagged task
+	testutil.AssertContains(t, stdout, `"Work task"`)
+	testutil.AssertNotContains(t, stdout, `"Home task"`)
+	testutil.AssertContains(t, stdout, `"tags"`)
+	testutil.AssertContains(t, stdout, `"work"`)
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"INFO_ONLY"`)
+}
+
+// TestFilterTagCombined verifies that `todoat -y MyList -s TODO --tag work` combined with status filter works
+func TestFilterTagCombinedSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different statuses and tags
+	cli.MustExecute("-y", "Work", "add", "Work TODO task", "--tag", "work")
+	cli.MustExecute("-y", "Work", "add", "Work DONE task", "--tag", "work")
+	cli.MustExecute("-y", "Work", "complete", "Work DONE task")
+	cli.MustExecute("-y", "Work", "add", "Home TODO task", "--tag", "home")
+
+	// Filter by TODO status AND work tag
+	stdout := cli.MustExecute("-y", "Work", "-s", "TODO", "--tag", "work")
+
+	testutil.AssertContains(t, stdout, "Work TODO task")
+	testutil.AssertNotContains(t, stdout, "Work DONE task")
+	testutil.AssertNotContains(t, stdout, "Home TODO task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// =============================================================================
+// List Management Tests (013-list-management)
+// =============================================================================
+
+// TestListDelete verifies that `todoat -y list delete "ListName"` soft-deletes a list
+func TestListDeleteSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "ToDelete")
+
+	// Delete the list
+	stdout := cli.MustExecute("-y", "list", "delete", "ToDelete")
+
+	testutil.AssertContains(t, stdout, "ToDelete")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify list is no longer visible in normal list view
+	stdout = cli.MustExecute("-y", "list")
+	testutil.AssertNotContains(t, stdout, "ToDelete")
+}
+
+// TestListDeleteNotFound verifies that deleting a non-existent list returns ERROR
+func TestListDeleteNotFoundSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Try to delete non-existent list
+	stdout, _, exitCode := cli.Execute("-y", "list", "delete", "NonExistent")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestListTrash verifies that `todoat -y list trash` displays deleted lists
+func TestListTrashSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create and delete a list
+	cli.MustExecute("-y", "list", "create", "TrashTest")
+	cli.MustExecute("-y", "list", "delete", "TrashTest")
+
+	// View trash
+	stdout := cli.MustExecute("-y", "list", "trash")
+
+	testutil.AssertContains(t, stdout, "TrashTest")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListTrashEmpty verifies that viewing empty trash returns INFO_ONLY
+func TestListTrashEmptySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// View trash with no deleted lists
+	stdout := cli.MustExecute("-y", "list", "trash")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListRestore verifies that `todoat -y list trash restore "Name"` restores a deleted list
+func TestListRestoreSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create, delete, then restore a list
+	cli.MustExecute("-y", "list", "create", "RestoreTest")
+	cli.MustExecute("-y", "list", "delete", "RestoreTest")
+
+	// Restore the list
+	stdout := cli.MustExecute("-y", "list", "trash", "restore", "RestoreTest")
+
+	testutil.AssertContains(t, stdout, "RestoreTest")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify list is visible in normal list view again
+	stdout = cli.MustExecute("-y", "list")
+	testutil.AssertContains(t, stdout, "RestoreTest")
+}
+
+// TestListRestoreNotInTrash verifies that restoring an active list returns ERROR
+func TestListRestoreNotInTrashSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list but don't delete it
+	cli.MustExecute("-y", "list", "create", "ActiveList")
+
+	// Try to restore an active list
+	stdout, _, exitCode := cli.Execute("-y", "list", "trash", "restore", "ActiveList")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestListPurge verifies that `todoat -y list trash purge "Name"` permanently deletes
+func TestListPurgeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create, delete, then purge a list
+	cli.MustExecute("-y", "list", "create", "PurgeTest")
+	cli.MustExecute("-y", "list", "delete", "PurgeTest")
+
+	// Purge the list
+	stdout := cli.MustExecute("-y", "list", "trash", "purge", "PurgeTest")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify list is not in trash anymore
+	stdout = cli.MustExecute("-y", "list", "trash")
+	testutil.AssertNotContains(t, stdout, "PurgeTest")
+}
+
+// TestListInfo verifies that `todoat -y list info "Name"` shows list details
+func TestListInfoSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add some tasks
+	cli.MustExecute("-y", "list", "create", "InfoTest")
+	cli.MustExecute("-y", "InfoTest", "add", "Task 1")
+	cli.MustExecute("-y", "InfoTest", "add", "Task 2")
+
+	// Get list info
+	stdout := cli.MustExecute("-y", "list", "info", "InfoTest")
+
+	testutil.AssertContains(t, stdout, "InfoTest")
+	// Should show task count (2 tasks)
+	testutil.AssertContains(t, stdout, "2")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// =============================================================================
+// Subtasks and Hierarchical Task Support Tests (014)
+// =============================================================================
+
+// TestAddSubtaskWithParentFlag verifies `todoat MyList add "Child" -P "Parent"` creates subtask under existing parent
+func TestAddSubtaskWithParentFlagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add a parent task
+	cli.MustExecute("-y", "list", "create", "SubtaskTest")
+	cli.MustExecute("-y", "SubtaskTest", "add", "Parent Task")
+
+	// Add a subtask under the parent using -P flag
+	stdout := cli.MustExecute("-y", "SubtaskTest", "add", "Child Task", "-P", "Parent Task")
+
+	testutil.AssertContains(t, stdout, "Child Task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the subtask was created with parent relationship
+	stdout = cli.MustExecute("-y", "--json", "SubtaskTest")
+	testutil.AssertContains(t, stdout, `"Child Task"`)
+	testutil.AssertContains(t, stdout, `"parent_id"`) // Should have parent reference
+}
+
+// TestPathBasedHierarchyCreation verifies `todoat MyList add "A/B/C"` creates 3-level hierarchy
+func TestPathBasedHierarchyCreationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "HierarchyTest")
+
+	// Add task with path-based hierarchy
+	stdout := cli.MustExecute("-y", "HierarchyTest", "add", "ProjectA/FeatureB/TaskC")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify all three tasks were created
+	stdout = cli.MustExecute("-y", "--json", "HierarchyTest")
+	testutil.AssertContains(t, stdout, `"ProjectA"`)
+	testutil.AssertContains(t, stdout, `"FeatureB"`)
+	testutil.AssertContains(t, stdout, `"TaskC"`)
+}
+
+// TestTreeVisualization verifies `todoat MyList` displays tasks with box-drawing characters
+func TestTreeVisualizationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with parent and children
+	cli.MustExecute("-y", "list", "create", "TreeTest")
+	cli.MustExecute("-y", "TreeTest", "add", "Parent")
+	cli.MustExecute("-y", "TreeTest", "add", "Child1", "-P", "Parent")
+	cli.MustExecute("-y", "TreeTest", "add", "Child2", "-P", "Parent")
+
+	// List tasks - should show tree structure with box-drawing characters
+	stdout := cli.MustExecute("-y", "TreeTest")
+
+	testutil.AssertContains(t, stdout, "Parent")
+	testutil.AssertContains(t, stdout, "Child1")
+	testutil.AssertContains(t, stdout, "Child2")
+	// Should contain box-drawing characters for tree visualization
+	// ├─ for branches, └─ for last child
+	if !strings.Contains(stdout, "├") && !strings.Contains(stdout, "└") {
+		t.Errorf("expected tree visualization with box-drawing characters, got:\n%s", stdout)
+	}
+}
+
+// TestUpdateParent verifies `todoat MyList update "Task" -P "NewParent"` re-parents task
+func TestUpdateParentSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with two parents and one child
+	cli.MustExecute("-y", "list", "create", "ReparentTest")
+	cli.MustExecute("-y", "ReparentTest", "add", "OldParent")
+	cli.MustExecute("-y", "ReparentTest", "add", "NewParent")
+	cli.MustExecute("-y", "ReparentTest", "add", "MovingChild", "-P", "OldParent")
+
+	// Re-parent the child to NewParent
+	stdout := cli.MustExecute("-y", "ReparentTest", "update", "MovingChild", "-P", "NewParent")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the task is now under NewParent (visible in tree view)
+	stdout = cli.MustExecute("-y", "--json", "ReparentTest")
+	// The child should be associated with NewParent now
+	testutil.AssertContains(t, stdout, `"MovingChild"`)
+}
+
+// TestRemoveParent verifies `todoat MyList update "Task" --no-parent` moves subtask to root level
+func TestRemoveParentSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with parent and child
+	cli.MustExecute("-y", "list", "create", "NoParentTest")
+	cli.MustExecute("-y", "NoParentTest", "add", "Parent")
+	cli.MustExecute("-y", "NoParentTest", "add", "Child", "-P", "Parent")
+
+	// Remove parent relationship using --no-parent
+	stdout := cli.MustExecute("-y", "NoParentTest", "update", "Child", "--no-parent")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the child is now a root-level task (no tree indentation)
+	stdout = cli.MustExecute("-y", "--json", "NoParentTest")
+	testutil.AssertContains(t, stdout, `"Child"`)
+}
+
+// TestCascadeDelete verifies `todoat MyList delete "Parent"` deletes all descendants
+func TestCascadeDeleteSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with parent and children
+	cli.MustExecute("-y", "list", "create", "CascadeTest")
+	cli.MustExecute("-y", "CascadeTest", "add", "ParentToDelete")
+	cli.MustExecute("-y", "CascadeTest", "add", "Child1", "-P", "ParentToDelete")
+	cli.MustExecute("-y", "CascadeTest", "add", "Child2", "-P", "ParentToDelete")
+	cli.MustExecute("-y", "CascadeTest", "add", "GrandChild", "-P", "Child1")
+
+	// Delete the parent task (should cascade delete all children)
+	stdout := cli.MustExecute("-y", "CascadeTest", "delete", "ParentToDelete")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify all tasks were deleted (parent and children)
+	stdout = cli.MustExecute("-y", "--json", "CascadeTest")
+	testutil.AssertNotContains(t, stdout, `"ParentToDelete"`)
+	testutil.AssertNotContains(t, stdout, `"Child1"`)
+	testutil.AssertNotContains(t, stdout, `"Child2"`)
+	testutil.AssertNotContains(t, stdout, `"GrandChild"`)
+}
+
+// TestLiteralSlashFlag verifies `todoat MyList add -l "UI/UX Design"` creates single task with slash in summary
+func TestLiteralSlashFlagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "LiteralTest")
+
+	// Add task with literal slash using -l flag
+	stdout := cli.MustExecute("-y", "LiteralTest", "add", "-l", "UI/UX Design")
+
+	testutil.AssertContains(t, stdout, "UI/UX Design")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify only one task was created with the full name including slash
+	stdout = cli.MustExecute("-y", "--json", "LiteralTest")
+	testutil.AssertContains(t, stdout, `"UI/UX Design"`)
+	// Should NOT have separate "UI" and "UX Design" tasks
+	testutil.AssertNotContains(t, stdout, `"UI"`)
+}
+
+// TestPathResolutionExisting verifies adding `A/B/C` when `A/B` exists only creates `C` under existing `B`
+func TestPathResolutionExistingSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with existing parent structure
+	cli.MustExecute("-y", "list", "create", "PathResTest")
+	cli.MustExecute("-y", "PathResTest", "add", "ExistingParent/ExistingChild")
+
+	// Add a new leaf under existing hierarchy
+	stdout := cli.MustExecute("-y", "PathResTest", "add", "ExistingParent/ExistingChild/NewGrandchild")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify structure: should have ExistingParent, ExistingChild, and NewGrandchild
+	// but NOT duplicate ExistingParent or ExistingChild
+	stdout = cli.MustExecute("-y", "--json", "PathResTest")
+	// Count occurrences - should only have one of each existing task
+	if strings.Count(stdout, `"ExistingParent"`) > 1 {
+		t.Errorf("expected only one ExistingParent task, but found duplicates in:\n%s", stdout)
+	}
+	if strings.Count(stdout, `"ExistingChild"`) > 1 {
+		t.Errorf("expected only one ExistingChild task, but found duplicates in:\n%s", stdout)
+	}
+	testutil.AssertContains(t, stdout, `"NewGrandchild"`)
+}
+
+// TestCircularReferenceBlocked verifies cannot set task as parent of its own ancestor
+func TestCircularReferenceBlockedSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with parent-child hierarchy
+	cli.MustExecute("-y", "list", "create", "CircularTest")
+	cli.MustExecute("-y", "CircularTest", "add", "Grandparent")
+	cli.MustExecute("-y", "CircularTest", "add", "Parent", "-P", "Grandparent")
+	cli.MustExecute("-y", "CircularTest", "add", "Child", "-P", "Parent")
+
+	// Try to set Grandparent's parent to Child (would create circular reference)
+	stdout, stderr, exitCode := cli.Execute("-y", "CircularTest", "update", "Grandparent", "-P", "Child")
+
+	// Should fail with exit code 1
+	testutil.AssertExitCode(t, exitCode, 1)
+	combinedOutput := stdout + stderr
+	// Should contain error about circular reference
+	if !strings.Contains(strings.ToLower(combinedOutput), "circular") {
+		t.Errorf("expected error about circular reference, got:\n%s", combinedOutput)
+	}
+}
+
+// TestOrphanDetection verifies system handles tasks whose parent was deleted externally
+func TestOrphanDetectionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with parent and child
+	cli.MustExecute("-y", "list", "create", "OrphanTest")
+	cli.MustExecute("-y", "OrphanTest", "add", "Parent")
+	cli.MustExecute("-y", "OrphanTest", "add", "Orphan", "-P", "Parent")
+
+	// Test that listing still works with the hierarchy
+	stdout := cli.MustExecute("-y", "OrphanTest")
+
+	testutil.AssertContains(t, stdout, "Parent")
+	testutil.AssertContains(t, stdout, "Orphan")
+}
+
+// =============================================================================
+// Views and Customization Tests (015-views-customization)
+// =============================================================================
+
+// TestDefaultView verifies that `todoat MyList` displays tasks with default view (status, summary, priority)
+func TestDefaultViewSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add tasks with different priorities
+	cli.MustExecute("-y", "list", "create", "DefaultViewTest")
+	cli.MustExecute("-y", "DefaultViewTest", "add", "High priority task", "-p", "1")
+	cli.MustExecute("-y", "DefaultViewTest", "add", "Medium priority task", "-p", "5")
+	cli.MustExecute("-y", "DefaultViewTest", "update", "High priority task", "-s", "IN-PROGRESS")
+
+	// List tasks (should show default view with status, summary, priority)
+	stdout := cli.MustExecute("-y", "DefaultViewTest")
+
+	// Default view should include status, summary, and priority
+	testutil.AssertContains(t, stdout, "High priority task")
+	testutil.AssertContains(t, stdout, "Medium priority task")
+	// Status should be visible
+	if !strings.Contains(stdout, "TODO") && !strings.Contains(stdout, "IN-PROGRESS") {
+		t.Errorf("expected status indicators in default view, got:\n%s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestAllView verifies that `todoat MyList -v all` displays all task metadata fields
+func TestAllViewSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add a task with multiple attributes
+	cli.MustExecute("-y", "list", "create", "AllViewTest")
+	cli.MustExecute("-y", "AllViewTest", "add", "Full metadata task", "-p", "3", "--due-date", "2026-01-31", "--tag", "work,urgent")
+
+	// List tasks with 'all' view
+	stdout := cli.MustExecute("-y", "AllViewTest", "-v", "all")
+
+	// All view should show more fields than default
+	testutil.AssertContains(t, stdout, "Full metadata task")
+	// Should show due date
+	testutil.AssertContains(t, stdout, "2026-01-31")
+	// Should show tags
+	if !strings.Contains(stdout, "work") || !strings.Contains(stdout, "urgent") {
+		t.Errorf("expected tags in 'all' view, got:\n%s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestCustomViewSelection verifies that `todoat MyList -v myview` loads view from views directory
+func TestCustomViewSelectionSQLiteCLI(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a custom view YAML file that shows only summary and status
+	viewYAML := `name: minimal
+fields:
+  - name: summary
+    width: 40
+  - name: status
+    width: 12
+`
+	viewPath := viewsDir + "/minimal.yaml"
+	if err := os.WriteFile(viewPath, []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create a list and add tasks
+	cli.MustExecute("-y", "list", "create", "CustomViewTest")
+	cli.MustExecute("-y", "CustomViewTest", "add", "Task with priority", "-p", "1")
+
+	// List tasks with custom view
+	stdout := cli.MustExecute("-y", "CustomViewTest", "-v", "minimal")
+
+	testutil.AssertContains(t, stdout, "Task with priority")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestViewListCommand verifies that `todoat view list` shows all available views (built-in and custom)
+func TestViewListCommandSQLiteCLI(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a custom view
+	viewYAML := `name: custom
+fields:
+  - name: summary
+`
+	if err := os.WriteFile(viewsDir+"/custom.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// List available views
+	stdout := cli.MustExecute("-y", "view", "list")
+
+	// Should show built-in views
+	testutil.AssertContains(t, stdout, "default")
+	testutil.AssertContains(t, stdout, "all")
+	// Should show custom view
+	testutil.AssertContains(t, stdout, "custom")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestViewFieldOrdering verifies that custom view with reordered fields displays columns in specified order
+func TestViewFieldOrderingSQLiteCLI(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a view with priority BEFORE summary (reversed from default)
+	viewYAML := `name: priority_first
+fields:
+  - name: priority
+    width: 8
+  - name: summary
+    width: 40
+  - name: status
+    width: 12
+`
+	if err := os.WriteFile(viewsDir+"/priority_first.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create a list and add a task
+	cli.MustExecute("-y", "list", "create", "FieldOrderTest")
+	cli.MustExecute("-y", "FieldOrderTest", "add", "Important task", "-p", "1")
+
+	// List tasks with priority_first view
+	stdout := cli.MustExecute("-y", "FieldOrderTest", "-v", "priority_first")
+
+	testutil.AssertContains(t, stdout, "Important task")
+	// Priority should appear before the summary in output
+	// The priority indicator (1 or P1) should appear before "Important task"
+	prioIdx := strings.Index(stdout, "1")
+	summIdx := strings.Index(stdout, "Important task")
+	if prioIdx >= summIdx {
+		t.Errorf("expected priority to appear before summary in output, got:\n%s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestViewFiltering verifies that view with filters only shows matching tasks (e.g., status != DONE)
+func TestViewFilteringSQLiteCLI(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a view that filters out completed tasks
+	viewYAML := `name: active_only
+fields:
+  - name: status
+  - name: summary
+filters:
+  - field: status
+    operator: ne
+    value: DONE
+`
+	if err := os.WriteFile(viewsDir+"/active_only.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create tasks with different statuses
+	cli.MustExecute("-y", "list", "create", "FilterViewTest")
+	cli.MustExecute("-y", "FilterViewTest", "add", "Active task")
+	cli.MustExecute("-y", "FilterViewTest", "add", "Completed task")
+	cli.MustExecute("-y", "FilterViewTest", "complete", "Completed task")
+
+	// List tasks with active_only view
+	stdout := cli.MustExecute("-y", "FilterViewTest", "-v", "active_only")
+
+	testutil.AssertContains(t, stdout, "Active task")
+	testutil.AssertNotContains(t, stdout, "Completed task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestViewSorting verifies that view with sort rules orders tasks correctly (multi-level sort)
+func TestViewSortingSQLiteCLI(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a view that sorts by priority ascending, then by summary
+	viewYAML := `name: priority_sorted
+fields:
+  - name: priority
+  - name: summary
+sort:
+  - field: priority
+    direction: asc
+  - field: summary
+    direction: asc
+`
+	if err := os.WriteFile(viewsDir+"/priority_sorted.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create tasks with different priorities
+	cli.MustExecute("-y", "list", "create", "SortViewTest")
+	cli.MustExecute("-y", "SortViewTest", "add", "Low priority task", "-p", "9")
+	cli.MustExecute("-y", "SortViewTest", "add", "High priority task", "-p", "1")
+	cli.MustExecute("-y", "SortViewTest", "add", "Medium priority task", "-p", "5")
+
+	// List tasks with priority_sorted view
+	stdout := cli.MustExecute("-y", "SortViewTest", "-v", "priority_sorted")
+
+	// Tasks should appear in priority order: High (1), Medium (5), Low (9)
+	highIdx := strings.Index(stdout, "High priority task")
+	medIdx := strings.Index(stdout, "Medium priority task")
+	lowIdx := strings.Index(stdout, "Low priority task")
+	if highIdx >= medIdx || medIdx >= lowIdx {
+		t.Errorf("expected tasks sorted by priority (high, medium, low), got:\n%s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestViewDateFilter verifies that view filters with relative dates (`today`, `+7d`, `-3d`) work correctly
+func TestViewDateFilterSQLiteCLI(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a view that shows tasks due within next 7 days
+	viewYAML := `name: due_soon
+fields:
+  - name: summary
+  - name: due_date
+filters:
+  - field: due_date
+    operator: lte
+    value: "+7d"
+  - field: due_date
+    operator: gte
+    value: "today"
+`
+	if err := os.WriteFile(viewsDir+"/due_soon.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Calculate dates relative to today for test data
+	today := time.Now()
+	threeDays := today.AddDate(0, 0, 3).Format("2006-01-02")
+	tenDays := today.AddDate(0, 0, 10).Format("2006-01-02")
+	yesterday := today.AddDate(0, 0, -1).Format("2006-01-02")
+
+	// Create tasks with different due dates
+	cli.MustExecute("-y", "list", "create", "DateFilterTest")
+	cli.MustExecute("-y", "DateFilterTest", "add", "Due soon task", "--due-date", threeDays)
+	cli.MustExecute("-y", "DateFilterTest", "add", "Due later task", "--due-date", tenDays)
+	cli.MustExecute("-y", "DateFilterTest", "add", "Overdue task", "--due-date", yesterday)
+	cli.MustExecute("-y", "DateFilterTest", "add", "No due date task")
+
+	// List tasks with due_soon view
+	stdout := cli.MustExecute("-y", "DateFilterTest", "-v", "due_soon")
+
+	// Should show only tasks due within 7 days from today
+	testutil.AssertContains(t, stdout, "Due soon task")
+	testutil.AssertNotContains(t, stdout, "Due later task")
+	testutil.AssertNotContains(t, stdout, "Overdue task")
+	testutil.AssertNotContains(t, stdout, "No due date task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestViewTagFilter verifies that view filters on tags/categories work with `contains` and `in` operators
+func TestViewTagFilterSQLiteCLI(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a view that filters by tags using 'contains' operator
+	viewYAML := `name: work_only
+fields:
+  - name: summary
+  - name: tags
+filters:
+  - field: tags
+    operator: contains
+    value: work
+`
+	if err := os.WriteFile(viewsDir+"/work_only.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create tasks with different tags
+	cli.MustExecute("-y", "list", "create", "TagFilterTest")
+	cli.MustExecute("-y", "TagFilterTest", "add", "Work task", "--tag", "work")
+	cli.MustExecute("-y", "TagFilterTest", "add", "Home task", "--tag", "home")
+	cli.MustExecute("-y", "TagFilterTest", "add", "Work and home task", "--tag", "work,home")
+
+	// List tasks with work_only view
+	stdout := cli.MustExecute("-y", "TagFilterTest", "-v", "work_only")
+
+	// Should show tasks with 'work' tag
+	testutil.AssertContains(t, stdout, "Work task")
+	testutil.AssertContains(t, stdout, "Work and home task")
+	testutil.AssertNotContains(t, stdout, "Home task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestViewHierarchyPreserved verifies that custom views maintain parent-child tree structure display
+func TestViewHierarchyPreservedSQLiteCLI(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a simple custom view
+	viewYAML := `name: simple
+fields:
+  - name: summary
+  - name: status
+`
+	if err := os.WriteFile(viewsDir+"/simple.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create a list with hierarchical tasks
+	cli.MustExecute("-y", "list", "create", "HierarchyViewTest")
+	cli.MustExecute("-y", "HierarchyViewTest", "add", "Parent Task")
+	cli.MustExecute("-y", "HierarchyViewTest", "add", "Child Task 1", "-P", "Parent Task")
+	cli.MustExecute("-y", "HierarchyViewTest", "add", "Child Task 2", "-P", "Parent Task")
+
+	// List tasks with custom view
+	stdout := cli.MustExecute("-y", "HierarchyViewTest", "-v", "simple")
+
+	testutil.AssertContains(t, stdout, "Parent Task")
+	testutil.AssertContains(t, stdout, "Child Task 1")
+	testutil.AssertContains(t, stdout, "Child Task 2")
+	// Should contain box-drawing characters for hierarchy
+	if !strings.Contains(stdout, "├") && !strings.Contains(stdout, "└") {
+		t.Errorf("expected hierarchy preserved with tree characters in custom view, got:\n%s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestInvalidViewError verifies that invalid view name shows helpful error message
+func TestInvalidViewErrorSQLiteCLI(t *testing.T) {
+	cli, _ := testutil.NewCLITestWithViews(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "InvalidViewTest")
+	cli.MustExecute("-y", "InvalidViewTest", "add", "Test task")
+
+	// Try to use a non-existent view
+	stdout, stderr, exitCode := cli.Execute("-y", "InvalidViewTest", "-v", "nonexistent")
+
+	// Should return error
+	testutil.AssertExitCode(t, exitCode, 1)
+	combinedOutput := stdout + stderr
+	// Error should mention the view name or indicate it's not found
+	if !strings.Contains(strings.ToLower(combinedOutput), "view") || !strings.Contains(strings.ToLower(combinedOutput), "nonexistent") {
+		t.Errorf("expected error message about invalid view 'nonexistent', got:\n%s", combinedOutput)
+	}
+}

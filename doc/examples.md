@@ -457,6 +457,67 @@ todoat Today complete "Code review"
 todoat Today
 ```
 
+## Using Views
+
+Views let you customize how tasks are displayed:
+
+```bash
+# Use built-in 'all' view to see all task fields
+todoat Work get --view all
+
+# Use short form
+todoat Work get -v all
+
+# List available views
+todoat view list
+```
+
+### Custom Views
+
+Create custom views in `~/.config/todoat/views/`:
+
+```bash
+# Create views directory
+mkdir -p ~/.config/todoat/views
+
+# Create a custom view file
+cat > ~/.config/todoat/views/urgent.yaml << 'EOF'
+name: urgent
+description: High priority tasks only
+
+fields:
+  - name: status
+  - name: summary
+  - name: priority
+  - name: due_date
+
+filters:
+  - field: priority
+    operator: lte
+    value: 3
+  - field: status
+    operator: ne
+    value: DONE
+
+sort:
+  - field: priority
+    direction: asc
+EOF
+
+# Use your custom view
+todoat Work get --view urgent
+```
+
+### Combining Views with Filters
+
+```bash
+# Use urgent view, but only show tasks tagged 'work'
+todoat Project get --view urgent --tag work
+
+# Use all view filtered to in-progress status
+todoat Project get -v all -s IN-PROGRESS
+```
+
 ## Tips
 
 ### Use Short List Names

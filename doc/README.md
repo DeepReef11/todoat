@@ -27,6 +27,7 @@ A command-line task manager with multiple backend support.
 - **Status Tracking**: Track task status (TODO, IN-PROGRESS, DONE, CANCELLED)
 - **Tags**: Categorize tasks with tags and filter by tag
 - **Due Dates**: Set start and due dates for tasks
+- **Views**: Customizable task display with built-in and custom views
 - **JSON Output**: Machine-readable JSON output for scripting
 - **SQLite Backend**: Local task storage in `~/.todoat/todoat.db`
 
@@ -47,6 +48,9 @@ todoat MyList add "Code review" --tag work,urgent
 
 # Filter by tag
 todoat MyList get --tag urgent
+
+# Use a custom view
+todoat MyList get --view all
 
 # Create subtasks using path notation
 todoat MyList add "Project/Backend/API"
@@ -69,6 +73,7 @@ todoat MyList get --json
 - [Installation](./installation.md) - How to install todoat
 - [Commands](./commands.md) - Complete command reference
 - [Configuration](./configuration.md) - Configuration options
+- [Views](./views.md) - Custom views for task display
 - [Backends](./backends.md) - Backend setup and configuration
 - [Examples](./examples.md) - Usage examples and workflows
 
