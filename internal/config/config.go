@@ -15,6 +15,7 @@ import (
 type Config struct {
 	Backends       BackendsConfig `yaml:"backends"`
 	DefaultBackend string         `yaml:"default_backend"`
+	DefaultView    string         `yaml:"default_view"`
 	NoPrompt       bool           `yaml:"no_prompt"`
 	OutputFormat   string         `yaml:"output_format"`
 	Sync           SyncConfig     `yaml:"sync"`

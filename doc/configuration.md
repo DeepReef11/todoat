@@ -34,6 +34,10 @@ backends:
 # Default backend to use
 default_backend: sqlite
 
+# Default view for task display (optional)
+# Can be a built-in view ("default", "all") or a custom view name
+default_view: default
+
 # Disable interactive prompts by default
 no_prompt: false
 
@@ -76,6 +80,7 @@ notifications:
 | `backends.sqlite.enabled` | boolean | `true` | Enable SQLite backend |
 | `backends.sqlite.path` | string | `~/.local/share/todoat/tasks.db` | Path to SQLite database |
 | `default_backend` | string | `sqlite` | Which backend to use |
+| `default_view` | string | `default` | Default view for task display (built-in or custom view name) |
 | `no_prompt` | boolean | `false` | Disable interactive prompts |
 | `output_format` | string | `text` | Default output format (`text` or `json`) |
 | `sync.enabled` | boolean | `false` | Enable synchronization with remote backends |

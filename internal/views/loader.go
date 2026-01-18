@@ -119,6 +119,24 @@ type ViewInfo struct {
 	BuiltIn     bool
 }
 
+// ViewExists checks if a view exists (either built-in or custom)
+func (l *Loader) ViewExists(name string) bool {
+	// Check built-in views first
+	switch strings.ToLower(name) {
+	case "default", "", "all":
+		return true
+	}
+
+	// Check if custom view file exists
+	if l.viewsDir == "" {
+		return false
+	}
+
+	viewPath := filepath.Join(l.viewsDir, name+".yaml")
+	_, err := os.Stat(viewPath)
+	return err == nil
+}
+
 // validateView checks that a view configuration is valid
 func (l *Loader) validateView(v *View) error {
 	if len(v.Fields) == 0 {

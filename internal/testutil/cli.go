@@ -16,9 +16,10 @@ import (
 
 // CLITest provides a test helper for running CLI commands in isolation.
 type CLITest struct {
-	t      *testing.T
-	cfg    *cmd.Config
-	tmpDir string
+	t          *testing.T
+	cfg        *cmd.Config
+	tmpDir     string
+	configPath string // Optional path to config file for SetConfigValue
 }
 
 // NewCLITest creates a new CLI test helper with an isolated in-memory database.
@@ -65,6 +66,41 @@ func NewCLITestWithViews(t *testing.T) (*CLITest, string) {
 	}, viewsDir
 }
 
+// NewCLITestWithViewsAndConfig creates a new CLI test helper with views directory and config file support.
+// This is used for testing features that depend on configuration (like default_view).
+func NewCLITestWithViewsAndConfig(t *testing.T) (*CLITest, string) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+	viewsDir := tmpDir + "/views"
+	configPath := tmpDir + "/config.yaml"
+
+	if err := os.MkdirAll(viewsDir, 0755); err != nil {
+		t.Fatalf("failed to create views directory: %v", err)
+	}
+
+	// Write initial config file
+	initialConfig := "# test config\n"
+	if err := os.WriteFile(configPath, []byte(initialConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	cfg := &cmd.Config{
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		ViewsPath:  viewsDir,
+		ConfigPath: configPath,
+	}
+
+	return &CLITest{
+		t:          t,
+		cfg:        cfg,
+		tmpDir:     tmpDir,
+		configPath: configPath,
+	}, viewsDir
+}
+
 // NewCLITestWithNotification creates a new CLI test helper with notification support.
 func NewCLITestWithNotification(t *testing.T) *CLITest {
 	t.Helper()
@@ -95,6 +131,29 @@ func (c *CLITest) Config() *cmd.Config {
 // TmpDir returns the temporary directory for the test.
 func (c *CLITest) TmpDir() string {
 	return c.tmpDir
+}
+
+// SetConfigValue sets a configuration key-value pair in the test config file.
+// This is used for testing configuration-based features like default_view.
+func (c *CLITest) SetConfigValue(key, value string) {
+	c.t.Helper()
+
+	if c.configPath == "" {
+		c.t.Fatalf("SetConfigValue requires a CLITest created with NewCLITestWithViewsAndConfig")
+	}
+
+	// Read existing config
+	data, err := os.ReadFile(c.configPath)
+	if err != nil {
+		c.t.Fatalf("failed to read config file: %v", err)
+	}
+
+	// Append the new key-value pair
+	newConfig := string(data) + key + ": " + value + "\n"
+
+	if err := os.WriteFile(c.configPath, []byte(newConfig), 0644); err != nil {
+		c.t.Fatalf("failed to write config file: %v", err)
+	}
 }
 
 // Execute runs a CLI command with the given arguments and returns stdout, stderr, and exit code.

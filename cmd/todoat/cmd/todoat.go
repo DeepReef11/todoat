@@ -17,6 +17,7 @@ import (
 	_ "modernc.org/sqlite"
 	"todoat/backend"
 	"todoat/backend/sqlite"
+	"todoat/internal/config"
 	"todoat/internal/credentials"
 	"todoat/internal/notification"
 	"todoat/internal/reminder"
@@ -827,6 +828,10 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		tagFilter, _ := cmd.Flags().GetStringSlice("tag")
 		tagFilter = normalizeTagSlice(tagFilter)
 		viewName, _ := cmd.Flags().GetString("view")
+		// Apply default view from config if -v flag was not explicitly provided
+		if !cmd.Flags().Changed("view") {
+			viewName = getDefaultView(cfg, cmd.ErrOrStderr())
+		}
 		return doGet(ctx, be, list, statusFilter, priorityFilter, tagFilter, viewName, cfg, stdout, jsonOutput)
 	case "add":
 		priorityStr, _ := cmd.Flags().GetString("priority")
@@ -1017,6 +1022,44 @@ func getViewsDir(cfg *Config) string {
 		return ""
 	}
 	return filepath.Join(home, ".config", "todoat", "views")
+}
+
+// getDefaultView returns the default view from config, or empty string if not set.
+// Also returns a warning message if the configured view doesn't exist.
+func getDefaultView(cfg *Config, stderr io.Writer) string {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		if cfg.DBPath != "" {
+			configPath = filepath.Join(filepath.Dir(cfg.DBPath), "config.yaml")
+		}
+	}
+
+	if configPath == "" {
+		return ""
+	}
+
+	appConfig, err := config.LoadFromPath(configPath)
+	if err != nil || appConfig == nil {
+		return ""
+	}
+
+	defaultView := appConfig.DefaultView
+	if defaultView == "" {
+		return ""
+	}
+
+	// Check if the view exists
+	viewsDir := getViewsDir(cfg)
+	loader := views.NewLoader(viewsDir)
+	if !loader.ViewExists(defaultView) {
+		// Warn about missing view and fall back to default
+		if stderr != nil {
+			_, _ = fmt.Fprintf(stderr, "Warning: configured default_view '%s' not found, using built-in default\n", defaultView) //nolint:errcheck // Best effort warning, write failure non-critical
+		}
+		return ""
+	}
+
+	return defaultView
 }
 
 // newViewCmd creates the 'view' subcommand for view management
