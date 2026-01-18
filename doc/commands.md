@@ -701,6 +701,63 @@ $ todoat sync conflicts resolve abc123-def456 --strategy local_wins
 Conflict resolved for task abc123-def456 using strategy local_wins
 ```
 
+## Shell Completion
+
+Generate shell completion scripts for faster command entry.
+
+```bash
+# Generate completion for your shell
+todoat completion bash > ~/.bash_completion.d/todoat
+todoat completion zsh > ~/.zfunc/_todoat
+todoat completion fish > ~/.config/fish/completions/todoat.fish
+todoat completion powershell > todoat.ps1
+```
+
+### Completion Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `completion bash` | Generate bash completion script |
+| `completion zsh` | Generate zsh completion script |
+| `completion fish` | Generate fish completion script |
+| `completion powershell` | Generate PowerShell completion script |
+
+### Setup Examples
+
+**Bash:**
+```bash
+# Add to ~/.bashrc
+source <(todoat completion bash)
+
+# Or save to a file
+todoat completion bash > /etc/bash_completion.d/todoat
+```
+
+**Zsh:**
+```bash
+# Add to ~/.zshrc (before compinit)
+source <(todoat completion zsh)
+
+# Or save to fpath
+todoat completion zsh > "${fpath[1]}/_todoat"
+```
+
+**Fish:**
+```bash
+todoat completion fish | source
+
+# Or save permanently
+todoat completion fish > ~/.config/fish/completions/todoat.fish
+```
+
+**PowerShell:**
+```powershell
+todoat completion powershell | Out-String | Invoke-Expression
+
+# Or add to profile
+todoat completion powershell >> $PROFILE
+```
+
 ## Examples
 
 ```bash

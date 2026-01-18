@@ -29,8 +29,10 @@ A command-line task manager with multiple backend support.
 - **Due Dates**: Set start and due dates for tasks
 - **Views**: Customizable task display with built-in and custom views
 - **JSON Output**: Machine-readable JSON output for scripting
-- **Multiple Backends**: SQLite (local), Nextcloud CalDAV (sync)
+- **Multiple Backends**: SQLite (local), Nextcloud CalDAV, Todoist
+- **Synchronization**: Sync tasks with remote backends with conflict resolution
 - **Secure Credentials**: System keyring integration for secure credential storage
+- **Shell Completion**: Auto-completion for Bash, Zsh, Fish, and PowerShell
 
 ## Basic Usage
 

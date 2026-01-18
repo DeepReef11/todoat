@@ -170,10 +170,98 @@ Some features work differently with CalDAV compared to the SQLite backend:
 | Allow HTTP | Can be enabled for testing (not recommended) |
 | Skip TLS verification | Can be enabled for self-signed certificates |
 
+## Todoist Backend
+
+The Todoist backend syncs tasks with Todoist using the REST API v2. Tasks are stored as Todoist tasks within projects.
+
+### Configuration
+
+Configure the Todoist backend using environment variables or the credential manager:
+
+| Variable | Description |
+|----------|-------------|
+| `TODOAT_TODOIST_TOKEN` | Todoist API token |
+
+### Getting Your API Token
+
+1. Log in to your Todoist account at [todoist.com](https://todoist.com)
+2. Go to Settings > Integrations > Developer
+3. Copy your API token
+
+### Example Setup
+
+**Option 1: Using the secure credential manager (recommended)**
+
+```bash
+# Store API token securely in system keyring
+todoat credentials set todoist myaccount --prompt
+
+# Verify credentials are stored
+todoat credentials get todoist myaccount
+```
+
+**Option 2: Using environment variables**
+
+```bash
+# Set environment variable
+export TODOAT_TODOIST_TOKEN="your-api-token"
+```
+
+For security, consider using the credential manager rather than environment variables, especially on shared systems.
+
+### Features
+
+The Todoist backend supports:
+- Listing projects as task lists
+- Creating, updating, and deleting projects
+- Creating, updating, and deleting tasks
+- Task properties: summary (content), description, priority, due date, labels
+- Task completion tracking
+- Rate limiting with automatic retry
+
+### Todoist Mapping
+
+| todoat Concept | Todoist Concept |
+|----------------|-----------------|
+| List | Project |
+| Task | Task |
+| Tags/Categories | Labels |
+| Priority (1-9) | Priority (1-4, mapped) |
+| Status | Completed flag |
+
+### Priority Mapping
+
+Todoist uses priority 1-4 (4 being highest), while todoat uses 1-9 (1 being highest). The priorities are mapped as follows:
+
+| todoat Priority | Todoist Priority |
+|-----------------|------------------|
+| 1 | 4 (urgent) |
+| 2-3 | 3 (high) |
+| 4-5 | 2 (medium) |
+| 6-9 | 1 (low) |
+
+### Limitations
+
+Some features work differently with Todoist compared to the SQLite backend:
+
+| Feature | SQLite | Todoist |
+|---------|--------|---------|
+| Soft delete lists | Yes | No (permanent) |
+| Trash/restore lists | Yes | No |
+| Subtasks | Yes | Yes |
+| Start date | Yes | No |
+| Custom status values | Yes | No (completed/not completed only) |
+
+### Rate Limiting
+
+The Todoist API has rate limits. todoat handles this automatically by:
+- Detecting 429 (Too Many Requests) responses
+- Waiting and retrying up to the configured number of times
+- Displaying an error if rate limit persists
+
 ## Future Backends
 
 Additional backends planned for future releases:
-- Todoist API
 - Git/Markdown files
 
 ---

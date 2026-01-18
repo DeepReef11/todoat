@@ -116,11 +116,33 @@ todoat MyList get --json
 
 todoat respects these environment variables:
 
+### XDG Directories
+
 | Variable | Description |
 |----------|-------------|
 | `XDG_CONFIG_HOME` | Configuration directory (default: `~/.config`) |
 | `XDG_DATA_HOME` | Data directory (default: `~/.local/share`) |
 | `XDG_CACHE_HOME` | Cache directory (default: `~/.cache`) |
+
+### Backend Credentials
+
+Backend authentication can be configured via environment variables. See [Backends](./backends.md) for detailed setup instructions.
+
+**Nextcloud:**
+
+| Variable | Description |
+|----------|-------------|
+| `TODOAT_NEXTCLOUD_HOST` | Nextcloud server hostname (e.g., `cloud.example.com`) |
+| `TODOAT_NEXTCLOUD_USERNAME` | Nextcloud username |
+| `TODOAT_NEXTCLOUD_PASSWORD` | Nextcloud password or app password |
+
+**Todoist:**
+
+| Variable | Description |
+|----------|-------------|
+| `TODOAT_TODOIST_TOKEN` | Todoist API token |
+
+Note: For better security, consider using the credential manager instead of environment variables. See [Credential Management](./commands.md#credential-management).
 
 ## Validation
 
