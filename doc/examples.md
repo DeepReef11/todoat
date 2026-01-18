@@ -164,6 +164,81 @@ In JSON output, tags are an array:
 todoat Work get --json | jq '.tasks[].tags'
 ```
 
+## Subtasks and Hierarchies
+
+Organize complex projects with subtasks:
+
+### Creating Subtasks with Path Notation
+
+```bash
+# Create a project hierarchy
+todoat Project add "Website Redesign/Design Phase/Wireframes"
+todoat Project add "Website Redesign/Design Phase/Color Palette"
+todoat Project add "Website Redesign/Development/Frontend"
+todoat Project add "Website Redesign/Development/Backend"
+
+# View the tree structure
+todoat Project
+```
+
+Output:
+```
+Tasks in 'Project':
+  [TODO] Website Redesign
+  └─ [TODO] Design Phase
+       └─ [TODO] Wireframes
+       └─ [TODO] Color Palette
+  └─ [TODO] Development
+       └─ [TODO] Frontend
+       └─ [TODO] Backend
+```
+
+### Creating Subtasks with --parent Flag
+
+```bash
+# Create a parent task
+todoat Work add "Code Review"
+
+# Add subtasks using --parent
+todoat Work add "Review authentication module" --parent "Code Review"
+todoat Work add "Review database queries" --parent "Code Review"
+todoat Work add "Review API endpoints" --parent "Code Review"
+```
+
+### Reorganizing Tasks
+
+```bash
+# Move a task under a different parent
+todoat Work update "API endpoints" --parent "Backend"
+
+# Make a subtask into a root-level task
+todoat Work update "API endpoints" --no-parent
+```
+
+### Working with Subtasks
+
+```bash
+# Complete a subtask
+todoat Project complete "Wireframes"
+
+# Update a subtask status
+todoat Project update "Frontend" -s IN-PROGRESS
+
+# Delete a parent (also deletes all subtasks)
+todoat Project delete "Design Phase"
+```
+
+### Using Literal Mode
+
+If your task name contains `/`, use `--literal` to prevent hierarchy parsing:
+
+```bash
+# Creates a task named "Fix A/B test bug" (not a hierarchy)
+todoat Work add "Fix A/B test bug" --literal
+
+# Without --literal, this would create: Fix > A > B test bug
+```
+
 ## Due Dates
 
 Set start and due dates for task scheduling:

@@ -22,6 +22,7 @@ A command-line task manager with multiple backend support.
 
 - **Task Management**: Add, view, update, complete, and delete tasks
 - **Task Lists**: Organize tasks into named lists (created automatically)
+- **Subtasks**: Create task hierarchies with parent-child relationships
 - **Priority Support**: Set task priority (0-9, where 1 is highest) and filter by priority
 - **Status Tracking**: Track task status (TODO, IN-PROGRESS, DONE, CANCELLED)
 - **Tags**: Categorize tasks with tags and filter by tag
@@ -46,6 +47,9 @@ todoat MyList add "Code review" --tag work,urgent
 
 # Filter by tag
 todoat MyList get --tag urgent
+
+# Create subtasks using path notation
+todoat MyList add "Project/Backend/API"
 
 # Complete a task
 todoat MyList complete "Buy groceries"

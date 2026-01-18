@@ -148,6 +148,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().String("due-date", "", "Due date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
 	cmd.Flags().String("start-date", "", "Start date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
 	cmd.Flags().StringSlice("tag", nil, "Tag/category for add/update, or filter by tag for get (can be specified multiple times or comma-separated)")
+	cmd.Flags().StringP("parent", "P", "", "Parent task summary (for add/update subtasks)")
+	cmd.Flags().BoolP("literal", "l", false, "Treat task summary literally (don't parse / as hierarchy separator)")
+	cmd.Flags().Bool("no-parent", false, "Remove parent relationship (for update, makes task root-level)")
 
 	// Add list subcommand
 	cmd.AddCommand(newListCmd(stdout, cfg))
@@ -696,7 +699,9 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		tags, _ := cmd.Flags().GetStringSlice("tag")
 		tags = normalizeTagSlice(tags)
 		categories := strings.Join(tags, ",")
-		return doAdd(ctx, be, list, taskSummary, priority, dueDate, startDate, categories, cfg, stdout, jsonOutput)
+		parentSummary, _ := cmd.Flags().GetString("parent")
+		literal, _ := cmd.Flags().GetBool("literal")
+		return doAdd(ctx, be, list, taskSummary, priority, dueDate, startDate, categories, parentSummary, literal, cfg, stdout, jsonOutput)
 	case "update":
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		priority, err := parsePrioritySingle(priorityStr)
@@ -744,7 +749,9 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 			cat := strings.Join(tags, ",")
 			newCategories = &cat
 		}
-		return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, cfg, stdout, jsonOutput)
+		parentSummary, _ := cmd.Flags().GetString("parent")
+		noParent, _ := cmd.Flags().GetBool("no-parent")
+		return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
 	case "complete":
 		return doComplete(ctx, be, list, taskSummary, cfg, stdout, jsonOutput)
 	case "delete":
@@ -803,18 +810,7 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		_, _ = fmt.Fprintf(stdout, "No tasks in list '%s'\n", list.Name)
 	} else {
 		_, _ = fmt.Fprintf(stdout, "Tasks in '%s':\n", list.Name)
-		for _, t := range tasks {
-			statusIcon := getStatusIcon(t.Status)
-			priorityStr := ""
-			if t.Priority > 0 {
-				priorityStr = fmt.Sprintf(" [P%d]", t.Priority)
-			}
-			tagsStr := ""
-			if t.Categories != "" {
-				tagsStr = fmt.Sprintf(" {%s}", t.Categories)
-			}
-			_, _ = fmt.Fprintf(stdout, "  %s %s%s%s\n", statusIcon, t.Summary, priorityStr, tagsStr)
-		}
+		printTaskTree(tasks, stdout)
 	}
 
 	// Emit INFO_ONLY result code in no-prompt mode
@@ -822,6 +818,96 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
 	return nil
+}
+
+// taskNode represents a task with its children for tree building
+type taskNode struct {
+	task     backend.Task
+	children []*taskNode
+}
+
+// printTaskTree prints tasks in a tree structure with box-drawing characters
+func printTaskTree(tasks []backend.Task, stdout io.Writer) {
+	// Build a map from task ID to task
+	taskMap := make(map[string]*backend.Task)
+	for i := range tasks {
+		taskMap[tasks[i].ID] = &tasks[i]
+	}
+
+	// Build tree nodes
+	nodeMap := make(map[string]*taskNode)
+	var rootNodes []*taskNode
+
+	// First pass: create nodes for all tasks
+	for i := range tasks {
+		nodeMap[tasks[i].ID] = &taskNode{task: tasks[i]}
+	}
+
+	// Second pass: build parent-child relationships
+	for i := range tasks {
+		node := nodeMap[tasks[i].ID]
+		if tasks[i].ParentID == "" {
+			// Root-level task
+			rootNodes = append(rootNodes, node)
+		} else if parentNode, ok := nodeMap[tasks[i].ParentID]; ok {
+			// Has valid parent
+			parentNode.children = append(parentNode.children, node)
+		} else {
+			// Orphan task (parent not in list) - show at root level
+			rootNodes = append(rootNodes, node)
+		}
+	}
+
+	// Print the tree recursively
+	for i, node := range rootNodes {
+		isLast := i == len(rootNodes)-1
+		printTaskNode(node, "", isLast, stdout)
+	}
+}
+
+// printTaskNode recursively prints a task node with tree visualization
+func printTaskNode(node *taskNode, prefix string, isLast bool, stdout io.Writer) {
+	t := node.task
+
+	// Build the display line
+	statusIcon := getStatusIcon(t.Status)
+	priorityStr := ""
+	if t.Priority > 0 {
+		priorityStr = fmt.Sprintf(" [P%d]", t.Priority)
+	}
+	tagsStr := ""
+	if t.Categories != "" {
+		tagsStr = fmt.Sprintf(" {%s}", t.Categories)
+	}
+
+	// Choose the appropriate tree character
+	var treeChar string
+	if prefix == "" {
+		// Root level - no tree character
+		treeChar = "  "
+	} else if isLast {
+		treeChar = "└─ "
+	} else {
+		treeChar = "├─ "
+	}
+
+	_, _ = fmt.Fprintf(stdout, "%s%s%s %s%s%s\n", prefix, treeChar, statusIcon, t.Summary, priorityStr, tagsStr)
+
+	// Build the prefix for children
+	var childPrefix string
+	if prefix == "" {
+		childPrefix = "  "
+	} else if isLast {
+		childPrefix = prefix + "   "
+	} else {
+		childPrefix = prefix + "│  "
+	}
+
+	// Print children
+	for i, child := range node.children {
+		isChildLast := i == len(node.children)-1
+		printTaskNode(child, childPrefix, isChildLast, stdout)
+	}
 }
 
 // matchesTagFilter checks if a task's categories match any of the filter tags (OR logic)
@@ -946,9 +1032,25 @@ func getStatusIcon(status backend.TaskStatus) string {
 }
 
 // doAdd creates a new task
-func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, dueDate, startDate *time.Time, categories string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, dueDate, startDate *time.Time, categories string, parentSummary string, literal bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	if summary == "" {
 		return fmt.Errorf("task summary is required")
+	}
+
+	var parentID string
+
+	// If -P/--parent flag is provided, find the parent task
+	if parentSummary != "" {
+		parent, err := findTask(ctx, be, list, parentSummary, cfg)
+		if err != nil {
+			return fmt.Errorf("parent task not found: %w", err)
+		}
+		parentID = parent.ID
+	}
+
+	// Handle path-based hierarchy creation unless --literal flag is set
+	if !literal && strings.Contains(summary, "/") && parentSummary == "" {
+		return doAddHierarchy(ctx, be, list, summary, priority, dueDate, startDate, categories, cfg, stdout, jsonOutput)
 	}
 
 	task := &backend.Task{
@@ -958,6 +1060,7 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 		DueDate:    dueDate,
 		StartDate:  startDate,
 		Categories: categories,
+		ParentID:   parentID,
 	}
 
 	created, err := be.CreateTask(ctx, list.ID, task)
@@ -978,8 +1081,95 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 	return nil
 }
 
+// doAddHierarchy creates a task hierarchy from a path like "A/B/C"
+func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.List, path string, priority int, dueDate, startDate *time.Time, categories string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 {
+		return fmt.Errorf("invalid path")
+	}
+
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	var parentID string
+	var lastCreated *backend.Task
+
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		// Check if this task already exists at the current level
+		var existingTask *backend.Task
+		for _, t := range tasks {
+			if strings.EqualFold(t.Summary, part) && t.ParentID == parentID {
+				existingTask = &t
+				break
+			}
+		}
+
+		if existingTask != nil {
+			// Task exists, use it as parent for next level
+			parentID = existingTask.ID
+			lastCreated = existingTask
+		} else {
+			// Create the task
+			// Only apply priority, dates, and categories to the leaf task
+			taskPriority := 0
+			var taskDueDate, taskStartDate *time.Time
+			taskCategories := ""
+			if i == len(parts)-1 {
+				taskPriority = priority
+				taskDueDate = dueDate
+				taskStartDate = startDate
+				taskCategories = categories
+			}
+
+			task := &backend.Task{
+				Summary:    part,
+				Priority:   taskPriority,
+				Status:     backend.StatusNeedsAction,
+				DueDate:    taskDueDate,
+				StartDate:  taskStartDate,
+				Categories: taskCategories,
+				ParentID:   parentID,
+			}
+
+			created, err := be.CreateTask(ctx, list.ID, task)
+			if err != nil {
+				return err
+			}
+
+			parentID = created.ID
+			lastCreated = created
+
+			// Add to tasks slice so subsequent iterations can find it
+			tasks = append(tasks, *created)
+		}
+	}
+
+	if lastCreated == nil {
+		return fmt.Errorf("no task created")
+	}
+
+	if jsonOutput {
+		return outputActionJSON("add", lastCreated, stdout)
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Created task: %s (ID: %s)\n", lastCreated.Summary, lastCreated.ID)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
 // doUpdate modifies an existing task
-func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
 	if err != nil {
 		return err
@@ -1011,6 +1201,23 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 		task.Categories = *newCategories
 	}
 
+	// Handle parent updates
+	if noParent {
+		task.ParentID = ""
+	} else if parentSummary != "" {
+		parent, err := findTask(ctx, be, list, parentSummary, cfg)
+		if err != nil {
+			return fmt.Errorf("parent task not found: %w", err)
+		}
+
+		// Check for circular reference
+		if err := checkCircularReference(ctx, be, list, task.ID, parent.ID); err != nil {
+			return err
+		}
+
+		task.ParentID = parent.ID
+	}
+
 	updated, err := be.UpdateTask(ctx, list.ID, task)
 	if err != nil {
 		return err
@@ -1026,6 +1233,46 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
+	return nil
+}
+
+// checkCircularReference checks if setting parentID as the parent of taskID would create a circular reference
+func checkCircularReference(ctx context.Context, be backend.TaskManager, list *backend.List, taskID, parentID string) error {
+	if taskID == parentID {
+		return fmt.Errorf("circular reference: cannot set task as its own parent")
+	}
+
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	// Build a map for quick lookup
+	taskMap := make(map[string]*backend.Task)
+	for i := range tasks {
+		taskMap[tasks[i].ID] = &tasks[i]
+	}
+
+	// Walk up the parent chain from parentID to check if we hit taskID
+	currentID := parentID
+	visited := make(map[string]bool)
+	for currentID != "" {
+		if visited[currentID] {
+			return fmt.Errorf("circular reference detected in existing hierarchy")
+		}
+		visited[currentID] = true
+
+		if currentID == taskID {
+			return fmt.Errorf("circular reference: cannot set a descendant as parent")
+		}
+
+		current, ok := taskMap[currentID]
+		if !ok {
+			break
+		}
+		currentID = current.ParentID
+	}
+
 	return nil
 }
 
@@ -1085,6 +1332,21 @@ func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	// Store task info before deletion for JSON output
 	deletedTask := *task
 
+	// Find all descendants for cascade delete
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	descendantIDs := findDescendants(task.ID, tasks)
+
+	// Delete descendants first (bottom-up to avoid FK issues), then parent
+	for i := len(descendantIDs) - 1; i >= 0; i-- {
+		if err := be.DeleteTask(ctx, list.ID, descendantIDs[i]); err != nil {
+			return err
+		}
+	}
+
 	if err := be.DeleteTask(ctx, list.ID, task.ID); err != nil {
 		return err
 	}
@@ -1100,6 +1362,32 @@ func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, t
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
 	return nil
+}
+
+// findDescendants returns a list of task IDs that are descendants of the given parent
+func findDescendants(parentID string, tasks []backend.Task) []string {
+	var result []string
+	// Build a map of parent to children
+	childMap := make(map[string][]string)
+	for _, t := range tasks {
+		if t.ParentID != "" {
+			childMap[t.ParentID] = append(childMap[t.ParentID], t.ID)
+		}
+	}
+
+	// BFS to find all descendants
+	queue := []string{parentID}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for _, childID := range childMap[current] {
+			result = append(result, childID)
+			queue = append(queue, childID)
+		}
+	}
+
+	return result
 }
 
 // findTask searches for a task by summary using exact then partial matching
@@ -1157,6 +1445,7 @@ type taskJSON struct {
 	Summary   string   `json:"summary"`
 	Status    string   `json:"status"`
 	Priority  int      `json:"priority"`
+	ParentID  string   `json:"parent_id,omitempty"`
 	DueDate   *string  `json:"due_date,omitempty"`
 	StartDate *string  `json:"start_date,omitempty"`
 	Completed *string  `json:"completed,omitempty"`
@@ -1189,6 +1478,7 @@ func taskToJSON(t *backend.Task) taskJSON {
 		Summary:  t.Summary,
 		Status:   statusToString(t.Status),
 		Priority: t.Priority,
+		ParentID: t.ParentID,
 	}
 	if t.DueDate != nil {
 		s := t.DueDate.Format("2006-01-02")

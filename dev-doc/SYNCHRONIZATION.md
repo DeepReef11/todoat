@@ -589,8 +589,8 @@ Every local modification creates a queue entry:
 ```go
 type SyncQueueEntry struct {
     ID              int64
-    TaskID          int64     // Foreign key to tasks table
-    TaskUID         string    // Task's UID
+    TaskID          int64     // SQLite internal ID (local_id) - always present
+    TaskUID         string    // Backend-assigned UID - empty for unsynced tasks
     ListID          int64     // Task's list
     OperationType   string    // "create", "update", "delete"
     RetryCount      int       // Number of retry attempts
@@ -598,6 +598,13 @@ type SyncQueueEntry struct {
     CreatedAt       time.Time // When queued
 }
 ```
+
+**Note on Task Identification:**
+- `TaskID` is the SQLite internal ID (corresponds to `local_id` in CLI output)
+- `TaskUID` is the backend-assigned unique identifier (corresponds to `uid` in CLI output)
+- For newly created tasks (not yet synced), `TaskUID` will be empty
+- After successful sync push, `TaskUID` is populated with the remote backend's assigned UID
+- CLI flag `--local-id` uses `TaskID`, while `--uid` uses `TaskUID`
 
 **2. Operation Types**
 
@@ -1083,8 +1090,8 @@ Store tasks, sync metadata, and operation queue in structured SQLite databases f
 **1. tasks**
 ```sql
 CREATE TABLE tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uid TEXT UNIQUE NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,  -- SQLite internal ID (local_id in CLI)
+    uid TEXT UNIQUE,                       -- Backend-assigned UID (null until synced)
     list_id INTEGER NOT NULL,
     summary TEXT NOT NULL,
     description TEXT,
@@ -1100,6 +1107,8 @@ CREATE TABLE tasks (
     FOREIGN KEY (parent_uid) REFERENCES tasks(uid)
 );
 ```
+
+Note: `id` is used as `local_id` in CLI output and with `--local-id` flag. `uid` is the backend-assigned identifier used with `--uid` flag. For newly created tasks (not yet synced), `uid` will be `NULL` until sync completes.
 
 **2. sync_metadata**
 ```sql
@@ -1130,8 +1139,8 @@ CREATE TABLE list_sync_metadata (
 ```sql
 CREATE TABLE sync_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id INTEGER,
-    task_uid TEXT,
+    task_id INTEGER,             -- SQLite internal ID (local_id), always present
+    task_uid TEXT,               -- Backend-assigned UID, empty for unsynced tasks
     list_id INTEGER,
     operation_type TEXT NOT NULL,  -- create, update, delete
     retry_count INTEGER DEFAULT 0,
@@ -1140,6 +1149,8 @@ CREATE TABLE sync_queue (
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 ```
+
+Note: `task_id` corresponds to the CLI's `--local-id` flag, and `task_uid` corresponds to `--uid`. For create operations, `task_uid` will be empty until the sync completes and the remote backend assigns a UID.
 
 **5. schema_version**
 ```sql

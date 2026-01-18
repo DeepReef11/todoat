@@ -254,13 +254,21 @@ todoat -y --json MyList update "review" -s DONE
 
 **Task Selection Flags:**
 11. **UID Selection (`--uid`):**
-    - Selects a task by its unique identifier instead of summary search
+    - Selects a task by its backend-assigned unique identifier
     - Bypasses task search and matching entirely
     - Required for unambiguous task operations in scripts
     - Useful after receiving `ACTION_INCOMPLETE` with multiple matches
     - Example: `--uid "550e8400-e29b-41d4-a716-446655440000"`
-    - **Unsynced tasks**: For tasks not yet synced to remote (no backend-assigned UID), use `NOT-SYNCED-<sqlite-id>` format
-    - Example: `--uid "NOT-SYNCED-123"` (uses SQLite internal ID)
+    - Only works for tasks that have been synced to remote backend (have a UID)
+    - Supported by: `update`, `complete`, `delete`
+
+12. **Local ID Selection (`--local-id`):**
+    - Selects a task by its SQLite internal ID
+    - **Only available when sync is enabled** (`sync.enabled: true`)
+    - Returns error if sync is disabled: "Local ID selection requires sync to be enabled"
+    - Useful for newly created tasks that haven't been synced yet
+    - Example: `--local-id 42`
+    - Works for both synced and unsynced tasks (local ID is always present in SQLite cache)
     - Supported by: `update`, `complete`, `delete`
 
 **User Journey:**
@@ -295,24 +303,28 @@ todoat MyList add -l "Design UI/UX mockups"
 todoat MyList -v all
 todoat MyList -v myview
 
-# UID-based task selection (for scripting)
+# UID-based task selection (for scripting, synced tasks only)
 todoat MyList update --uid "550e8400-e29b-41d4-a716-446655440000" -s DONE
 todoat MyList delete --uid "550e8400-e29b-41d4-a716-446655440000"
 todoat MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
 
-# Unsynced task (created locally, not yet synced to remote)
-todoat MyList update --uid "NOT-SYNCED-123" -s DONE  # Uses SQLite internal ID
+# Local ID-based task selection (requires sync enabled, works for any task)
+todoat MyList update --local-id 42 -s DONE
+todoat MyList delete --local-id 42
+todoat MyList complete --local-id 42
 
-# Workflow: search → get UID → operate
-todoat -y --json MyList update "ambiguous" -s DONE  # Returns matches with UIDs
-todoat -y MyList update --uid "returned-uid-here" -s DONE  # Use specific UID
+# Workflow: search → get IDs → operate
+todoat -y --json MyList update "ambiguous" -s DONE  # Returns matches with local_id and uid
+todoat -y MyList update --uid "550e8400..."  # Use UID for synced task
+todoat -y MyList update --local-id 42         # Use local ID for any task (including unsynced)
 ```
 
 **Prerequisites:**
 - Task list must exist for list-specific operations
-- For `update`: Task must exist (uses intelligent search, or `--uid` for direct selection)
+- For `update`: Task must exist (uses intelligent search, or `--uid`/`--local-id` for direct selection)
 - For `-P`: Parent task must exist
-- For `--uid`: Valid UID must exist in the task list
+- For `--uid`: Valid UID must exist in the task list (task must be synced)
+- For `--local-id`: Sync must be enabled, and local ID must exist in SQLite cache
 - For custom views: View must be defined in `~/.config/todoat/views/`
 
 **Outputs/Results:**
@@ -1219,22 +1231,26 @@ $ todoat -y --json MyList complete "review"
 # If single match: Task completed
 {
   "action": "complete",
-  "task": {"uid": "550e8400...", "summary": "Review PR #456", "status": "DONE"},
+  "task": {"local_id": 42, "uid": "550e8400...", "summary": "Review PR #456", "status": "DONE"},
   "result": "ACTION_COMPLETED"
 }
 
 # If multiple matches: Returns candidates for user/script to choose
 {
   "matches": [
-    {"uid": "550e8400...", "summary": "Review PR #456", "parents": ["Project Alpha"]},
-    {"uid": "660e8400...", "summary": "Code review", "parents": []}
+    {"local_id": 42, "uid": "550e8400...", "summary": "Review PR #456", "parents": ["Project Alpha"], "synced": true},
+    {"local_id": 43, "uid": "660e8400...", "summary": "Code review", "parents": [], "synced": true},
+    {"local_id": 44, "uid": null, "summary": "Review notes", "parents": [], "synced": false}
   ],
   "result": "ACTION_INCOMPLETE",
-  "message": "Multiple tasks match 'review'. Use --uid to specify exact task."
+  "message": "Multiple tasks match 'review'. Use --uid or --local-id to specify exact task."
 }
 
-# Script then uses specific UID
+# Script then uses specific UID (for synced tasks) or local ID (for any task)
 $ todoat -y MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
+ACTION_COMPLETED
+
+$ todoat -y MyList complete --local-id 44
 ACTION_COMPLETED
 ```
 
@@ -1242,13 +1258,13 @@ ACTION_COMPLETED
 
 ```
 Multiple tasks match "review":
-UID:550e8400-e29b-41d4-a716-446655440000	TASK:Review PR #456	PARENT:Project Alpha
-UID:660e8400-e29b-41d4-a716-446655440001	TASK:Code review guidelines	PARENT:
-UID:NOT-SYNCED-42	TASK:Review meeting notes	PARENT:Documentation/Meetings
+ID:42	UID:550e8400-e29b-41d4-a716-446655440000	TASK:Review PR #456	PARENT:Project Alpha
+ID:43	UID:660e8400-e29b-41d4-a716-446655440001	TASK:Code review guidelines	PARENT:
+ID:44	UID:	TASK:Review meeting notes	PARENT:Documentation/Meetings
 ACTION_INCOMPLETE
 ```
 
-Note: `NOT-SYNCED-<id>` indicates a task created locally but not yet synced to the remote backend. The number is the SQLite internal ID. Use this value with `--uid` to operate on unsynced tasks.
+Note: `ID` is the SQLite internal local ID (always present when sync is enabled). `UID` is the backend-assigned unique identifier (empty if task not yet synced). Use `--local-id` with the `ID` value, or `--uid` with the `UID` value (synced tasks only).
 
 **No List Specified Output:**
 
@@ -1335,19 +1351,32 @@ $ todoat --json MyList
   },
   "tasks": [
     {
+      "local_id": 42,
       "uid": "550e8400-e29b-41d4-a716-446655440000",
       "summary": "Review PR #456",
       "status": "TODO",
       "priority": 2,
       "due_date": "2026-01-20",
-      "parents": ["Project Alpha"]
+      "parents": ["Project Alpha"],
+      "synced": true
     },
     {
+      "local_id": 43,
       "uid": "660e8400-e29b-41d4-a716-446655440001",
       "summary": "Write documentation",
       "status": "PROCESSING",
       "priority": 5,
-      "parents": []
+      "parents": [],
+      "synced": true
+    },
+    {
+      "local_id": 44,
+      "uid": null,
+      "summary": "New task",
+      "status": "TODO",
+      "priority": 0,
+      "parents": [],
+      "synced": false
     }
   ],
   "result": "INFO_ONLY"
@@ -1362,16 +1391,20 @@ $ todoat --json MyList add "New task" -p 1 --due-date 2026-01-25
 {
   "action": "add",
   "task": {
-    "uid": "770e8400-e29b-41d4-a716-446655440002",
+    "local_id": 45,
+    "uid": null,
     "summary": "New task",
     "status": "TODO",
     "priority": 1,
     "due_date": "2026-01-25",
-    "created": "2026-01-16T10:30:00Z"
+    "created": "2026-01-16T10:30:00Z",
+    "synced": false
   },
   "result": "ACTION_COMPLETED"
 }
 ```
+
+Note: When a task is created, it immediately gets a `local_id` (SQLite internal ID) which can be used with `--local-id` for subsequent operations. The `uid` will be `null` until the task is synced to the remote backend.
 
 **Update Task (JSON):**
 ```bash
@@ -1381,10 +1414,12 @@ $ todoat --json MyList update "PR" -s DONE
 {
   "action": "update",
   "task": {
+    "local_id": 42,
     "uid": "550e8400-e29b-41d4-a716-446655440000",
     "summary": "Review PR #456",
     "status": "DONE",
-    "completed": "2026-01-16T10:35:00Z"
+    "completed": "2026-01-16T10:35:00Z",
+    "synced": true
   },
   "result": "ACTION_COMPLETED"
 }
@@ -1413,6 +1448,7 @@ $ todoat -y --json MyList complete "review"
 {
   "matches": [
     {
+      "local_id": 42,
       "uid": "550e8400-e29b-41d4-a716-446655440000",
       "summary": "Review PR #456",
       "status": "TODO",
@@ -1421,6 +1457,7 @@ $ todoat -y --json MyList complete "review"
       "synced": true
     },
     {
+      "local_id": 43,
       "uid": "660e8400-e29b-41d4-a716-446655440001",
       "summary": "Code review guidelines",
       "status": "DONE",
@@ -1429,7 +1466,8 @@ $ todoat -y --json MyList complete "review"
       "synced": true
     },
     {
-      "uid": "NOT-SYNCED-42",
+      "local_id": 44,
+      "uid": null,
       "summary": "Review meeting notes",
       "status": "PROCESSING",
       "priority": 5,
@@ -1438,11 +1476,11 @@ $ todoat -y --json MyList complete "review"
     }
   ],
   "result": "ACTION_INCOMPLETE",
-  "message": "Multiple tasks match 'review'. Use --uid to specify exact task."
+  "message": "Multiple tasks match 'review'. Use --uid or --local-id to specify exact task."
 }
 ```
 
-Note: Tasks with `"synced": false` have `uid` in `NOT-SYNCED-<sqlite-id>` format. This is the SQLite internal ID and can be used with `--uid` until the task is synced to the remote backend.
+Note: `local_id` is always present (integer, SQLite internal ID). `uid` is `null` for unsynced tasks and contains the backend-assigned UUID for synced tasks. Use `--local-id` for any task, or `--uid` for synced tasks only.
 
 **Error Response (JSON):**
 ```bash
@@ -1504,13 +1542,16 @@ ui:
 | `list` | object | List metadata for list-specific operations |
 | `lists` | array | Array of list objects |
 | `message` | string | Human-readable message: info for `ACTION_INCOMPLETE`, error details for `ERROR` (format: `Error #: description`) |
+| `local_id` | integer | SQLite internal ID (always present when sync enabled, in task objects) |
+| `uid` | string/null | Backend-assigned UID (`null` if not yet synced, in task objects) |
 | `synced` | boolean | Whether task has been synced to remote (in task objects) |
 
-**UID Format:**
-| Format | Description |
-|--------|-------------|
-| `<uuid>` | Backend-assigned UID (e.g., `550e8400-e29b-41d4-a716-446655440000`) |
-| `NOT-SYNCED-<id>` | SQLite internal ID for unsynced tasks (e.g., `NOT-SYNCED-42`) |
+**Task ID Fields:**
+| Field | Type | When Present | Description |
+|-------|------|--------------|-------------|
+| `local_id` | integer | Always (when sync enabled) | SQLite internal ID, use with `--local-id` |
+| `uid` | string/null | After sync | Backend-assigned UID, use with `--uid` (null before sync) |
+| `synced` | boolean | Always | `true` if task has backend UID, `false` if local-only |
 
 **Related Features:**
 - [No-Prompt Mode](#no-prompt-mode) - Pairs well for scripting
@@ -1787,7 +1828,9 @@ The CLI interface of todoat provides a comprehensive command-line experience wit
 - **No-prompt mode** for scripting and automation (`-y`, `--no-prompt`)
 - **JSON output** for machine-parseable results (`--json`)
 - **Result codes** for reliable script integration (`ACTION_COMPLETED`, `ACTION_INCOMPLETE`, `INFO_ONLY`)
-- **UID-based selection** for unambiguous task operations (`--uid`)
+- **ID-based selection** for unambiguous task operations:
+  - `--uid` for synced tasks (backend-assigned UID)
+  - `--local-id` for any task (SQLite internal ID, requires sync enabled)
 
 All interface features are built on the Cobra framework, providing consistent behavior, automatic help generation, and cross-platform compatibility.
 

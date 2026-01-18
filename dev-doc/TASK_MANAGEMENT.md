@@ -667,26 +667,34 @@ Tasks in "Work" (3 tasks, filtered by status: TODO, PROCESSING):
 **Intelligent Task Identification**
 
 ### Purpose
-Provides smart, user-friendly task lookup that handles exact matches, partial matches, and multiple matches with interactive selection. Reduces need for typing full task names. Also supports direct UID-based selection for unambiguous operations in scripts.
+Provides smart, user-friendly task lookup that handles exact matches, partial matches, and multiple matches with interactive selection. Reduces need for typing full task names. Also supports direct ID-based selection for unambiguous operations in scripts.
 
 ### How It Works
 
 **User Actions:**
 - User references task by summary in update/complete/delete commands
 - Summary can be full name or partial match
-- Alternatively, user specifies task directly by UID using `--uid` flag
+- Alternatively, user specifies task directly by:
+  - `--uid` flag: Select by backend-assigned UID (for synced tasks)
+  - `--local-id` flag: Select by SQLite internal ID (only when sync enabled)
 
 **System Processes:**
 
-**0. UID Selection (Bypass Search):**
+**0. Direct ID Selection (Bypass Search):**
+
+   **UID Selection (`--uid`):**
    - If `--uid` flag provided, bypass all search logic
-   - Look up task directly by UID
+   - Look up task directly by backend-assigned UID
    - If found → proceed immediately
    - If not found → error with message
-   - Used for scripting and automation after receiving multiple matches
-   - **Unsynced tasks**: If UID starts with `NOT-SYNCED-`, use SQLite internal ID instead
-     - Example: `--uid "NOT-SYNCED-42"` looks up task with SQLite ID 42
-     - This handles tasks created locally but not yet synced to remote backend
+   - Used for synced tasks that have a backend-assigned UID
+
+   **Local ID Selection (`--local-id`):**
+   - Only available when sync is enabled (`sync.enabled: true`)
+   - Look up task directly by SQLite internal ID
+   - Useful for tasks that were just created locally and not yet synced
+   - Example: `--local-id 42` looks up task with SQLite ID 42
+   - Returns error if sync is disabled (local IDs only exist in SQLite cache)
 
 1. **Exact Match Search** (Case-Insensitive):
    - Search all tasks in list for exact summary match
@@ -722,10 +730,10 @@ Provides smart, user-friendly task lookup that handles exact matches, partial ma
 
 **Data Flow:**
 ```
---uid Flag? → Yes → Look up by UID → Found? → Proceed
-                                      ↓ No → Error
+--uid or --local-id Flag? → Yes → Look up by ID → Found? → Proceed
+                                                   ↓ No → Error
 
-No UID:
+No ID flags:
 Search String → Exact Match → Found? → Return Task
                               ↓ No
                            Partial Match → Count Matches
@@ -751,32 +759,36 @@ Search String → Exact Match → Found? → Return Task
 - User enters invalid selection number: Re-prompt with error
 - No tasks in list: Immediate error "No tasks found"
 - Search string matches all tasks: Present full list for selection
-- **No-prompt mode with multiple matches**: Returns `ACTION_INCOMPLETE` with match list
+- **No-prompt mode with multiple matches**: Returns `ACTION_INCOMPLETE` with match list including `local_id` for each task
 - **UID not found**: Error with message, suggests listing tasks
+- **Local ID not found**: Error with message
+- **--local-id used with sync disabled**: Error "Local ID selection requires sync to be enabled"
 
 ### User Journey
 
-**UID-Based Selection (Scripting):**
+**ID-Based Selection (Scripting):**
 1. User runs: `todoat -y Work complete "review"`
 2. Multiple matches found, returns:
    ```
    Multiple tasks match "review":
-   UID:550e8400-e29b-41d4-a716-446655440000	TASK:Review PR #456	PARENT:Project Alpha
-   UID:660e8400-e29b-41d4-a716-446655440001	TASK:Code review	PARENT:
-   UID:NOT-SYNCED-42	TASK:Review notes	PARENT:Documentation
+   ID:42	UID:550e8400-e29b-41d4-a716-446655440000	TASK:Review PR #456	PARENT:Project Alpha
+   ID:43	UID:660e8400-e29b-41d4-a716-446655440001	TASK:Code review	PARENT:
+   ID:44	UID:	TASK:Review notes	PARENT:Documentation
    ACTION_INCOMPLETE
    ```
-3. User/script re-runs with UID: `todoat Work complete --uid "550e8400-e29b-41d4-a716-446655440000"`
-4. Task completed immediately (no prompts)
-5. Output: `ACTION_COMPLETED`
+3. User/script re-runs with UID (for synced task): `todoat Work complete --uid "550e8400-e29b-41d4-a716-446655440000"`
+4. Or with local ID (for any task): `todoat Work complete --local-id 44`
+5. Task completed immediately (no prompts)
+6. Output: `ACTION_COMPLETED`
 
 **Unsynced Task Selection:**
 1. User creates task locally while offline: `todoat -y Work add "Draft proposal"`
 2. Task created with SQLite ID (no remote UID yet)
-3. User lists tasks: `todoat -y --json Work`
-4. Output shows: `"uid": "NOT-SYNCED-42", "synced": false`
-5. User can operate on it: `todoat Work update --uid "NOT-SYNCED-42" -p 1`
-6. After sync, UID becomes backend-assigned UUID
+3. Response includes: `local_id: 44` (the SQLite internal ID)
+4. User can immediately operate on it using local ID: `todoat Work update --local-id 44 -p 1`
+5. User lists tasks: `todoat -y --json Work`
+6. Output shows: `"local_id": 44, "uid": null, "synced": false`
+7. After sync, `uid` becomes backend-assigned UUID: `"local_id": 44, "uid": "550e8400...", "synced": true`
 
 **Single Partial Match (Normal Mode):**
 1. User types: `todoat Work update "PR" -s DONE`
@@ -811,21 +823,22 @@ Search String → Exact Match → Found? → Return Task
    ```json
    {
      "matches": [
-       {"uid": "550e8400...", "summary": "Review PR #456", "status": "TODO", "parents": ["Project Alpha"], "synced": true},
-       {"uid": "660e8400...", "summary": "Code review guidelines", "status": "DONE", "parents": [], "synced": true},
-       {"uid": "NOT-SYNCED-42", "summary": "Review meeting notes", "status": "PROCESSING", "parents": [], "synced": false}
+       {"local_id": 42, "uid": "550e8400...", "summary": "Review PR #456", "status": "TODO", "parents": ["Project Alpha"], "synced": true},
+       {"local_id": 43, "uid": "660e8400...", "summary": "Code review guidelines", "status": "DONE", "parents": [], "synced": true},
+       {"local_id": 44, "uid": null, "summary": "Review meeting notes", "status": "PROCESSING", "parents": [], "synced": false}
      ],
      "result": "ACTION_INCOMPLETE",
-     "message": "Multiple tasks match 'review'. Use --uid to specify exact task."
+     "message": "Multiple tasks match 'review'. Use --uid or --local-id to specify exact task."
    }
    ```
-3. Script parses JSON, selects appropriate UID (note: third task uses `NOT-SYNCED-<id>` format)
-4. Script re-runs: `todoat -y Work complete --uid "550e8400..."` or `--uid "NOT-SYNCED-42"`
+3. Script parses JSON, selects appropriate task by `uid` (for synced) or `local_id` (for any)
+4. Script re-runs: `todoat -y Work complete --uid "550e8400..."` or `todoat -y Work complete --local-id 44`
 
 ### Prerequisites
 - Task list must contain tasks
-- User must provide search string OR `--uid` flag
+- User must provide search string, `--uid` flag, or `--local-id` flag
 - For `--uid`: UID must exist in the task list
+- For `--local-id`: Sync must be enabled, and local ID must exist in the SQLite cache
 
 ### Outputs/Results
 See User Journey examples above.
@@ -842,47 +855,44 @@ See User Journey examples above.
 ### Technical Details
 - **Function**: `findTaskBySummary()` in `internal/operations/subtasks.go`
 - **UID Lookup**: Direct database/backend query by UID field
+- **Local ID Lookup**: Direct SQLite query by internal ID (only when sync enabled)
 - **Case Sensitivity**: All searches are case-insensitive
 - **Substring Matching**: Uses `strings.Contains()` after lowercasing
 - **User Input**: Uses `bufio.NewScanner()` for terminal input (skipped in no-prompt mode)
 - **Cancellation**: User can type 'c' or 'cancel' at any prompt
 - **No-Prompt Mode**: Controlled by `-y` flag or `no_prompt: true` in config
 
-**UID Flag:**
+**ID Flags:**
 ```go
 // CLI flag registration
-cmd.Flags().String("uid", "", "Select task by UID (bypasses search)")
+cmd.Flags().String("uid", "", "Select task by backend-assigned UID (bypasses search)")
+cmd.Flags().Int64("local-id", 0, "Select task by SQLite internal ID (requires sync enabled)")
 ```
 
-**UID Resolution Logic:**
+**ID Resolution Logic:**
 ```go
-func resolveTaskByUID(uid string, backend TaskManager) (*Task, error) {
-    // Check for NOT-SYNCED prefix (unsynced local task)
-    if strings.HasPrefix(uid, "NOT-SYNCED-") {
-        sqliteID := strings.TrimPrefix(uid, "NOT-SYNCED-")
-        return backend.GetTaskBySQLiteID(sqliteID)
+func resolveTask(uid string, localID int64, syncEnabled bool, backend TaskManager) (*Task, error) {
+    // Local ID takes precedence if provided
+    if localID > 0 {
+        if !syncEnabled {
+            return nil, errors.New("Local ID selection requires sync to be enabled")
+        }
+        return backend.GetTaskByLocalID(localID)
     }
-    // Standard UID lookup
-    return backend.GetTaskByUID(uid)
+    // UID lookup for synced tasks
+    if uid != "" {
+        return backend.GetTaskByUID(uid)
+    }
+    return nil, errors.New("No task identifier provided")
 }
 ```
 
-**UID Output Logic:**
-```go
-func getTaskUID(task *Task) string {
-    if task.UID == "" {
-        // Task not yet synced - use SQLite ID with prefix
-        return fmt.Sprintf("NOT-SYNCED-%d", task.SQLiteID)
-    }
-    return task.UID
-}
-```
-
-**UID Format:**
-| Format | Description |
-|--------|-------------|
-| `<uuid>` | Backend-assigned UID (e.g., `550e8400-e29b-41d4-a716-446655440000`) |
-| `NOT-SYNCED-<id>` | SQLite internal ID for unsynced tasks (e.g., `NOT-SYNCED-42`) |
+**Task ID Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `local_id` | int64 | SQLite internal ID (always present when sync enabled) |
+| `uid` | string | Backend-assigned UID (present after sync, null/empty before) |
+| `synced` | bool | Whether task has been synced to remote backend |
 
 ### Related Features
 - [Update Tasks](#update-tasks) - Primary consumer
@@ -892,6 +902,7 @@ func getTaskUID(task *Task) string {
 - [CLI Interface - No-Prompt Mode](./CLI_INTERFACE.md#no-prompt-mode) - Non-interactive operation
 - [CLI Interface - JSON Output](./CLI_INTERFACE.md#json-output-mode) - Machine-parseable output
 - [CLI Interface - Result Codes](./CLI_INTERFACE.md#result-codes) - Operation outcome indicators
+- [Synchronization](./SYNCHRONIZATION.md) - `--local-id` requires sync to be enabled
 
 ---
 

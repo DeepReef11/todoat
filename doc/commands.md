@@ -177,6 +177,8 @@ todoat MyList add "Urgent task" -p 1
 | `--due-date` | | Due date in YYYY-MM-DD format |
 | `--start-date` | | Start date in YYYY-MM-DD format |
 | `--tag` | | Tag/category (can be specified multiple times or comma-separated) |
+| `--parent` | `-P` | Parent task summary (creates subtask under specified parent) |
+| `--literal` | `-l` | Treat task summary literally (don't parse `/` as hierarchy separator) |
 
 ### Add Examples with Dates and Tags
 
@@ -194,6 +196,44 @@ todoat Work add "Urgent deadline" -p 1 --due-date 2026-01-25
 todoat Work add "Review PR" --tag code-review
 todoat Work add "Urgent fix" --tag urgent,bug
 todoat Work add "Feature work" --tag feature --tag frontend
+```
+
+### Subtasks and Hierarchy
+
+Create task hierarchies using the `/` separator or the `--parent` flag:
+
+```bash
+# Create a hierarchy using path notation (Project > Backend > API)
+todoat Work add "Project/Backend/API"
+
+# Creates:
+#   Project
+#     └─ Backend
+#          └─ API
+
+# Create a subtask using --parent flag
+todoat Work add "Write tests" --parent "API"
+
+# Use --literal to treat "/" literally (not as hierarchy separator)
+todoat Work add "Fix bug in A/B test" --literal
+```
+
+**Path notation behavior:**
+- Intermediate tasks (Project, Backend) are created if they don't exist
+- If a task at any level already exists, it is reused
+- Priority, dates, and tags are applied only to the leaf task (API in the example)
+
+### Subtask Display
+
+Subtasks are displayed in a tree structure:
+
+```
+Tasks in 'Work':
+  [TODO] Project
+  └─ [TODO] Backend
+       └─ [IN-PROGRESS] API [P1]
+       └─ [TODO] Write tests
+  [DONE] Other task
 ```
 
 ## Updating Tasks
@@ -224,6 +264,8 @@ todoat MyList u "task name" -s IN-PROGRESS
 | `--due-date` | | Due date (YYYY-MM-DD format, use "" to clear) |
 | `--start-date` | | Start date (YYYY-MM-DD format, use "" to clear) |
 | `--tag` | | Set tags (replaces existing; can be multiple or comma-separated) |
+| `--parent` | `-P` | Set parent task (move task under specified parent) |
+| `--no-parent` | | Remove parent relationship (make task root-level) |
 
 ### Update Date and Tag Examples
 
@@ -244,6 +286,21 @@ todoat Work update "task" --tag work,meeting
 # Clear all tags
 todoat Work update "task" --tag ""
 ```
+
+### Update Parent Examples
+
+```bash
+# Move a task under a parent (make it a subtask)
+todoat Work update "Write tests" --parent "API"
+
+# Move a subtask to root level (remove parent)
+todoat Work update "Write tests" --no-parent
+
+# Move a task to a different parent
+todoat Work update "Write tests" --parent "Backend"
+```
+
+**Note:** Circular references are automatically prevented. You cannot set a task's descendant as its parent.
 
 ### Status Values
 
@@ -282,6 +339,16 @@ todoat MyList delete "groceries"
 
 # Using alias
 todoat MyList d "groceries"
+```
+
+### Cascade Deletion
+
+When you delete a parent task, all its subtasks are also deleted:
+
+```bash
+# Given hierarchy: Project > Backend > API
+todoat Work delete "Backend"
+# Deletes both "Backend" and "API"
 ```
 
 ## Task Matching
