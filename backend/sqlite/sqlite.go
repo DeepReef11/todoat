@@ -54,6 +54,7 @@ func (b *Backend) initSchema() error {
 			created TEXT NOT NULL,
 			modified TEXT NOT NULL,
 			parent_id TEXT DEFAULT '',
+			categories TEXT DEFAULT '',
 			FOREIGN KEY (list_id) REFERENCES task_lists(id) ON DELETE CASCADE
 		);
 
@@ -152,7 +153,7 @@ func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 // GetTasks returns all tasks in a list
 func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
 	rows, err := b.db.QueryContext(ctx,
-		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id
+		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories
 		 FROM tasks WHERE list_id = ?`,
 		listID,
 	)
@@ -179,7 +180,7 @@ func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, 
 // GetTask returns a specific task
 func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.Task, error) {
 	row := b.db.QueryRowContext(ctx,
-		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id
+		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories
 		 FROM tasks WHERE list_id = ? AND id = ?`,
 		listID, taskID,
 	)
@@ -231,16 +232,20 @@ type scanner interface {
 func scanTaskFrom(s scanner) (*backend.Task, error) {
 	var t backend.Task
 	var dueDateStr, startDateStr, completedStr, createdStr, modifiedStr sql.NullString
+	var categoriesStr sql.NullString
 
 	err := s.Scan(
 		&t.ID, &t.ListID, &t.Summary, &t.Description, &t.Status,
-		&t.Priority, &dueDateStr, &startDateStr, &completedStr, &createdStr, &modifiedStr, &t.ParentID,
+		&t.Priority, &dueDateStr, &startDateStr, &completedStr, &createdStr, &modifiedStr, &t.ParentID, &categoriesStr,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	parseDateStrings(&t, dueDateStr, startDateStr, completedStr, createdStr, modifiedStr)
+	if categoriesStr.Valid {
+		t.Categories = categoriesStr.String
+	}
 	return &t, nil
 }
 
@@ -270,10 +275,10 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 	}
 
 	_, err := b.db.ExecContext(ctx,
-		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, listID, task.Summary, task.Description, status, task.Priority,
-		dueDateStr, startDateStr, completedStr, nowStr, nowStr, task.ParentID,
+		dueDateStr, startDateStr, completedStr, nowStr, nowStr, task.ParentID, task.Categories,
 	)
 	if err != nil {
 		return nil, err
@@ -292,6 +297,7 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 		Created:     now,
 		Modified:    now,
 		ParentID:    task.ParentID,
+		Categories:  task.Categories,
 	}, nil
 }
 
@@ -305,9 +311,9 @@ func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.T
 	completedStr := timeToNullString(task.Completed)
 
 	_, err := b.db.ExecContext(ctx,
-		`UPDATE tasks SET summary = ?, description = ?, status = ?, priority = ?, due_date = ?, start_date = ?, completed = ?, modified = ?, parent_id = ?
+		`UPDATE tasks SET summary = ?, description = ?, status = ?, priority = ?, due_date = ?, start_date = ?, completed = ?, modified = ?, parent_id = ?, categories = ?
 		 WHERE id = ? AND list_id = ?`,
-		task.Summary, task.Description, task.Status, task.Priority, dueDateStr, startDateStr, completedStr, nowStr, task.ParentID,
+		task.Summary, task.Description, task.Status, task.Priority, dueDateStr, startDateStr, completedStr, nowStr, task.ParentID, task.Categories,
 		task.ID, listID,
 	)
 	if err != nil {

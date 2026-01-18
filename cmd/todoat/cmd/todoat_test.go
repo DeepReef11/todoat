@@ -2018,3 +2018,275 @@ func TestCompletedTimestamp(t *testing.T) {
 	assertContains(t, output, "Task to complete")
 	assertContains(t, output, `"completed"`)
 }
+
+// =============================================================================
+// Tag Filtering Tests (012-tag-filtering)
+// =============================================================================
+
+// TestAddTaskWithTag verifies that `todoat -y MyList add "Task" --tag work` adds task with tag
+func TestAddTaskWithTag(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "Work", "add", "Tagged task", "--tag", "work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check tags
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Tagged task")
+	assertContains(t, output, "work")
+}
+
+// TestAddTaskMultipleTags verifies that `todoat -y MyList add "Task" --tag work --tag urgent` adds task with multiple tags
+func TestAddTaskMultipleTags(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "Work", "add", "Multi-tagged task", "--tag", "work", "--tag", "urgent"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check tags
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Multi-tagged task")
+	assertContains(t, output, "work")
+	assertContains(t, output, "urgent")
+}
+
+// TestAddTaskCommaSeparatedTags verifies that `todoat -y MyList add "Task" --tag "work,urgent"` adds task with comma-separated tags
+func TestAddTaskCommaSeparatedTags(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "Work", "add", "Comma-tagged task", "--tag", "work,urgent"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check tags
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Comma-tagged task")
+	assertContains(t, output, "work")
+	assertContains(t, output, "urgent")
+}
+
+// TestUpdateTaskTags verifies that `todoat -y MyList update "Task" --tag home` updates task tags
+func TestUpdateTaskTags(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task with a tag
+	Execute([]string{"-y", "Work", "add", "Update tag task", "--tag", "work"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update the tag
+	exitCode := Execute([]string{"-y", "Work", "update", "Update tag task", "--tag", "home"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify updated tag
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Update tag task")
+	assertContains(t, output, "home")
+	assertNotContains(t, output, `"work"`)
+}
+
+// TestClearTaskTags verifies that `todoat -y MyList update "Task" --tag ""` clears task tags
+func TestClearTaskTags(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task with a tag
+	Execute([]string{"-y", "Work", "add", "Clear tag task", "--tag", "work"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Clear the tag
+	exitCode := Execute([]string{"-y", "Work", "update", "Clear tag task", "--tag", ""}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify tag is cleared
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Clear tag task")
+	// The tags field should be empty or not contain "work"
+	// We check that the specific tag value is no longer present
+	if strings.Contains(output, `"tags":["work"]`) {
+		t.Errorf("expected tags to be cleared, but still found work tag in output: %s", output)
+	}
+}
+
+// TestFilterByTag verifies that `todoat -y MyList --tag work` shows only tasks with "work" tag
+func TestFilterByTag(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different tags
+	Execute([]string{"-y", "Work", "add", "Work task", "--tag", "work"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Home task", "--tag", "home"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "No tag task"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter by work tag
+	exitCode := Execute([]string{"-y", "Work", "--tag", "work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Work task")
+	assertNotContains(t, output, "Home task")
+	assertNotContains(t, output, "No tag task")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestFilterByMultipleTags verifies that `todoat -y MyList --tag work --tag urgent` shows tasks with ANY of the tags (OR logic)
+func TestFilterByMultipleTags(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different tags
+	Execute([]string{"-y", "Work", "add", "Work task", "--tag", "work"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Urgent task", "--tag", "urgent"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Home task", "--tag", "home"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter by work OR urgent tag
+	exitCode := Execute([]string{"-y", "Work", "--tag", "work", "--tag", "urgent"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Work task")
+	assertContains(t, output, "Urgent task")
+	assertNotContains(t, output, "Home task")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestFilterTagNoMatch verifies that `todoat -y MyList --tag nonexistent` returns INFO_ONLY with message
+func TestFilterTagNoMatch(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task with a different tag
+	Execute([]string{"-y", "Work", "add", "Some task", "--tag", "work"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter by non-existent tag
+	exitCode := Execute([]string{"-y", "Work", "--tag", "nonexistent"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should show a message about no matching tasks
+	if !strings.Contains(strings.ToLower(output), "no") || !strings.Contains(strings.ToLower(output), "task") {
+		t.Errorf("expected message about no matching tasks, got: %s", output)
+	}
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestFilterTagJSON verifies that `todoat -y --json MyList --tag work` returns filtered JSON result with tags array
+func TestFilterTagJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different tags
+	Execute([]string{"-y", "Work", "add", "Work task", "--tag", "work"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Home task", "--tag", "home"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter with JSON output
+	exitCode := Execute([]string{"-y", "--json", "Work", "--tag", "work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain JSON with only work-tagged task
+	assertContains(t, output, `"Work task"`)
+	assertNotContains(t, output, `"Home task"`)
+	assertContains(t, output, `"tags"`)
+	assertContains(t, output, `"work"`)
+	assertContains(t, output, `"result"`)
+	assertContains(t, output, `"INFO_ONLY"`)
+}
+
+// TestFilterTagCombined verifies that `todoat -y MyList -s TODO --tag work` combined with status filter works
+func TestFilterTagCombined(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add tasks with different statuses and tags
+	Execute([]string{"-y", "Work", "add", "Work TODO task", "--tag", "work"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Work DONE task", "--tag", "work"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "Work DONE task"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Home TODO task", "--tag", "home"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter by TODO status AND work tag
+	exitCode := Execute([]string{"-y", "Work", "-s", "TODO", "--tag", "work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Work TODO task")
+	assertNotContains(t, output, "Work DONE task")
+	assertNotContains(t, output, "Home TODO task")
+	assertResultCode(t, output, ResultInfoOnly)
+}

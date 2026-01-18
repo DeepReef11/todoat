@@ -70,6 +70,11 @@ todoat MyList get -p high        # Show high priority (1-4)
 todoat MyList get -p medium      # Show medium priority (5)
 todoat MyList get -p low         # Show low priority (6-9)
 
+# Filter by tag
+todoat MyList get --tag work              # Show tasks with "work" tag
+todoat MyList get --tag work,urgent       # Show tasks with "work" OR "urgent" tag
+todoat MyList get --tag work --tag urgent # Same as above (multiple flags)
+
 # JSON output
 todoat MyList get --json
 ```
@@ -80,6 +85,7 @@ todoat MyList get --json
 |------|-------|-------------|
 | `--status` | `-s` | Filter tasks by status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 | `--priority` | `-p` | Filter by priority: single value (1), comma-separated (1,2,3), or alias (high, medium, low) |
+| `--tag` | | Filter by tag (can be specified multiple times or comma-separated; OR logic) |
 
 ### Priority Aliases
 
@@ -93,9 +99,11 @@ todoat MyList get --json
 ```
 Tasks in 'MyList':
   [TODO] Buy groceries
-  [IN-PROGRESS] Write report [P1]
-  [DONE] Call dentist
+  [IN-PROGRESS] Write report [P1] {work}
+  [DONE] Call dentist {personal,health}
 ```
+
+Tags are displayed in curly braces `{tag1,tag2}` when present.
 
 Status indicators:
 - `[TODO]` - Needs action
@@ -125,8 +133,9 @@ todoat MyList add "Urgent task" -p 1
 | `--priority` | `-p` | Task priority (0-9, 0=undefined, 1=highest) |
 | `--due-date` | | Due date in YYYY-MM-DD format |
 | `--start-date` | | Start date in YYYY-MM-DD format |
+| `--tag` | | Tag/category (can be specified multiple times or comma-separated) |
 
-### Add Examples with Dates
+### Add Examples with Dates and Tags
 
 ```bash
 # Add task with due date
@@ -137,6 +146,11 @@ todoat Work add "Project milestone" --start-date 2026-01-20 --due-date 2026-02-1
 
 # Add task with priority and due date
 todoat Work add "Urgent deadline" -p 1 --due-date 2026-01-25
+
+# Add task with tags
+todoat Work add "Review PR" --tag code-review
+todoat Work add "Urgent fix" --tag urgent,bug
+todoat Work add "Feature work" --tag feature --tag frontend
 ```
 
 ## Updating Tasks
@@ -166,8 +180,9 @@ todoat MyList u "task name" -s IN-PROGRESS
 | `--summary` | | New task summary/name |
 | `--due-date` | | Due date (YYYY-MM-DD format, use "" to clear) |
 | `--start-date` | | Start date (YYYY-MM-DD format, use "" to clear) |
+| `--tag` | | Set tags (replaces existing; can be multiple or comma-separated) |
 
-### Update Date Examples
+### Update Date and Tag Examples
 
 ```bash
 # Set a due date
@@ -178,6 +193,13 @@ todoat Work update "task" --due-date ""
 
 # Set both dates
 todoat Work update "task" --start-date 2026-01-15 --due-date 2026-01-30
+
+# Set tags (replaces all existing tags)
+todoat Work update "task" --tag urgent
+todoat Work update "task" --tag work,meeting
+
+# Clear all tags
+todoat Work update "task" --tag ""
 ```
 
 ### Status Values
@@ -296,7 +318,8 @@ todoat MyList add "New task" --json
       "summary": "Buy groceries",
       "status": "TODO",
       "priority": 1,
-      "due_date": "2026-01-31"
+      "due_date": "2026-01-31",
+      "tags": ["shopping", "errands"]
     }
   ],
   "list": "Shopping",

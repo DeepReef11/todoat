@@ -147,6 +147,7 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().String("summary", "", "New task summary (for update)")
 	cmd.Flags().String("due-date", "", "Due date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
 	cmd.Flags().String("start-date", "", "Start date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
+	cmd.Flags().StringSlice("tag", nil, "Tag/category for add/update, or filter by tag for get (can be specified multiple times or comma-separated)")
 
 	// Add list subcommand
 	cmd.AddCommand(newListCmd(stdout, cfg))
@@ -389,7 +390,9 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if err != nil {
 			return err
 		}
-		return doGet(ctx, be, list, statusFilter, priorityFilter, cfg, stdout, jsonOutput)
+		tagFilter, _ := cmd.Flags().GetStringSlice("tag")
+		tagFilter = normalizeTagSlice(tagFilter)
+		return doGet(ctx, be, list, statusFilter, priorityFilter, tagFilter, cfg, stdout, jsonOutput)
 	case "add":
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		priority, err := parsePrioritySingle(priorityStr)
@@ -406,7 +409,10 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if err != nil {
 			return fmt.Errorf("invalid start-date: %w", err)
 		}
-		return doAdd(ctx, be, list, taskSummary, priority, dueDate, startDate, cfg, stdout, jsonOutput)
+		tags, _ := cmd.Flags().GetStringSlice("tag")
+		tags = normalizeTagSlice(tags)
+		categories := strings.Join(tags, ",")
+		return doAdd(ctx, be, list, taskSummary, priority, dueDate, startDate, categories, cfg, stdout, jsonOutput)
 	case "update":
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		priority, err := parsePrioritySingle(priorityStr)
@@ -446,7 +452,15 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 				startDate = d
 			}
 		}
-		return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, cfg, stdout, jsonOutput)
+		tagFlagSet := cmd.Flags().Changed("tag")
+		var newCategories *string
+		if tagFlagSet {
+			tags, _ := cmd.Flags().GetStringSlice("tag")
+			tags = normalizeTagSlice(tags)
+			cat := strings.Join(tags, ",")
+			newCategories = &cat
+		}
+		return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, cfg, stdout, jsonOutput)
 	case "complete":
 		return doComplete(ctx, be, list, taskSummary, cfg, stdout, jsonOutput)
 	case "delete":
@@ -456,8 +470,8 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 	}
 }
 
-// doGet lists all tasks in a list, optionally filtering by status and/or priority
-func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+// doGet lists all tasks in a list, optionally filtering by status, priority, and/or tags
+func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	tasks, err := be.GetTasks(ctx, list.ID)
 	if err != nil {
 		return err
@@ -486,6 +500,17 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		tasks = filteredTasks
 	}
 
+	// Filter by tags if specified (OR logic - match any tag)
+	if len(tagFilter) > 0 {
+		var filteredTasks []backend.Task
+		for _, t := range tasks {
+			if matchesTagFilter(t.Categories, tagFilter) {
+				filteredTasks = append(filteredTasks, t)
+			}
+		}
+		tasks = filteredTasks
+	}
+
 	if jsonOutput {
 		return outputTaskListJSON(tasks, list, stdout)
 	}
@@ -500,7 +525,11 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 			if t.Priority > 0 {
 				priorityStr = fmt.Sprintf(" [P%d]", t.Priority)
 			}
-			_, _ = fmt.Fprintf(stdout, "  %s %s%s\n", statusIcon, t.Summary, priorityStr)
+			tagsStr := ""
+			if t.Categories != "" {
+				tagsStr = fmt.Sprintf(" {%s}", t.Categories)
+			}
+			_, _ = fmt.Fprintf(stdout, "  %s %s%s%s\n", statusIcon, t.Summary, priorityStr, tagsStr)
 		}
 	}
 
@@ -509,6 +538,39 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
 	return nil
+}
+
+// matchesTagFilter checks if a task's categories match any of the filter tags (OR logic)
+func matchesTagFilter(categories string, filterTags []string) bool {
+	if categories == "" {
+		return false
+	}
+	taskTags := strings.Split(categories, ",")
+	for _, filterTag := range filterTags {
+		filterTag = strings.TrimSpace(filterTag)
+		for _, taskTag := range taskTags {
+			if strings.EqualFold(strings.TrimSpace(taskTag), filterTag) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// normalizeTagSlice processes a tag slice to handle comma-separated values
+func normalizeTagSlice(tags []string) []string {
+	var result []string
+	for _, tag := range tags {
+		// Split by comma in case of comma-separated values
+		parts := strings.Split(tag, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				result = append(result, part)
+			}
+		}
+	}
+	return result
 }
 
 // matchesPriorityFilter checks if a task's priority matches any of the filter priorities
@@ -600,17 +662,18 @@ func getStatusIcon(status backend.TaskStatus) string {
 }
 
 // doAdd creates a new task
-func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, dueDate, startDate *time.Time, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, dueDate, startDate *time.Time, categories string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	if summary == "" {
 		return fmt.Errorf("task summary is required")
 	}
 
 	task := &backend.Task{
-		Summary:   summary,
-		Priority:  priority,
-		Status:    backend.StatusNeedsAction,
-		DueDate:   dueDate,
-		StartDate: startDate,
+		Summary:    summary,
+		Priority:   priority,
+		Status:     backend.StatusNeedsAction,
+		DueDate:    dueDate,
+		StartDate:  startDate,
+		Categories: categories,
 	}
 
 	created, err := be.CreateTask(ctx, list.ID, task)
@@ -632,7 +695,7 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 }
 
 // doUpdate modifies an existing task
-func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
 	if err != nil {
 		return err
@@ -659,6 +722,9 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	}
 	if clearStartDate {
 		task.StartDate = nil
+	}
+	if newCategories != nil {
+		task.Categories = *newCategories
 	}
 
 	updated, err := be.UpdateTask(ctx, list.ID, task)
@@ -803,13 +869,14 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 
 // JSON output structures
 type taskJSON struct {
-	UID       string  `json:"uid"`
-	Summary   string  `json:"summary"`
-	Status    string  `json:"status"`
-	Priority  int     `json:"priority"`
-	DueDate   *string `json:"due_date,omitempty"`
-	StartDate *string `json:"start_date,omitempty"`
-	Completed *string `json:"completed,omitempty"`
+	UID       string   `json:"uid"`
+	Summary   string   `json:"summary"`
+	Status    string   `json:"status"`
+	Priority  int      `json:"priority"`
+	DueDate   *string  `json:"due_date,omitempty"`
+	StartDate *string  `json:"start_date,omitempty"`
+	Completed *string  `json:"completed,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
 }
 
 type listTasksResponse struct {
@@ -850,6 +917,13 @@ func taskToJSON(t *backend.Task) taskJSON {
 	if t.Completed != nil {
 		s := t.Completed.Format(time.RFC3339)
 		result.Completed = &s
+	}
+	if t.Categories != "" {
+		result.Tags = strings.Split(t.Categories, ",")
+		// Trim whitespace from each tag
+		for i, tag := range result.Tags {
+			result.Tags[i] = strings.TrimSpace(tag)
+		}
 	}
 	return result
 }

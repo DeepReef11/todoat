@@ -19,6 +19,7 @@ type Task struct {
 	Modified    time.Time
 	ListID      string
 	ParentID    string // For subtasks
+	Categories  string // Comma-separated list of tags/categories
 }
 
 // TaskStatus represents the completion state of a task

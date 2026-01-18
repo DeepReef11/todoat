@@ -127,6 +127,43 @@ todoat Work get -p medium   # priority 5
 todoat Work get -p low      # priorities 6-9
 ```
 
+## Tags
+
+Tags (also called categories) help organize tasks across lists:
+
+```bash
+# Add task with tags
+todoat Work add "Review PR #123" --tag code-review
+todoat Work add "Fix login bug" --tag bug,urgent
+todoat Work add "Design meeting" --tag meeting --tag design
+
+# Filter by tag (OR logic - shows tasks with ANY matching tag)
+todoat Work get --tag bug
+todoat Work get --tag bug,urgent           # Tasks with "bug" OR "urgent"
+todoat Work get --tag code-review --tag bug # Same as above
+
+# Update tags (replaces existing)
+todoat Work update "PR" --tag code-review,approved
+
+# Clear all tags from a task
+todoat Work update "PR" --tag ""
+```
+
+### Tag Display
+
+In text output, tags appear in curly braces:
+```
+Tasks in 'Work':
+  [TODO] Fix login bug [P1] {bug,urgent}
+  [IN-PROGRESS] Review PR #123 {code-review}
+  [TODO] Design meeting {meeting,design}
+```
+
+In JSON output, tags are an array:
+```bash
+todoat Work get --json | jq '.tasks[].tags'
+```
+
 ## Due Dates
 
 Set start and due dates for task scheduling:

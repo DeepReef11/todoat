@@ -24,6 +24,7 @@ A command-line task manager with multiple backend support.
 - **Task Lists**: Organize tasks into named lists (created automatically)
 - **Priority Support**: Set task priority (0-9, where 1 is highest) and filter by priority
 - **Status Tracking**: Track task status (TODO, IN-PROGRESS, DONE, CANCELLED)
+- **Tags**: Categorize tasks with tags and filter by tag
 - **Due Dates**: Set start and due dates for tasks
 - **JSON Output**: Machine-readable JSON output for scripting
 - **SQLite Backend**: Local task storage in `~/.todoat/todoat.db`
@@ -39,6 +40,12 @@ todoat MyList add "Buy groceries"
 
 # Add a task with priority and due date
 todoat MyList add "Urgent task" -p 1 --due-date 2026-01-31
+
+# Add a task with tags
+todoat MyList add "Code review" --tag work,urgent
+
+# Filter by tag
+todoat MyList get --tag urgent
 
 # Complete a task
 todoat MyList complete "Buy groceries"
