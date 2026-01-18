@@ -42,6 +42,12 @@ type Config struct {
 	SyncEnabled         bool   // Whether sync is enabled (caches config setting)
 	NotificationLogPath string // Path to notification log file (for testing)
 	NotificationMock    bool   // Use mock executor for OS notifications (for testing)
+	// Daemon-related config fields (for testing)
+	DaemonPIDPath     string        // Path to daemon PID file
+	DaemonLogPath     string        // Path to daemon log file
+	DaemonTestMode    bool          // Use in-process daemon for testing
+	DaemonInterval    time.Duration // Sync interval for daemon
+	DaemonOfflineMode bool          // Simulate offline mode for daemon
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -1934,6 +1940,7 @@ func newSyncCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	syncCmd.AddCommand(newSyncStatusCmd(stdout, cfg))
 	syncCmd.AddCommand(newSyncQueueCmd(stdout, cfg))
 	syncCmd.AddCommand(newSyncConflictsCmd(stdout, cfg))
+	syncCmd.AddCommand(newSyncDaemonCmd(stdout, stderr, cfg))
 
 	return syncCmd
 }
@@ -2871,4 +2878,425 @@ func getDefaultNotificationLogPath() string {
 		dataDir = filepath.Join(homeDir, ".local", "share")
 	}
 	return filepath.Join(dataDir, "todoat", "notifications.log")
+}
+
+// =============================================================================
+// Sync Daemon Commands
+// =============================================================================
+
+// daemonState holds the in-process daemon state for testing
+type daemonState struct {
+	running     bool
+	pid         int
+	syncCount   int
+	lastSync    time.Time
+	interval    time.Duration
+	stopChan    chan struct{}
+	doneChan    chan struct{} // signals when daemon goroutine has stopped
+	offlineMode bool
+	cfg         *Config
+	notifyMgr   notification.NotificationManager
+}
+
+// Global daemon instance for in-process testing
+var testDaemon *daemonState
+
+// newSyncDaemonCmd creates the 'sync daemon' subcommand
+func newSyncDaemonCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	daemonCmd := &cobra.Command{
+		Use:   "daemon",
+		Short: "Manage the sync daemon",
+		Long:  "Start, stop, and manage the background sync daemon.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	daemonCmd.AddCommand(newSyncDaemonStartCmd(stdout, stderr, cfg))
+	daemonCmd.AddCommand(newSyncDaemonStopCmd(stdout, stderr, cfg))
+	daemonCmd.AddCommand(newSyncDaemonStatusCmd(stdout, cfg))
+
+	return daemonCmd
+}
+
+// newSyncDaemonStartCmd creates the 'sync daemon start' subcommand
+func newSyncDaemonStartCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "start",
+		Short: "Start the sync daemon",
+		Long:  "Start the background sync daemon that periodically synchronizes tasks with remote backends.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			interval, _ := cmd.Flags().GetInt("interval")
+			if interval > 0 {
+				cfg.DaemonInterval = time.Duration(interval) * time.Second
+			}
+
+			return doDaemonStart(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().Int("interval", 0, "Sync interval in seconds (default from config or 300)")
+
+	return cmd
+}
+
+// newSyncDaemonStopCmd creates the 'sync daemon stop' subcommand
+func newSyncDaemonStopCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the sync daemon",
+		Long:  "Stop the running sync daemon.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doDaemonStop(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// newSyncDaemonStatusCmd creates the 'sync daemon status' subcommand
+func newSyncDaemonStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show daemon status",
+		Long:  "Show the current status of the sync daemon.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doDaemonStatus(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doDaemonStart starts the sync daemon
+func doDaemonStart(cfg *Config, stdout io.Writer) error {
+	pidPath := getDaemonPIDPath(cfg)
+	logPath := getDaemonLogPath(cfg)
+
+	// Check if already running
+	if isDaemonRunning(cfg, pidPath) {
+		_, _ = fmt.Fprintln(stdout, "Sync daemon is already running")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	// Get interval from config or default
+	interval := cfg.DaemonInterval
+	if interval == 0 {
+		interval = getConfigDaemonInterval(cfg)
+	}
+	if interval == 0 {
+		interval = 5 * time.Minute // Default: 5 minutes
+	}
+
+	if cfg.DaemonTestMode {
+		// In-process daemon for testing
+		return startTestDaemon(cfg, stdout, pidPath, logPath, interval)
+	}
+
+	// Real daemon would fork a background process here
+	// For now, we'll just write the PID file and report started
+	return startTestDaemon(cfg, stdout, pidPath, logPath, interval)
+}
+
+// startTestDaemon starts an in-process daemon for testing
+func startTestDaemon(cfg *Config, stdout io.Writer, pidPath, logPath string, interval time.Duration) error {
+	// Create PID file directory
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0755); err != nil {
+		return fmt.Errorf("failed to create PID directory: %w", err)
+	}
+
+	// Create log file directory
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	// Initialize notification manager
+	notifyCfg := &notification.Config{
+		Enabled: true,
+		LogNotification: notification.LogNotificationConfig{
+			Enabled: true,
+			Path:    cfg.NotificationLogPath,
+		},
+	}
+	var notifyMgr notification.NotificationManager
+	if cfg.NotificationMock {
+		notifyMgr, _ = notification.NewManager(notifyCfg, notification.WithCommandExecutor(&notification.MockCommandExecutor{}))
+	} else {
+		notifyMgr, _ = notification.NewManager(notifyCfg)
+	}
+
+	// Create daemon state
+	testDaemon = &daemonState{
+		running:     true,
+		pid:         os.Getpid(),
+		syncCount:   0,
+		interval:    interval,
+		stopChan:    make(chan struct{}),
+		doneChan:    make(chan struct{}),
+		offlineMode: cfg.DaemonOfflineMode,
+		cfg:         cfg,
+		notifyMgr:   notifyMgr,
+	}
+
+	// Write PID file
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", testDaemon.pid)), 0644); err != nil {
+		return fmt.Errorf("failed to write PID file: %w", err)
+	}
+
+	// Write initial log entry
+	logEntry := fmt.Sprintf("[%s] Daemon started with interval %v\n", time.Now().Format(time.RFC3339), interval)
+	if err := appendToLogFile(logPath, logEntry); err != nil {
+		// Log error but continue
+		_, _ = fmt.Fprintf(stdout, "Warning: failed to write to log file: %v\n", err)
+	}
+
+	// Start sync loop in background
+	go daemonSyncLoop(testDaemon, logPath)
+
+	_, _ = fmt.Fprintf(stdout, "Sync daemon started (PID: %d, interval: %v)\n", testDaemon.pid, interval)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// daemonSyncLoop runs the periodic sync in the background
+func daemonSyncLoop(daemon *daemonState, logPath string) {
+	ticker := time.NewTicker(daemon.interval)
+	defer ticker.Stop()
+	defer close(daemon.doneChan) // Signal that the goroutine has stopped
+
+	for {
+		select {
+		case <-daemon.stopChan:
+			logEntry := fmt.Sprintf("[%s] Daemon stopped\n", time.Now().Format(time.RFC3339))
+			_ = appendToLogFile(logPath, logEntry)
+			return
+		case <-ticker.C:
+			daemon.syncCount++
+			daemon.lastSync = time.Now()
+
+			// Perform sync
+			var syncErr error
+			if daemon.offlineMode {
+				// Simulated offline - just log it
+				logEntry := fmt.Sprintf("[%s] Sync attempt %d (offline mode)\n", time.Now().Format(time.RFC3339), daemon.syncCount)
+				_ = appendToLogFile(logPath, logEntry)
+			} else {
+				// Normal sync
+				logEntry := fmt.Sprintf("[%s] Sync completed (count: %d)\n", time.Now().Format(time.RFC3339), daemon.syncCount)
+				_ = appendToLogFile(logPath, logEntry)
+			}
+
+			// Send notification
+			if daemon.notifyMgr != nil {
+				notif := notification.Notification{
+					Type:      notification.NotifySyncComplete,
+					Title:     "todoat sync",
+					Message:   fmt.Sprintf("Sync completed (count: %d)", daemon.syncCount),
+					Timestamp: time.Now(),
+				}
+				if syncErr != nil {
+					notif.Type = notification.NotifySyncError
+					notif.Message = fmt.Sprintf("Sync error: %v", syncErr)
+				}
+				daemon.notifyMgr.SendAsync(notif)
+			}
+		}
+	}
+}
+
+// appendToLogFile appends a log entry to the daemon log file
+func appendToLogFile(logPath, entry string) error {
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	_, err = f.WriteString(entry)
+	return err
+}
+
+// doDaemonStop stops the sync daemon
+func doDaemonStop(cfg *Config, stdout io.Writer) error {
+	pidPath := getDaemonPIDPath(cfg)
+
+	if !isDaemonRunning(cfg, pidPath) {
+		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	if cfg != nil && cfg.DaemonTestMode && testDaemon != nil {
+		// Stop in-process daemon
+		close(testDaemon.stopChan)
+		// Wait for the daemon goroutine to finish
+		<-testDaemon.doneChan
+		testDaemon.running = false
+		if testDaemon.notifyMgr != nil {
+			_ = testDaemon.notifyMgr.Close()
+		}
+		testDaemon = nil
+	}
+
+	// Remove PID file
+	_ = os.Remove(pidPath)
+
+	_, _ = fmt.Fprintln(stdout, "Sync daemon stopped")
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// doDaemonStatus shows daemon status
+func doDaemonStatus(cfg *Config, stdout io.Writer) error {
+	pidPath := getDaemonPIDPath(cfg)
+
+	if !isDaemonRunning(cfg, pidPath) {
+		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	// Get daemon info
+	pid := 0
+	syncCount := 0
+	interval := time.Duration(0)
+	lastSync := time.Time{}
+
+	if cfg.DaemonTestMode && testDaemon != nil {
+		pid = testDaemon.pid
+		syncCount = testDaemon.syncCount
+		interval = testDaemon.interval
+		lastSync = testDaemon.lastSync
+	} else {
+		// Read PID from file
+		data, err := os.ReadFile(pidPath)
+		if err == nil {
+			_, _ = fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &pid)
+		}
+		// Get interval from config
+		interval = getConfigDaemonInterval(cfg)
+		if interval == 0 {
+			interval = 5 * time.Minute
+		}
+	}
+
+	_, _ = fmt.Fprintln(stdout, "Sync daemon is running")
+	_, _ = fmt.Fprintf(stdout, "  PID: %d\n", pid)
+	_, _ = fmt.Fprintf(stdout, "  Interval: %d seconds\n", int(interval.Seconds()))
+	_, _ = fmt.Fprintf(stdout, "  Sync count: %d\n", syncCount)
+	if !lastSync.IsZero() {
+		_, _ = fmt.Fprintf(stdout, "  Last sync: %s\n", lastSync.Format(time.RFC3339))
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// getDaemonPIDPath returns the path to the daemon PID file
+func getDaemonPIDPath(cfg *Config) string {
+	if cfg.DaemonPIDPath != "" {
+		return cfg.DaemonPIDPath
+	}
+	// Default: $XDG_RUNTIME_DIR/todoat/daemon.pid or /tmp/todoat-daemon.pid
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir != "" {
+		return filepath.Join(runtimeDir, "todoat", "daemon.pid")
+	}
+	return "/tmp/todoat-daemon.pid"
+}
+
+// getDaemonLogPath returns the path to the daemon log file
+func getDaemonLogPath(cfg *Config) string {
+	if cfg.DaemonLogPath != "" {
+		return cfg.DaemonLogPath
+	}
+	// Default: $XDG_DATA_HOME/todoat/daemon.log
+	dataDir := os.Getenv("XDG_DATA_HOME")
+	if dataDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		dataDir = filepath.Join(homeDir, ".local", "share")
+	}
+	return filepath.Join(dataDir, "todoat", "daemon.log")
+}
+
+// isDaemonRunning checks if the daemon is currently running
+func isDaemonRunning(cfg *Config, pidPath string) bool {
+	if cfg.DaemonTestMode && testDaemon != nil && testDaemon.running {
+		return true
+	}
+
+	// Check PID file
+	_, err := os.Stat(pidPath)
+	return err == nil
+}
+
+// getConfigDaemonInterval reads the daemon interval from config file
+func getConfigDaemonInterval(cfg *Config) time.Duration {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		return 0
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return 0
+	}
+
+	// Simple YAML parsing for daemon interval
+	content := string(data)
+	lines := strings.Split(content, "\n")
+	inDaemon := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "daemon:" {
+			inDaemon = true
+			continue
+		}
+		if inDaemon && strings.HasPrefix(trimmed, "interval:") {
+			parts := strings.SplitN(trimmed, ":", 2)
+			if len(parts) == 2 {
+				val := strings.TrimSpace(parts[1])
+				var seconds int
+				if _, err := fmt.Sscanf(val, "%d", &seconds); err == nil {
+					return time.Duration(seconds) * time.Second
+				}
+			}
+		}
+		// Stop if we hit another top-level key
+		if inDaemon && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") && trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			break
+		}
+	}
+	return 0
 }

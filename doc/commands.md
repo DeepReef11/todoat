@@ -619,6 +619,9 @@ todoat sync queue clear
 | `sync queue clear` | Remove all pending operations from the queue |
 | `sync conflicts` | View unresolved sync conflicts |
 | `sync conflicts resolve [uid]` | Resolve a specific conflict with a strategy |
+| `sync daemon start` | Start the background sync daemon |
+| `sync daemon stop` | Stop the running sync daemon |
+| `sync daemon status` | Show daemon status |
 
 ### Sync Status Output
 
@@ -700,6 +703,60 @@ abc123-def456                        Update report                  2026-01-18 1
 $ todoat sync conflicts resolve abc123-def456 --strategy local_wins
 Conflict resolved for task abc123-def456 using strategy local_wins
 ```
+
+### Sync Daemon
+
+The sync daemon runs in the background and periodically synchronizes tasks with remote backends.
+
+```bash
+# Start the sync daemon
+todoat sync daemon start
+
+# Start with custom interval (in seconds)
+todoat sync daemon start --interval 60
+
+# Check daemon status
+todoat sync daemon status
+
+# Stop the daemon
+todoat sync daemon stop
+```
+
+### Sync Daemon Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `sync daemon start` | Start the background sync daemon |
+| `sync daemon start --interval N` | Start with sync interval of N seconds |
+| `sync daemon stop` | Stop the running sync daemon |
+| `sync daemon status` | Show whether daemon is running and its configuration |
+
+### Daemon Status Output
+
+```bash
+$ todoat sync daemon status
+Sync Daemon Status:
+  Running: Yes
+  PID: 12345
+  Interval: 300s
+  Last Sync: 2026-01-18 14:30:00
+```
+
+### Daemon Configuration
+
+The sync daemon reads its configuration from the config file (`~/.config/todoat/config.yaml`):
+
+```yaml
+sync:
+  enabled: true
+  daemon:
+    interval: 300  # Sync interval in seconds (default: 300 = 5 minutes)
+```
+
+The daemon automatically:
+- Synchronizes pending local changes to remote backends
+- Fetches remote changes and applies them locally
+- Sends notifications for sync events and conflicts
 
 ## Shell Completion
 

@@ -5,8 +5,10 @@ package testutil
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"todoat/cmd/todoat/cmd"
 )
@@ -169,3 +171,76 @@ const (
 	ResultInfoOnly        = cmd.ResultInfoOnly
 	ResultError           = cmd.ResultError
 )
+
+// DaemonCLITest extends CLITest with daemon-specific helpers for testing sync daemon.
+type DaemonCLITest struct {
+	*CLITest
+	pidFile        string
+	logFile        string
+	configPath     string
+	daemonInterval time.Duration
+	offlineMode    bool
+}
+
+// NewCLITestWithDaemon creates a new CLI test helper with daemon support.
+func NewCLITestWithDaemon(t *testing.T) *DaemonCLITest {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	notificationLogPath := filepath.Join(tmpDir, "notifications.log")
+	pidFile := filepath.Join(tmpDir, "daemon.pid")
+	logFile := filepath.Join(tmpDir, "daemon.log")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := &cmd.Config{
+		NoPrompt:            true,
+		DBPath:              dbPath,
+		ConfigPath:          configPath,
+		NotificationLogPath: notificationLogPath,
+		NotificationMock:    true,
+		DaemonPIDPath:       pidFile,
+		DaemonLogPath:       logFile,
+		DaemonTestMode:      true, // Use in-process daemon for testing
+	}
+
+	return &DaemonCLITest{
+		CLITest: &CLITest{
+			t:      t,
+			cfg:    cfg,
+			tmpDir: tmpDir,
+		},
+		pidFile:        pidFile,
+		logFile:        logFile,
+		configPath:     configPath,
+		daemonInterval: 5 * time.Minute,
+		offlineMode:    false,
+	}
+}
+
+// PIDFilePath returns the path to the daemon PID file.
+func (d *DaemonCLITest) PIDFilePath() string {
+	return d.pidFile
+}
+
+// DaemonLogPath returns the path to the daemon log file.
+func (d *DaemonCLITest) DaemonLogPath() string {
+	return d.logFile
+}
+
+// ConfigPath returns the path to the config file.
+func (d *DaemonCLITest) ConfigPath() string {
+	return d.configPath
+}
+
+// SetDaemonInterval sets the sync interval for testing.
+func (d *DaemonCLITest) SetDaemonInterval(interval time.Duration) {
+	d.daemonInterval = interval
+	d.cfg.DaemonInterval = interval
+}
+
+// SetDaemonOffline sets the daemon to offline mode for testing.
+func (d *DaemonCLITest) SetDaemonOffline(offline bool) {
+	d.offlineMode = offline
+	d.cfg.DaemonOfflineMode = offline
+}

@@ -1,10 +1,13 @@
 package notification
 
+import "sync"
+
 // manager implements NotificationManager
 type manager struct {
 	channels        []NotificationChannel
 	enabled         bool
 	commandExecutor CommandExecutor
+	wg              sync.WaitGroup
 }
 
 // NewManager creates a new NotificationManager based on configuration
@@ -57,13 +60,18 @@ func (m *manager) Send(n Notification) error {
 
 // SendAsync dispatches notification without blocking
 func (m *manager) SendAsync(n Notification) {
+	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
 		_ = m.Send(n)
 	}()
 }
 
 // Close cleans up resources
 func (m *manager) Close() error {
+	// Wait for any pending async notifications to complete
+	m.wg.Wait()
+
 	var lastErr error
 	for _, ch := range m.channels {
 		if err := ch.Close(); err != nil {
