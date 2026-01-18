@@ -80,6 +80,7 @@ todoat MyList get --json
 - [Configuration](./configuration.md) - Configuration options
 - [Views](./views.md) - Custom views for task display
 - [Backends](./backends.md) - Backend setup and configuration
+- [TUI](./tui.md) - Terminal user interface guide
 - [Examples](./examples.md) - Usage examples and workflows
 
 ## Global Flags

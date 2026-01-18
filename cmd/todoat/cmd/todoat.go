@@ -12,12 +12,14 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 	"todoat/backend"
 	"todoat/backend/sqlite"
 	"todoat/internal/credentials"
 	"todoat/internal/notification"
+	"todoat/internal/tui"
 	"todoat/internal/views"
 )
 
@@ -190,6 +192,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add migrate subcommand
 	cmd.AddCommand(newMigrateCmd(stdout, stderr, cfg))
+
+	// Add TUI subcommand
+	cmd.AddCommand(newTUICmd(stdout, stderr, cfg))
 
 	return cmd
 }
@@ -4114,4 +4119,63 @@ func doMigrateTargetInfo(cfg *Config, stdout io.Writer, targetBackend, listName 
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
 	return nil
+}
+
+// newTUICmd creates the 'tui' subcommand for launching the terminal UI
+func newTUICmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "tui",
+		Short: "Launch the terminal user interface",
+		Long:  "Launch an interactive terminal user interface for managing tasks with keyboard navigation.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			be, err := getBackend(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to initialize backend: %w", err)
+			}
+			defer func() { _ = be.Close() }()
+
+			// Create a TUI backend adapter
+			adapter := &tuiBackendAdapter{TaskManager: be}
+
+			// Create and run the TUI
+			model := tui.New(adapter)
+			p := tea.NewProgram(model, tea.WithAltScreen())
+			if _, err := p.Run(); err != nil {
+				return fmt.Errorf("error running TUI: %w", err)
+			}
+
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// tuiBackendAdapter adapts backend.TaskManager to tui.Backend interface
+type tuiBackendAdapter struct {
+	backend.TaskManager
+}
+
+func (a *tuiBackendAdapter) GetLists(ctx context.Context) ([]backend.List, error) {
+	return a.TaskManager.GetLists(ctx)
+}
+
+func (a *tuiBackendAdapter) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
+	return a.TaskManager.GetTasks(ctx, listID)
+}
+
+func (a *tuiBackendAdapter) GetTask(ctx context.Context, listID, taskID string) (*backend.Task, error) {
+	return a.TaskManager.GetTask(ctx, listID, taskID)
+}
+
+func (a *tuiBackendAdapter) CreateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	return a.TaskManager.CreateTask(ctx, listID, task)
+}
+
+func (a *tuiBackendAdapter) UpdateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	return a.TaskManager.UpdateTask(ctx, listID, task)
+}
+
+func (a *tuiBackendAdapter) DeleteTask(ctx context.Context, listID, taskID string) error {
+	return a.TaskManager.DeleteTask(ctx, listID, taskID)
 }

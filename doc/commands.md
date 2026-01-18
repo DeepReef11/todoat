@@ -966,6 +966,33 @@ Would migrate 15 tasks from sqlite to file (dry-run)
 - Some metadata may not transfer between backends with different capabilities
 - Use `--dry-run` first to preview what will be migrated
 
+## Terminal User Interface (TUI)
+
+Launch an interactive terminal interface for managing tasks.
+
+```bash
+todoat tui
+```
+
+The TUI provides a two-pane interface with lists on the left and tasks on the right. Navigate using keyboard shortcuts.
+
+### Key Bindings
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Switch between lists/tasks panes |
+| `↑`/`k` | Move up |
+| `↓`/`j` | Move down |
+| `a` | Add new task |
+| `e` | Edit task |
+| `c` | Toggle completion |
+| `d` | Delete task |
+| `/` | Filter tasks |
+| `?` | Show help |
+| `q` | Quit |
+
+For full TUI documentation, see [tui.md](./tui.md).
+
 ## Examples
 
 ```bash
