@@ -219,3 +219,151 @@ func TestRootCommandShowsHelpCoreCLI(t *testing.T) {
 		t.Errorf("no-args should show help with Usage:, got: %s", output)
 	}
 }
+
+// =============================================================================
+// Shell Completion Tests
+// These tests verify shell completion script generation for all supported shells.
+// =============================================================================
+
+// TestCompletionBash verifies that `todoat completion bash` outputs valid Bash completion script
+func TestCompletionBash(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"completion", "bash"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Bash completion scripts contain specific markers
+	if !strings.Contains(output, "bash completion") || !strings.Contains(output, "_todoat") {
+		t.Errorf("expected bash completion script with _todoat function, got: %s", output[:min(200, len(output))])
+	}
+	// Should contain completion function definitions
+	if !strings.Contains(output, "complete") {
+		t.Errorf("expected bash completion script with 'complete' directive, got: %s", output[:min(200, len(output))])
+	}
+}
+
+// TestCompletionZsh verifies that `todoat completion zsh` outputs valid Zsh completion script
+func TestCompletionZsh(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"completion", "zsh"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Zsh completion scripts contain specific markers
+	if !strings.Contains(output, "#compdef") || !strings.Contains(output, "_todoat") {
+		t.Errorf("expected zsh completion script with #compdef and _todoat, got: %s", output[:min(200, len(output))])
+	}
+}
+
+// TestCompletionFish verifies that `todoat completion fish` outputs valid Fish completion script
+func TestCompletionFish(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"completion", "fish"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Fish completion scripts contain specific markers
+	if !strings.Contains(output, "fish completion") || !strings.Contains(output, "complete -c todoat") {
+		t.Errorf("expected fish completion script, got: %s", output[:min(200, len(output))])
+	}
+}
+
+// TestCompletionPowerShell verifies that `todoat completion powershell` outputs valid PowerShell completion script
+func TestCompletionPowerShell(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"completion", "powershell"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// PowerShell completion scripts contain specific markers
+	if !strings.Contains(output, "powershell completion") || !strings.Contains(output, "Register-ArgumentCompleter") {
+		t.Errorf("expected powershell completion script, got: %s", output[:min(200, len(output))])
+	}
+}
+
+// TestCompletionHelp verifies that `todoat completion --help` shows usage instructions for each shell
+func TestCompletionHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"completion", "--help"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Help should mention all supported shells
+	shells := []string{"bash", "zsh", "fish", "powershell"}
+	for _, shell := range shells {
+		if !strings.Contains(output, shell) {
+			t.Errorf("completion help should mention %s, got: %s", shell, output)
+		}
+	}
+	// Should have usage information
+	if !strings.Contains(output, "Usage:") {
+		t.Errorf("completion help should contain Usage:, got: %s", output)
+	}
+}
+
+// TestCompletionInstallInstructions verifies that each completion subcommand outputs installation instructions
+func TestCompletionInstallInstructions(t *testing.T) {
+	tests := []struct {
+		shell        string
+		instructions []string
+	}{
+		{"bash", []string{"source", ".bashrc", "bash_completion"}},
+		{"zsh", []string{"fpath", ".zshrc"}},
+		{"fish", []string{"config.fish", "completions"}},
+		{"powershell", []string{"profile", "Invoke-Expression"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.shell, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			exitCode := Execute([]string{"completion", tt.shell, "--help"}, &stdout, &stderr, nil)
+
+			if exitCode != 0 {
+				t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+			}
+
+			output := stdout.String()
+			// Check that at least one installation instruction keyword is present
+			found := false
+			for _, instruction := range tt.instructions {
+				if strings.Contains(output, instruction) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("completion %s --help should contain installation instructions (looking for one of %v), got: %s",
+					tt.shell, tt.instructions, output)
+			}
+		})
+	}
+}
+
+// min helper for string slicing
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
