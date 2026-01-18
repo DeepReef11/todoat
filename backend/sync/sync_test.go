@@ -13,8 +13,8 @@ import (
 // Sync Core System Tests (018-synchronization-core)
 // =============================================================================
 
-// TestSyncPull tests that `todoat sync` pulls changes from remote backend to local cache
-func TestSyncPull(t *testing.T) {
+// TestSyncPullCLI tests that `todoat sync` pulls changes from remote backend to local cache
+func TestSyncPullCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -30,8 +30,8 @@ func TestSyncPull(t *testing.T) {
 	}
 }
 
-// TestSyncPush tests that `todoat sync` pushes queued local changes to remote backend
-func TestSyncPush(t *testing.T) {
+// TestSyncPushCLI tests that `todoat sync` pushes queued local changes to remote backend
+func TestSyncPushCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -49,8 +49,8 @@ func TestSyncPush(t *testing.T) {
 	}
 }
 
-// TestSyncStatus tests that `todoat sync status` shows last sync time, pending operations, and connection status
-func TestSyncStatus(t *testing.T) {
+// TestSyncStatusCLI tests that `todoat sync status` shows last sync time, pending operations, and connection status
+func TestSyncStatusCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -64,8 +64,8 @@ func TestSyncStatus(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Sync Status")
 }
 
-// TestSyncQueueView tests that `todoat sync queue` lists pending operations with timestamps
-func TestSyncQueueView(t *testing.T) {
+// TestSyncQueueViewCLI tests that `todoat sync queue` lists pending operations with timestamps
+func TestSyncQueueViewCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -78,8 +78,8 @@ func TestSyncQueueView(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Pending Operations")
 }
 
-// TestSyncQueueClear tests that `todoat sync queue clear` removes all pending operations
-func TestSyncQueueClear(t *testing.T) {
+// TestSyncQueueClearCLI tests that `todoat sync queue clear` removes all pending operations
+func TestSyncQueueClearCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -99,8 +99,8 @@ func TestSyncQueueClear(t *testing.T) {
 	testutil.AssertContains(t, stdout, "0")
 }
 
-// TestSyncOfflineAdd tests that adding a task while offline queues operation in sync_queue table
-func TestSyncOfflineAdd(t *testing.T) {
+// TestSyncOfflineAddCLI tests that adding a task while offline queues operation in sync_queue table
+func TestSyncOfflineAddCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -117,8 +117,8 @@ func TestSyncOfflineAdd(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Offline task")
 }
 
-// TestSyncOfflineUpdate tests that updating a task while offline queues operation
-func TestSyncOfflineUpdate(t *testing.T) {
+// TestSyncOfflineUpdateCLI tests that updating a task while offline queues operation
+func TestSyncOfflineUpdateCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -135,8 +135,8 @@ func TestSyncOfflineUpdate(t *testing.T) {
 	testutil.AssertContains(t, stdout, "update")
 }
 
-// TestSyncOfflineDelete tests that deleting a task while offline queues operation
-func TestSyncOfflineDelete(t *testing.T) {
+// TestSyncOfflineDeleteCLI tests that deleting a task while offline queues operation
+func TestSyncOfflineDeleteCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -153,8 +153,8 @@ func TestSyncOfflineDelete(t *testing.T) {
 	testutil.AssertContains(t, stdout, "delete")
 }
 
-// TestSyncCacheIsolation tests that each remote backend has separate cache tables
-func TestSyncCacheIsolation(t *testing.T) {
+// TestSyncCacheIsolationCLI tests that each remote backend has separate cache tables
+func TestSyncCacheIsolationCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create config with multiple backends
@@ -183,8 +183,8 @@ backends:
 	testutil.AssertContains(t, stdout, "todoist")
 }
 
-// TestSyncETagSupport tests that updates use If-Match header with ETag for optimistic locking
-func TestSyncETagSupport(t *testing.T) {
+// TestSyncETagSupportCLI tests that updates use If-Match header with ETag for optimistic locking
+func TestSyncETagSupportCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -202,8 +202,8 @@ func TestSyncETagSupport(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Sync Status")
 }
 
-// TestSyncConfigEnabled tests that `sync.enabled: true` in config enables sync behavior
-func TestSyncConfigEnabled(t *testing.T) {
+// TestSyncConfigEnabledCLI tests that `sync.enabled: true` in config enables sync behavior
+func TestSyncConfigEnabledCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled
@@ -223,8 +223,8 @@ func TestSyncConfigEnabled(t *testing.T) {
 	}
 }
 
-// TestSyncConfigDisabled tests that `sync.enabled: false` bypasses sync manager
-func TestSyncConfigDisabled(t *testing.T) {
+// TestSyncConfigDisabledCLI tests that `sync.enabled: false` bypasses sync manager
+func TestSyncConfigDisabledCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync disabled
@@ -293,8 +293,8 @@ backends:
 // Sync Conflict Resolution Tests (019-sync-conflict-resolution)
 // =============================================================================
 
-// TestConflictDetection tests that sync detects when local and remote have both changed same task
-func TestConflictDetection(t *testing.T) {
+// TestConflictDetectionCLI tests that sync detects when local and remote have both changed same task
+func TestConflictDetectionCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfig(t, tmpDir, true)
 
@@ -312,8 +312,8 @@ func TestConflictDetection(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Sync Status")
 }
 
-// TestConflictServerWins tests that with `conflict_strategy: server-wins`, remote changes override local
-func TestConflictServerWins(t *testing.T) {
+// TestConflictServerWinsCLI tests that with `conflict_strategy: server-wins`, remote changes override local
+func TestConflictServerWinsCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfigWithStrategy(t, tmpDir, true, "server_wins")
 
@@ -329,8 +329,8 @@ func TestConflictServerWins(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Server wins task")
 }
 
-// TestConflictLocalWins tests that with `conflict_strategy: local-wins`, local changes override remote
-func TestConflictLocalWins(t *testing.T) {
+// TestConflictLocalWinsCLI tests that with `conflict_strategy: local-wins`, local changes override remote
+func TestConflictLocalWinsCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfigWithStrategy(t, tmpDir, true, "local_wins")
 
@@ -346,8 +346,8 @@ func TestConflictLocalWins(t *testing.T) {
 	testutil.AssertContains(t, stdout, "[P1]")
 }
 
-// TestConflictMerge tests that with `conflict_strategy: merge`, non-conflicting fields are combined
-func TestConflictMerge(t *testing.T) {
+// TestConflictMergeCLI tests that with `conflict_strategy: merge`, non-conflicting fields are combined
+func TestConflictMergeCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfigWithStrategy(t, tmpDir, true, "merge")
 
@@ -364,8 +364,8 @@ func TestConflictMerge(t *testing.T) {
 	testutil.AssertContains(t, stdout, "important")
 }
 
-// TestConflictKeepBoth tests that with `conflict_strategy: keep-both`, duplicate task created
-func TestConflictKeepBoth(t *testing.T) {
+// TestConflictKeepBothCLI tests that with `conflict_strategy: keep-both`, duplicate task created
+func TestConflictKeepBothCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfigWithStrategy(t, tmpDir, true, "keep_both")
 
@@ -377,8 +377,8 @@ func TestConflictKeepBoth(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Keep both task")
 }
 
-// TestConflictStatusDisplay tests that `todoat sync status` shows count of conflicts needing attention
-func TestConflictStatusDisplay(t *testing.T) {
+// TestConflictStatusDisplayCLI tests that `todoat sync status` shows count of conflicts needing attention
+func TestConflictStatusDisplayCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfig(t, tmpDir, true)
 
@@ -391,8 +391,8 @@ func TestConflictStatusDisplay(t *testing.T) {
 	// When no conflicts exist, it may show "Conflicts: 0" or similar
 }
 
-// TestConflictList tests that `todoat sync conflicts` lists all unresolved conflicts with details
-func TestConflictList(t *testing.T) {
+// TestConflictListCLI tests that `todoat sync conflicts` lists all unresolved conflicts with details
+func TestConflictListCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfig(t, tmpDir, true)
 
@@ -403,8 +403,8 @@ func TestConflictList(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Conflict")
 }
 
-// TestConflictResolve tests that `todoat sync conflicts resolve [task-uid] --strategy server-wins` resolves specific conflict
-func TestConflictResolve(t *testing.T) {
+// TestConflictResolveCLI tests that `todoat sync conflicts resolve [task-uid] --strategy server-wins` resolves specific conflict
+func TestConflictResolveCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfig(t, tmpDir, true)
 
@@ -423,8 +423,8 @@ func TestConflictResolve(t *testing.T) {
 	// Non-zero exit is acceptable when trying to resolve non-existent conflict
 }
 
-// TestConflictDefaultStrategy tests that default strategy is configurable in config.yaml
-func TestConflictDefaultStrategy(t *testing.T) {
+// TestConflictDefaultStrategyCLI tests that default strategy is configurable in config.yaml
+func TestConflictDefaultStrategyCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Test with different default strategies
@@ -441,8 +441,8 @@ func TestConflictDefaultStrategy(t *testing.T) {
 	}
 }
 
-// TestConflictJSONOutput tests that `todoat --json sync conflicts` returns conflicts in JSON format
-func TestConflictJSONOutput(t *testing.T) {
+// TestConflictJSONOutputCLI tests that `todoat --json sync conflicts` returns conflicts in JSON format
+func TestConflictJSONOutputCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 	createSyncConfig(t, tmpDir, true)
 

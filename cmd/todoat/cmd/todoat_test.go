@@ -2,8 +2,14 @@ package cmd
 
 import (
 	"bytes"
+	"database/sql"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	_ "modernc.org/sqlite"
+	"todoat/internal/config"
 )
 
 // =============================================================================
@@ -366,4 +372,251 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// =============================================================================
+// SQLite CLI Initialization Tests
+// These tests verify that the application correctly initializes on first run:
+// - Database creation at XDG path
+// - Config creation at XDG path
+// - Directory creation with proper permissions
+// - Schema initialization on new database
+// =============================================================================
+
+// TestAppStartsWithoutExistingDBSQLiteCLI verifies that the app starts successfully
+// when no database exists and creates the db automatically
+func TestAppStartsWithoutExistingDBSQLiteCLI(t *testing.T) {
+	// Create a temp directory to act as home
+	tempHome := t.TempDir()
+
+	// Set up config with XDG paths pointing to temp directory
+	dbPath := filepath.Join(tempHome, "data", "todoat", "tasks.db")
+	cfg := &Config{
+		DBPath: dbPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Running a list command should work even with no existing DB
+	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s stdout=%s", exitCode, stderr.String(), stdout.String())
+	}
+
+	// Verify the database file was created
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Errorf("expected database file to be created at %s", dbPath)
+	}
+}
+
+// TestAppStartsWithoutExistingConfigSQLiteCLI verifies that the app starts successfully
+// when no config file exists and creates a default config
+func TestAppStartsWithoutExistingConfigSQLiteCLI(t *testing.T) {
+	// Create a temp directory to act as home
+	tempHome := t.TempDir()
+
+	// Set XDG environment variables for this test
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	oldDataHome := os.Getenv("XDG_DATA_HOME")
+	defer func() {
+		_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		_ = os.Setenv("XDG_DATA_HOME", oldDataHome)
+	}()
+
+	configDir := filepath.Join(tempHome, ".config")
+	dataDir := filepath.Join(tempHome, ".local", "share")
+	if err := os.Setenv("XDG_CONFIG_HOME", configDir); err != nil {
+		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
+	}
+	if err := os.Setenv("XDG_DATA_HOME", dataDir); err != nil {
+		t.Fatalf("failed to set XDG_DATA_HOME: %v", err)
+	}
+
+	// Verify config doesn't exist
+	configPath := filepath.Join(configDir, "todoat", "config.yaml")
+	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+		t.Fatalf("config file should not exist before test: %v", err)
+	}
+
+	// Use the config loader to trigger config creation
+	loadedCfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load should succeed: %v", err)
+	}
+
+	if loadedCfg == nil {
+		t.Fatal("expected config to be returned")
+	}
+
+	// Verify the config file was created
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Errorf("expected config file to be created at %s", configPath)
+	}
+}
+
+// TestDBCreatedAtCorrectPathSQLiteCLI verifies that the database is created at
+// $XDG_DATA_HOME/todoat/tasks.db or ~/.local/share/todoat/tasks.db
+func TestDBCreatedAtCorrectPathSQLiteCLI(t *testing.T) {
+	// Create a temp directory to act as home
+	tempHome := t.TempDir()
+
+	// Set XDG environment variables for this test
+	oldDataHome := os.Getenv("XDG_DATA_HOME")
+	defer func() {
+		_ = os.Setenv("XDG_DATA_HOME", oldDataHome)
+	}()
+
+	dataDir := filepath.Join(tempHome, ".local", "share")
+	if err := os.Setenv("XDG_DATA_HOME", dataDir); err != nil {
+		t.Fatalf("failed to set XDG_DATA_HOME: %v", err)
+	}
+
+	// Use nil DBPath to test default path resolution
+	cfg := &Config{}
+
+	var stdout, stderr bytes.Buffer
+
+	// Running a command that requires DB should trigger DB creation at XDG path
+	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Expected path should be XDG_DATA_HOME/todoat/tasks.db
+	expectedDBPath := filepath.Join(dataDir, "todoat", "tasks.db")
+	if _, err := os.Stat(expectedDBPath); os.IsNotExist(err) {
+		t.Errorf("expected database at XDG path %s, but file does not exist", expectedDBPath)
+		// Check what was actually created
+		files, _ := filepath.Glob(filepath.Join(tempHome, "**", "*.db"))
+		t.Logf("DB files found: %v", files)
+	}
+}
+
+// TestConfigCreatedAtCorrectPathSQLiteCLI verifies that the config is created at
+// $XDG_CONFIG_HOME/todoat/config.yaml or ~/.config/todoat/config.yaml
+func TestConfigCreatedAtCorrectPathSQLiteCLI(t *testing.T) {
+	// Create a temp directory to act as home
+	tempHome := t.TempDir()
+
+	// Set XDG environment variables for this test
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	defer func() {
+		_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+	}()
+
+	configDir := filepath.Join(tempHome, ".config")
+	if err := os.Setenv("XDG_CONFIG_HOME", configDir); err != nil {
+		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
+	}
+
+	// Expected path should be XDG_CONFIG_HOME/todoat/config.yaml
+	expectedConfigPath := filepath.Join(configDir, "todoat", "config.yaml")
+
+	// Use the config loader to trigger config creation
+	_, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load should succeed: %v", err)
+	}
+
+	// Verify the config file was created at correct XDG path
+	if _, err := os.Stat(expectedConfigPath); os.IsNotExist(err) {
+		t.Errorf("expected config file at XDG path %s, but file does not exist", expectedConfigPath)
+		// Check what was actually created
+		files, _ := filepath.Glob(filepath.Join(tempHome, "**", "*.yaml"))
+		t.Logf("Config files found: %v", files)
+	}
+}
+
+// TestDirectoriesCreatedAutomaticallySQLiteCLI verifies that parent directories
+// are created with proper permissions when they don't exist
+func TestDirectoriesCreatedAutomaticallySQLiteCLI(t *testing.T) {
+	// Create a temp directory to act as home
+	tempHome := t.TempDir()
+
+	// Deep nested path that doesn't exist
+	dbPath := filepath.Join(tempHome, "deep", "nested", "path", "todoat", "tasks.db")
+	configPath := filepath.Join(tempHome, "config", "nested", "todoat", "config.yaml")
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Running a command should create all necessary directories
+	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Verify the database directory was created
+	dbDir := filepath.Dir(dbPath)
+	info, err := os.Stat(dbDir)
+	if os.IsNotExist(err) {
+		t.Errorf("expected database directory to be created at %s", dbDir)
+	} else if err != nil {
+		t.Errorf("error checking database directory: %v", err)
+	} else {
+		// Check that it's a directory
+		if !info.IsDir() {
+			t.Errorf("expected %s to be a directory", dbDir)
+		}
+		// Check permissions (should have user read/write/execute)
+		mode := info.Mode().Perm()
+		if mode&0700 != 0700 {
+			t.Errorf("expected directory to have at least 0700 permissions, got %o", mode)
+		}
+	}
+}
+
+// TestSchemaInitializedOnNewDBSQLiteCLI verifies that a new database has all
+// required tables (task_lists, tasks, and indexes)
+func TestSchemaInitializedOnNewDBSQLiteCLI(t *testing.T) {
+	// Create a temp directory for the database
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.db")
+
+	cfg := &Config{
+		DBPath: dbPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Running a command should initialize the schema
+	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Open the database directly and verify tables exist
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Check for required tables
+	tables := []string{"task_lists", "tasks"}
+	for _, tableName := range tables {
+		var name string
+		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", tableName).Scan(&name)
+		if err != nil {
+			t.Errorf("expected table %s to exist: %v", tableName, err)
+		}
+	}
+
+	// Check for required indexes
+	indexes := []string{"idx_tasks_list_id", "idx_tasks_status"}
+	for _, indexName := range indexes {
+		var name string
+		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name=?", indexName).Scan(&name)
+		if err != nil {
+			t.Errorf("expected index %s to exist: %v", indexName, err)
+		}
+	}
 }

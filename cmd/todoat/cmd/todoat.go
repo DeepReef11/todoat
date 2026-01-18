@@ -660,26 +660,23 @@ func doListPurge(ctx context.Context, be backend.TaskManager, name string, cfg *
 	return nil
 }
 
-// getDefaultDBPath returns the default database path
+// getDefaultDBPath returns the default database path following XDG spec
+// Default: $XDG_DATA_HOME/todoat/tasks.db or ~/.local/share/todoat/tasks.db
 func getDefaultDBPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "todoat.db"
-	}
-	return filepath.Join(home, ".todoat", "todoat.db")
+	return filepath.Join(config.GetDataDir(), "tasks.db")
 }
 
 // getBackend creates or returns the backend connection
 func getBackend(cfg *Config) (backend.TaskManager, error) {
 	dbPath := cfg.DBPath
 	if dbPath == "" {
-		// Use default path in user's home directory
+		// Use default XDG-compliant path
 		dbPath = getDefaultDBPath()
+	}
 
-		// Ensure directory exists
-		if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-			return nil, fmt.Errorf("could not create data directory: %w", err)
-		}
+	// Ensure directory exists (for both default and explicit paths)
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		return nil, fmt.Errorf("could not create data directory: %w", err)
 	}
 
 	// Load config to check if sync is enabled

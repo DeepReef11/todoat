@@ -14,8 +14,8 @@ import (
 // CLI Tests (024-auto-sync-daemon)
 // =============================================================================
 
-// TestSyncDaemonStart tests that 'todoat sync daemon start' launches a background process
-func TestSyncDaemonStart(t *testing.T) {
+// TestSyncDaemonStartCLI tests that 'todoat sync daemon start' launches a background process
+func TestSyncDaemonStartCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	stdout := cli.MustExecute("-y", "sync", "daemon", "start")
@@ -31,8 +31,8 @@ func TestSyncDaemonStart(t *testing.T) {
 	cli.MustExecute("-y", "sync", "daemon", "stop")
 }
 
-// TestSyncDaemonStop tests that 'todoat sync daemon stop' terminates a running daemon
-func TestSyncDaemonStop(t *testing.T) {
+// TestSyncDaemonStopCLI tests that 'todoat sync daemon stop' terminates a running daemon
+func TestSyncDaemonStopCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Start daemon first
@@ -49,8 +49,8 @@ func TestSyncDaemonStop(t *testing.T) {
 	testutil.AssertContains(t, statusOut, "not running")
 }
 
-// TestSyncDaemonStopNotRunning tests stopping when daemon is not running
-func TestSyncDaemonStopNotRunning(t *testing.T) {
+// TestSyncDaemonStopNotRunningCLI tests stopping when daemon is not running
+func TestSyncDaemonStopNotRunningCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Try to stop when not running - should report appropriately
@@ -60,8 +60,8 @@ func TestSyncDaemonStopNotRunning(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
-// TestSyncDaemonStatus tests that 'todoat sync daemon status' shows daemon state
-func TestSyncDaemonStatus(t *testing.T) {
+// TestSyncDaemonStatusCLI tests that 'todoat sync daemon status' shows daemon state
+func TestSyncDaemonStatusCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Check status when not running
@@ -84,8 +84,8 @@ func TestSyncDaemonStatus(t *testing.T) {
 	cli.MustExecute("-y", "sync", "daemon", "stop")
 }
 
-// TestSyncDaemonInterval tests that sync runs at configured interval
-func TestSyncDaemonInterval(t *testing.T) {
+// TestSyncDaemonIntervalCLI tests that sync runs at configured interval
+func TestSyncDaemonIntervalCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Configure a short interval for testing (1 second)
@@ -105,8 +105,8 @@ func TestSyncDaemonInterval(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Sync count")
 }
 
-// TestSyncDaemonNotification tests that notifications are sent on sync events
-func TestSyncDaemonNotification(t *testing.T) {
+// TestSyncDaemonNotificationCLI tests that notifications are sent on sync events
+func TestSyncDaemonNotificationCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Configure short interval and enable notifications
@@ -132,8 +132,8 @@ func TestSyncDaemonNotification(t *testing.T) {
 	}
 }
 
-// TestSyncDaemonOffline tests that daemon handles offline gracefully
-func TestSyncDaemonOffline(t *testing.T) {
+// TestSyncDaemonOfflineCLI tests that daemon handles offline gracefully
+func TestSyncDaemonOfflineCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Configure daemon with a simulated offline remote
@@ -161,8 +161,8 @@ func TestSyncDaemonOffline(t *testing.T) {
 	}
 }
 
-// TestSyncDaemonReconnect tests that daemon reconnects when network restored
-func TestSyncDaemonReconnect(t *testing.T) {
+// TestSyncDaemonReconnectCLI tests that daemon reconnects when network restored
+func TestSyncDaemonReconnectCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Start in offline mode
@@ -187,8 +187,8 @@ func TestSyncDaemonReconnect(t *testing.T) {
 	testutil.AssertContains(t, stdout, "running")
 }
 
-// TestSyncDaemonPIDFile tests that PID file is created for process management
-func TestSyncDaemonPIDFile(t *testing.T) {
+// TestSyncDaemonPIDFileCLI tests that PID file is created for process management
+func TestSyncDaemonPIDFileCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	pidFile := cli.PIDFilePath()
@@ -236,8 +236,8 @@ func TestSyncDaemonPIDFile(t *testing.T) {
 	}
 }
 
-// TestSyncDaemonDoubleStart tests that starting twice gives appropriate error
-func TestSyncDaemonDoubleStart(t *testing.T) {
+// TestSyncDaemonDoubleStartCLI tests that starting twice gives appropriate error
+func TestSyncDaemonDoubleStartCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Start daemon first
@@ -251,8 +251,8 @@ func TestSyncDaemonDoubleStart(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
-// TestSyncDaemonGracefulShutdown tests that daemon handles signals gracefully
-func TestSyncDaemonGracefulShutdown(t *testing.T) {
+// TestSyncDaemonGracefulShutdownCLI tests that daemon handles signals gracefully
+func TestSyncDaemonGracefulShutdownCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Start daemon
@@ -275,8 +275,8 @@ func TestSyncDaemonGracefulShutdown(t *testing.T) {
 	cli.MustExecute("-y", "sync", "daemon", "stop")
 }
 
-// TestSyncDaemonLogFile tests that daemon writes to log file
-func TestSyncDaemonLogFile(t *testing.T) {
+// TestSyncDaemonLogFileCLI tests that daemon writes to log file
+func TestSyncDaemonLogFileCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	logFile := cli.DaemonLogPath()
@@ -311,8 +311,8 @@ func TestSyncDaemonLogFile(t *testing.T) {
 	}
 }
 
-// TestSyncDaemonConfigInterval tests configuring sync interval via config
-func TestSyncDaemonConfigInterval(t *testing.T) {
+// TestSyncDaemonConfigIntervalCLI tests configuring sync interval via config
+func TestSyncDaemonConfigIntervalCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 	configPath := cli.ConfigPath()
 
@@ -335,8 +335,8 @@ func TestSyncDaemonConfigInterval(t *testing.T) {
 	testutil.AssertContains(t, stdout, "60")
 }
 
-// TestSyncDaemonStartWithInterval tests starting with --interval flag
-func TestSyncDaemonStartWithInterval(t *testing.T) {
+// TestSyncDaemonStartWithIntervalCLI tests starting with --interval flag
+func TestSyncDaemonStartWithIntervalCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Start daemon with custom interval flag

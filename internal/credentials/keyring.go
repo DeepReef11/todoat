@@ -5,6 +5,9 @@ import (
 	"sync"
 )
 
+// ErrKeyringNotAvailable is returned when the system keyring is not available
+const errKeyringNotAvailable = "system keyring not available in this build"
+
 // MockKeyring is a test implementation of the Keyring interface
 type MockKeyring struct {
 	mu    sync.RWMutex
@@ -64,17 +67,17 @@ type systemKeyring struct{}
 func (s *systemKeyring) Set(service, account, password string) error {
 	// TODO: Use zalando/go-keyring or similar for production
 	// For now, return an error indicating keyring is not available
-	return fmt.Errorf("system keyring not available in this build")
+	return fmt.Errorf(errKeyringNotAvailable)
 }
 
 // Get retrieves a password from the system keyring
 func (s *systemKeyring) Get(service, account string) (string, error) {
 	// TODO: Use zalando/go-keyring or similar for production
-	return "", fmt.Errorf("system keyring not available in this build")
+	return "", fmt.Errorf(errKeyringNotAvailable)
 }
 
 // Delete removes a password from the system keyring
 func (s *systemKeyring) Delete(service, account string) error {
 	// TODO: Use zalando/go-keyring or similar for production
-	return fmt.Errorf("system keyring not available in this build")
+	return fmt.Errorf(errKeyringNotAvailable)
 }
