@@ -1,6 +1,7 @@
 package credentials
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 )
@@ -67,17 +68,17 @@ type systemKeyring struct{}
 func (s *systemKeyring) Set(service, account, password string) error {
 	// TODO: Use zalando/go-keyring or similar for production
 	// For now, return an error indicating keyring is not available
-	return fmt.Errorf(errKeyringNotAvailable)
+	return errors.New(errKeyringNotAvailable)
 }
 
 // Get retrieves a password from the system keyring
 func (s *systemKeyring) Get(service, account string) (string, error) {
 	// TODO: Use zalando/go-keyring or similar for production
-	return "", fmt.Errorf(errKeyringNotAvailable)
+	return "", errors.New(errKeyringNotAvailable)
 }
 
 // Delete removes a password from the system keyring
 func (s *systemKeyring) Delete(service, account string) error {
 	// TODO: Use zalando/go-keyring or similar for production
-	return fmt.Errorf(errKeyringNotAvailable)
+	return errors.New(errKeyringNotAvailable)
 }
