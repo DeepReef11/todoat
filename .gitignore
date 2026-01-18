@@ -4,3 +4,4 @@ stats.txt
 bin/
 *.test
 todoat
+.env

@@ -34,7 +34,6 @@ A command-line task manager with multiple backend support.
 - **Synchronization**: Sync tasks with remote backends with conflict resolution
 - **Secure Credentials**: System keyring integration for secure credential storage
 - **Notifications**: Desktop and log notifications for sync events
-- **Shell Completion**: Auto-completion for Bash, Zsh, Fish, and PowerShell
 
 ## Basic Usage
 
