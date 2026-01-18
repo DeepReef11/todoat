@@ -259,10 +259,117 @@ The Todoist API has rate limits. todoat handles this automatically by:
 - Waiting and retrying up to the configured number of times
 - Displaying an error if rate limit persists
 
-## Future Backends
+## Git/Markdown Backend
 
-Additional backends planned for future releases:
-- Git/Markdown files
+The Git backend stores tasks in markdown files within Git repositories. This allows you to manage tasks alongside your code and use Git for version control and collaboration.
+
+### How It Works
+
+The Git backend:
+1. Detects if you're inside a Git repository
+2. Looks for a markdown file with the `<!-- todoat:enabled -->` marker
+3. Reads and writes tasks as markdown checkbox lists
+4. Optionally auto-commits changes
+
+### Setup
+
+Create a markdown file in your Git repository with the todoat marker:
+
+```markdown
+<!-- todoat:enabled -->
+
+## My Tasks
+
+- [ ] First task
+- [x] Completed task
+```
+
+The file must contain `<!-- todoat:enabled -->` for todoat to recognize it.
+
+### Default File Locations
+
+todoat searches for these files in order:
+1. `TODO.md`
+2. `todo.md`
+3. `.todoat.md`
+
+The first file found with the `<!-- todoat:enabled -->` marker is used.
+
+### Markdown Format
+
+Tasks are stored as standard markdown checkbox lists:
+
+```markdown
+## Project Tasks
+
+- [ ] Incomplete task
+- [x] Completed task
+- [~] In progress task
+- [-] Cancelled task
+  - [ ] Subtask (indented with 2 spaces)
+```
+
+### Status Characters
+
+| Character | Status |
+|-----------|--------|
+| `[ ]` | TODO (needs action) |
+| `[x]` | Completed |
+| `[~]` | In progress |
+| `[-]` | Cancelled |
+
+### Task Metadata
+
+Tasks can include inline metadata:
+
+```markdown
+- [ ] Task summary !1 @2026-01-31 #work #urgent
+```
+
+| Syntax | Meaning |
+|--------|---------|
+| `!1` - `!9` | Priority (1 is highest) |
+| `@2026-01-31` | Due date (YYYY-MM-DD format) |
+| `#tag` | Category/tag |
+
+### Subtasks
+
+Subtasks are created using indentation (2 spaces per level):
+
+```markdown
+## Work
+
+- [ ] Main project
+  - [ ] Backend tasks
+    - [ ] API design
+    - [ ] Database schema
+  - [ ] Frontend tasks
+```
+
+### Features
+
+The Git/Markdown backend supports:
+- Creating, updating, and deleting tasks
+- Task properties: summary, status, priority, due date, categories
+- Subtasks via indentation
+- Multiple lists (as `##` sections)
+- Optional auto-commit of changes
+
+### Limitations
+
+| Feature | SQLite | Git/Markdown |
+|---------|--------|--------------|
+| Soft delete lists | Yes | No |
+| Trash/restore lists | Yes | No |
+| Start date | Yes | No |
+| Task descriptions | Yes | No |
+
+### Auto-Commit
+
+When auto-commit is enabled, changes are automatically committed to Git with descriptive messages:
+- `todoat: add task 'Task name'`
+- `todoat: update task 'Task name'`
+- `todoat: delete task 'Task name'`
 
 ---
 *Last updated: 2026-01-18*
