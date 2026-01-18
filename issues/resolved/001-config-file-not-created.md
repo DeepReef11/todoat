@@ -54,3 +54,9 @@ The `config.Load()` function exists and is tested (`TestAppStartsWithoutExisting
 - Default view settings (`default_view`) cannot be persisted
 - Sync settings cannot be configured
 - The `config.yaml` is created only if users manually call sync status or other features that trigger config loading
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Added a call to `config.Load(cfg.ConfigPath)` in `getBackend()` function at `cmd/todoat/cmd/todoat.go:682-683`. This ensures the config file is created with defaults when the CLI is first executed.
+**Test added**: `TestConfigCreatedOnCLIExecutionSQLiteCLI` in `cmd/todoat/cmd/todoat_test.go` (already existed)

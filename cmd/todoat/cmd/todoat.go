@@ -679,7 +679,8 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 		return nil, fmt.Errorf("could not create data directory: %w", err)
 	}
 
-	// Load config to check if sync is enabled
+	// Load config (creates default if not exists) and check sync settings
+	_, _ = config.Load(cfg.ConfigPath)
 	loadSyncConfig(cfg)
 
 	// If sync is enabled, return a sync-aware backend wrapper

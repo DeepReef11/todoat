@@ -573,6 +573,52 @@ func TestDirectoriesCreatedAutomaticallySQLiteCLI(t *testing.T) {
 	}
 }
 
+// TestConfigCreatedOnCLIExecutionSQLiteCLI verifies that the config file is
+// automatically created when running any CLI command (not just when calling config.Load directly).
+// This is a regression test for issue #001: Config file not created on first run.
+func TestConfigCreatedOnCLIExecutionSQLiteCLI(t *testing.T) {
+	// Create a temp directory to act as home
+	tempHome := t.TempDir()
+
+	// Set XDG environment variables for this test
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	oldDataHome := os.Getenv("XDG_DATA_HOME")
+	defer func() {
+		_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		_ = os.Setenv("XDG_DATA_HOME", oldDataHome)
+	}()
+
+	configDir := filepath.Join(tempHome, ".config")
+	dataDir := filepath.Join(tempHome, ".local", "share")
+	if err := os.Setenv("XDG_CONFIG_HOME", configDir); err != nil {
+		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
+	}
+	if err := os.Setenv("XDG_DATA_HOME", dataDir); err != nil {
+		t.Fatalf("failed to set XDG_DATA_HOME: %v", err)
+	}
+
+	// Verify config doesn't exist before running CLI
+	configPath := filepath.Join(configDir, "todoat", "config.yaml")
+	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+		t.Fatalf("config file should not exist before test: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Run a CLI command that triggers backend creation (uses default XDG paths)
+	cfg := &Config{}
+	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s stdout=%s", exitCode, stderr.String(), stdout.String())
+	}
+
+	// Verify the config file was created by the CLI execution
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Errorf("expected config file to be created at %s by CLI execution, but it was not created", configPath)
+	}
+}
+
 // TestSchemaInitializedOnNewDBSQLiteCLI verifies that a new database has all
 // required tables (task_lists, tasks, and indexes)
 func TestSchemaInitializedOnNewDBSQLiteCLI(t *testing.T) {
