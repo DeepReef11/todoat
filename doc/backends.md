@@ -259,6 +259,106 @@ The Todoist API has rate limits. todoat handles this automatically by:
 - Waiting and retrying up to the configured number of times
 - Displaying an error if rate limit persists
 
+## File Backend
+
+The File backend stores tasks in plain text markdown files. This is a simple, portable storage option that works without Git or databases.
+
+### How It Works
+
+The File backend:
+1. Stores tasks in a markdown file (default: `tasks.txt`)
+2. Uses `##` headers for task lists (sections)
+3. Uses markdown checkbox syntax for tasks
+4. Supports subtasks via indentation
+
+### Configuration
+
+The file backend can be configured in your config file:
+
+```yaml
+backends:
+  file:
+    enabled: true
+    path: ~/tasks.txt
+```
+
+Or specify a file path when using the backend.
+
+### File Format
+
+Tasks are stored as markdown checkbox lists within sections:
+
+```markdown
+# Tasks
+
+## Work
+
+- [ ] Complete report !1 @2026-01-31 #urgent
+  - [ ] Gather data
+  - [ ] Write summary
+- [x] Send email #communication
+
+## Personal
+
+- [ ] Buy groceries
+- [~] Read book
+```
+
+### Status Characters
+
+| Character | Status |
+|-----------|--------|
+| `[ ]` | TODO (needs action) |
+| `[x]` or `[X]` | Completed |
+| `[~]` | In progress |
+| `[-]` | Cancelled |
+
+### Task Metadata
+
+Tasks support inline metadata with the same syntax as the Git backend:
+
+| Syntax | Meaning |
+|--------|---------|
+| `!1` - `!9` | Priority (1 is highest) |
+| `@2026-01-31` | Due date (YYYY-MM-DD format) |
+| `#tag` | Category/tag |
+
+### Subtasks
+
+Subtasks are created using 2-space indentation:
+
+```markdown
+- [ ] Main task
+  - [ ] Subtask 1
+    - [ ] Sub-subtask
+  - [ ] Subtask 2
+```
+
+### Features
+
+The File backend supports:
+- Creating, updating, and deleting tasks
+- Task properties: summary, status, priority, due date, categories
+- Subtasks via indentation
+- Multiple lists (as `##` sections)
+
+### Limitations
+
+| Feature | SQLite | File |
+|---------|--------|------|
+| Soft delete lists | Yes | No |
+| Trash/restore lists | Yes | No |
+| Start date | Yes | No |
+| Task descriptions | Yes | No |
+
+### Use Cases
+
+The File backend is ideal for:
+- Simple, human-readable task storage
+- Sharing tasks via file sync (Dropbox, Syncthing, etc.)
+- Editing tasks directly in a text editor
+- Portable task files that work without special software
+
 ## Git/Markdown Backend
 
 The Git backend stores tasks in markdown files within Git repositories. This allows you to manage tasks alongside your code and use Git for version control and collaboration.

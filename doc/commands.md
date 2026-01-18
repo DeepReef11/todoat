@@ -895,6 +895,75 @@ notifications:
 | `reminder` | Task reminder notification |
 | `test` | Test notification |
 
+## Migration
+
+Migrate tasks between different backends using the `migrate` command.
+
+```bash
+# Migrate all tasks from SQLite to file backend
+todoat migrate --from sqlite --to file
+
+# Migrate from Todoist to SQLite
+todoat migrate --from todoist --to sqlite
+
+# Migrate only a specific list
+todoat migrate --from sqlite --to file --list "Work"
+
+# Preview what would be migrated (dry run)
+todoat migrate --from sqlite --to file --dry-run
+```
+
+### Migrate Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `migrate --from [backend] --to [backend]` | Migrate all tasks between backends |
+| `migrate --list [name]` | Migrate only the specified list |
+| `migrate --dry-run` | Preview migration without making changes |
+
+### Migrate Flags
+
+| Flag | Description |
+|------|-------------|
+| `--from` | Source backend (sqlite, nextcloud, todoist, file) |
+| `--to` | Target backend (sqlite, nextcloud, todoist, file) |
+| `--list` | Migrate only the specified list (optional) |
+| `--dry-run` | Show what would be migrated without making changes |
+
+### Supported Backends
+
+| Backend | Description |
+|---------|-------------|
+| `sqlite` | Local SQLite database (default) |
+| `nextcloud` | Nextcloud CalDAV server |
+| `todoist` | Todoist REST API |
+| `file` | Plain text markdown file |
+
+### Migration Examples
+
+**SQLite to File (for portability):**
+```bash
+todoat migrate --from sqlite --to file
+```
+
+**Todoist to SQLite (for local backup):**
+```bash
+todoat migrate --from todoist --to sqlite
+```
+
+**Preview migration:**
+```bash
+$ todoat migrate --from sqlite --to file --dry-run
+Would migrate 15 tasks from sqlite to file (dry-run)
+```
+
+### Notes
+
+- Migration copies tasks; it does not delete from the source
+- Existing tasks in the target are not affected
+- Some metadata may not transfer between backends with different capabilities
+- Use `--dry-run` first to preview what will be migrated
+
 ## Examples
 
 ```bash

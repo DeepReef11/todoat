@@ -4,6 +4,7 @@ package testutil
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -243,4 +244,53 @@ func (d *DaemonCLITest) SetDaemonInterval(interval time.Duration) {
 func (d *DaemonCLITest) SetDaemonOffline(offline bool) {
 	d.offlineMode = offline
 	d.cfg.DaemonOfflineMode = offline
+}
+
+// MigrateCLITest extends CLITest with migration-specific helpers.
+type MigrateCLITest struct {
+	*CLITest
+	mockNextcloudTasks map[string][]string
+}
+
+// NewCLITestWithMigrate creates a new CLI test helper with migration support.
+func NewCLITestWithMigrate(t *testing.T) *MigrateCLITest {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	migrateTargetDir := filepath.Join(tmpDir, "migrate-target")
+
+	if err := os.MkdirAll(migrateTargetDir, 0755); err != nil {
+		t.Fatalf("failed to create migrate target directory: %v", err)
+	}
+
+	cfg := &cmd.Config{
+		NoPrompt:         true,
+		DBPath:           dbPath,
+		MigrateTargetDir: migrateTargetDir,
+		MigrateMockMode:  true, // Enable mock backends for testing
+	}
+
+	return &MigrateCLITest{
+		CLITest: &CLITest{
+			t:      t,
+			cfg:    cfg,
+			tmpDir: tmpDir,
+		},
+		mockNextcloudTasks: make(map[string][]string),
+	}
+}
+
+// SetupMockNextcloudTasks sets up mock tasks for the nextcloud-mock backend.
+func (m *MigrateCLITest) SetupMockNextcloudTasks(listName string, tasks []string) {
+	m.mockNextcloudTasks[listName] = tasks
+	// Write mock data to temp file for the mock backend to read
+	mockDataPath := filepath.Join(m.tmpDir, "mock-nextcloud-data.json")
+	data := make(map[string][]string)
+	for k, v := range m.mockNextcloudTasks {
+		data[k] = v
+	}
+	jsonData, _ := json.Marshal(data)
+	_ = os.WriteFile(mockDataPath, jsonData, 0644)
+	m.cfg.MockNextcloudDataPath = mockDataPath
 }

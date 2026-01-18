@@ -48,6 +48,10 @@ type Config struct {
 	DaemonTestMode    bool          // Use in-process daemon for testing
 	DaemonInterval    time.Duration // Sync interval for daemon
 	DaemonOfflineMode bool          // Simulate offline mode for daemon
+	// Migration-related config fields (for testing)
+	MigrateTargetDir      string // Directory for file-mock backend target
+	MigrateMockMode       bool   // Enable mock backends for testing
+	MockNextcloudDataPath string // Path to mock nextcloud data file
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -183,6 +187,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add notification subcommand
 	cmd.AddCommand(newNotificationCmd(stdout, stderr, cfg))
+
+	// Add migrate subcommand
+	cmd.AddCommand(newMigrateCmd(stdout, stderr, cfg))
 
 	return cmd
 }
@@ -3299,4 +3306,812 @@ func getConfigDaemonInterval(cfg *Config) time.Duration {
 		}
 	}
 	return 0
+}
+
+// =============================================================================
+// Migrate Command
+// =============================================================================
+
+// newMigrateCmd creates the 'migrate' subcommand for cross-backend migration
+func newMigrateCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	migrateCmd := &cobra.Command{
+		Use:   "migrate",
+		Short: "Migrate tasks between backends",
+		Long:  "Migrate tasks from one storage backend to another, preserving metadata and hierarchy.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			fromBackend, _ := cmd.Flags().GetString("from")
+			toBackend, _ := cmd.Flags().GetString("to")
+			listName, _ := cmd.Flags().GetString("list")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			targetInfo, _ := cmd.Flags().GetString("target-info")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+
+			// Handle target-info mode
+			if targetInfo != "" {
+				return doMigrateTargetInfo(cfg, stdout, targetInfo, listName, jsonOutput)
+			}
+
+			// Validate required flags
+			if fromBackend == "" {
+				return fmt.Errorf("--from flag is required")
+			}
+			if toBackend == "" {
+				return fmt.Errorf("--to flag is required")
+			}
+
+			// Validate backends are different
+			if fromBackend == toBackend {
+				return fmt.Errorf("cannot migrate to same backend type")
+			}
+
+			// Validate backend names
+			validBackends := map[string]bool{
+				"sqlite": true, "nextcloud": true, "todoist": true, "file": true,
+				"nextcloud-mock": true, "todoist-mock": true, "file-mock": true,
+			}
+			if !validBackends[fromBackend] {
+				return fmt.Errorf("unknown backend: %s", fromBackend)
+			}
+			if !validBackends[toBackend] {
+				return fmt.Errorf("unknown backend: %s", toBackend)
+			}
+
+			return doMigrate(cfg, stdout, fromBackend, toBackend, listName, dryRun, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	migrateCmd.Flags().String("from", "", "Source backend (sqlite, nextcloud, todoist, file)")
+	migrateCmd.Flags().String("to", "", "Target backend (sqlite, nextcloud, todoist, file)")
+	migrateCmd.Flags().String("list", "", "Migrate only specified list")
+	migrateCmd.Flags().Bool("dry-run", false, "Show what would be migrated without making changes")
+	migrateCmd.Flags().String("target-info", "", "Show tasks in target backend")
+
+	return migrateCmd
+}
+
+// MigrationResult holds the result of a migration operation
+type MigrationResult struct {
+	Source         string             `json:"source"`
+	Target         string             `json:"target"`
+	List           string             `json:"list,omitempty"`
+	Migrated       int                `json:"migrated"`
+	Skipped        int                `json:"skipped"`
+	Updated        int                `json:"updated"`
+	StatusMappings []StatusMapping    `json:"status_mappings,omitempty"`
+	Tasks          []MigratedTaskInfo `json:"tasks,omitempty"`
+	DryRun         bool               `json:"dry_run"`
+	Hierarchy      bool               `json:"hierarchy_preserved"`
+}
+
+// StatusMapping describes how a status was mapped between backends
+type StatusMapping struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// MigratedTaskInfo holds info about a migrated task
+type MigratedTaskInfo struct {
+	Summary    string `json:"summary"`
+	Status     string `json:"status"`
+	Priority   int    `json:"priority,omitempty"`
+	DueDate    string `json:"due_date,omitempty"`
+	Categories string `json:"categories,omitempty"`
+	ParentID   string `json:"parent_id,omitempty"`
+}
+
+// MockBackend implements backend.TaskManager for testing migrations
+type MockBackend struct {
+	name      string
+	lists     []backend.List
+	tasks     map[string][]backend.Task
+	tasksByID map[string]*backend.Task
+	targetDir string
+}
+
+// NewMockBackend creates a new mock backend for testing
+func NewMockBackend(name, targetDir string) *MockBackend {
+	return &MockBackend{
+		name:      name,
+		lists:     []backend.List{},
+		tasks:     make(map[string][]backend.Task),
+		tasksByID: make(map[string]*backend.Task),
+		targetDir: targetDir,
+	}
+}
+
+// LoadFromFile loads mock data from a JSON file (for nextcloud-mock)
+func (m *MockBackend) LoadFromFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil // File not existing is OK
+	}
+
+	// Try to parse as full format first (from SaveToFile)
+	var fullData map[string][]map[string]interface{}
+	if err := json.Unmarshal(data, &fullData); err == nil && len(fullData) > 0 {
+		// Check if first entry has "summary" key to distinguish from simple format
+		for _, taskMaps := range fullData {
+			if len(taskMaps) > 0 {
+				if _, hasSummary := taskMaps[0]["summary"]; hasSummary {
+					// Full format - load complete task data
+					return m.loadFullFormat(fullData)
+				}
+			}
+		}
+	}
+
+	// Try simple format (list of strings)
+	var simpleData map[string][]string
+	if err := json.Unmarshal(data, &simpleData); err != nil {
+		return err
+	}
+
+	for listName, taskSummaries := range simpleData {
+		list := backend.List{
+			ID:       generateUUID(),
+			Name:     listName,
+			Modified: time.Now(),
+		}
+		m.lists = append(m.lists, list)
+		m.tasks[list.ID] = []backend.Task{}
+
+		for _, summary := range taskSummaries {
+			task := backend.Task{
+				ID:       generateUUID(),
+				Summary:  summary,
+				Status:   backend.StatusNeedsAction,
+				ListID:   list.ID,
+				Created:  time.Now(),
+				Modified: time.Now(),
+			}
+			m.tasks[list.ID] = append(m.tasks[list.ID], task)
+			m.tasksByID[task.ID] = &m.tasks[list.ID][len(m.tasks[list.ID])-1]
+		}
+	}
+
+	return nil
+}
+
+// loadFullFormat loads from the full format saved by SaveToFile
+func (m *MockBackend) loadFullFormat(data map[string][]map[string]interface{}) error {
+	for listName, taskMaps := range data {
+		list := backend.List{
+			ID:       generateUUID(),
+			Name:     listName,
+			Modified: time.Now(),
+		}
+		m.lists = append(m.lists, list)
+		m.tasks[list.ID] = []backend.Task{}
+
+		for _, taskMap := range taskMaps {
+			task := backend.Task{
+				ID:       generateUUID(),
+				ListID:   list.ID,
+				Created:  time.Now(),
+				Modified: time.Now(),
+			}
+
+			if summary, ok := taskMap["summary"].(string); ok {
+				task.Summary = summary
+			}
+			if status, ok := taskMap["status"].(string); ok {
+				task.Status = backend.TaskStatus(status)
+			}
+			if priority, ok := taskMap["priority"].(float64); ok {
+				task.Priority = int(priority)
+			}
+			if dueDate, ok := taskMap["due_date"].(string); ok {
+				if t, err := time.Parse("2006-01-02", dueDate); err == nil {
+					task.DueDate = &t
+				}
+			}
+			if categories, ok := taskMap["categories"].(string); ok {
+				task.Categories = categories
+			}
+			if parentID, ok := taskMap["parent_id"].(string); ok {
+				task.ParentID = parentID
+			}
+
+			if task.Status == "" {
+				task.Status = backend.StatusNeedsAction
+			}
+
+			m.tasks[list.ID] = append(m.tasks[list.ID], task)
+			m.tasksByID[task.ID] = &m.tasks[list.ID][len(m.tasks[list.ID])-1]
+		}
+	}
+
+	return nil
+}
+
+// SaveToFile saves the mock backend state to a JSON file
+func (m *MockBackend) SaveToFile(path string) error {
+	result := make(map[string][]map[string]interface{})
+
+	for _, list := range m.lists {
+		tasks := m.tasks[list.ID]
+		taskList := make([]map[string]interface{}, 0, len(tasks))
+		for _, task := range tasks {
+			taskMap := map[string]interface{}{
+				"summary":  task.Summary,
+				"status":   string(task.Status),
+				"priority": task.Priority,
+			}
+			if task.DueDate != nil {
+				taskMap["due_date"] = task.DueDate.Format("2006-01-02")
+			}
+			if task.Categories != "" {
+				taskMap["categories"] = task.Categories
+			}
+			if task.ParentID != "" {
+				taskMap["parent_id"] = task.ParentID
+			}
+			taskList = append(taskList, taskMap)
+		}
+		result[list.Name] = taskList
+	}
+
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+func (m *MockBackend) GetLists(ctx context.Context) ([]backend.List, error) {
+	return m.lists, nil
+}
+
+func (m *MockBackend) GetList(ctx context.Context, listID string) (*backend.List, error) {
+	for i := range m.lists {
+		if m.lists[i].ID == listID {
+			return &m.lists[i], nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *MockBackend) GetListByName(ctx context.Context, name string) (*backend.List, error) {
+	for i := range m.lists {
+		if strings.EqualFold(m.lists[i].Name, name) {
+			return &m.lists[i], nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *MockBackend) CreateList(ctx context.Context, name string) (*backend.List, error) {
+	// Check if already exists
+	for i := range m.lists {
+		if strings.EqualFold(m.lists[i].Name, name) {
+			return &m.lists[i], nil
+		}
+	}
+
+	list := backend.List{
+		ID:       generateUUID(),
+		Name:     name,
+		Modified: time.Now(),
+	}
+	m.lists = append(m.lists, list)
+	m.tasks[list.ID] = []backend.Task{}
+	return &m.lists[len(m.lists)-1], nil
+}
+
+func (m *MockBackend) DeleteList(ctx context.Context, listID string) error {
+	for i := range m.lists {
+		if m.lists[i].ID == listID {
+			m.lists = append(m.lists[:i], m.lists[i+1:]...)
+			delete(m.tasks, listID)
+			return nil
+		}
+	}
+	return fmt.Errorf("list not found")
+}
+
+func (m *MockBackend) GetDeletedLists(ctx context.Context) ([]backend.List, error) {
+	return []backend.List{}, nil
+}
+
+func (m *MockBackend) GetDeletedListByName(ctx context.Context, name string) (*backend.List, error) {
+	return nil, nil
+}
+
+func (m *MockBackend) RestoreList(ctx context.Context, listID string) error {
+	return fmt.Errorf("not supported")
+}
+
+func (m *MockBackend) PurgeList(ctx context.Context, listID string) error {
+	return fmt.Errorf("not supported")
+}
+
+func (m *MockBackend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
+	return m.tasks[listID], nil
+}
+
+func (m *MockBackend) GetTask(ctx context.Context, listID, taskID string) (*backend.Task, error) {
+	return m.tasksByID[taskID], nil
+}
+
+func (m *MockBackend) CreateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	newTask := backend.Task{
+		ID:          generateUUID(),
+		Summary:     task.Summary,
+		Description: task.Description,
+		Status:      task.Status,
+		Priority:    task.Priority,
+		DueDate:     task.DueDate,
+		StartDate:   task.StartDate,
+		Categories:  task.Categories,
+		ParentID:    task.ParentID,
+		ListID:      listID,
+		Created:     time.Now(),
+		Modified:    time.Now(),
+	}
+
+	if newTask.Status == "" {
+		newTask.Status = backend.StatusNeedsAction
+	}
+
+	m.tasks[listID] = append(m.tasks[listID], newTask)
+	m.tasksByID[newTask.ID] = &m.tasks[listID][len(m.tasks[listID])-1]
+
+	return &newTask, nil
+}
+
+func (m *MockBackend) UpdateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	existing, ok := m.tasksByID[task.ID]
+	if !ok {
+		return nil, fmt.Errorf("task not found")
+	}
+
+	existing.Summary = task.Summary
+	existing.Description = task.Description
+	existing.Status = task.Status
+	existing.Priority = task.Priority
+	existing.DueDate = task.DueDate
+	existing.StartDate = task.StartDate
+	existing.Categories = task.Categories
+	existing.ParentID = task.ParentID
+	existing.Modified = time.Now()
+
+	return existing, nil
+}
+
+func (m *MockBackend) DeleteTask(ctx context.Context, listID, taskID string) error {
+	tasks := m.tasks[listID]
+	for i := range tasks {
+		if tasks[i].ID == taskID {
+			m.tasks[listID] = append(tasks[:i], tasks[i+1:]...)
+			delete(m.tasksByID, taskID)
+			return nil
+		}
+	}
+	return fmt.Errorf("task not found")
+}
+
+func (m *MockBackend) Close() error {
+	// Save state to file if targetDir is set
+	if m.targetDir != "" {
+		path := filepath.Join(m.targetDir, m.name+"-data.json")
+		return m.SaveToFile(path)
+	}
+	return nil
+}
+
+// generateUUID generates a new UUID string
+func generateUUID() string {
+	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), time.Now().UnixNano()%1000000)
+}
+
+// getMigrateBackend returns a backend instance for migration
+func getMigrateBackend(cfg *Config, backendName string) (backend.TaskManager, error) {
+	ctx := context.Background()
+
+	switch backendName {
+	case "sqlite":
+		return getBackend(cfg)
+
+	case "file-mock":
+		if cfg.MigrateTargetDir == "" {
+			return nil, fmt.Errorf("migrate target directory not configured")
+		}
+		mb := NewMockBackend("file-mock", cfg.MigrateTargetDir)
+		// Load existing data if any
+		path := filepath.Join(cfg.MigrateTargetDir, "file-mock-data.json")
+		_ = mb.LoadFromFile(path)
+		return mb, nil
+
+	case "nextcloud-mock":
+		mb := NewMockBackend("nextcloud-mock", cfg.MigrateTargetDir)
+		if cfg.MockNextcloudDataPath != "" {
+			_ = mb.LoadFromFile(cfg.MockNextcloudDataPath)
+		}
+		return mb, nil
+
+	case "todoist-mock":
+		mb := NewMockBackend("todoist-mock", cfg.MigrateTargetDir)
+		return mb, nil
+
+	case "nextcloud":
+		// For real nextcloud, we'd need credentials
+		_ = ctx
+		return nil, fmt.Errorf("real nextcloud backend not yet implemented for migration")
+
+	case "todoist":
+		return nil, fmt.Errorf("real todoist backend not yet implemented for migration")
+
+	case "file":
+		return nil, fmt.Errorf("real file backend not yet implemented for migration")
+
+	default:
+		return nil, fmt.Errorf("unknown backend: %s", backendName)
+	}
+}
+
+// mapStatus maps a status from source to target backend
+func mapStatus(status backend.TaskStatus, targetBackend string) (backend.TaskStatus, bool) {
+	// Todoist doesn't support IN-PROGRESS status
+	if targetBackend == "todoist" || targetBackend == "todoist-mock" {
+		if status == backend.StatusInProgress {
+			return backend.StatusNeedsAction, true // Mapped from IN-PROGRESS
+		}
+	}
+	return status, false
+}
+
+// doMigrate performs the actual migration between backends
+func doMigrate(cfg *Config, stdout io.Writer, fromBackend, toBackend, listName string, dryRun, jsonOutput bool) error {
+	ctx := context.Background()
+
+	// Get source backend
+	source, err := getMigrateBackend(cfg, fromBackend)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = source.Close() }()
+
+	// Get target backend
+	target, err := getMigrateBackend(cfg, toBackend)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = target.Close() }()
+
+	// Get lists to migrate
+	var listsToMigrate []backend.List
+	if listName != "" {
+		list, err := source.GetListByName(ctx, listName)
+		if err != nil {
+			return err
+		}
+		if list == nil {
+			return fmt.Errorf("list not found: %s", listName)
+		}
+		listsToMigrate = []backend.List{*list}
+	} else {
+		var err error
+		listsToMigrate, err = source.GetLists(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	result := MigrationResult{
+		Source: fromBackend,
+		Target: toBackend,
+		DryRun: dryRun,
+	}
+	if listName != "" {
+		result.List = listName
+	}
+
+	hasHierarchy := false
+	statusMappings := make(map[string]string)
+
+	for _, list := range listsToMigrate {
+		// Get tasks from source
+		tasks, err := source.GetTasks(ctx, list.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get tasks from list %s: %w", list.Name, err)
+		}
+
+		if dryRun {
+			// Just record what would be migrated
+			for _, task := range tasks {
+				result.Tasks = append(result.Tasks, MigratedTaskInfo{
+					Summary:    task.Summary,
+					Status:     string(task.Status),
+					Priority:   task.Priority,
+					Categories: task.Categories,
+				})
+				result.Migrated++
+				if task.ParentID != "" {
+					hasHierarchy = true
+				}
+			}
+			continue
+		}
+
+		// Create list in target if needed
+		targetList, err := target.GetListByName(ctx, list.Name)
+		if err != nil {
+			return fmt.Errorf("failed to check target list %s: %w", list.Name, err)
+		}
+		if targetList == nil {
+			targetList, err = target.CreateList(ctx, list.Name)
+			if err != nil {
+				return fmt.Errorf("failed to create target list %s: %w", list.Name, err)
+			}
+		}
+
+		// Get existing tasks in target for conflict detection
+		existingTasks, _ := target.GetTasks(ctx, targetList.ID)
+		existingByUID := make(map[string]*backend.Task)
+		for i := range existingTasks {
+			existingByUID[existingTasks[i].ID] = &existingTasks[i]
+		}
+
+		// Track ID mapping for hierarchy
+		idMapping := make(map[string]string) // oldID -> newID
+
+		// First pass: create all tasks (without hierarchy)
+		for _, task := range tasks {
+			// Map status if needed
+			mappedStatus, wasMapped := mapStatus(task.Status, toBackend)
+			if wasMapped {
+				statusMappings[string(task.Status)] = string(mappedStatus)
+			}
+
+			// Check for existing task with same summary (conflict detection)
+			var existingTask *backend.Task
+			for i := range existingTasks {
+				if existingTasks[i].Summary == task.Summary {
+					existingTask = &existingTasks[i]
+					break
+				}
+			}
+
+			newTask := &backend.Task{
+				Summary:     task.Summary,
+				Description: task.Description,
+				Status:      mappedStatus,
+				Priority:    task.Priority,
+				DueDate:     task.DueDate,
+				StartDate:   task.StartDate,
+				Completed:   task.Completed,
+				Categories:  task.Categories,
+				// ParentID will be set in second pass
+			}
+
+			if existingTask != nil {
+				// Update existing task
+				newTask.ID = existingTask.ID
+				_, err := target.UpdateTask(ctx, targetList.ID, newTask)
+				if err != nil {
+					return fmt.Errorf("failed to update task %s: %w", task.Summary, err)
+				}
+				idMapping[task.ID] = existingTask.ID
+				result.Updated++
+			} else {
+				// Create new task
+				created, err := target.CreateTask(ctx, targetList.ID, newTask)
+				if err != nil {
+					return fmt.Errorf("failed to create task %s: %w", task.Summary, err)
+				}
+				idMapping[task.ID] = created.ID
+				result.Migrated++
+			}
+
+			if task.ParentID != "" {
+				hasHierarchy = true
+			}
+		}
+
+		// Second pass: update parent relationships
+		for _, task := range tasks {
+			if task.ParentID != "" {
+				newID, ok := idMapping[task.ID]
+				if !ok {
+					continue
+				}
+				newParentID, ok := idMapping[task.ParentID]
+				if !ok {
+					continue
+				}
+
+				// Get the task and update its parent
+				targetTask, err := target.GetTask(ctx, targetList.ID, newID)
+				if err != nil || targetTask == nil {
+					continue
+				}
+
+				targetTask.ParentID = newParentID
+				_, _ = target.UpdateTask(ctx, targetList.ID, targetTask)
+			}
+		}
+	}
+
+	result.Hierarchy = hasHierarchy
+	for from, to := range statusMappings {
+		result.StatusMappings = append(result.StatusMappings, StatusMapping{From: from, To: to})
+	}
+
+	// Output results
+	if jsonOutput {
+		data, _ := json.MarshalIndent(result, "", "  ")
+		_, _ = fmt.Fprintln(stdout, string(data))
+		return nil
+	}
+
+	if dryRun {
+		_, _ = fmt.Fprintf(stdout, "Would migrate %d tasks from %s to %s (dry-run)\n", result.Migrated, fromBackend, toBackend)
+		for _, task := range result.Tasks {
+			_, _ = fmt.Fprintf(stdout, "  - %s\n", task.Summary)
+		}
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+	} else {
+		listInfo := ""
+		if listName != "" {
+			listInfo = fmt.Sprintf(" from list %s", listName)
+		}
+
+		// Also show list name if all tasks were from the same list
+		allListNames := make(map[string]bool)
+		for _, list := range listsToMigrate {
+			allListNames[list.Name] = true
+		}
+		listNames := ""
+		for name := range allListNames {
+			if listNames != "" {
+				listNames += ", "
+			}
+			listNames += name
+		}
+
+		_, _ = fmt.Fprintf(stdout, "Migrated %d tasks%s from %s to %s\n", result.Migrated, listInfo, fromBackend, toBackend)
+		if listNames != "" && listInfo == "" {
+			_, _ = fmt.Fprintf(stdout, "  Lists: %s\n", listNames)
+		}
+
+		if result.Updated > 0 {
+			_, _ = fmt.Fprintf(stdout, "  (%d updated, %d skipped)\n", result.Updated, result.Skipped)
+		}
+
+		if hasHierarchy {
+			_, _ = fmt.Fprintln(stdout, "  (hierarchy preserved)")
+		}
+
+		if len(result.StatusMappings) > 0 {
+			for _, mapping := range result.StatusMappings {
+				_, _ = fmt.Fprintf(stdout, "  (status %s mapped to %s)\n", mapping.From, mapping.To)
+			}
+		}
+
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+		}
+	}
+
+	return nil
+}
+
+// doMigrateTargetInfo displays tasks in the target backend
+func doMigrateTargetInfo(cfg *Config, stdout io.Writer, targetBackend, listName string, jsonOutput bool) error {
+	ctx := context.Background()
+
+	target, err := getMigrateBackend(cfg, targetBackend)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = target.Close() }()
+
+	var list *backend.List
+	if listName != "" {
+		list, err = target.GetListByName(ctx, listName)
+		if err != nil {
+			return err
+		}
+		if list == nil {
+			return fmt.Errorf("list not found: %s", listName)
+		}
+	}
+
+	if list == nil {
+		// Show all lists and tasks
+		lists, err := target.GetLists(ctx)
+		if err != nil {
+			return err
+		}
+
+		if jsonOutput {
+			result := make(map[string][]map[string]interface{})
+			for _, l := range lists {
+				tasks, _ := target.GetTasks(ctx, l.ID)
+				taskList := make([]map[string]interface{}, 0, len(tasks))
+				for _, t := range tasks {
+					taskMap := map[string]interface{}{
+						"summary":  t.Summary,
+						"status":   string(t.Status),
+						"priority": t.Priority,
+					}
+					if t.DueDate != nil {
+						taskMap["due_date"] = t.DueDate.Format("2006-01-02")
+					}
+					if t.Categories != "" {
+						taskMap["categories"] = t.Categories
+					}
+					if t.ParentID != "" {
+						taskMap["parent_id"] = t.ParentID
+					}
+					taskList = append(taskList, taskMap)
+				}
+				result[l.Name] = taskList
+			}
+			data, _ := json.MarshalIndent(result, "", "  ")
+			_, _ = fmt.Fprintln(stdout, string(data))
+			return nil
+		}
+
+		for _, l := range lists {
+			_, _ = fmt.Fprintf(stdout, "List: %s\n", l.Name)
+			tasks, _ := target.GetTasks(ctx, l.ID)
+			_, _ = fmt.Fprintf(stdout, "  %d tasks\n", len(tasks))
+		}
+		return nil
+	}
+
+	// Show specific list
+	tasks, err := target.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		taskList := make([]map[string]interface{}, 0, len(tasks))
+		for _, t := range tasks {
+			taskMap := map[string]interface{}{
+				"summary":  t.Summary,
+				"status":   string(t.Status),
+				"priority": t.Priority,
+			}
+			if t.DueDate != nil {
+				taskMap["due_date"] = t.DueDate.Format("2006-01-02")
+			}
+			if t.Categories != "" {
+				taskMap["categories"] = t.Categories
+			}
+			if t.ParentID != "" {
+				taskMap["parent_id"] = t.ParentID
+			}
+			taskList = append(taskList, taskMap)
+		}
+		result := map[string]interface{}{
+			"list":  list.Name,
+			"tasks": taskList,
+		}
+		data, _ := json.MarshalIndent(result, "", "  ")
+		_, _ = fmt.Fprintln(stdout, string(data))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "List: %s (%d tasks)\n", list.Name, len(tasks))
+	for _, t := range tasks {
+		_, _ = fmt.Fprintf(stdout, "  - %s (%s)\n", t.Summary, t.Status)
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
 }
