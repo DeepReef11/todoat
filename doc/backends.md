@@ -120,6 +120,18 @@ Configure the Nextcloud backend using environment variables:
 
 ### Example Setup
 
+**Option 1: Using the secure credential manager (recommended)**
+
+```bash
+# Store credentials securely in system keyring
+todoat credentials set nextcloud youruser --prompt
+
+# Verify credentials are stored
+todoat credentials get nextcloud youruser
+```
+
+**Option 2: Using environment variables**
+
 ```bash
 # Set environment variables
 export TODOAT_NEXTCLOUD_HOST="cloud.example.com"
@@ -128,6 +140,8 @@ export TODOAT_NEXTCLOUD_PASSWORD="your-app-password"
 ```
 
 For security, consider using an app password instead of your main Nextcloud password. You can generate an app password in Nextcloud under Settings > Security > Devices & sessions.
+
+See [Credential Management](./commands.md#credential-management) for more details on secure credential storage.
 
 ### Features
 

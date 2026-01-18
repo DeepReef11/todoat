@@ -501,6 +501,92 @@ todoat MyList add "New task" --json
 ```
 
 
+## Credential Management
+
+Manage credentials for backend services (Nextcloud, Todoist, etc.) securely using system keyrings.
+
+```bash
+# Store credentials in system keyring
+todoat credentials set nextcloud myuser --prompt
+
+# Retrieve credentials and show source
+todoat credentials get nextcloud myuser
+
+# Remove credentials from keyring
+todoat credentials delete nextcloud myuser
+
+# List all backends with credential status
+todoat credentials list
+```
+
+### Credentials Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `credentials set [backend] [username] --prompt` | Store credentials in system keyring |
+| `credentials get [backend] [username]` | Retrieve credentials and show source |
+| `credentials delete [backend] [username]` | Remove credentials from system keyring |
+| `credentials list` | List all backends with credential status |
+
+### Credential Sources
+
+Credentials are retrieved in priority order:
+
+1. **System keyring** - OS-native secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+2. **Environment variables** - `TODOAT_[BACKEND]_PASSWORD` and `TODOAT_[BACKEND]_USERNAME`
+
+### Set Command
+
+```bash
+# Store credentials (password prompted securely)
+todoat credentials set nextcloud myuser --prompt
+```
+
+The `--prompt` flag is required for security - passwords are never passed on the command line.
+
+### Get Command
+
+```bash
+# Check credential status
+todoat credentials get nextcloud myuser
+
+# Output example when found:
+# Source: keyring
+# Username: myuser
+# Password: ******** (hidden)
+# Backend: nextcloud
+# Status: Available
+
+# JSON output
+todoat credentials get nextcloud myuser --json
+```
+
+### Delete Command
+
+```bash
+# Remove stored credentials
+todoat credentials delete nextcloud myuser
+```
+
+This only removes credentials from the system keyring. Environment variable credentials are not affected.
+
+### List Command
+
+```bash
+# View all backends and their credential status
+todoat credentials list
+
+# Output example:
+# Backend Credentials:
+#
+# BACKEND              USERNAME             STATUS          SOURCE
+# nextcloud            myuser               Available       keyring
+# todoist                                   Not configured  -
+
+# JSON output
+todoat credentials list --json
+```
+
 ## Examples
 
 ```bash

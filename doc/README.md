@@ -30,6 +30,7 @@ A command-line task manager with multiple backend support.
 - **Views**: Customizable task display with built-in and custom views
 - **JSON Output**: Machine-readable JSON output for scripting
 - **Multiple Backends**: SQLite (local), Nextcloud CalDAV (sync)
+- **Secure Credentials**: System keyring integration for secure credential storage
 
 ## Basic Usage
 

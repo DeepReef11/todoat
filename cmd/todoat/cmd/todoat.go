@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"todoat/backend"
 	"todoat/backend/sqlite"
+	"todoat/internal/credentials"
 	"todoat/internal/views"
 )
 
@@ -160,6 +161,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add view subcommand
 	cmd.AddCommand(newViewCmd(stdout, cfg))
+
+	// Add credentials subcommand
+	cmd.AddCommand(newCredentialsCmd(stdout, stderr, cfg))
 
 	return cmd
 }
@@ -1684,4 +1688,115 @@ func outputErrorJSON(err error, stdout io.Writer) {
 
 	jsonBytes, _ := json.Marshal(response)
 	_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+}
+
+// newCredentialsCmd creates the 'credentials' subcommand for credential management
+func newCredentialsCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	credentialsCmd := &cobra.Command{
+		Use:   "credentials",
+		Short: "Manage backend credentials",
+		Long:  "Store, retrieve, and manage credentials for backend services securely.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	credentialsCmd.AddCommand(newCredentialsSetCmd(stdout, stderr, cfg))
+	credentialsCmd.AddCommand(newCredentialsGetCmd(stdout, stderr, cfg))
+	credentialsCmd.AddCommand(newCredentialsDeleteCmd(stdout, stderr, cfg))
+	credentialsCmd.AddCommand(newCredentialsListCmd(stdout, stderr, cfg))
+
+	return credentialsCmd
+}
+
+// newCredentialsSetCmd creates the 'credentials set' subcommand
+func newCredentialsSetCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "set [backend] [username]",
+		Short: "Store credentials in system keyring",
+		Long:  "Store credentials securely in the system keyring (macOS Keychain, Windows Credential Manager, or Linux Secret Service).",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			backend := args[0]
+			username := args[1]
+			prompt, _ := cmd.Flags().GetBool("prompt")
+
+			manager := credentials.NewManager()
+			handler := credentials.NewCLIHandler(manager, os.Stdin, stdout, stderr)
+			return handler.Set(backend, username, prompt)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().Bool("prompt", false, "Prompt for password input (required for security)")
+	return cmd
+}
+
+// newCredentialsGetCmd creates the 'credentials get' subcommand
+func newCredentialsGetCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get [backend] [username]",
+		Short: "Retrieve credentials and show source",
+		Long:  "Retrieve credentials from the priority chain (keyring > environment > config URL) and display the source.",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			backend := args[0]
+			username := args[1]
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+
+			manager := credentials.NewManager()
+			handler := credentials.NewCLIHandler(manager, nil, stdout, stderr)
+			return handler.Get(backend, username, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// newCredentialsDeleteCmd creates the 'credentials delete' subcommand
+func newCredentialsDeleteCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete [backend] [username]",
+		Short: "Remove credentials from system keyring",
+		Long:  "Remove stored credentials from the system keyring. Environment variables and config URL credentials are not affected.",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			backend := args[0]
+			username := args[1]
+
+			manager := credentials.NewManager()
+			handler := credentials.NewCLIHandler(manager, nil, stdout, stderr)
+			return handler.Delete(backend, username)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// newCredentialsListCmd creates the 'credentials list' subcommand
+func newCredentialsListCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all backends with credential status",
+		Long:  "Show all configured backends and whether credentials are available for each.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+
+			// TODO: Get backend configs from actual configuration
+			// For now, return a placeholder list
+			backends := []credentials.BackendConfig{
+				{Name: "nextcloud", Username: ""},
+				{Name: "todoist", Username: ""},
+			}
+
+			manager := credentials.NewManager()
+			handler := credentials.NewCLIHandler(manager, nil, stdout, stderr)
+			return handler.List(backends, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
 }
