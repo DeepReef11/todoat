@@ -49,6 +49,8 @@ func (b *Backend) initSchema() error {
 			status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
 			priority INTEGER DEFAULT 0,
 			due_date TEXT,
+			start_date TEXT,
+			completed TEXT,
 			created TEXT NOT NULL,
 			modified TEXT NOT NULL,
 			parent_id TEXT DEFAULT '',
@@ -150,7 +152,7 @@ func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 // GetTasks returns all tasks in a list
 func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
 	rows, err := b.db.QueryContext(ctx,
-		`SELECT id, list_id, summary, description, status, priority, due_date, created, modified, parent_id
+		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id
 		 FROM tasks WHERE list_id = ?`,
 		listID,
 	)
@@ -177,7 +179,7 @@ func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, 
 // GetTask returns a specific task
 func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.Task, error) {
 	row := b.db.QueryRowContext(ctx,
-		`SELECT id, list_id, summary, description, status, priority, due_date, created, modified, parent_id
+		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id
 		 FROM tasks WHERE list_id = ? AND id = ?`,
 		listID, taskID,
 	)
@@ -189,62 +191,67 @@ func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.
 	return t, err
 }
 
-// scanTask scans a task from a Rows result
-func scanTask(rows *sql.Rows) (*backend.Task, error) {
-	var t backend.Task
-	var dueDateStr, createdStr, modifiedStr sql.NullString
-
-	err := rows.Scan(
-		&t.ID, &t.ListID, &t.Summary, &t.Description, &t.Status,
-		&t.Priority, &dueDateStr, &createdStr, &modifiedStr, &t.ParentID,
-	)
-	if err != nil {
-		return nil, err
+// timeToNullString converts a *time.Time to sql.NullString for database storage.
+func timeToNullString(t *time.Time) sql.NullString {
+	if t == nil {
+		return sql.NullString{}
 	}
+	return sql.NullString{String: t.Format(time.RFC3339Nano), Valid: true}
+}
 
+// parseOptionalDate parses a nullable date string and returns a pointer to time.Time.
+func parseOptionalDate(str sql.NullString) *time.Time {
+	if str.Valid && str.String != "" {
+		if parsed, err := time.Parse(time.RFC3339Nano, str.String); err == nil {
+			return &parsed
+		}
+	}
+	return nil
+}
+
+// parseDateStrings parses the nullable date strings and populates the task's date fields.
+func parseDateStrings(t *backend.Task, dueDateStr, startDateStr, completedStr, createdStr, modifiedStr sql.NullString) {
 	if createdStr.Valid {
 		t.Created, _ = time.Parse(time.RFC3339Nano, createdStr.String)
 	}
 	if modifiedStr.Valid {
 		t.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr.String)
 	}
-	if dueDateStr.Valid && dueDateStr.String != "" {
-		parsed, err := time.Parse(time.RFC3339Nano, dueDateStr.String)
-		if err == nil {
-			t.DueDate = &parsed
-		}
+	t.DueDate = parseOptionalDate(dueDateStr)
+	t.StartDate = parseOptionalDate(startDateStr)
+	t.Completed = parseOptionalDate(completedStr)
+}
+
+// scanner is an interface satisfied by both *sql.Rows and *sql.Row
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+// scanTaskFrom scans a task from any scanner (Rows or Row)
+func scanTaskFrom(s scanner) (*backend.Task, error) {
+	var t backend.Task
+	var dueDateStr, startDateStr, completedStr, createdStr, modifiedStr sql.NullString
+
+	err := s.Scan(
+		&t.ID, &t.ListID, &t.Summary, &t.Description, &t.Status,
+		&t.Priority, &dueDateStr, &startDateStr, &completedStr, &createdStr, &modifiedStr, &t.ParentID,
+	)
+	if err != nil {
+		return nil, err
 	}
 
+	parseDateStrings(&t, dueDateStr, startDateStr, completedStr, createdStr, modifiedStr)
 	return &t, nil
+}
+
+// scanTask scans a task from a Rows result
+func scanTask(rows *sql.Rows) (*backend.Task, error) {
+	return scanTaskFrom(rows)
 }
 
 // scanTaskRow scans a task from a Row result
 func scanTaskRow(row *sql.Row) (*backend.Task, error) {
-	var t backend.Task
-	var dueDateStr, createdStr, modifiedStr sql.NullString
-
-	err := row.Scan(
-		&t.ID, &t.ListID, &t.Summary, &t.Description, &t.Status,
-		&t.Priority, &dueDateStr, &createdStr, &modifiedStr, &t.ParentID,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if createdStr.Valid {
-		t.Created, _ = time.Parse(time.RFC3339Nano, createdStr.String)
-	}
-	if modifiedStr.Valid {
-		t.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr.String)
-	}
-	if dueDateStr.Valid && dueDateStr.String != "" {
-		parsed, err := time.Parse(time.RFC3339Nano, dueDateStr.String)
-		if err == nil {
-			t.DueDate = &parsed
-		}
-	}
-
-	return &t, nil
+	return scanTaskFrom(row)
 }
 
 // CreateTask adds a new task to a list
@@ -253,10 +260,9 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
 
-	var dueDateStr sql.NullString
-	if task.DueDate != nil {
-		dueDateStr = sql.NullString{String: task.DueDate.Format(time.RFC3339Nano), Valid: true}
-	}
+	dueDateStr := timeToNullString(task.DueDate)
+	startDateStr := timeToNullString(task.StartDate)
+	completedStr := timeToNullString(task.Completed)
 
 	status := task.Status
 	if status == "" {
@@ -264,10 +270,10 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 	}
 
 	_, err := b.db.ExecContext(ctx,
-		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, created, modified, parent_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, listID, task.Summary, task.Description, status, task.Priority,
-		dueDateStr, nowStr, nowStr, task.ParentID,
+		dueDateStr, startDateStr, completedStr, nowStr, nowStr, task.ParentID,
 	)
 	if err != nil {
 		return nil, err
@@ -281,6 +287,8 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 		Status:      status,
 		Priority:    task.Priority,
 		DueDate:     task.DueDate,
+		StartDate:   task.StartDate,
+		Completed:   task.Completed,
 		Created:     now,
 		Modified:    now,
 		ParentID:    task.ParentID,
@@ -292,15 +300,14 @@ func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.T
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
 
-	var dueDateStr sql.NullString
-	if task.DueDate != nil {
-		dueDateStr = sql.NullString{String: task.DueDate.Format(time.RFC3339Nano), Valid: true}
-	}
+	dueDateStr := timeToNullString(task.DueDate)
+	startDateStr := timeToNullString(task.StartDate)
+	completedStr := timeToNullString(task.Completed)
 
 	_, err := b.db.ExecContext(ctx,
-		`UPDATE tasks SET summary = ?, description = ?, status = ?, priority = ?, due_date = ?, modified = ?, parent_id = ?
+		`UPDATE tasks SET summary = ?, description = ?, status = ?, priority = ?, due_date = ?, start_date = ?, completed = ?, modified = ?, parent_id = ?
 		 WHERE id = ? AND list_id = ?`,
-		task.Summary, task.Description, task.Status, task.Priority, dueDateStr, nowStr, task.ParentID,
+		task.Summary, task.Description, task.Status, task.Priority, dueDateStr, startDateStr, completedStr, nowStr, task.ParentID,
 		task.ID, listID,
 	)
 	if err != nil {

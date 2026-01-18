@@ -13,6 +13,8 @@ type Task struct {
 	Status      TaskStatus
 	Priority    int
 	DueDate     *time.Time
+	StartDate   *time.Time
+	Completed   *time.Time
 	Created     time.Time
 	Modified    time.Time
 	ListID      string

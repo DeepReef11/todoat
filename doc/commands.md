@@ -22,6 +22,28 @@ todoat [list-name] [action] [task-summary] [flags]
 | `complete` | `c` | Mark a task as completed |
 | `delete` | `d` | Delete a task |
 
+## List Management
+
+View and manage task lists using the `list` subcommand:
+
+```bash
+# View all lists with task counts
+todoat list
+
+# Create a new list
+todoat list create "MyList"
+```
+
+### Output Example
+
+```
+Available lists (2):
+
+NAME                 TASKS
+Work                 5
+Personal             3
+```
+
 ## Viewing Tasks
 
 List all tasks in a list:
@@ -40,6 +62,16 @@ todoat MyList
 todoat MyList get -s TODO
 todoat MyList get -s IN-PROGRESS
 todoat MyList get -s DONE
+
+# Filter by priority
+todoat MyList get -p 1           # Show only priority 1 tasks
+todoat MyList get -p 1,2,3       # Show priorities 1, 2, or 3
+todoat MyList get -p high        # Show high priority (1-4)
+todoat MyList get -p medium      # Show medium priority (5)
+todoat MyList get -p low         # Show low priority (6-9)
+
+# JSON output
+todoat MyList get --json
 ```
 
 ### Get Flags
@@ -47,6 +79,15 @@ todoat MyList get -s DONE
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--status` | `-s` | Filter tasks by status (TODO, IN-PROGRESS, DONE, CANCELLED) |
+| `--priority` | `-p` | Filter by priority: single value (1), comma-separated (1,2,3), or alias (high, medium, low) |
+
+### Priority Aliases
+
+| Alias | Priority Values |
+|-------|-----------------|
+| `high` | 1, 2, 3, 4 |
+| `medium` | 5 |
+| `low` | 6, 7, 8, 9 |
 
 **Output format:**
 ```
@@ -82,6 +123,21 @@ todoat MyList add "Urgent task" -p 1
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--priority` | `-p` | Task priority (0-9, 0=undefined, 1=highest) |
+| `--due-date` | | Due date in YYYY-MM-DD format |
+| `--start-date` | | Start date in YYYY-MM-DD format |
+
+### Add Examples with Dates
+
+```bash
+# Add task with due date
+todoat Work add "Submit report" --due-date 2026-01-31
+
+# Add task with start and due date
+todoat Work add "Project milestone" --start-date 2026-01-20 --due-date 2026-02-15
+
+# Add task with priority and due date
+todoat Work add "Urgent deadline" -p 1 --due-date 2026-01-25
+```
 
 ## Updating Tasks
 
@@ -108,6 +164,21 @@ todoat MyList u "task name" -s IN-PROGRESS
 | `--priority` | `-p` | New priority (0-9) |
 | `--status` | `-s` | New status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 | `--summary` | | New task summary/name |
+| `--due-date` | | Due date (YYYY-MM-DD format, use "" to clear) |
+| `--start-date` | | Start date (YYYY-MM-DD format, use "" to clear) |
+
+### Update Date Examples
+
+```bash
+# Set a due date
+todoat Work update "task" --due-date 2026-02-01
+
+# Clear a due date
+todoat Work update "task" --due-date ""
+
+# Set both dates
+todoat Work update "task" --start-date 2026-01-15 --due-date 2026-01-30
+```
 
 ### Status Values
 
@@ -191,6 +262,72 @@ todoat -y MyList delete "task"
 todoat --no-prompt MyList add "Automated task"
 ```
 
+In no-prompt mode, todoat outputs result codes to help with scripting:
+
+| Result Code | Meaning |
+|-------------|---------|
+| `ACTION_COMPLETED` | A modification was made (add, update, complete, delete) |
+| `INFO_ONLY` | Read-only operation (get, list view) |
+| `ERROR` | An error occurred |
+
+## JSON Output
+
+Use `--json` flag to get machine-readable JSON output:
+
+```bash
+# Get tasks as JSON
+todoat MyList get --json
+
+# List all lists as JSON
+todoat list --json
+
+# Add task and get JSON response
+todoat MyList add "New task" --json
+```
+
+### JSON Response Examples
+
+**Task list response:**
+```json
+{
+  "tasks": [
+    {
+      "uid": "abc123",
+      "summary": "Buy groceries",
+      "status": "TODO",
+      "priority": 1,
+      "due_date": "2026-01-31"
+    }
+  ],
+  "list": "Shopping",
+  "count": 1,
+  "result": "INFO_ONLY"
+}
+```
+
+**Action response:**
+```json
+{
+  "action": "add",
+  "task": {
+    "uid": "abc123",
+    "summary": "New task",
+    "status": "TODO",
+    "priority": 0
+  },
+  "result": "ACTION_COMPLETED"
+}
+```
+
+**Error response:**
+```json
+{
+  "error": "task summary is required",
+  "code": 1,
+  "result": "ERROR"
+}
+```
+
 
 ## Examples
 
@@ -218,4 +355,4 @@ todoat -y Work delete "old task"
 ```
 
 ---
-*Last updated: 2026-01-17*
+*Last updated: 2026-01-18*

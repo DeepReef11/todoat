@@ -155,8 +155,8 @@ func TestExitCodeError(t *testing.T) {
 func TestMaxThreePositionalArgs(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	// 4 positional arguments should fail
-	exitCode := Execute([]string{"list", "action", "task", "extra"}, &stdout, &stderr, nil)
+	// 4 positional arguments should fail (use "mylist" instead of "list" which is now a subcommand)
+	exitCode := Execute([]string{"mylist", "action", "task", "extra"}, &stdout, &stderr, nil)
 
 	if exitCode != 1 {
 		t.Errorf("expected exit code 1 for 4 positional args, got %d", exitCode)
@@ -172,8 +172,8 @@ func TestMaxThreePositionalArgs(t *testing.T) {
 func TestThreePositionalArgsAllowed(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	// 3 positional arguments should be accepted (even if the command doesn't do anything useful yet)
-	exitCode := Execute([]string{"list", "get", "task"}, &stdout, &stderr, nil)
+	// 3 positional arguments should be accepted (use "mylist" instead of "list" which is now a subcommand)
+	exitCode := Execute([]string{"mylist", "get", "task"}, &stdout, &stderr, nil)
 
 	// Should not fail due to arg count (might fail for other reasons, but not arg count)
 	if exitCode == 1 {
@@ -1202,4 +1202,819 @@ func TestExitCodesVerified(t *testing.T) {
 	if exitCode != 1 {
 		t.Errorf("expected exit code 1 for error, got %d", exitCode)
 	}
+}
+
+// =============================================================================
+// List Management Tests (007-list-commands)
+// =============================================================================
+
+// TestListCreate verifies that `todoat -y list create "MyList"` creates a new list
+func TestListCreate(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "list", "create", "MyList"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertContains(t, stdout.String(), "MyList")
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+}
+
+// TestListCreateDuplicate verifies that creating a duplicate list returns ERROR
+func TestListCreateDuplicate(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create first list
+	Execute([]string{"-y", "list", "create", "ExistingList"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Try to create duplicate
+	exitCode := Execute([]string{"-y", "list", "create", "ExistingList"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 1)
+	assertResultCode(t, stdout.String(), ResultError)
+}
+
+// TestListView verifies that `todoat -y list` displays all lists with task counts
+func TestListView(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create lists and add tasks
+	Execute([]string{"-y", "list", "create", "Work"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "list", "create", "Personal"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Task 1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Task 2"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Personal", "add", "Task 3"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// View lists
+	exitCode := Execute([]string{"-y", "list"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Work")
+	assertContains(t, output, "Personal")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestListViewEmpty verifies that viewing lists with no lists shows INFO_ONLY message
+func TestListViewEmpty(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// View lists when none exist
+	exitCode := Execute([]string{"-y", "list"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain a helpful message about no lists
+	if !strings.Contains(strings.ToLower(output), "no") || !strings.Contains(strings.ToLower(output), "list") {
+		t.Errorf("expected message about no lists, got: %s", output)
+	}
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestListViewJSON verifies that `todoat -y --json list` returns valid JSON
+func TestListViewJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list
+	Execute([]string{"-y", "list", "create", "JSONTest"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// View lists with JSON output
+	exitCode := Execute([]string{"-y", "--json", "list"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain JSON array indicators
+	assertContains(t, output, "[")
+	assertContains(t, output, "]")
+	assertContains(t, output, "JSONTest")
+}
+
+// TestListCreateJSON verifies that `todoat -y --json list create "Test"` returns JSON
+func TestListCreateJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create list with JSON output
+	exitCode := Execute([]string{"-y", "--json", "list", "create", "JSONCreate"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain JSON object indicators
+	assertContains(t, output, "{")
+	assertContains(t, output, "}")
+	assertContains(t, output, "JSONCreate")
+}
+
+// =============================================================================
+// JSON Output Tests for Task Commands (008-json-output)
+// =============================================================================
+
+// TestJSONFlagParsing verifies that --json flag is recognized and sets output mode
+func TestJSONFlagParsing(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	Execute([]string{"-y", "list", "create", "FlagTest"}, &stdout, &stderr, cfg)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Test that --json flag is accepted without error
+	exitCode := Execute([]string{"-y", "--json", "FlagTest"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// JSON output should contain JSON structure, not plain text
+	assertContains(t, output, "{")
+	assertNotContains(t, output, "Tasks in 'FlagTest'")
+}
+
+// TestListTasksJSON verifies that `todoat -y --json MyList` returns valid JSON with tasks array
+func TestListTasksJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and add tasks
+	Execute([]string{"-y", "list", "create", "TaskListJSON"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "TaskListJSON", "add", "First Task"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "TaskListJSON", "add", "Second Task"}, &stdout, &stderr, cfg)
+	stdout.Reset()
+	stderr.Reset()
+
+	// List tasks with JSON output
+	exitCode := Execute([]string{"-y", "--json", "TaskListJSON"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain JSON with tasks array
+	assertContains(t, output, `"tasks"`)
+	assertContains(t, output, `"list"`)
+	assertContains(t, output, `"TaskListJSON"`)
+	assertContains(t, output, `"First Task"`)
+	assertContains(t, output, `"Second Task"`)
+	assertContains(t, output, `"result"`)
+	assertContains(t, output, `"INFO_ONLY"`)
+}
+
+// TestAddTaskJSON verifies that `todoat -y --json MyList add "Task"` returns JSON with task info and result
+func TestAddTaskJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	Execute([]string{"-y", "list", "create", "AddJSON"}, &stdout, &stderr, cfg)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Add task with JSON output
+	exitCode := Execute([]string{"-y", "--json", "AddJSON", "add", "New JSON Task"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain JSON with action and task
+	assertContains(t, output, `"action"`)
+	assertContains(t, output, `"add"`)
+	assertContains(t, output, `"task"`)
+	assertContains(t, output, `"New JSON Task"`)
+	assertContains(t, output, `"result"`)
+	assertContains(t, output, `"ACTION_COMPLETED"`)
+}
+
+// TestUpdateTaskJSON verifies that `todoat -y --json MyList update "Task" -s DONE` returns JSON with updated task
+func TestUpdateTaskJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and add a task
+	Execute([]string{"-y", "list", "create", "UpdateJSON"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "UpdateJSON", "add", "Task To Update"}, &stdout, &stderr, cfg)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update task with JSON output
+	exitCode := Execute([]string{"-y", "--json", "UpdateJSON", "update", "Task To Update", "-s", "DONE"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain JSON with action and updated task
+	assertContains(t, output, `"action"`)
+	assertContains(t, output, `"update"`)
+	assertContains(t, output, `"task"`)
+	assertContains(t, output, `"Task To Update"`)
+	assertContains(t, output, `"result"`)
+	assertContains(t, output, `"ACTION_COMPLETED"`)
+}
+
+// TestDeleteTaskJSON verifies that `todoat -y --json MyList delete "Task"` returns JSON with result
+func TestDeleteTaskJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and add a task
+	Execute([]string{"-y", "list", "create", "DeleteJSON"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "DeleteJSON", "add", "Task To Delete"}, &stdout, &stderr, cfg)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Delete task with JSON output
+	exitCode := Execute([]string{"-y", "--json", "DeleteJSON", "delete", "Task To Delete"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain JSON with action and result
+	assertContains(t, output, `"action"`)
+	assertContains(t, output, `"delete"`)
+	assertContains(t, output, `"result"`)
+	assertContains(t, output, `"ACTION_COMPLETED"`)
+}
+
+// TestErrorJSON verifies that error conditions return JSON error with result: "ERROR"
+func TestErrorJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	Execute([]string{"-y", "list", "create", "ErrorTestList"}, &stdout, &stderr, cfg)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Try to delete a non-existent task with JSON output (this triggers an error)
+	exitCode := Execute([]string{"-y", "--json", "ErrorTestList", "delete", "NonExistentTask"}, &stdout, &stderr, cfg)
+
+	// Should return non-zero exit code
+	if exitCode == 0 {
+		t.Errorf("expected non-zero exit code for error, got 0")
+	}
+
+	output := stdout.String()
+	// Should contain JSON error
+	assertContains(t, output, `"error"`)
+	assertContains(t, output, `"result"`)
+	assertContains(t, output, `"ERROR"`)
+}
+
+// TestJSONResultCodes verifies that all JSON responses include "result" field
+func TestJSONResultCodes(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create list
+	Execute([]string{"-y", "list", "create", "ResultCodeTest"}, &stdout, &stderr, cfg)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Test INFO_ONLY result for listing tasks
+	exitCode := Execute([]string{"-y", "--json", "ResultCodeTest"}, &stdout, &stderr, cfg)
+	assertExitCode(t, exitCode, 0)
+	assertContains(t, stdout.String(), `"result"`)
+	assertContains(t, stdout.String(), `"INFO_ONLY"`)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Test ACTION_COMPLETED result for add
+	exitCode = Execute([]string{"-y", "--json", "ResultCodeTest", "add", "Test Task"}, &stdout, &stderr, cfg)
+	assertExitCode(t, exitCode, 0)
+	assertContains(t, stdout.String(), `"result"`)
+	assertContains(t, stdout.String(), `"ACTION_COMPLETED"`)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Test ACTION_COMPLETED result for update
+	exitCode = Execute([]string{"-y", "--json", "ResultCodeTest", "update", "Test Task", "-s", "DONE"}, &stdout, &stderr, cfg)
+	assertExitCode(t, exitCode, 0)
+	assertContains(t, stdout.String(), `"result"`)
+	assertContains(t, stdout.String(), `"ACTION_COMPLETED"`)
+	stdout.Reset()
+	stderr.Reset()
+
+	// Test ACTION_COMPLETED result for delete
+	Execute([]string{"-y", "ResultCodeTest", "add", "Delete Me"}, &stdout, &stderr, cfg)
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "ResultCodeTest", "delete", "Delete Me"}, &stdout, &stderr, cfg)
+	assertExitCode(t, exitCode, 0)
+	assertContains(t, stdout.String(), `"result"`)
+	assertContains(t, stdout.String(), `"ACTION_COMPLETED"`)
+}
+
+// =============================================================================
+// Priority Filtering Tests (009-priority-filtering)
+// =============================================================================
+
+// TestPriorityFilterSingle verifies that `todoat -y MyList -p 1` shows only priority 1 tasks
+func TestPriorityFilterSingle(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with different priorities
+	Execute([]string{"-y", "Work", "add", "Priority 1 task", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 2 task", "-p", "2"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 5 task", "-p", "5"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter to show only priority 1 tasks
+	exitCode := Execute([]string{"-y", "Work", "-p", "1"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Priority 1 task")
+	assertNotContains(t, output, "Priority 2 task")
+	assertNotContains(t, output, "Priority 5 task")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestPriorityFilterRange verifies that `todoat -y MyList -p 1,2,3` shows tasks with priority 1, 2, or 3
+func TestPriorityFilterRange(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with different priorities
+	Execute([]string{"-y", "Work", "add", "Priority 1 task", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 2 task", "-p", "2"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 3 task", "-p", "3"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 5 task", "-p", "5"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 7 task", "-p", "7"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter to show priorities 1, 2, 3
+	exitCode := Execute([]string{"-y", "Work", "-p", "1,2,3"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Priority 1 task")
+	assertContains(t, output, "Priority 2 task")
+	assertContains(t, output, "Priority 3 task")
+	assertNotContains(t, output, "Priority 5 task")
+	assertNotContains(t, output, "Priority 7 task")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestPriorityFilterHigh verifies that `todoat -y MyList -p high` shows priorities 1-4
+func TestPriorityFilterHigh(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with different priorities
+	Execute([]string{"-y", "Work", "add", "Priority 1 task", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 4 task", "-p", "4"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 5 task", "-p", "5"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 9 task", "-p", "9"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter using 'high' alias
+	exitCode := Execute([]string{"-y", "Work", "-p", "high"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Priority 1 task")
+	assertContains(t, output, "Priority 4 task")
+	assertNotContains(t, output, "Priority 5 task")
+	assertNotContains(t, output, "Priority 9 task")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestPriorityFilterMedium verifies that `todoat -y MyList -p medium` shows priority 5
+func TestPriorityFilterMedium(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with different priorities
+	Execute([]string{"-y", "Work", "add", "Priority 1 task", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 5 task", "-p", "5"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 6 task", "-p", "6"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter using 'medium' alias
+	exitCode := Execute([]string{"-y", "Work", "-p", "medium"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertNotContains(t, output, "Priority 1 task")
+	assertContains(t, output, "Priority 5 task")
+	assertNotContains(t, output, "Priority 6 task")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestPriorityFilterLow verifies that `todoat -y MyList -p low` shows priorities 6-9
+func TestPriorityFilterLow(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with different priorities
+	Execute([]string{"-y", "Work", "add", "Priority 1 task", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 5 task", "-p", "5"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 6 task", "-p", "6"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 9 task", "-p", "9"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter using 'low' alias
+	exitCode := Execute([]string{"-y", "Work", "-p", "low"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertNotContains(t, output, "Priority 1 task")
+	assertNotContains(t, output, "Priority 5 task")
+	assertContains(t, output, "Priority 6 task")
+	assertContains(t, output, "Priority 9 task")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestPriorityFilterUndefined verifies that `todoat -y MyList -p 0` shows tasks with no priority set
+func TestPriorityFilterUndefined(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with and without priority
+	Execute([]string{"-y", "Work", "add", "No priority task"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 1 task", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 5 task", "-p", "5"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter to show only tasks with no priority (priority 0)
+	exitCode := Execute([]string{"-y", "Work", "-p", "0"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "No priority task")
+	assertNotContains(t, output, "Priority 1 task")
+	assertNotContains(t, output, "Priority 5 task")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestPriorityFilterNoMatch verifies that `todoat -y MyList -p 1` with no matching tasks returns INFO_ONLY with message
+func TestPriorityFilterNoMatch(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with priority 5 only
+	Execute([]string{"-y", "Work", "add", "Priority 5 task", "-p", "5"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter for priority 1 (no matches)
+	exitCode := Execute([]string{"-y", "Work", "-p", "1"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should show a message about no tasks matching
+	if !strings.Contains(strings.ToLower(output), "no") || !strings.Contains(strings.ToLower(output), "task") {
+		t.Errorf("expected message about no matching tasks, got: %s", output)
+	}
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// TestPriorityFilterJSON verifies that `todoat -y --json MyList -p 1` returns filtered JSON result
+func TestPriorityFilterJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with different priorities
+	Execute([]string{"-y", "Work", "add", "Priority 1 task", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Priority 5 task", "-p", "5"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter with JSON output
+	exitCode := Execute([]string{"-y", "--json", "Work", "-p", "1"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	// Should contain JSON with only priority 1 task
+	assertContains(t, output, `"Priority 1 task"`)
+	assertNotContains(t, output, `"Priority 5 task"`)
+	assertContains(t, output, `"result"`)
+	assertContains(t, output, `"INFO_ONLY"`)
+}
+
+// TestPriorityFilterInvalid verifies that `todoat -y MyList -p 10` returns ERROR for invalid priority
+func TestPriorityFilterInvalid(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a task
+	Execute([]string{"-y", "Work", "add", "Some task"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Try invalid priority filter
+	exitCode := Execute([]string{"-y", "Work", "-p", "10"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 1)
+	assertResultCode(t, stdout.String(), ResultError)
+}
+
+// TestPriorityFilterCombinedWithStatus verifies combined status and priority filters work
+func TestPriorityFilterCombinedWithStatus(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Create tasks with different priorities and statuses
+	Execute([]string{"-y", "Work", "add", "High priority TODO", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "High priority DONE", "-p", "1"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "complete", "High priority DONE"}, &stdout, &stderr, cfg)
+	Execute([]string{"-y", "Work", "add", "Low priority TODO", "-p", "7"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Filter for TODO tasks with high priority
+	exitCode := Execute([]string{"-y", "Work", "-s", "TODO", "-p", "high"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "High priority TODO")
+	assertNotContains(t, output, "High priority DONE")
+	assertNotContains(t, output, "Low priority TODO")
+	assertResultCode(t, output, ResultInfoOnly)
+}
+
+// =============================================================================
+// Task Dates Tests (011-task-dates)
+// =============================================================================
+
+// TestAddTaskWithDueDate verifies that `todoat -y MyList add "Task" --due-date 2026-01-31` sets due date
+func TestAddTaskWithDueDate(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "Work", "add", "Task with due", "--due-date", "2026-01-31"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Task with due")
+	assertContains(t, output, "2026-01-31")
+}
+
+// TestAddTaskWithStartDate verifies that `todoat -y MyList add "Task" --start-date 2026-01-15` sets start date
+func TestAddTaskWithStartDate(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "Work", "add", "Task with start", "--start-date", "2026-01-15"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check start_date
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Task with start")
+	assertContains(t, output, "2026-01-15")
+}
+
+// TestAddTaskWithBothDates verifies that both --due-date and --start-date can be set together
+func TestAddTaskWithBothDates(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "Work", "add", "Task with both dates", "--due-date", "2026-01-31", "--start-date", "2026-01-15"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check both dates
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Task with both dates")
+	assertContains(t, output, "2026-01-31")
+	assertContains(t, output, "2026-01-15")
+}
+
+// TestUpdateTaskDueDate verifies that `todoat -y MyList update "Task" --due-date 2026-02-15` updates due date
+func TestUpdateTaskDueDate(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task with a due date
+	Execute([]string{"-y", "Work", "add", "Update date task", "--due-date", "2026-01-31"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update the due date
+	exitCode := Execute([]string{"-y", "Work", "update", "Update date task", "--due-date", "2026-02-15"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify updated due date
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Update date task")
+	assertContains(t, output, "2026-02-15")
+	assertNotContains(t, output, "2026-01-31")
+}
+
+// TestClearTaskDueDate verifies that `todoat -y MyList update "Task" --due-date ""` clears due date
+func TestClearTaskDueDate(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task with a due date
+	Execute([]string{"-y", "Work", "add", "Clear date task", "--due-date", "2026-01-31"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Clear the due date
+	exitCode := Execute([]string{"-y", "Work", "update", "Clear date task", "--due-date", ""}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Verify due date is cleared - JSON output should not have the date
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Clear date task")
+	// Due date should be empty or null in JSON
+	assertNotContains(t, output, "2026-01-31")
+}
+
+// TestInvalidDateFormat verifies that `todoat -y MyList add "Task" --due-date "invalid"` returns ERROR
+func TestInvalidDateFormat(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"-y", "Work", "add", "Invalid date task", "--due-date", "invalid"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 1)
+	assertResultCode(t, stdout.String(), ResultError)
+}
+
+// TestDateFormatValidation verifies that `todoat -y MyList add "Task" --due-date "01-31-2026"` returns ERROR (wrong format)
+func TestDateFormatValidation(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Wrong format: MM-DD-YYYY instead of YYYY-MM-DD
+	exitCode := Execute([]string{"-y", "Work", "add", "Wrong format task", "--due-date", "01-31-2026"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 1)
+	assertResultCode(t, stdout.String(), ResultError)
+}
+
+// TestTaskDatesInJSON verifies that `todoat -y --json MyList` includes due_date and start_date fields
+func TestTaskDatesInJSON(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task with both dates
+	Execute([]string{"-y", "Work", "add", "JSON date task", "--due-date", "2026-01-31", "--start-date", "2026-01-15"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get tasks as JSON
+	exitCode := Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, `"due_date"`)
+	assertContains(t, output, `"start_date"`)
+	assertContains(t, output, "2026-01-31")
+	assertContains(t, output, "2026-01-15")
+}
+
+// TestCompletedTimestamp verifies that `todoat -y MyList complete "Task"` sets completed timestamp automatically
+func TestCompletedTimestamp(t *testing.T) {
+	cfg, cleanup := testWithDB(t)
+	defer cleanup()
+
+	var stdout, stderr bytes.Buffer
+
+	// Add a task
+	Execute([]string{"-y", "Work", "add", "Task to complete"}, &stdout, &stderr, cfg)
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Complete the task
+	exitCode := Execute([]string{"-y", "Work", "complete", "Task to complete"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	assertResultCode(t, stdout.String(), ResultActionCompleted)
+
+	// Get tasks as JSON and verify completed timestamp is set
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "--json", "Work"}, &stdout, &stderr, cfg)
+
+	assertExitCode(t, exitCode, 0)
+	output := stdout.String()
+	assertContains(t, output, "Task to complete")
+	assertContains(t, output, `"completed"`)
 }

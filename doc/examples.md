@@ -112,6 +112,42 @@ todoat Work add "Nice to have" -p 9
 todoat Work update "bug fix" -p 2
 ```
 
+### Priority Filtering
+
+```bash
+# Show only priority 1 tasks
+todoat Work get -p 1
+
+# Show priorities 1, 2, or 3
+todoat Work get -p 1,2,3
+
+# Use aliases for common filters
+todoat Work get -p high     # priorities 1-4
+todoat Work get -p medium   # priority 5
+todoat Work get -p low      # priorities 6-9
+```
+
+## Due Dates
+
+Set start and due dates for task scheduling:
+
+```bash
+# Add task with due date
+todoat Work add "Submit report" --due-date 2026-01-31
+
+# Add task with start and due date
+todoat Work add "Project phase 1" --start-date 2026-01-20 --due-date 2026-02-15
+
+# Update due date
+todoat Work update "report" --due-date 2026-02-01
+
+# Clear due date
+todoat Work update "report" --due-date ""
+
+# Combine with priority
+todoat Work add "Urgent deadline" -p 1 --due-date 2026-01-25
+```
+
 ## Multiple Lists
 
 ```bash
@@ -159,6 +195,80 @@ done < tasks.txt
 ```bash
 # Delete without confirmation
 todoat -y Cleanup delete "old task"
+```
+
+### Result Codes
+
+In no-prompt mode, todoat outputs result codes for scripting:
+
+```bash
+# Check if action completed
+output=$(todoat -y Work add "Task" 2>&1)
+if echo "$output" | grep -q "ACTION_COMPLETED"; then
+    echo "Task added successfully"
+fi
+```
+
+Result codes:
+- `ACTION_COMPLETED` - Modification succeeded
+- `INFO_ONLY` - Read-only operation
+- `ERROR` - Operation failed
+
+## JSON Output
+
+Use `--json` for machine-readable output:
+
+```bash
+# Get tasks as JSON
+todoat Work get --json
+
+# Pretty print with jq
+todoat Work get --json | jq '.'
+
+# Get task count
+todoat Work get --json | jq '.count'
+
+# Get task summaries
+todoat Work get --json | jq '.tasks[].summary'
+
+# View all lists as JSON
+todoat list --json
+```
+
+### JSON in Scripts
+
+```bash
+#!/bin/bash
+# Example: Count tasks by status
+
+TODO_COUNT=$(todoat Work get -s TODO --json | jq '.count')
+DONE_COUNT=$(todoat Work get -s DONE --json | jq '.count')
+
+echo "Todo: $TODO_COUNT, Done: $DONE_COUNT"
+```
+
+```bash
+#!/bin/bash
+# Example: Add task and capture ID
+
+RESULT=$(todoat Work add "New task" --json)
+TASK_ID=$(echo "$RESULT" | jq -r '.task.uid')
+echo "Created task with ID: $TASK_ID"
+```
+
+## List Management
+
+View and create task lists:
+
+```bash
+# View all lists
+todoat list
+
+# Create a new list
+todoat list create "Projects"
+
+# Lists as JSON
+todoat list --json | jq '.[] | {name, tasks}'
 ```
 
 ## Renaming Tasks
@@ -224,4 +334,4 @@ todoat Work complete "task with spaces"
 ```
 
 ---
-*Last updated: 2026-01-17*
+*Last updated: 2026-01-18*

@@ -22,8 +22,10 @@ A command-line task manager with multiple backend support.
 
 - **Task Management**: Add, view, update, complete, and delete tasks
 - **Task Lists**: Organize tasks into named lists (created automatically)
-- **Priority Support**: Set task priority (0-9, where 1 is highest)
+- **Priority Support**: Set task priority (0-9, where 1 is highest) and filter by priority
 - **Status Tracking**: Track task status (TODO, IN-PROGRESS, DONE, CANCELLED)
+- **Due Dates**: Set start and due dates for tasks
+- **JSON Output**: Machine-readable JSON output for scripting
 - **SQLite Backend**: Local task storage in `~/.todoat/todoat.db`
 
 ## Basic Usage
@@ -35,14 +37,20 @@ todoat MyList
 # Add a task
 todoat MyList add "Buy groceries"
 
-# Add a task with priority
-todoat MyList add "Urgent task" -p 1
+# Add a task with priority and due date
+todoat MyList add "Urgent task" -p 1 --due-date 2026-01-31
 
 # Complete a task
 todoat MyList complete "Buy groceries"
 
 # Delete a task
 todoat MyList delete "Buy groceries"
+
+# View all lists
+todoat list
+
+# JSON output (for scripting)
+todoat MyList get --json
 ```
 
 ## Documentation
@@ -61,10 +69,11 @@ todoat MyList delete "Buy groceries"
 | `--version` | | Show version |
 | `--no-prompt` | `-y` | Disable interactive prompts |
 | `--verbose` | `-V` | Enable debug output |
+| `--json` | | Output in JSON format |
 
 ## License
 
 See the project repository for license information.
 
 ---
-*Last updated: 2026-01-17*
+*Last updated: 2026-01-18*

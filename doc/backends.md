@@ -77,4 +77,4 @@ Additional backends are planned for future releases:
 - Git/Markdown files
 
 ---
-*Last updated: 2026-01-17*
+*Last updated: 2026-01-18*

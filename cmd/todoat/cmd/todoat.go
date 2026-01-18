@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"todoat/backend"
@@ -40,14 +43,30 @@ func Execute(args []string, stdout, stderr io.Writer, cfg *Config) int {
 	rootCmd.SetErr(stderr)
 
 	if err := rootCmd.Execute(); err != nil {
-		_, _ = fmt.Fprintln(stderr, "Error:", err)
-		// Emit ERROR result code in no-prompt mode
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultError)
+		// Check if --json flag was passed to output error as JSON
+		jsonOutput := containsJSONFlag(args)
+		if jsonOutput {
+			outputErrorJSON(err, stdout)
+		} else {
+			_, _ = fmt.Fprintln(stderr, "Error:", err)
+			// Emit ERROR result code in no-prompt mode
+			if cfg != nil && cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultError)
+			}
 		}
 		return 1
 	}
 	return 0
+}
+
+// containsJSONFlag checks if args contain --json flag
+func containsJSONFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--json" {
+			return true
+		}
+	}
+	return false
 }
 
 // NewTodoAt creates the root command with injectable IO
@@ -107,8 +126,11 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 				return err
 			}
 
+			// Check for JSON output mode
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+
 			// Execute the action
-			return executeAction(ctx, cmd, be, list, action, taskSummary, cfg, stdout)
+			return executeAction(ctx, cmd, be, list, action, taskSummary, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -120,11 +142,185 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.PersistentFlags().Bool("json", false, "Output in JSON format")
 
 	// Add action-specific flags
-	cmd.Flags().IntP("priority", "p", 0, "Task priority (0-9)")
+	cmd.Flags().StringP("priority", "p", "", "Task priority (0-9) for add/update, or filter (1,2,3 or high/medium/low) for get")
 	cmd.Flags().StringP("status", "s", "", "Task status (TODO, IN-PROGRESS, DONE, CANCELLED)")
 	cmd.Flags().String("summary", "", "New task summary (for update)")
+	cmd.Flags().String("due-date", "", "Due date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
+	cmd.Flags().String("start-date", "", "Start date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
+
+	// Add list subcommand
+	cmd.AddCommand(newListCmd(stdout, cfg))
 
 	return cmd
+}
+
+// newListCmd creates the 'list' subcommand for list management
+func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "Manage task lists",
+		Long:  "View all lists or manage lists with subcommands.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Update config from flags
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListView(context.Background(), be, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	// Add 'create' subcommand
+	listCmd.AddCommand(newListCreateCmd(stdout, cfg))
+
+	return listCmd
+}
+
+// newListCreateCmd creates the 'list create' subcommand
+func newListCreateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "create [name]",
+		Short: "Create a new list",
+		Long:  "Create a new task list with the given name.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Update config from flags
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListCreate(context.Background(), be, args[0], cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doListView displays all task lists with their task counts
+func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	lists, err := be.GetLists(ctx)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		// Build JSON output with task counts
+		type listJSON struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Color    string `json:"color,omitempty"`
+			Tasks    int    `json:"tasks"`
+			Modified string `json:"modified"`
+		}
+		var output []listJSON
+		for _, l := range lists {
+			tasks, _ := be.GetTasks(ctx, l.ID)
+			output = append(output, listJSON{
+				ID:       l.ID,
+				Name:     l.Name,
+				Color:    l.Color,
+				Tasks:    len(tasks),
+				Modified: l.Modified.Format("2006-01-02T15:04:05Z"),
+			})
+		}
+		if output == nil {
+			output = []listJSON{}
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	if len(lists) == 0 {
+		_, _ = fmt.Fprintln(stdout, "No lists found. Create one with: todoat list create \"MyList\"")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	// Display formatted list with task counts
+	_, _ = fmt.Fprintf(stdout, "Available lists (%d):\n\n", len(lists))
+	_, _ = fmt.Fprintf(stdout, "%-20s %s\n", "NAME", "TASKS")
+
+	for _, l := range lists {
+		tasks, _ := be.GetTasks(ctx, l.ID)
+		_, _ = fmt.Fprintf(stdout, "%-20s %d\n", l.Name, len(tasks))
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// doListCreate creates a new task list
+func doListCreate(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check for duplicate list name
+	lists, err := be.GetLists(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, l := range lists {
+		if strings.EqualFold(l.Name, name) {
+			return fmt.Errorf("list '%s' already exists", name)
+		}
+	}
+
+	// Create the list
+	list, err := be.CreateList(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		type listJSON struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Color    string `json:"color,omitempty"`
+			Modified string `json:"modified"`
+		}
+		output := listJSON{
+			ID:       list.ID,
+			Name:     list.Name,
+			Color:    list.Color,
+			Modified: list.Modified.Format("2006-01-02T15:04:05Z"),
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Created list: %s\n", list.Name)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
 }
 
 // getBackend creates or returns the backend connection
@@ -184,30 +380,84 @@ func getOrCreateList(ctx context.Context, be backend.TaskManager, name string) (
 }
 
 // executeAction performs the requested action on the list
-func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManager, list *backend.List, action, taskSummary string, cfg *Config, stdout io.Writer) error {
+func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManager, list *backend.List, action, taskSummary string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	switch action {
 	case "get":
 		statusFilter, _ := cmd.Flags().GetString("status")
-		return doGet(ctx, be, list, statusFilter, cfg, stdout)
+		priorityFilterStr, _ := cmd.Flags().GetString("priority")
+		priorityFilter, err := parsePriorityFilter(priorityFilterStr)
+		if err != nil {
+			return err
+		}
+		return doGet(ctx, be, list, statusFilter, priorityFilter, cfg, stdout, jsonOutput)
 	case "add":
-		priority, _ := cmd.Flags().GetInt("priority")
-		return doAdd(ctx, be, list, taskSummary, priority, cfg, stdout)
+		priorityStr, _ := cmd.Flags().GetString("priority")
+		priority, err := parsePrioritySingle(priorityStr)
+		if err != nil {
+			return err
+		}
+		dueDateStr, _ := cmd.Flags().GetString("due-date")
+		startDateStr, _ := cmd.Flags().GetString("start-date")
+		dueDate, err := parseDate(dueDateStr)
+		if err != nil {
+			return fmt.Errorf("invalid due-date: %w", err)
+		}
+		startDate, err := parseDate(startDateStr)
+		if err != nil {
+			return fmt.Errorf("invalid start-date: %w", err)
+		}
+		return doAdd(ctx, be, list, taskSummary, priority, dueDate, startDate, cfg, stdout, jsonOutput)
 	case "update":
-		priority, _ := cmd.Flags().GetInt("priority")
+		priorityStr, _ := cmd.Flags().GetString("priority")
+		priority, err := parsePrioritySingle(priorityStr)
+		if err != nil {
+			return err
+		}
 		status, _ := cmd.Flags().GetString("status")
 		newSummary, _ := cmd.Flags().GetString("summary")
-		return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, cfg, stdout)
+		dueDateStr, dueDateChanged := cmd.Flags().GetString("due-date")
+		startDateStr, startDateChanged := cmd.Flags().GetString("start-date")
+		// Check if flags were actually set (not just empty)
+		dueDateFlagSet := cmd.Flags().Changed("due-date")
+		startDateFlagSet := cmd.Flags().Changed("start-date")
+		_ = dueDateChanged
+		_ = startDateChanged
+		var dueDate, startDate *time.Time
+		var clearDueDate, clearStartDate bool
+		if dueDateFlagSet {
+			if dueDateStr == "" {
+				clearDueDate = true
+			} else {
+				d, err := parseDate(dueDateStr)
+				if err != nil {
+					return fmt.Errorf("invalid due-date: %w", err)
+				}
+				dueDate = d
+			}
+		}
+		if startDateFlagSet {
+			if startDateStr == "" {
+				clearStartDate = true
+			} else {
+				d, err := parseDate(startDateStr)
+				if err != nil {
+					return fmt.Errorf("invalid start-date: %w", err)
+				}
+				startDate = d
+			}
+		}
+		return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, cfg, stdout, jsonOutput)
 	case "complete":
-		return doComplete(ctx, be, list, taskSummary, cfg, stdout)
+		return doComplete(ctx, be, list, taskSummary, cfg, stdout, jsonOutput)
 	case "delete":
-		return doDelete(ctx, be, list, taskSummary, cfg, stdout)
+		return doDelete(ctx, be, list, taskSummary, cfg, stdout, jsonOutput)
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
 }
 
-// doGet lists all tasks in a list, optionally filtering by status
-func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, cfg *Config, stdout io.Writer) error {
+// doGet lists all tasks in a list, optionally filtering by status and/or priority
+func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	tasks, err := be.GetTasks(ctx, list.ID)
 	if err != nil {
 		return err
@@ -223,6 +473,21 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 			}
 		}
 		tasks = filteredTasks
+	}
+
+	// Filter by priority if specified
+	if len(priorityFilter) > 0 {
+		var filteredTasks []backend.Task
+		for _, t := range tasks {
+			if matchesPriorityFilter(t.Priority, priorityFilter) {
+				filteredTasks = append(filteredTasks, t)
+			}
+		}
+		tasks = filteredTasks
+	}
+
+	if jsonOutput {
+		return outputTaskListJSON(tasks, list, stdout)
 	}
 
 	if len(tasks) == 0 {
@@ -246,6 +511,80 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 	return nil
 }
 
+// matchesPriorityFilter checks if a task's priority matches any of the filter priorities
+func matchesPriorityFilter(taskPriority int, priorities []int) bool {
+	for _, p := range priorities {
+		if taskPriority == p {
+			return true
+		}
+	}
+	return false
+}
+
+// parsePriorityFilter parses a priority filter string into a slice of priority values
+// Supports: single value (1), comma-separated (1,2,3), aliases (high, medium, low)
+func parsePriorityFilter(s string) ([]int, error) {
+	if s == "" {
+		return nil, nil
+	}
+
+	s = strings.TrimSpace(strings.ToLower(s))
+
+	// Handle aliases
+	switch s {
+	case "high":
+		return []int{1, 2, 3, 4}, nil
+	case "medium":
+		return []int{5}, nil
+	case "low":
+		return []int{6, 7, 8, 9}, nil
+	}
+
+	// Handle comma-separated values
+	parts := strings.Split(s, ",")
+	var priorities []int
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		val, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid priority value: %s", part)
+		}
+		if val < 0 || val > 9 {
+			return nil, fmt.Errorf("priority must be between 0 and 9, got: %d", val)
+		}
+		priorities = append(priorities, val)
+	}
+
+	return priorities, nil
+}
+
+// parsePrioritySingle parses a single priority value from string
+func parsePrioritySingle(s string) (int, error) {
+	if s == "" {
+		return 0, nil
+	}
+	val, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid priority value: %s", s)
+	}
+	if val < 0 || val > 9 {
+		return 0, fmt.Errorf("priority must be between 0 and 9, got: %d", val)
+	}
+	return val, nil
+}
+
+// parseDate parses a date string in YYYY-MM-DD format
+func parseDate(s string) (*time.Time, error) {
+	if s == "" {
+		return nil, nil
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return nil, fmt.Errorf("date must be in YYYY-MM-DD format (e.g., 2026-01-31)")
+	}
+	return &t, nil
+}
+
 // getStatusIcon returns a visual indicator for task status
 func getStatusIcon(status backend.TaskStatus) string {
 	switch status {
@@ -261,20 +600,26 @@ func getStatusIcon(status backend.TaskStatus) string {
 }
 
 // doAdd creates a new task
-func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, cfg *Config, stdout io.Writer) error {
+func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, dueDate, startDate *time.Time, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	if summary == "" {
 		return fmt.Errorf("task summary is required")
 	}
 
 	task := &backend.Task{
-		Summary:  summary,
-		Priority: priority,
-		Status:   backend.StatusNeedsAction,
+		Summary:   summary,
+		Priority:  priority,
+		Status:    backend.StatusNeedsAction,
+		DueDate:   dueDate,
+		StartDate: startDate,
 	}
 
 	created, err := be.CreateTask(ctx, list.ID, task)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		return outputActionJSON("add", created, stdout)
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Created task: %s (ID: %s)\n", created.Summary, created.ID)
@@ -287,7 +632,7 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 }
 
 // doUpdate modifies an existing task
-func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary, status string, priority int, cfg *Config, stdout io.Writer) error {
+func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
 	if err != nil {
 		return err
@@ -303,10 +648,26 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	if priority > 0 {
 		task.Priority = priority
 	}
+	if dueDate != nil {
+		task.DueDate = dueDate
+	}
+	if clearDueDate {
+		task.DueDate = nil
+	}
+	if startDate != nil {
+		task.StartDate = startDate
+	}
+	if clearStartDate {
+		task.StartDate = nil
+	}
 
 	updated, err := be.UpdateTask(ctx, list.ID, task)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		return outputActionJSON("update", updated, stdout)
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Updated task: %s\n", updated.Summary)
@@ -335,17 +696,24 @@ func parseStatus(s string) backend.TaskStatus {
 }
 
 // doComplete marks a task as completed
-func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary string, cfg *Config, stdout io.Writer) error {
+func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
 	if err != nil {
 		return err
 	}
 
 	task.Status = backend.StatusCompleted
+	// Auto-set completed timestamp
+	now := time.Now().UTC()
+	task.Completed = &now
 
 	updated, err := be.UpdateTask(ctx, list.ID, task)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		return outputActionJSON("complete", updated, stdout)
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Completed task: %s\n", updated.Summary)
@@ -358,14 +726,21 @@ func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List,
 }
 
 // doDelete removes a task
-func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary string, cfg *Config, stdout io.Writer) error {
+func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
 	if err != nil {
 		return err
 	}
 
+	// Store task info before deletion for JSON output
+	deletedTask := *task
+
 	if err := be.DeleteTask(ctx, list.ID, task.ID); err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		return outputActionJSON("delete", &deletedTask, stdout)
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Deleted task: %s\n", task.Summary)
@@ -424,4 +799,124 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 
 	// In interactive mode, we would prompt - but for now return error
 	return nil, fmt.Errorf("multiple tasks match '%s' - please be more specific", searchTerm)
+}
+
+// JSON output structures
+type taskJSON struct {
+	UID       string  `json:"uid"`
+	Summary   string  `json:"summary"`
+	Status    string  `json:"status"`
+	Priority  int     `json:"priority"`
+	DueDate   *string `json:"due_date,omitempty"`
+	StartDate *string `json:"start_date,omitempty"`
+	Completed *string `json:"completed,omitempty"`
+}
+
+type listTasksResponse struct {
+	Tasks  []taskJSON `json:"tasks"`
+	List   string     `json:"list"`
+	Count  int        `json:"count"`
+	Result string     `json:"result"`
+}
+
+type actionResponse struct {
+	Action string   `json:"action"`
+	Task   taskJSON `json:"task"`
+	Result string   `json:"result"`
+}
+
+type errorResponse struct {
+	Error  string `json:"error"`
+	Code   int    `json:"code"`
+	Result string `json:"result"`
+}
+
+// taskToJSON converts a backend.Task to taskJSON
+func taskToJSON(t *backend.Task) taskJSON {
+	result := taskJSON{
+		UID:      t.ID,
+		Summary:  t.Summary,
+		Status:   statusToString(t.Status),
+		Priority: t.Priority,
+	}
+	if t.DueDate != nil {
+		s := t.DueDate.Format("2006-01-02")
+		result.DueDate = &s
+	}
+	if t.StartDate != nil {
+		s := t.StartDate.Format("2006-01-02")
+		result.StartDate = &s
+	}
+	if t.Completed != nil {
+		s := t.Completed.Format(time.RFC3339)
+		result.Completed = &s
+	}
+	return result
+}
+
+// statusToString converts TaskStatus to string representation
+func statusToString(s backend.TaskStatus) string {
+	switch s {
+	case backend.StatusCompleted:
+		return "DONE"
+	case backend.StatusInProgress:
+		return "IN-PROGRESS"
+	case backend.StatusCancelled:
+		return "CANCELLED"
+	default:
+		return "TODO"
+	}
+}
+
+// outputTaskListJSON outputs tasks in JSON format
+func outputTaskListJSON(tasks []backend.Task, list *backend.List, stdout io.Writer) error {
+	var jsonTasks []taskJSON
+	for _, t := range tasks {
+		jsonTasks = append(jsonTasks, taskToJSON(&t))
+	}
+	if jsonTasks == nil {
+		jsonTasks = []taskJSON{}
+	}
+
+	response := listTasksResponse{
+		Tasks:  jsonTasks,
+		List:   list.Name,
+		Count:  len(jsonTasks),
+		Result: ResultInfoOnly,
+	}
+
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+	return nil
+}
+
+// outputActionJSON outputs action result in JSON format
+func outputActionJSON(action string, task *backend.Task, stdout io.Writer) error {
+	response := actionResponse{
+		Action: action,
+		Task:   taskToJSON(task),
+		Result: ResultActionCompleted,
+	}
+
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+	return nil
+}
+
+// outputErrorJSON outputs error in JSON format
+func outputErrorJSON(err error, stdout io.Writer) {
+	response := errorResponse{
+		Error:  err.Error(),
+		Code:   1,
+		Result: ResultError,
+	}
+
+	jsonBytes, _ := json.Marshal(response)
+	_, _ = fmt.Fprintln(stdout, string(jsonBytes))
 }
