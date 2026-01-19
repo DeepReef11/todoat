@@ -410,3 +410,36 @@ func TestCredentialsEnvVarPriority(t *testing.T) {
 		t.Errorf("Expected password 'todoistpass', got '%s'", info.Password)
 	}
 }
+
+// TestCredentialsTodoistTokenEnvVar tests that TODOAT_TODOIST_TOKEN env var is detected
+// This is a regression test for issue #002 - TODOAT_TODOIST_TOKEN not detected
+func TestCredentialsTodoistTokenEnvVar(t *testing.T) {
+	// Save and restore env var
+	origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
+	defer func() {
+		_ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
+	}()
+
+	// Set the token environment variable
+	_ = os.Setenv("TODOAT_TODOIST_TOKEN", "test-api-token-12345")
+
+	mockKeyring := NewMockKeyring()
+	manager := NewManager(WithKeyring(mockKeyring))
+
+	// Get should detect the token from environment
+	// For Todoist, username can be empty since it uses a token
+	info, err := manager.Get(context.Background(), "todoist", "")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	if !info.Found {
+		t.Error("Expected credentials to be found from TODOAT_TODOIST_TOKEN")
+	}
+	if info.Source != SourceEnvironment {
+		t.Errorf("Expected source %s, got %s", SourceEnvironment, info.Source)
+	}
+	if info.Password != "test-api-token-12345" {
+		t.Errorf("Expected token 'test-api-token-12345', got '%s'", info.Password)
+	}
+}

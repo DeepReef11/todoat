@@ -214,6 +214,7 @@ func TestVerboseModeEnabledCoreCLI(t *testing.T) {
 	// Create temp directory for test database
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	// Initialize database
 	db, err := sql.Open("sqlite", dbPath)
@@ -221,6 +222,11 @@ func TestVerboseModeEnabledCoreCLI(t *testing.T) {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
 	_ = db.Close()
+
+	// Write a default config to ensure test isolation
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 
 	// Capture real stderr (logger writes to os.Stderr)
 	oldStderr := os.Stderr
@@ -230,7 +236,8 @@ func TestVerboseModeEnabledCoreCLI(t *testing.T) {
 	var stdout, stderrBuf bytes.Buffer
 
 	cfg := &Config{
-		DBPath: dbPath,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
 	}
 
 	// Execute with verbose flag
@@ -261,6 +268,7 @@ func TestVerboseModeDisabledCoreCLI(t *testing.T) {
 	// Create temp directory for test database
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	// Initialize database
 	db, err := sql.Open("sqlite", dbPath)
@@ -268,6 +276,11 @@ func TestVerboseModeDisabledCoreCLI(t *testing.T) {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
 	_ = db.Close()
+
+	// Write a default config to ensure test isolation
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 
 	// Capture real stderr (logger writes to os.Stderr)
 	oldStderr := os.Stderr
@@ -277,7 +290,8 @@ func TestVerboseModeDisabledCoreCLI(t *testing.T) {
 	var stdout, stderrBuf bytes.Buffer
 
 	cfg := &Config{
-		DBPath: dbPath,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
 	}
 
 	// Execute without verbose flag
@@ -588,8 +602,16 @@ func TestAppStartsWithoutExistingDBSQLiteCLI(t *testing.T) {
 
 	// Set up config with XDG paths pointing to temp directory
 	dbPath := filepath.Join(tempHome, "data", "todoat", "tasks.db")
+	configPath := filepath.Join(tempHome, "config.yaml")
+
+	// Write a default config to ensure test isolation
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
 	cfg := &Config{
-		DBPath: dbPath,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -660,13 +682,19 @@ func TestDBCreatedAtCorrectPathSQLiteCLI(t *testing.T) {
 
 	// Set XDG environment variables for this test
 	oldDataHome := os.Getenv("XDG_DATA_HOME")
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
 	defer func() {
 		_ = os.Setenv("XDG_DATA_HOME", oldDataHome)
+		_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
 	}()
 
 	dataDir := filepath.Join(tempHome, ".local", "share")
+	configDir := filepath.Join(tempHome, ".config")
 	if err := os.Setenv("XDG_DATA_HOME", dataDir); err != nil {
 		t.Fatalf("failed to set XDG_DATA_HOME: %v", err)
+	}
+	if err := os.Setenv("XDG_CONFIG_HOME", configDir); err != nil {
+		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
 	}
 
 	// Use nil DBPath to test default path resolution
@@ -822,9 +850,16 @@ func TestSchemaInitializedOnNewDBSQLiteCLI(t *testing.T) {
 	// Create a temp directory for the database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "test.db")
+	configPath := filepath.Join(tempDir, "config.yaml")
+
+	// Write a default config to ensure test isolation
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 
 	cfg := &Config{
-		DBPath: dbPath,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -875,9 +910,16 @@ func TestEmptyListNameRejectedCLI(t *testing.T) {
 	// Create temp directory for test database
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write a default config to ensure test isolation
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 
 	cfg := &Config{
-		DBPath: dbPath,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -903,9 +945,16 @@ func TestWhitespaceOnlyListNameRejectedCLI(t *testing.T) {
 	// Create temp directory for test database
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write a default config to ensure test isolation
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 
 	cfg := &Config{
-		DBPath: dbPath,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -931,9 +980,16 @@ func TestInvalidStatusRejectedCLI(t *testing.T) {
 	// Create temp directory for test database
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write a default config to ensure test isolation
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 
 	cfg := &Config{
-		DBPath: dbPath,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -973,9 +1029,16 @@ func TestValidStatusesAcceptedCLI(t *testing.T) {
 			// Create temp directory for test database
 			tmpDir := t.TempDir()
 			dbPath := filepath.Join(tmpDir, "test.db")
+			configPath := filepath.Join(tmpDir, "config.yaml")
+
+			// Write a default config to ensure test isolation
+			if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+				t.Fatalf("failed to write config: %v", err)
+			}
 
 			cfg := &Config{
-				DBPath: dbPath,
+				DBPath:     dbPath,
+				ConfigPath: configPath,
 			}
 
 			var stdout, stderr bytes.Buffer

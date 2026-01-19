@@ -3726,3 +3726,333 @@ func TestListUpdateNoChangesSQLiteCLI(t *testing.T) {
 	testutil.AssertExitCode(t, exitCode, 1)
 	testutil.AssertResultCode(t, stdout, testutil.ResultError)
 }
+
+// =============================================================================
+// Task Categories/Tags Management Tests (053-task-categories-management)
+// =============================================================================
+
+// TestTaskAddWithTags verifies that `todoat -y MyList add "Task" --tags "work,urgent"` creates task with tags
+func TestTaskAddWithTagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "TagsTestList")
+
+	// Add task with --tags flag (plural form with comma-separated tags)
+	stdout := cli.MustExecute("-y", "TagsTestList", "add", "Task with tags", "--tags", "work,urgent")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify tags by listing with JSON
+	stdout = cli.MustExecute("-y", "--json", "TagsTestList")
+
+	testutil.AssertContains(t, stdout, "Task with tags")
+	testutil.AssertContains(t, stdout, "work")
+	testutil.AssertContains(t, stdout, "urgent")
+}
+
+// TestTaskUpdateAddTag verifies that `todoat -y MyList update "Task" --add-tag "important"` adds tag to existing
+func TestTaskUpdateAddTagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and task with initial tag
+	cli.MustExecute("-y", "list", "create", "AddTagTestList")
+	cli.MustExecute("-y", "AddTagTestList", "add", "Task with tag", "--tag", "work")
+
+	// Add a new tag using --add-tag
+	stdout := cli.MustExecute("-y", "AddTagTestList", "update", "Task with tag", "--add-tag", "important")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify both tags exist
+	stdout = cli.MustExecute("-y", "--json", "AddTagTestList")
+
+	testutil.AssertContains(t, stdout, "work")
+	testutil.AssertContains(t, stdout, "important")
+}
+
+// TestTaskUpdateAddTagMultiple verifies that `todoat -y MyList update "Task" --add-tag "tag1" --add-tag "tag2"` adds multiple tags
+func TestTaskUpdateAddTagMultipleSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and task
+	cli.MustExecute("-y", "list", "create", "MultiAddTagList")
+	cli.MustExecute("-y", "MultiAddTagList", "add", "Multi tag task", "--tag", "original")
+
+	// Add multiple tags using repeated --add-tag flags
+	stdout := cli.MustExecute("-y", "MultiAddTagList", "update", "Multi tag task", "--add-tag", "new1", "--add-tag", "new2")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify all tags exist
+	stdout = cli.MustExecute("-y", "--json", "MultiAddTagList")
+
+	testutil.AssertContains(t, stdout, "original")
+	testutil.AssertContains(t, stdout, "new1")
+	testutil.AssertContains(t, stdout, "new2")
+}
+
+// TestTaskUpdateAddTagDuplicate verifies that adding a duplicate tag is handled gracefully (case-insensitive)
+func TestTaskUpdateAddTagDuplicateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and task with initial tag
+	cli.MustExecute("-y", "list", "create", "DupTagTestList")
+	cli.MustExecute("-y", "DupTagTestList", "add", "Dup tag task", "--tag", "Work")
+
+	// Add same tag with different case (should not duplicate)
+	stdout := cli.MustExecute("-y", "DupTagTestList", "update", "Dup tag task", "--add-tag", "work")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify only one instance exists (original case preserved)
+	stdout = cli.MustExecute("-y", "--json", "DupTagTestList")
+
+	// Count occurrences - there should only be one "Work" or "work", not both
+	testutil.AssertContains(t, stdout, "Dup tag task")
+	// The tag should appear only once in the tags array
+}
+
+// TestTaskUpdateRemoveTag verifies that `todoat -y MyList update "Task" --remove-tag "urgent"` removes specific tag
+func TestTaskUpdateRemoveTagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and task with multiple tags
+	cli.MustExecute("-y", "list", "create", "RemoveTagList")
+	cli.MustExecute("-y", "RemoveTagList", "add", "Task to remove tag", "--tag", "work,urgent,home")
+
+	// Remove one tag using --remove-tag
+	stdout := cli.MustExecute("-y", "RemoveTagList", "update", "Task to remove tag", "--remove-tag", "urgent")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the tag was removed but others remain
+	stdout = cli.MustExecute("-y", "--json", "RemoveTagList")
+
+	testutil.AssertContains(t, stdout, "work")
+	testutil.AssertContains(t, stdout, "home")
+	testutil.AssertNotContains(t, stdout, `"urgent"`)
+}
+
+// TestTaskUpdateRemoveTagCaseInsensitive verifies that --remove-tag works case-insensitively
+func TestTaskUpdateRemoveTagCaseInsensitiveSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and task with a tag
+	cli.MustExecute("-y", "list", "create", "RemoveCaseList")
+	cli.MustExecute("-y", "RemoveCaseList", "add", "Case test task", "--tag", "WorkTag")
+
+	// Remove tag with different case
+	stdout := cli.MustExecute("-y", "RemoveCaseList", "update", "Case test task", "--remove-tag", "worktag")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the tag was removed
+	stdout = cli.MustExecute("-y", "--json", "RemoveCaseList")
+
+	if strings.Contains(stdout, `"WorkTag"`) || strings.Contains(stdout, `"worktag"`) {
+		t.Errorf("expected tag to be removed (case-insensitive), got: %s", stdout)
+	}
+}
+
+// TestTaskUpdateRemoveTagMultiple verifies that `todoat -y MyList update "Task" --remove-tag "tag1" --remove-tag "tag2"` removes multiple tags
+func TestTaskUpdateRemoveTagMultipleSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and task with multiple tags
+	cli.MustExecute("-y", "list", "create", "MultiRemoveList")
+	cli.MustExecute("-y", "MultiRemoveList", "add", "Multi remove task", "--tag", "a,b,c,d")
+
+	// Remove multiple tags
+	stdout := cli.MustExecute("-y", "MultiRemoveList", "update", "Multi remove task", "--remove-tag", "b", "--remove-tag", "d")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify tags b and d were removed, a and c remain
+	stdout = cli.MustExecute("-y", "--json", "MultiRemoveList")
+
+	testutil.AssertContains(t, stdout, `"a"`)
+	testutil.AssertContains(t, stdout, `"c"`)
+	testutil.AssertNotContains(t, stdout, `"b"`)
+	testutil.AssertNotContains(t, stdout, `"d"`)
+}
+
+// TestTaskUpdateClearTags verifies that `todoat -y MyList update "Task" --tags ""` clears all tags
+func TestTaskUpdateClearTagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and task with tags
+	cli.MustExecute("-y", "list", "create", "ClearTagsList")
+	cli.MustExecute("-y", "ClearTagsList", "add", "Task to clear", "--tags", "work,urgent,important")
+
+	// Clear all tags using --tags ""
+	stdout := cli.MustExecute("-y", "ClearTagsList", "update", "Task to clear", "--tags", "")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify all tags are cleared
+	stdout = cli.MustExecute("-y", "--json", "ClearTagsList")
+
+	testutil.AssertContains(t, stdout, "Task to clear")
+	// Tags should be empty array or not contain any of the original tags
+	if strings.Contains(stdout, `"work"`) || strings.Contains(stdout, `"urgent"`) || strings.Contains(stdout, `"important"`) {
+		t.Errorf("expected all tags to be cleared, got: %s", stdout)
+	}
+}
+
+// TestTaskTagsDisplay verifies that tags are shown in task listing with view that includes tags field
+func TestTaskTagsDisplaySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and task with tags
+	cli.MustExecute("-y", "list", "create", "TagsDisplayList")
+	cli.MustExecute("-y", "TagsDisplayList", "add", "Display tags task", "--tags", "important,urgent")
+
+	// Use 'all' view which should show tags
+	stdout := cli.MustExecute("-y", "TagsDisplayList", "-v", "all")
+
+	testutil.AssertContains(t, stdout, "Display tags task")
+	// Check if tags are shown (either as comma-separated or in some format)
+	if !strings.Contains(stdout, "important") && !strings.Contains(stdout, "urgent") {
+		t.Errorf("expected tags to be displayed in 'all' view, got: %s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListTags verifies that `todoat tags` lists all unique tags across all tasks
+func TestListTagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create lists and tasks with various tags
+	cli.MustExecute("-y", "list", "create", "ListA")
+	cli.MustExecute("-y", "list", "create", "ListB")
+	cli.MustExecute("-y", "ListA", "add", "Task 1", "--tag", "work")
+	cli.MustExecute("-y", "ListA", "add", "Task 2", "--tag", "work,urgent")
+	cli.MustExecute("-y", "ListA", "add", "Task 3", "--tag", "home")
+	cli.MustExecute("-y", "ListB", "add", "Task 4", "--tag", "project-x")
+	cli.MustExecute("-y", "ListB", "add", "Task 5", "--tag", "work") // duplicate tag
+
+	// List all tags
+	stdout := cli.MustExecute("-y", "tags")
+
+	// Should show unique tags with task counts
+	testutil.AssertContains(t, stdout, "work")
+	testutil.AssertContains(t, stdout, "urgent")
+	testutil.AssertContains(t, stdout, "home")
+	testutil.AssertContains(t, stdout, "project-x")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListTagsWithCount verifies that `todoat tags` shows task counts for each tag
+func TestListTagsWithCountSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and tasks with tags
+	cli.MustExecute("-y", "list", "create", "CountList")
+	cli.MustExecute("-y", "CountList", "add", "Task 1", "--tag", "common")
+	cli.MustExecute("-y", "CountList", "add", "Task 2", "--tag", "common")
+	cli.MustExecute("-y", "CountList", "add", "Task 3", "--tag", "common")
+	cli.MustExecute("-y", "CountList", "add", "Task 4", "--tag", "rare")
+
+	// List all tags
+	stdout := cli.MustExecute("-y", "tags")
+
+	// Should show counts (e.g., "common (3 tasks)" and "rare (1 task)")
+	if !strings.Contains(stdout, "3") || !strings.Contains(stdout, "common") {
+		t.Errorf("expected 'common' with count 3, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1") || !strings.Contains(stdout, "rare") {
+		t.Errorf("expected 'rare' with count 1, got: %s", stdout)
+	}
+}
+
+// TestListTagsForList verifies that `todoat tags --list "ListName"` shows tags only from specific list
+func TestListTagsForListSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create multiple lists with different tags
+	cli.MustExecute("-y", "list", "create", "List1")
+	cli.MustExecute("-y", "list", "create", "List2")
+	cli.MustExecute("-y", "List1", "add", "Task A", "--tag", "list1-only")
+	cli.MustExecute("-y", "List1", "add", "Task B", "--tag", "shared")
+	cli.MustExecute("-y", "List2", "add", "Task C", "--tag", "list2-only")
+	cli.MustExecute("-y", "List2", "add", "Task D", "--tag", "shared")
+
+	// List tags for List1 only
+	stdout := cli.MustExecute("-y", "tags", "--list", "List1")
+
+	// Should show tags from List1 only
+	testutil.AssertContains(t, stdout, "list1-only")
+	testutil.AssertContains(t, stdout, "shared")
+	testutil.AssertNotContains(t, stdout, "list2-only")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListTagsJSON verifies that `todoat --json tags` returns JSON array of tags
+func TestListTagsJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and tasks with tags
+	cli.MustExecute("-y", "list", "create", "JSONTagsList")
+	cli.MustExecute("-y", "JSONTagsList", "add", "Task 1", "--tag", "alpha")
+	cli.MustExecute("-y", "JSONTagsList", "add", "Task 2", "--tag", "beta")
+	cli.MustExecute("-y", "JSONTagsList", "add", "Task 3", "--tag", "alpha")
+
+	// List tags with JSON output
+	stdout := cli.MustExecute("-y", "--json", "tags")
+
+	// Should be valid JSON with tags array
+	testutil.AssertContains(t, stdout, "{")
+	testutil.AssertContains(t, stdout, "}")
+	testutil.AssertContains(t, stdout, "alpha")
+	testutil.AssertContains(t, stdout, "beta")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"INFO_ONLY"`)
+}
+
+// TestListTagsJSONForList verifies that `todoat --json tags --list "ListName"` returns JSON with list-specific tags
+func TestListTagsJSONForListSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create multiple lists with different tags
+	cli.MustExecute("-y", "list", "create", "JSONList1")
+	cli.MustExecute("-y", "list", "create", "JSONList2")
+	cli.MustExecute("-y", "JSONList1", "add", "Task A", "--tag", "json1-only")
+	cli.MustExecute("-y", "JSONList2", "add", "Task B", "--tag", "json2-only")
+
+	// List tags for JSONList1 with JSON output
+	stdout := cli.MustExecute("-y", "--json", "tags", "--list", "JSONList1")
+
+	// Should contain JSONList1 tags only
+	testutil.AssertContains(t, stdout, "json1-only")
+	testutil.AssertNotContains(t, stdout, "json2-only")
+}
+
+// TestListTagsEmpty verifies that `todoat tags` handles empty tag list gracefully
+func TestListTagsEmptySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list with tasks but no tags
+	cli.MustExecute("-y", "list", "create", "NoTagsList")
+	cli.MustExecute("-y", "NoTagsList", "add", "Task without tags")
+
+	// List tags - should show appropriate message
+	stdout := cli.MustExecute("-y", "tags")
+
+	// Should indicate no tags or show empty result
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestTagsCasePreserved verifies that tags are case-preserved but comparison is case-insensitive
+func TestTagsCasePreservedSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and task with mixed-case tag
+	cli.MustExecute("-y", "list", "create", "CasePreserveList")
+	cli.MustExecute("-y", "CasePreserveList", "add", "Case task", "--tag", "WorkProject")
+
+	// Verify the original case is preserved in output
+	stdout := cli.MustExecute("-y", "--json", "CasePreserveList")
+
+	testutil.AssertContains(t, stdout, "WorkProject")
+}

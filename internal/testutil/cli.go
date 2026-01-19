@@ -17,6 +17,9 @@ import (
 	"todoat/cmd/todoat/cmd"
 )
 
+// defaultTestConfig is the minimal config used by most test constructors to ensure isolation.
+const defaultTestConfig = "# test config\ndefault_backend: sqlite\n"
+
 // CLITest provides a test helper for running CLI commands in isolation.
 type CLITest struct {
 	t          *testing.T
@@ -32,11 +35,18 @@ func NewCLITest(t *testing.T) *CLITest {
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/test.db"
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+	configPath := tmpDir + "/config.yaml"
+
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
 
 	cfg := &cmd.Config{
-		NoPrompt:  true,
-		DBPath:    dbPath,
-		CachePath: cachePath, // Use test-specific cache path
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		CachePath:  cachePath,  // Use test-specific cache path
+		ConfigPath: configPath, // Use test-specific config path for isolation
 	}
 
 	return &CLITest{
@@ -55,16 +65,23 @@ func NewCLITestWithViews(t *testing.T) (*CLITest, string) {
 	dbPath := tmpDir + "/test.db"
 	viewsDir := tmpDir + "/views"
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+	configPath := tmpDir + "/config.yaml"
 
 	if err := os.MkdirAll(viewsDir, 0755); err != nil {
 		t.Fatalf("failed to create views directory: %v", err)
 	}
 
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
 	cfg := &cmd.Config{
-		NoPrompt:  true,
-		DBPath:    dbPath,
-		ViewsPath: viewsDir,
-		CachePath: cachePath,
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		ViewsPath:  viewsDir,
+		CachePath:  cachePath,
+		ConfigPath: configPath,
 	}
 
 	return &CLITest{
@@ -83,16 +100,23 @@ func NewCLITestWithViewsAndTmpDir(t *testing.T) (*CLITest, string, string) {
 	dbPath := tmpDir + "/test.db"
 	viewsDir := tmpDir + "/views"
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+	configPath := tmpDir + "/config.yaml"
 
 	if err := os.MkdirAll(viewsDir, 0755); err != nil {
 		t.Fatalf("failed to create views directory: %v", err)
 	}
 
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
 	cfg := &cmd.Config{
-		NoPrompt:  true,
-		DBPath:    dbPath,
-		ViewsPath: viewsDir,
-		CachePath: cachePath,
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		ViewsPath:  viewsDir,
+		CachePath:  cachePath,
+		ConfigPath: configPath,
 	}
 
 	return &CLITest{
@@ -178,6 +202,12 @@ func NewCLITestWithNotification(t *testing.T) *CLITest {
 	dbPath := tmpDir + "/test.db"
 	notificationLogPath := tmpDir + "/notifications.log"
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+	configPath := tmpDir + "/config.yaml"
+
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
 
 	cfg := &cmd.Config{
 		NoPrompt:            true,
@@ -185,6 +215,7 @@ func NewCLITestWithNotification(t *testing.T) *CLITest {
 		NotificationLogPath: notificationLogPath,
 		NotificationMock:    true, // Use mock executor for OS notifications
 		CachePath:           cachePath,
+		ConfigPath:          configPath,
 	}
 
 	return &CLITest{
@@ -344,6 +375,11 @@ func NewCLITestWithDaemon(t *testing.T) *DaemonCLITest {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
 	cfg := &cmd.Config{
 		NoPrompt:            true,
 		DBPath:              dbPath,
@@ -411,9 +447,15 @@ func NewCLITestWithMigrate(t *testing.T) *MigrateCLITest {
 	dbPath := filepath.Join(tmpDir, "test.db")
 	migrateTargetDir := filepath.Join(tmpDir, "migrate-target")
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	if err := os.MkdirAll(migrateTargetDir, 0755); err != nil {
 		t.Fatalf("failed to create migrate target directory: %v", err)
+	}
+
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
 	}
 
 	cfg := &cmd.Config{
@@ -422,6 +464,7 @@ func NewCLITestWithMigrate(t *testing.T) *MigrateCLITest {
 		MigrateTargetDir: migrateTargetDir,
 		MigrateMockMode:  true, // Enable mock backends for testing
 		CachePath:        cachePath,
+		ConfigPath:       configPath,
 	}
 
 	return &MigrateCLITest{
@@ -465,6 +508,12 @@ func NewCLITestWithReminder(t *testing.T) *ReminderCLITest {
 	notificationLogPath := filepath.Join(tmpDir, "notifications.log")
 	reminderConfigPath := filepath.Join(tmpDir, "reminder-config.json")
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
 
 	cfg := &cmd.Config{
 		NoPrompt:            true,
@@ -473,6 +522,7 @@ func NewCLITestWithReminder(t *testing.T) *ReminderCLITest {
 		NotificationMock:    true,
 		ReminderConfigPath:  reminderConfigPath,
 		CachePath:           cachePath,
+		ConfigPath:          configPath,
 	}
 
 	return &ReminderCLITest{
@@ -527,16 +577,23 @@ func NewCLITestWithCache(t *testing.T) *CacheCLITest {
 	dbPath := filepath.Join(tmpDir, "test.db")
 	cacheDir := filepath.Join(tmpDir, "cache")
 	cachePath := filepath.Join(cacheDir, "lists.json")
+	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		t.Fatalf("failed to create cache directory: %v", err)
 	}
 
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
 	cfg := &cmd.Config{
-		NoPrompt:  true,
-		DBPath:    dbPath,
-		CachePath: cachePath,
-		CacheTTL:  5 * time.Minute, // Default 5 minute TTL
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		CachePath:  cachePath,
+		CacheTTL:   5 * time.Minute, // Default 5 minute TTL
+		ConfigPath: configPath,
 	}
 
 	return &CacheCLITest{
@@ -576,8 +633,8 @@ func NewCLITestWithTrash(t *testing.T) *TrashCLITest {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
-	// Write initial config file
-	initialConfig := "# test config\n"
+	// Write initial config file with default backend for isolation
+	initialConfig := "# test config\ndefault_backend: sqlite\n"
 	if err := os.WriteFile(configPath, []byte(initialConfig), 0644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}

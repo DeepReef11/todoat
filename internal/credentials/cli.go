@@ -3,8 +3,10 @@ package credentials
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // CLIHandler handles CLI commands for credential management
@@ -43,11 +45,36 @@ func (h *CLIHandler) Set(backend, username string, prompt bool) error {
 	ctx := context.Background()
 	err = h.manager.Set(ctx, backend, username, password)
 	if err != nil {
+		// Check if keyring is not available and provide helpful guidance
+		if errors.Is(err, ErrKeyringNotAvailable) {
+			return h.keyringNotAvailableError(backend)
+		}
 		return fmt.Errorf("failed to store credentials: %w", err)
 	}
 
 	_, _ = fmt.Fprintf(h.stdout, "Credentials stored in system keyring\n")
 	return nil
+}
+
+// keyringNotAvailableError returns a helpful error message when keyring is not available
+func (h *CLIHandler) keyringNotAvailableError(backend string) error {
+	upperBackend := strings.ToUpper(backend)
+
+	msg := fmt.Sprintf(`System keyring not available in this build.
+
+Alternative: Use environment variables instead:
+
+For %s, set one of these environment variables:
+  export TODOAT_%s_TOKEN="your-api-token"
+  export TODOAT_%s_PASSWORD="your-password"
+
+Environment variables are automatically detected by todoat.
+Run 'todoat credentials list' to verify credentials are detected.
+
+For more information, see: https://github.com/yourusername/todoat#credentials
+`, backend, upperBackend, upperBackend)
+
+	return errors.New(msg)
 }
 
 // Get retrieves and displays credential information

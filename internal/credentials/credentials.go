@@ -150,14 +150,25 @@ func (m *Manager) Get(ctx context.Context, backend, username string) (*Credentia
 	}, nil
 }
 
-// getEnvPassword gets password from environment variables
+// getEnvPassword gets password/token from environment variables
 func (m *Manager) getEnvPassword(backend, username string) string {
-	// Environment variable pattern: TODOAT_[BACKEND]_PASSWORD
-	envKey := fmt.Sprintf("TODOAT_%s_PASSWORD", strings.ToUpper(backend))
+	upperBackend := strings.ToUpper(backend)
+
+	// Priority 1: Check for TOKEN env var (e.g., TODOAT_TODOIST_TOKEN)
+	// This is the preferred pattern for API tokens (Todoist, Google, etc.)
+	tokenKey := fmt.Sprintf("TODOAT_%s_TOKEN", upperBackend)
+	token := os.Getenv(tokenKey)
+	if token != "" {
+		return token
+	}
+
+	// Priority 2: Check for PASSWORD env var (e.g., TODOAT_NEXTCLOUD_PASSWORD)
+	// This is used for username/password authentication (Nextcloud, etc.)
+	envKey := fmt.Sprintf("TODOAT_%s_PASSWORD", upperBackend)
 	password := os.Getenv(envKey)
 
 	// Also check username matches if set
-	userEnvKey := fmt.Sprintf("TODOAT_%s_USERNAME", strings.ToUpper(backend))
+	userEnvKey := fmt.Sprintf("TODOAT_%s_USERNAME", upperBackend)
 	envUsername := os.Getenv(userEnvKey)
 
 	// If username is set in env and doesn't match, return empty

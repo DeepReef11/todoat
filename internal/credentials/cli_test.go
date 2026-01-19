@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// TestCLICredentialsSet tests the CLI command: todoat credentials set nextcloud myuser --prompt
-func TestCLICredentialsSet(t *testing.T) {
+// TestCredentialsSetCLI tests the CLI command: todoat credentials set nextcloud myuser --prompt
+func TestCredentialsSetCLI(t *testing.T) {
 	mockKeyring := NewMockKeyring()
 	manager := NewManager(WithKeyring(mockKeyring))
 
@@ -41,8 +41,8 @@ func TestCLICredentialsSet(t *testing.T) {
 	}
 }
 
-// TestCLICredentialsGet tests the CLI command: todoat credentials get nextcloud myuser
-func TestCLICredentialsGet(t *testing.T) {
+// TestCredentialsGetCLI tests the CLI command: todoat credentials get nextcloud myuser
+func TestCredentialsGetCLI(t *testing.T) {
 	mockKeyring := NewMockKeyring()
 	_ = mockKeyring.Set("todoat-nextcloud", "myuser", "storedpass")
 	manager := NewManager(WithKeyring(mockKeyring))
@@ -73,8 +73,8 @@ func TestCLICredentialsGet(t *testing.T) {
 	}
 }
 
-// TestCLICredentialsGetJSON tests the CLI command: todoat --json credentials get nextcloud myuser
-func TestCLICredentialsGetJSON(t *testing.T) {
+// TestCredentialsGetJSONCLI tests the CLI command: todoat --json credentials get nextcloud myuser
+func TestCredentialsGetJSONCLI(t *testing.T) {
 	mockKeyring := NewMockKeyring()
 	_ = mockKeyring.Set("todoat-nextcloud", "myuser", "storedpass")
 	manager := NewManager(WithKeyring(mockKeyring))
@@ -112,8 +112,8 @@ func TestCLICredentialsGetJSON(t *testing.T) {
 	}
 }
 
-// TestCLICredentialsDelete tests the CLI command: todoat credentials delete nextcloud myuser
-func TestCLICredentialsDelete(t *testing.T) {
+// TestCredentialsDeleteCLI tests the CLI command: todoat credentials delete nextcloud myuser
+func TestCredentialsDeleteCLI(t *testing.T) {
 	mockKeyring := NewMockKeyring()
 	_ = mockKeyring.Set("todoat-nextcloud", "myuser", "toberemoved")
 	manager := NewManager(WithKeyring(mockKeyring))
@@ -140,8 +140,8 @@ func TestCLICredentialsDelete(t *testing.T) {
 	}
 }
 
-// TestCLICredentialsNotFound tests error handling when credentials not found
-func TestCLICredentialsNotFound(t *testing.T) {
+// TestCredentialsNotFoundCLI tests error handling when credentials not found
+func TestCredentialsNotFoundCLI(t *testing.T) {
 	mockKeyring := NewMockKeyring()
 	manager := NewManager(WithKeyring(mockKeyring))
 
@@ -162,8 +162,8 @@ func TestCLICredentialsNotFound(t *testing.T) {
 	}
 }
 
-// TestCLICredentialsList tests the CLI command: todoat credentials list
-func TestCLICredentialsList(t *testing.T) {
+// TestCredentialsListCLI tests the CLI command: todoat credentials list
+func TestCredentialsListCLI(t *testing.T) {
 	mockKeyring := NewMockKeyring()
 	_ = mockKeyring.Set("todoat-nextcloud", "ncuser", "pass1")
 	manager := NewManager(WithKeyring(mockKeyring))
@@ -192,8 +192,8 @@ func TestCLICredentialsList(t *testing.T) {
 	}
 }
 
-// TestCLICredentialsListJSON tests the CLI command: todoat --json credentials list
-func TestCLICredentialsListJSON(t *testing.T) {
+// TestCredentialsListJSONCLI tests the CLI command: todoat --json credentials list
+func TestCredentialsListJSONCLI(t *testing.T) {
 	mockKeyring := NewMockKeyring()
 	_ = mockKeyring.Set("todoat-nextcloud", "ncuser", "pass1")
 	manager := NewManager(WithKeyring(mockKeyring))
@@ -257,5 +257,36 @@ func TestCLICredentialsListJSON(t *testing.T) {
 	}
 	if todoistEntry.HasCredentials {
 		t.Error("Expected todoist to NOT have credentials")
+	}
+}
+
+// TestCredentialsSetKeyringNotAvailableCLI tests that helpful error message is shown
+// when keyring is not available. This is a regression test for issue #003.
+func TestCredentialsSetKeyringNotAvailableCLI(t *testing.T) {
+	// Use the system keyring which always returns ErrKeyringNotAvailable
+	manager := NewManager() // No mock, uses real systemKeyring
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	stdin := strings.NewReader("test-password\n")
+
+	handler := NewCLIHandler(manager, stdin, stdout, stderr)
+	err := handler.Set("todoist", "apiuser", true)
+
+	// Should fail with keyring not available
+	if err == nil {
+		t.Fatal("Expected error when keyring not available")
+	}
+
+	// Error message should provide helpful guidance about environment variables
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "environment variable") {
+		t.Errorf("Expected error to mention environment variables, got: %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "TODOAT_TODOIST_TOKEN") {
+		t.Errorf("Expected error to mention TODOAT_TODOIST_TOKEN, got: %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "TODOAT_TODOIST_PASSWORD") {
+		t.Errorf("Expected error to mention TODOAT_TODOIST_PASSWORD, got: %s", errMsg)
 	}
 }

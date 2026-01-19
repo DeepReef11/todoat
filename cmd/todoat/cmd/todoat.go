@@ -25,7 +25,7 @@ import (
 	"todoat/backend"
 	_ "todoat/backend/git" // Register git as detectable backend
 	"todoat/backend/sqlite"
-	_ "todoat/backend/todoist" // Register todoist as detectable backend
+	"todoat/backend/todoist"
 	"todoat/internal/cache"
 	"todoat/internal/config"
 	"todoat/internal/credentials"
@@ -248,6 +248,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().String("due-date", "", "Due date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
 	cmd.Flags().String("start-date", "", "Start date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
 	cmd.Flags().StringSlice("tag", nil, "Tag/category for add/update, or filter by tag for get (can be specified multiple times or comma-separated)")
+	cmd.Flags().StringSlice("tags", nil, "Alias for --tag")
+	cmd.Flags().StringSlice("add-tag", nil, "Add tag(s) to existing tags (for update, can be specified multiple times)")
+	cmd.Flags().StringSlice("remove-tag", nil, "Remove tag(s) from existing tags (for update, can be specified multiple times)")
 	cmd.Flags().StringP("parent", "P", "", "Parent task summary (for add/update subtasks)")
 	cmd.Flags().BoolP("literal", "l", false, "Treat task summary literally (don't parse / as hierarchy separator)")
 	cmd.Flags().Bool("no-parent", false, "Remove parent relationship (for update, makes task root-level)")
@@ -289,6 +292,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add version subcommand
 	cmd.AddCommand(newVersionCmd(stdout, cfg))
+
+	// Add tags subcommand
+	cmd.AddCommand(newTagsCmd(stdout, cfg))
 
 	return cmd
 }
@@ -2132,7 +2138,21 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 			utils.Debugf("Auto-detected backend: %s", name)
 			return be, nil
 		}
-		// Fall through to default sqlite if no backend detected
+		// Fall through to default backend based on config
+	}
+
+	// Check default_backend setting from config
+	if appConfig != nil && appConfig.DefaultBackend != "" && appConfig.DefaultBackend != "sqlite" {
+		switch appConfig.DefaultBackend {
+		case "todoist":
+			// Create Todoist backend using environment variable credentials
+			todoistCfg := todoist.ConfigFromEnv()
+			if todoistCfg.APIToken == "" {
+				return nil, fmt.Errorf("todoist backend is configured as default but TODOAT_TODOIST_TOKEN environment variable is not set")
+			}
+			utils.Debugf("Using default backend: todoist")
+			return todoist.New(todoistCfg)
+		}
 	}
 
 	return sqlite.New(dbPath)
@@ -2321,6 +2341,8 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 			return fmt.Errorf("invalid start-date: %w", err)
 		}
 		tags, _ := cmd.Flags().GetStringSlice("tag")
+		tagsAlias, _ := cmd.Flags().GetStringSlice("tags")
+		tags = append(tags, tagsAlias...)
 		tags = normalizeTagSlice(tags)
 		categories := strings.Join(tags, ",")
 		parentSummary, _ := cmd.Flags().GetString("parent")
@@ -2376,13 +2398,20 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 			}
 		}
 		tagFlagSet := cmd.Flags().Changed("tag")
+		tagsFlagSet := cmd.Flags().Changed("tags")
 		var newCategories *string
-		if tagFlagSet {
+		if tagFlagSet || tagsFlagSet {
 			tags, _ := cmd.Flags().GetStringSlice("tag")
+			tagsAlias, _ := cmd.Flags().GetStringSlice("tags")
+			tags = append(tags, tagsAlias...)
 			tags = normalizeTagSlice(tags)
 			cat := strings.Join(tags, ",")
 			newCategories = &cat
 		}
+		addTagsSlice, _ := cmd.Flags().GetStringSlice("add-tag")
+		addTagsSlice = normalizeTagSlice(addTagsSlice)
+		removeTagsSlice, _ := cmd.Flags().GetStringSlice("remove-tag")
+		removeTagsSlice = normalizeTagSlice(removeTagsSlice)
 		parentSummary, _ := cmd.Flags().GetString("parent")
 		noParent, _ := cmd.Flags().GetBool("no-parent")
 
@@ -2390,7 +2419,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		_, _, isBulk := parseBulkPattern(taskSummary)
 		if isBulk && uidFlag == "" && !cmd.Flags().Changed("local-id") {
 			// Use original bulk update function
-			return doUpdate(ctx, be, list, taskSummary, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
+			return doUpdate(ctx, be, list, taskSummary, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, addTagsSlice, removeTagsSlice, parentSummary, noParent, cfg, stdout, jsonOutput)
 		}
 
 		// Resolve task by UID, local-id, or summary
@@ -2398,7 +2427,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if err != nil {
 			return err
 		}
-		return doUpdateWithTask(ctx, be, list, task, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
+		return doUpdateWithTask(ctx, be, list, task, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, addTagsSlice, removeTagsSlice, parentSummary, noParent, cfg, stdout, jsonOutput)
 	case "complete":
 		// Check for direct ID selection flags
 		uidFlag, _ := cmd.Flags().GetString("uid")
@@ -2784,6 +2813,47 @@ func normalizeTagSlice(tags []string) []string {
 	return result
 }
 
+// applyTagChanges applies --add-tag and --remove-tag operations to existing categories
+// Tags are case-insensitive for matching but preserve original case
+func applyTagChanges(existingCategories string, addTags, removeTags []string) string {
+	// Skip if no changes requested
+	if len(addTags) == 0 && len(removeTags) == 0 {
+		return existingCategories
+	}
+
+	// Parse existing tags into a map (lowercase key -> original case value)
+	tagMap := make(map[string]string)
+	if existingCategories != "" {
+		for _, tag := range strings.Split(existingCategories, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				tagMap[strings.ToLower(tag)] = tag
+			}
+		}
+	}
+
+	// Remove tags (case-insensitive)
+	for _, tag := range removeTags {
+		delete(tagMap, strings.ToLower(tag))
+	}
+
+	// Add tags (case-insensitive for dedup, preserve original case)
+	for _, tag := range addTags {
+		lowerTag := strings.ToLower(tag)
+		if _, exists := tagMap[lowerTag]; !exists {
+			tagMap[lowerTag] = tag
+		}
+	}
+
+	// Convert map back to sorted slice (for consistent output)
+	var result []string
+	for _, tag := range tagMap {
+		result = append(result, tag)
+	}
+	sort.Strings(result)
+	return strings.Join(result, ",")
+}
+
 // matchesPriorityFilter checks if a task's priority matches any of the filter priorities
 func matchesPriorityFilter(taskPriority int, priorities []int) bool {
 	for _, p := range priorities {
@@ -3100,7 +3170,7 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 }
 
 // doUpdate modifies an existing task
-func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, addTags, removeTags []string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Check for bulk pattern
 	bulkParentSummary, pattern, isBulk := parseBulkPattern(taskSummary)
 	if isBulk {
@@ -3143,6 +3213,10 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	}
 	if newCategories != nil {
 		task.Categories = *newCategories
+	}
+	// Handle --add-tag and --remove-tag (only if --tags was not set)
+	if newCategories == nil {
+		task.Categories = applyTagChanges(task.Categories, addTags, removeTags)
 	}
 
 	// Handle parent updates
@@ -3823,7 +3897,7 @@ func resolveTaskByID(ctx context.Context, cmd *cobra.Command, be backend.TaskMan
 }
 
 // doUpdateWithTask modifies an existing task (task already resolved)
-func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, addTags, removeTags []string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// If task is nil, fall back to original behavior (for bulk patterns)
 	if task == nil {
 		return fmt.Errorf("task not found")
@@ -3860,6 +3934,10 @@ func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend
 	}
 	if newCategories != nil {
 		task.Categories = *newCategories
+	}
+	// Handle --add-tag and --remove-tag (only if --tags was not set)
+	if newCategories == nil {
+		task.Categories = applyTagChanges(task.Categories, addTags, removeTags)
 	}
 
 	// Handle parent updates
@@ -7750,5 +7828,154 @@ func outputVersionText(stdout io.Writer, info VersionInfo, verbose bool) error {
 		_, _ = fmt.Fprintf(stdout, "Platform:   %s\n", info.Platform)
 	}
 
+	return nil
+}
+
+// TagInfo holds information about a tag and its usage count
+type TagInfo struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// TagsOutput holds the JSON output structure for the tags command
+type TagsOutput struct {
+	Tags   []TagInfo `json:"tags"`
+	List   string    `json:"list,omitempty"`
+	Result string    `json:"result"`
+}
+
+// newTagsCmd creates the 'tags' subcommand for listing all unique tags
+func newTagsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	tagsCmd := &cobra.Command{
+		Use:   "tags",
+		Short: "List all unique tags in use",
+		Long:  "List all unique tags across all tasks, with optional filtering by list.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			listName, _ := cmd.Flags().GetString("list")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doTags(context.Background(), be, listName, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	tagsCmd.Flags().StringP("list", "l", "", "Filter tags to a specific list")
+
+	return tagsCmd
+}
+
+// doTags lists all unique tags across all tasks
+func doTags(ctx context.Context, be backend.TaskManager, listName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Get all lists
+	lists, err := be.GetLists(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Filter to specific list if requested
+	if listName != "" {
+		var filteredLists []backend.List
+		for _, l := range lists {
+			if strings.EqualFold(l.Name, listName) {
+				filteredLists = append(filteredLists, l)
+				break
+			}
+		}
+		if len(filteredLists) == 0 {
+			return fmt.Errorf("list not found: %s", listName)
+		}
+		lists = filteredLists
+	}
+
+	// Collect all tags with counts
+	tagCounts := make(map[string]int)
+	tagOrigCase := make(map[string]string) // Store original case for display
+
+	for _, l := range lists {
+		tasks, err := be.GetTasks(ctx, l.ID)
+		if err != nil {
+			continue
+		}
+
+		for _, t := range tasks {
+			if t.Categories == "" {
+				continue
+			}
+			// Split comma-separated tags
+			tags := strings.Split(t.Categories, ",")
+			for _, tag := range tags {
+				tag = strings.TrimSpace(tag)
+				if tag == "" {
+					continue
+				}
+				lowerTag := strings.ToLower(tag)
+				tagCounts[lowerTag]++
+				// Preserve first-seen case
+				if _, exists := tagOrigCase[lowerTag]; !exists {
+					tagOrigCase[lowerTag] = tag
+				}
+			}
+		}
+	}
+
+	// Build sorted list of tags
+	var tagInfos []TagInfo
+	for lowerTag, count := range tagCounts {
+		tagInfos = append(tagInfos, TagInfo{
+			Name:  tagOrigCase[lowerTag],
+			Count: count,
+		})
+	}
+	// Sort by count descending, then name ascending
+	sort.Slice(tagInfos, func(i, j int) bool {
+		if tagInfos[i].Count != tagInfos[j].Count {
+			return tagInfos[i].Count > tagInfos[j].Count
+		}
+		return strings.ToLower(tagInfos[i].Name) < strings.ToLower(tagInfos[j].Name)
+	})
+
+	if jsonOutput {
+		output := TagsOutput{
+			Tags:   tagInfos,
+			List:   listName,
+			Result: ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	// Text output
+	if len(tagInfos) == 0 {
+		_, _ = fmt.Fprintln(stdout, "No tags in use.")
+	} else {
+		_, _ = fmt.Fprintln(stdout, "Tags in use:")
+		for _, ti := range tagInfos {
+			taskWord := "tasks"
+			if ti.Count == 1 {
+				taskWord = "task"
+			}
+			_, _ = fmt.Fprintf(stdout, "  %s (%d %s)\n", ti.Name, ti.Count, taskWord)
+		}
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
 	return nil
 }
