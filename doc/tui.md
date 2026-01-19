@@ -108,4 +108,4 @@ The TUI works with all configured backends (SQLite, Nextcloud, Todoist, etc.). I
 - The TUI remembers your position when switching between lists
 
 ---
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*

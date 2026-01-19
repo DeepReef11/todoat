@@ -684,4 +684,4 @@ When auto-commit is enabled, changes are automatically committed to Git with des
 - `todoat: delete task 'Task name'`
 
 ---
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*

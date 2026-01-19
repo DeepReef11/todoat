@@ -4077,6 +4077,11 @@ func doSyncStatus(cfg *Config, stdout io.Writer, verbose bool) error {
 	_, _ = fmt.Fprintln(stdout, "Sync Status:")
 	_, _ = fmt.Fprintln(stdout, "")
 
+	// Get offline mode from config
+	offlineMode := getOfflineMode(cfg)
+	_, _ = fmt.Fprintf(stdout, "Offline Mode: %s\n", offlineMode)
+	_, _ = fmt.Fprintln(stdout, "")
+
 	// Get pending operations count
 	pendingCount, err := syncMgr.GetPendingCount()
 	if err != nil {
@@ -4117,6 +4122,27 @@ func doSyncStatus(cfg *Config, stdout io.Writer, verbose bool) error {
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
 	return nil
+}
+
+// getOfflineMode returns the configured offline mode from config file
+func getOfflineMode(cfg *Config) string {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		if cfg.DBPath != "" {
+			configPath = filepath.Join(filepath.Dir(cfg.DBPath), "config.yaml")
+		}
+	}
+
+	if configPath == "" {
+		return "auto" // default
+	}
+
+	appConfig, err := config.LoadFromPath(configPath)
+	if err != nil || appConfig == nil {
+		return "auto" // default
+	}
+
+	return appConfig.GetOfflineMode()
 }
 
 // getConfiguredBackends returns a list of backend names from the config file

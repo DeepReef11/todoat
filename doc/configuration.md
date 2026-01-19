@@ -56,6 +56,8 @@ sync:
   enabled: false
   local_backend: sqlite
   conflict_resolution: local
+  offline_mode: auto  # auto | online | offline
+  connectivity_timeout: 5s  # timeout for connectivity checks
 
 # Notification configuration
 notifications:
@@ -95,6 +97,8 @@ notifications:
 | `sync.enabled` | boolean | `false` | Enable synchronization with remote backends |
 | `sync.local_backend` | string | `sqlite` | Local backend to use for caching |
 | `sync.conflict_resolution` | string | `local` | Conflict resolution strategy (`local` or `remote`) |
+| `sync.offline_mode` | string | `auto` | Offline behavior: `auto`, `online`, or `offline` |
+| `sync.connectivity_timeout` | string | `5s` | Timeout for connectivity checks in auto mode |
 | `notifications.enabled` | boolean | `true` | Enable notification system |
 | `notifications.os.enabled` | boolean | `true` | Enable OS desktop notifications |
 | `notifications.os.on_sync_complete` | boolean | `true` | Notify when sync completes |
@@ -246,6 +250,70 @@ todoat list trash
 
 # To disable auto-purge, set retention_days to 0 in config
 ```
+
+## Offline Mode
+
+Control how todoat behaves when remote backends are unavailable. This is useful for working without network connectivity or to prevent unintended remote operations.
+
+### Modes
+
+| Mode | Description |
+|------|-------------|
+| `auto` (default) | Automatically detect connectivity; queue operations when offline |
+| `online` | Require backend connectivity; fail with error if unavailable |
+| `offline` | Never contact remote backends; always use local cache and queue operations |
+
+### Configuration
+
+```yaml
+sync:
+  enabled: true
+  offline_mode: auto  # auto | online | offline
+  connectivity_timeout: 5s  # timeout for connectivity checks
+```
+
+### Mode Behaviors
+
+| Mode | Backend Available | Backend Unavailable |
+|------|------------------|---------------------|
+| `auto` | Direct operation | Queue + local cache |
+| `online` | Direct operation | Error + suggestion |
+| `offline` | Queue always | Queue always |
+
+### Connectivity Timeout
+
+The `connectivity_timeout` setting controls how long todoat waits when checking backend connectivity in `auto` mode. Shorter timeouts provide faster fallback to offline mode but may incorrectly detect slow connections as offline.
+
+```yaml
+sync:
+  connectivity_timeout: 5s   # Default: 5 seconds
+  connectivity_timeout: 1s   # Faster fallback
+  connectivity_timeout: 30s  # More tolerant of slow connections
+```
+
+### Checking Current Mode
+
+View the current offline mode status:
+
+```bash
+todoat sync status
+```
+
+Output includes the configured offline mode:
+```
+Sync Status:
+
+Backend: sqlite
+  Last Sync: 2026-01-18 14:30:00
+  Pending Operations: 0
+  Offline Mode: auto
+```
+
+### Use Cases
+
+- **`auto`**: Best for most users. Works offline when needed, syncs when possible.
+- **`online`**: Use when you need guarantee that operations reach the remote backend.
+- **`offline`**: Use for airplane mode, metered connections, or to batch sync operations.
 
 ## Backend Auto-Detection
 

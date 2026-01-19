@@ -30,9 +30,11 @@ type TrashConfig struct {
 
 // SyncConfig holds synchronization settings
 type SyncConfig struct {
-	Enabled            bool   `yaml:"enabled"`
-	LocalBackend       string `yaml:"local_backend"`
-	ConflictResolution string `yaml:"conflict_resolution"`
+	Enabled             bool   `yaml:"enabled"`
+	LocalBackend        string `yaml:"local_backend"`
+	ConflictResolution  string `yaml:"conflict_resolution"`
+	OfflineMode         string `yaml:"offline_mode"`         // auto, online, offline
+	ConnectivityTimeout string `yaml:"connectivity_timeout"` // e.g., "5s"
 }
 
 // BackendsConfig holds configuration for all backends
@@ -171,6 +173,26 @@ func (c *Config) GetDatabasePath() string {
 // IsSyncEnabled returns true if synchronization is enabled
 func (c *Config) IsSyncEnabled() bool {
 	return c.Sync.Enabled
+}
+
+// GetOfflineMode returns the offline mode setting.
+// Returns "auto" as default if not configured.
+func (c *Config) GetOfflineMode() string {
+	mode := c.Sync.OfflineMode
+	if mode == "" {
+		return "auto"
+	}
+	return mode
+}
+
+// GetConnectivityTimeout returns the connectivity timeout setting.
+// Returns "5s" as default if not configured.
+func (c *Config) GetConnectivityTimeout() string {
+	timeout := c.Sync.ConnectivityTimeout
+	if timeout == "" {
+		return "5s"
+	}
+	return timeout
 }
 
 // IsAutoDetectEnabled returns true if auto-detection is enabled

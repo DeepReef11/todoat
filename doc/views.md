@@ -263,4 +263,4 @@ todoat MyList get -v detailed -s IN-PROGRESS
 Command-line filters are applied **after** view filters.
 
 ---
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*
