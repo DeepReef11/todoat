@@ -92,10 +92,11 @@ todoat MyList get --json
 | `--no-prompt` | `-y` | Disable interactive prompts |
 | `--verbose` | `-V` | Enable debug output |
 | `--json` | | Output in JSON format |
+| `--detect-backend` | | Show auto-detected backends |
 
 ## License
 
 See the project repository for license information.
 
 ---
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*

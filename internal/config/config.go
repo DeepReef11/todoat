@@ -13,12 +13,13 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Backends       BackendsConfig `yaml:"backends"`
-	DefaultBackend string         `yaml:"default_backend"`
-	DefaultView    string         `yaml:"default_view"`
-	NoPrompt       bool           `yaml:"no_prompt"`
-	OutputFormat   string         `yaml:"output_format"`
-	Sync           SyncConfig     `yaml:"sync"`
+	Backends          BackendsConfig `yaml:"backends"`
+	DefaultBackend    string         `yaml:"default_backend"`
+	DefaultView       string         `yaml:"default_view"`
+	NoPrompt          bool           `yaml:"no_prompt"`
+	OutputFormat      string         `yaml:"output_format"`
+	Sync              SyncConfig     `yaml:"sync"`
+	AutoDetectBackend bool           `yaml:"auto_detect_backend"`
 }
 
 // SyncConfig holds synchronization settings
@@ -164,6 +165,11 @@ func (c *Config) GetDatabasePath() string {
 // IsSyncEnabled returns true if synchronization is enabled
 func (c *Config) IsSyncEnabled() bool {
 	return c.Sync.Enabled
+}
+
+// IsAutoDetectEnabled returns true if auto-detection is enabled
+func (c *Config) IsAutoDetectEnabled() bool {
+	return c.AutoDetectBackend
 }
 
 // LoadFromPath loads configuration from a specific path without creating defaults

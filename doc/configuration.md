@@ -44,6 +44,9 @@ no_prompt: false
 # Default output format (text or json)
 output_format: text
 
+# Enable automatic backend detection based on directory context
+auto_detect_backend: false
+
 # Synchronization configuration
 sync:
   enabled: false
@@ -83,6 +86,7 @@ notifications:
 | `default_view` | string | `default` | Default view for task display (built-in or custom view name) |
 | `no_prompt` | boolean | `false` | Disable interactive prompts |
 | `output_format` | string | `text` | Default output format (`text` or `json`) |
+| `auto_detect_backend` | boolean | `false` | Enable automatic backend detection (see below) |
 | `sync.enabled` | boolean | `false` | Enable synchronization with remote backends |
 | `sync.local_backend` | string | `sqlite` | Local backend to use for caching |
 | `sync.conflict_resolution` | string | `local` | Conflict resolution strategy (`local` or `remote`) |
@@ -202,6 +206,57 @@ Backend authentication can be configured via environment variables. See [Backend
 
 Note: For better security, consider using the credential manager instead of environment variables. See [Credential Management](./commands.md#credential-management).
 
+## Backend Auto-Detection
+
+When `auto_detect_backend` is enabled, todoat automatically detects which backend to use based on your current directory context. This is useful when working in project directories that have their own task files.
+
+### How It Works
+
+1. todoat checks the current directory for detectable backends
+2. Backends are checked in priority order (Git has highest priority)
+3. The first available backend is used instead of the default backend
+
+### Supported Detectable Backends
+
+| Backend | Detection Criteria |
+|---------|-------------------|
+| Git/Markdown | Current directory is in a Git repository with a TODO.md, todo.md, or .todoat.md file containing `<!-- todoat:enabled -->` |
+| SQLite | Always available as fallback |
+
+### Enabling Auto-Detection
+
+Add to your config file:
+
+```yaml
+auto_detect_backend: true
+```
+
+### Checking Detection Results
+
+Use the `--detect-backend` flag to see which backends are detected:
+
+```bash
+todoat --detect-backend
+```
+
+This shows all detected backends and which one would be selected.
+
+### Example Workflow
+
+```bash
+# Enable auto-detection in config
+# ~/.config/todoat/config.yaml:
+# auto_detect_backend: true
+
+# In a project with TODO.md containing <!-- todoat:enabled -->
+cd ~/projects/myproject
+todoat MyList add "Project task"  # Uses Git/Markdown backend
+
+# Outside the project
+cd ~
+todoat MyList add "Personal task"  # Uses SQLite backend (default)
+```
+
 ## Validation
 
 The configuration file is validated on load. Invalid configurations will produce an error message. Validation checks:
@@ -211,4 +266,4 @@ The configuration file is validated on load. Invalid configurations will produce
 - The default backend must be enabled
 
 ---
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*

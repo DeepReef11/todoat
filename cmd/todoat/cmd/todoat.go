@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 	"todoat/backend"
+	_ "todoat/backend/git" // Register git as detectable backend
 	"todoat/backend/sqlite"
 	"todoat/internal/cache"
 	"todoat/internal/config"
@@ -65,6 +66,9 @@ type Config struct {
 	// Cache-related config fields
 	CachePath string        // Path to list cache file (for testing)
 	CacheTTL  time.Duration // Cache TTL duration
+	// Auto-detection config fields
+	WorkDir           string // Working directory for auto-detection (for testing)
+	AutoDetectBackend bool   // Enable auto-detection of backend
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -130,6 +134,12 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 				cfg.NoPrompt = true
 			}
 
+			// Handle --detect-backend flag
+			detectBackend, _ := cmd.Flags().GetBool("detect-backend")
+			if detectBackend {
+				return runDetectBackend(stdout, cfg)
+			}
+
 			// If no args, show help
 			if len(args) == 0 {
 				return cmd.Help()
@@ -187,6 +197,7 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.PersistentFlags().BoolP("no-prompt", "y", false, "Disable interactive prompts")
 	cmd.PersistentFlags().BoolP("verbose", "V", false, "Enable verbose/debug output")
 	cmd.PersistentFlags().Bool("json", false, "Output in JSON format")
+	cmd.PersistentFlags().Bool("detect-backend", false, "Show auto-detected backends and exit")
 
 	// Add action-specific flags
 	cmd.Flags().StringP("priority", "p", "", "Task priority (0-9) for add/update, or filter (1,2,3 or high/medium/low) for get")
@@ -828,9 +839,10 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 		return nil, fmt.Errorf("could not create data directory: %w", err)
 	}
 
-	// Load config (creates default if not exists) and check sync settings
-	_, _ = config.Load(cfg.ConfigPath)
+	// Load config (creates default if not exists) and check sync/auto-detect settings
+	appConfig, _ := config.Load(cfg.ConfigPath)
 	loadSyncConfig(cfg)
+	loadAutoDetectConfig(cfg, appConfig)
 
 	// If sync is enabled, return a sync-aware backend wrapper
 	if cfg.SyncEnabled {
@@ -844,7 +856,33 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 		}, nil
 	}
 
+	// If auto-detect is enabled, try to detect a backend
+	if cfg.AutoDetectBackend {
+		workDir := cfg.WorkDir
+		if workDir == "" {
+			workDir, _ = os.Getwd()
+		}
+
+		// Register backends for detection
+		registerDetectableBackends(cfg)
+
+		// Try to select a detected backend
+		be, name, err := backend.SelectDetectedBackend(workDir)
+		if err == nil && be != nil {
+			utils.Debugf("Auto-detected backend: %s", name)
+			return be, nil
+		}
+		// Fall through to default sqlite if no backend detected
+	}
+
 	return sqlite.New(dbPath)
+}
+
+// loadAutoDetectConfig loads the auto-detect configuration from the config file
+func loadAutoDetectConfig(cfg *Config, appConfig *config.Config) {
+	if appConfig != nil && appConfig.IsAutoDetectEnabled() {
+		cfg.AutoDetectBackend = true
+	}
 }
 
 // loadSyncConfig loads the sync configuration from the config file
@@ -1461,7 +1499,7 @@ func parseDate(s string) (*time.Time, error) {
 	if s == "" {
 		return nil, nil
 	}
-	t, err := time.Parse("2006-01-02", s)
+	t, err := time.Parse(views.DefaultDateFormat, s)
 	if err != nil {
 		return nil, fmt.Errorf("date must be in YYYY-MM-DD format (e.g., 2026-01-31)")
 	}
@@ -1937,11 +1975,11 @@ func taskToJSON(t *backend.Task) taskJSON {
 		ParentID: t.ParentID,
 	}
 	if t.DueDate != nil {
-		s := t.DueDate.Format("2006-01-02")
+		s := t.DueDate.Format(views.DefaultDateFormat)
 		result.DueDate = &s
 	}
 	if t.StartDate != nil {
-		s := t.StartDate.Format("2006-01-02")
+		s := t.StartDate.Format(views.DefaultDateFormat)
 		result.StartDate = &s
 	}
 	if t.Completed != nil {
@@ -3723,7 +3761,7 @@ func (m *MockBackend) loadFullFormat(data map[string][]map[string]interface{}) e
 				task.Priority = int(priority)
 			}
 			if dueDate, ok := taskMap["due_date"].(string); ok {
-				if t, err := time.Parse("2006-01-02", dueDate); err == nil {
+				if t, err := time.Parse(views.DefaultDateFormat, dueDate); err == nil {
 					task.DueDate = &t
 				}
 			}
@@ -3760,7 +3798,7 @@ func (m *MockBackend) SaveToFile(path string) error {
 				"priority": task.Priority,
 			}
 			if task.DueDate != nil {
-				taskMap["due_date"] = task.DueDate.Format("2006-01-02")
+				taskMap["due_date"] = task.DueDate.Format(views.DefaultDateFormat)
 			}
 			if task.Categories != "" {
 				taskMap["categories"] = task.Categories
@@ -4261,7 +4299,7 @@ func doMigrateTargetInfo(cfg *Config, stdout io.Writer, targetBackend, listName 
 						"priority": t.Priority,
 					}
 					if t.DueDate != nil {
-						taskMap["due_date"] = t.DueDate.Format("2006-01-02")
+						taskMap["due_date"] = t.DueDate.Format(views.DefaultDateFormat)
 					}
 					if t.Categories != "" {
 						taskMap["categories"] = t.Categories
@@ -4301,7 +4339,7 @@ func doMigrateTargetInfo(cfg *Config, stdout io.Writer, targetBackend, listName 
 				"priority": t.Priority,
 			}
 			if t.DueDate != nil {
-				taskMap["due_date"] = t.DueDate.Format("2006-01-02")
+				taskMap["due_date"] = t.DueDate.Format(views.DefaultDateFormat)
 			}
 			if t.Categories != "" {
 				taskMap["categories"] = t.Categories
@@ -4540,7 +4578,7 @@ func doReminderCheck(cfg *Config, stdout io.Writer) error {
 	} else {
 		_, _ = fmt.Fprintf(stdout, "Triggered %d reminder(s):\n", len(triggered))
 		for _, task := range triggered {
-			_, _ = fmt.Fprintf(stdout, "  - %s (due: %s)\n", task.Summary, task.DueDate.Format("2006-01-02"))
+			_, _ = fmt.Fprintf(stdout, "  - %s (due: %s)\n", task.Summary, task.DueDate.Format(views.DefaultDateFormat))
 		}
 	}
 
@@ -4619,7 +4657,7 @@ func doReminderList(cfg *Config, stdout io.Writer) error {
 	} else {
 		_, _ = fmt.Fprintf(stdout, "Upcoming reminders (%d):\n", len(upcoming))
 		for _, task := range upcoming {
-			_, _ = fmt.Fprintf(stdout, "  - %s (due: %s)\n", task.Summary, task.DueDate.Format("2006-01-02"))
+			_, _ = fmt.Fprintf(stdout, "  - %s (due: %s)\n", task.Summary, task.DueDate.Format(views.DefaultDateFormat))
 		}
 	}
 
@@ -4878,4 +4916,83 @@ func getAllTasks(ctx context.Context, be backend.TaskManager) ([]backend.Task, e
 	}
 
 	return allTasks, nil
+}
+
+// runDetectBackend shows detected backends and the one that would be used
+func runDetectBackend(stdout io.Writer, cfg *Config) error {
+	workDir := cfg.WorkDir
+	if workDir == "" {
+		var err error
+		workDir, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get working directory: %w", err)
+		}
+	}
+
+	// Register default backends for detection
+	registerDetectableBackends(cfg)
+
+	// Run detection
+	results, err := backend.DetectBackends(workDir)
+	if err != nil {
+		return fmt.Errorf("detection failed: %w", err)
+	}
+
+	// Output detection results
+	_, _ = fmt.Fprintln(stdout, "Auto-detected backends:")
+
+	if len(results) == 0 {
+		_, _ = fmt.Fprintln(stdout, "  (none detected)")
+		_, _ = fmt.Fprintln(stdout, "\nNo backends could be detected.")
+		return nil
+	}
+
+	// Show available backends first with numbering
+	num := 1
+	var firstAvailable string
+	for _, r := range results {
+		if r.Available {
+			_, _ = fmt.Fprintf(stdout, "  %d. %s: %s\n", num, r.Name, r.Info)
+			if firstAvailable == "" {
+				firstAvailable = r.Name
+			}
+			num++
+			// Close backend as we're just showing info
+			if r.Backend != nil {
+				_ = r.Backend.Close()
+			}
+		}
+	}
+
+	// Show unavailable backends
+	for _, r := range results {
+		if !r.Available {
+			_, _ = fmt.Fprintf(stdout, "     %s: (not available) %s\n", r.Name, r.Info)
+		}
+	}
+
+	// Show what would be used
+	if firstAvailable != "" {
+		_, _ = fmt.Fprintf(stdout, "\nWould use: %s\n", firstAvailable)
+	} else {
+		_, _ = fmt.Fprintln(stdout, "\nNo backends available. Configure a backend in config.yaml.")
+	}
+
+	return nil
+}
+
+// registerDetectableBackends registers all detectable backends
+func registerDetectableBackends(cfg *Config) {
+	// Git backend is registered from backend/git package via init()
+	// We need to register SQLite here since it depends on config
+
+	dbPath := cfg.DBPath
+	if dbPath == "" {
+		dbPath = getDefaultDBPath()
+	}
+
+	// Register SQLite as always-available fallback
+	backend.RegisterDetectable("sqlite", func(workDir string) (backend.DetectableBackend, error) {
+		return sqlite.NewDetectable(dbPath)
+	})
 }

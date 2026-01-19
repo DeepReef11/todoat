@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Task represents a todo item
@@ -77,4 +79,10 @@ func FindListByName(lists []List, name string) *List {
 		}
 	}
 	return nil
+}
+
+// GenerateID generates a unique identifier using UUID v4.
+// This is used by backends that need to generate task/list IDs locally.
+func GenerateID() string {
+	return uuid.New().String()
 }

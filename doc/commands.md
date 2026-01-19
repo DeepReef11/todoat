@@ -381,6 +381,7 @@ These flags work with any command:
 | `--version` | | Show version information |
 | `--no-prompt` | `-y` | Disable interactive prompts (for scripting) |
 | `--verbose` | `-V` | Enable debug/verbose output |
+| `--detect-backend` | | Show auto-detected backends and exit |
 
 ### No-Prompt Mode
 
@@ -1054,4 +1055,4 @@ todoat -y Work delete "old task"
 ```
 
 ---
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*

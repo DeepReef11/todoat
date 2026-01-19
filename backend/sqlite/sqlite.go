@@ -434,5 +434,34 @@ func (b *Backend) Close() error {
 	return nil
 }
 
+// DetectableBackend wraps Backend with auto-detection capabilities
+type DetectableBackend struct {
+	*Backend
+	dbPath string
+}
+
+// NewDetectable creates a DetectableBackend for the given database path
+func NewDetectable(dbPath string) (*DetectableBackend, error) {
+	be, err := New(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	return &DetectableBackend{
+		Backend: be,
+		dbPath:  dbPath,
+	}, nil
+}
+
+// CanDetect returns true - SQLite is always available as a fallback
+func (d *DetectableBackend) CanDetect() (bool, error) {
+	return true, nil
+}
+
+// DetectionInfo returns information about the SQLite database
+func (d *DetectableBackend) DetectionInfo() string {
+	return d.dbPath + " (always available)"
+}
+
 // Verify interface compliance at compile time
 var _ backend.TaskManager = (*Backend)(nil)
+var _ backend.DetectableBackend = (*DetectableBackend)(nil)

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"todoat/backend"
 	"todoat/internal/markdown"
 )
@@ -115,7 +114,7 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 
 	// Create new list
 	list := backend.List{
-		ID:       generateID(),
+		ID:       backend.GenerateID(),
 		Name:     name,
 		Modified: time.Now(),
 	}
@@ -232,7 +231,7 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 
 	// Create the task
 	newTask := backend.Task{
-		ID:          generateID(),
+		ID:          backend.GenerateID(),
 		Summary:     task.Summary,
 		Description: task.Description,
 		Status:      task.Status,
@@ -371,7 +370,7 @@ func (b *Backend) loadFile() error {
 		if matches := sectionPattern.FindStringSubmatch(line); len(matches) == 2 {
 			listName := strings.TrimSpace(matches[1])
 			list := backend.List{
-				ID:       generateID(),
+				ID:       backend.GenerateID(),
 				Name:     listName,
 				Modified: time.Now(),
 			}
@@ -392,7 +391,7 @@ func (b *Backend) loadFile() error {
 			summary, priority, dueDate, categories := markdown.ParseTaskText(taskText)
 
 			task := backend.Task{
-				ID:         generateID(),
+				ID:         backend.GenerateID(),
 				Summary:    summary,
 				Status:     markdown.ParseStatusChar(statusChar),
 				Priority:   priority,
@@ -465,15 +464,6 @@ func (b *Backend) saveFile() error {
 	}
 
 	return os.WriteFile(b.filePath, []byte(sb.String()), 0644)
-}
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-// generateID generates a unique identifier
-func generateID() string {
-	return uuid.New().String()
 }
 
 // Verify interface compliance at compile time
