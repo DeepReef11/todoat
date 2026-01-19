@@ -45,7 +45,7 @@ jobs:
 
       - name: Run Nextcloud integration tests
         env:
-          TODOAT_NEXTCLOUD_HOST: http://localhost:8080
+          TODOAT_NEXTCLOUD_HOST: localhost:8080
           TODOAT_NEXTCLOUD_USERNAME: admin
           TODOAT_NEXTCLOUD_PASSWORD: adminpass
         run: go test -tags=integration -v ./backend/nextcloud/...
