@@ -40,8 +40,8 @@ type detectableRegistration struct {
 
 // Global registry for detectable backends
 var (
-	detectableMu           sync.RWMutex
-	detectableConstructors = make(map[string]DetectableConstructor)
+	detectableMu            sync.RWMutex
+	detectableConstructors  = make(map[string]DetectableConstructor)
 	detectableRegistrations = make(map[string]detectableRegistration)
 )
 
