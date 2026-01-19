@@ -202,13 +202,36 @@ func formatStatus(status backend.TaskStatus) string {
 	}
 }
 
+// hasTimeComponent checks if a time.Time has a non-midnight time component
+func hasTimeComponent(t time.Time) bool {
+	return t.Hour() != 0 || t.Minute() != 0 || t.Second() != 0
+}
+
+// formatDateForJSON formats a date for JSON output
+// Uses RFC3339 with time if time component present, otherwise date-only
+func formatDateForJSON(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	if hasTimeComponent(*t) {
+		return t.Format(time.RFC3339)
+	}
+	return t.Format(DefaultDateFormat)
+}
+
 // formatDate formats a date pointer for display
+// If the time has a non-midnight time component, includes time in output
 func formatDate(t *time.Time, format string) string {
 	if t == nil {
 		return ""
 	}
 	if format == "" {
-		format = DefaultDateFormat
+		// Use date-only format unless time component is present
+		if hasTimeComponent(*t) {
+			format = "Jan 02 15:04"
+		} else {
+			format = DefaultDateFormat
+		}
 	}
 	return t.Format(format)
 }
@@ -261,15 +284,15 @@ func taskToPluginData(t *backend.Task) pluginTaskData {
 	}
 
 	if t.DueDate != nil {
-		s := t.DueDate.Format(DefaultDateFormat)
+		s := formatDateForJSON(t.DueDate)
 		data.DueDate = &s
 	}
 	if t.StartDate != nil {
-		s := t.StartDate.Format(DefaultDateFormat)
+		s := formatDateForJSON(t.StartDate)
 		data.StartDate = &s
 	}
 	if t.Completed != nil {
-		s := t.Completed.Format(DefaultDateFormat)
+		s := formatDateForJSON(t.Completed)
 		data.Completed = &s
 	}
 

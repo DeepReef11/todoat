@@ -26,6 +26,7 @@ todoat
 | [Task Management](task-management.md) | Adding, updating, completing, and deleting tasks |
 | [List Management](list-management.md) | Creating and managing task lists |
 | [Backends](backends.md) | Configuring Nextcloud, Todoist, SQLite, and other backends |
+| [Configuration](configuration.md) | Managing settings with the config command |
 | [Views](views.md) | Customizing how tasks are displayed |
 | [Synchronization](sync.md) | Offline mode and sync configuration |
 | [Shell Completion](shell-completion.md) | Tab completion for Bash, Zsh, Fish, and PowerShell |
@@ -73,6 +74,7 @@ todoat
 | `todoat sync` | Synchronize with remote backend |
 | `todoat tags` | List all tags in use |
 | `todoat view` | Manage custom views |
+| `todoat config` | View and modify configuration |
 | `todoat credentials` | Manage backend credentials |
 | `todoat version` | Show version information |
 

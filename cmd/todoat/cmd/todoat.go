@@ -2743,6 +2743,19 @@ func printTaskTree(tasks []backend.Task, stdout io.Writer) {
 	}
 }
 
+// formatDateDisplay formats a date for text display.
+// Shows time if present, otherwise date only.
+func formatDateDisplay(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	// Check if time has a non-midnight time component
+	if t.Hour() != 0 || t.Minute() != 0 || t.Second() != 0 {
+		return t.Format("Jan 02 15:04")
+	}
+	return t.Format("Jan 02")
+}
+
 // printTaskNode recursively prints a task node with tree visualization
 func printTaskNode(node *taskNode, prefix string, isLast bool, stdout io.Writer) {
 	t := node.task
@@ -2757,6 +2770,10 @@ func printTaskNode(node *taskNode, prefix string, isLast bool, stdout io.Writer)
 	if t.Categories != "" {
 		tagsStr = fmt.Sprintf(" {%s}", t.Categories)
 	}
+	dateStr := ""
+	if t.DueDate != nil {
+		dateStr = fmt.Sprintf(" (%s)", formatDateDisplay(t.DueDate))
+	}
 
 	// Choose the appropriate tree character
 	var treeChar string
@@ -2769,7 +2786,7 @@ func printTaskNode(node *taskNode, prefix string, isLast bool, stdout io.Writer)
 		treeChar = "├─ "
 	}
 
-	_, _ = fmt.Fprintf(stdout, "%s%s%s %s%s%s\n", prefix, treeChar, statusIcon, t.Summary, priorityStr, tagsStr)
+	_, _ = fmt.Fprintf(stdout, "%s%s%s %s%s%s%s\n", prefix, treeChar, statusIcon, t.Summary, priorityStr, dateStr, tagsStr)
 
 	// Build the prefix for children
 	var childPrefix string
@@ -4092,6 +4109,19 @@ type errorResponse struct {
 	Result string `json:"result"`
 }
 
+// formatDateForJSON formats a date for JSON output.
+// Uses RFC3339 with time if time component present, otherwise date-only.
+func formatDateForJSON(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	// Check if time has a non-midnight time component
+	if t.Hour() != 0 || t.Minute() != 0 || t.Second() != 0 {
+		return t.Format(time.RFC3339)
+	}
+	return t.Format(views.DefaultDateFormat)
+}
+
 // taskToJSON converts a backend.Task to taskJSON
 func taskToJSON(t *backend.Task) taskJSON {
 	result := taskJSON{
@@ -4103,11 +4133,11 @@ func taskToJSON(t *backend.Task) taskJSON {
 		ParentID:    t.ParentID,
 	}
 	if t.DueDate != nil {
-		s := t.DueDate.Format(views.DefaultDateFormat)
+		s := formatDateForJSON(t.DueDate)
 		result.DueDate = &s
 	}
 	if t.StartDate != nil {
-		s := t.StartDate.Format(views.DefaultDateFormat)
+		s := formatDateForJSON(t.StartDate)
 		result.StartDate = &s
 	}
 	if t.Completed != nil {

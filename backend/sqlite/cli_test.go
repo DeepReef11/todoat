@@ -4088,3 +4088,195 @@ func TestTagsCasePreservedSQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "WorkProject")
 }
+
+// ==================== Time of Day Support Tests ====================
+
+// TestAddTaskWithTimeSQLiteCLI verifies that `todoat -y MyList add "Meeting" --due-date "2026-01-20T14:30"` sets datetime
+func TestAddTaskWithTimeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Meeting", "--due-date", "2026-01-20T14:30")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date includes time
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Meeting")
+	// Should contain full datetime in ISO8601 format
+	testutil.AssertContains(t, stdout, "2026-01-20T14:30")
+}
+
+// TestAddTaskWithTimeZoneSQLiteCLI verifies that `todoat -y MyList add "Call" --due-date "2026-01-20T14:30-05:00"` handles timezone
+func TestAddTaskWithTimeZoneSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Call", "--due-date", "2026-01-20T14:30-05:00")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date is stored
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Call")
+	// Should contain the date portion at minimum
+	testutil.AssertContains(t, stdout, "2026-01-20")
+}
+
+// TestAddTaskWithTimeUTCSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date "2026-01-20T14:30Z"` handles UTC timezone
+func TestAddTaskWithTimeUTCSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "UTC Task", "--due-date", "2026-01-20T14:30Z")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "UTC Task")
+	testutil.AssertContains(t, stdout, "2026-01-20")
+}
+
+// TestDateOnlyStillWorksSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date "2026-01-20"` works (date only, midnight assumed)
+func TestDateOnlyStillWorksSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Date only task", "--due-date", "2026-01-20")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Date only task")
+	testutil.AssertContains(t, stdout, "2026-01-20")
+}
+
+// TestTimeDisplayInListSQLiteCLI verifies that tasks with time show time component in output
+func TestTimeDisplayInListSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with time
+	cli.MustExecute("-y", "Work", "add", "Timed meeting", "--due-date", "2026-01-20T14:30")
+
+	// List tasks (not JSON) to see display format
+	stdout := cli.MustExecute("-y", "Work")
+
+	testutil.AssertContains(t, stdout, "Timed meeting")
+	// The display should include time when time is set (not midnight)
+	testutil.AssertContains(t, stdout, "14:30")
+}
+
+// TestTimeInJSONSQLiteCLI verifies that `todoat -y --json MyList` includes full ISO8601 datetime
+func TestTimeInJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with time
+	cli.MustExecute("-y", "Work", "add", "JSON time task", "--due-date", "2026-01-20T14:30")
+
+	// List tasks with JSON
+	stdout := cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "JSON time task")
+	// JSON should include full datetime
+	testutil.AssertContains(t, stdout, "2026-01-20T14:30")
+}
+
+// TestRelativeDateWithTimeSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date "tomorrow 14:00"` works
+func TestRelativeDateWithTimeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Tomorrow afternoon", "--due-date", "tomorrow 14:00")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date has time
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Tomorrow afternoon")
+	// Should contain 14:00 time
+	testutil.AssertContains(t, stdout, "14:00")
+}
+
+// TestRelativeDatePlusDaysWithTimeSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date "+2d 09:00"` works
+func TestRelativeDatePlusDaysWithTimeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Morning in 2 days", "--due-date", "+2d 09:00")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date has time
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Morning in 2 days")
+	// Should contain 09:00 time
+	testutil.AssertContains(t, stdout, "09:00")
+}
+
+// TestTimeUpdateSQLiteCLI verifies that `todoat -y MyList update "Task" --due-date "2026-01-20T15:00"` updates time
+func TestTimeUpdateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with initial time
+	cli.MustExecute("-y", "Work", "add", "Update time task", "--due-date", "2026-01-20T14:00")
+
+	// Update the time
+	stdout := cli.MustExecute("-y", "Work", "update", "Update time task", "--due-date", "2026-01-20T15:00")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify updated time
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Update time task")
+	testutil.AssertContains(t, stdout, "15:00")
+	testutil.AssertNotContains(t, stdout, "14:00")
+}
+
+// TestAddTaskWithSecondsSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date "2026-01-20T14:30:45"` works with seconds
+func TestAddTaskWithSecondsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Precise task", "--due-date", "2026-01-20T14:30:45")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Precise task")
+	testutil.AssertContains(t, stdout, "2026-01-20T14:30")
+}
+
+// TestMidnightTimeNotDisplayedSQLiteCLI verifies that time component not shown if midnight (00:00)
+func TestMidnightTimeNotDisplayedSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a task with date only (defaults to midnight)
+	cli.MustExecute("-y", "Work", "add", "Midnight task", "--due-date", "2026-01-20")
+
+	// List tasks (not JSON) - should NOT show 00:00 time
+	stdout := cli.MustExecute("-y", "Work")
+
+	testutil.AssertContains(t, stdout, "Midnight task")
+	// Should NOT show midnight time in display
+	testutil.AssertNotContains(t, stdout, "00:00")
+}
+
+// TestStartDateWithTimeSQLiteCLI verifies that start-date also accepts datetime format
+func TestStartDateWithTimeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Start time task", "--start-date", "2026-01-20T09:00", "--due-date", "2026-01-20T17:00")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Start time task")
+	testutil.AssertContains(t, stdout, "09:00")
+	testutil.AssertContains(t, stdout, "17:00")
+}

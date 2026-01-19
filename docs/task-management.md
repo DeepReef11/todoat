@@ -73,6 +73,59 @@ todoat MyList add "Project kickoff" --start-date 2026-02-01
 todoat MyList add "Sprint work" --start-date 2026-01-15 --due-date 2026-01-29
 ```
 
+### Relative Dates
+
+Use human-friendly relative dates instead of absolute dates:
+
+```bash
+# Common relative dates
+todoat MyList add "Do today" --due-date today
+todoat MyList add "Do tomorrow" --due-date tomorrow
+
+# Days from now
+todoat MyList add "Due in a week" --due-date +7d
+
+# Weeks and months
+todoat MyList add "Due in 2 weeks" --due-date +2w
+todoat MyList add "Due next month" --due-date +1m
+
+# Days ago (useful for filtering)
+todoat MyList --due-after -3d
+```
+
+| Format | Meaning |
+|--------|---------|
+| `today` | Current date |
+| `tomorrow` | Next day |
+| `yesterday` | Previous day |
+| `+Nd` | N days from now |
+| `-Nd` | N days ago |
+| `+Nw` | N weeks from now |
+| `+Nm` | N months from now |
+
+### Task with Time
+
+Set specific times for due dates and start dates:
+
+```bash
+# ISO 8601 format with time
+todoat MyList add "Team meeting" --due-date 2026-01-20T14:30
+
+# With timezone
+todoat MyList add "Client call" --due-date "2026-01-20T14:30-05:00"
+
+# Relative date with time
+todoat MyList add "Morning standup" --due-date "tomorrow 09:00"
+todoat MyList add "Friday meeting" --due-date "+2d 14:00"
+```
+
+Date-only input defaults to midnight (00:00). Tasks with time show the time component in output:
+
+```
+TODO   Team meeting                       Jan 20 14:30
+TODO   Client call                        Jan 20 14:30
+```
+
 ### Task with Description
 
 ```bash
