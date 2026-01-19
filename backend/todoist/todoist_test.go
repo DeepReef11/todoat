@@ -154,6 +154,8 @@ func (m *mockTodoistServer) handler(w http.ResponseWriter, r *http.Request) {
 		m.handleUpdateTask(w, r, strings.TrimPrefix(path, "/rest/v2/tasks/"))
 	case strings.HasPrefix(path, "/rest/v2/tasks/") && r.Method == http.MethodDelete:
 		m.handleDeleteTask(w, r, strings.TrimPrefix(path, "/rest/v2/tasks/"))
+	case path == "/sync/v9/completed/get_all" && r.Method == http.MethodGet:
+		m.handleGetCompletedTasks(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -231,6 +233,10 @@ func (m *mockTodoistServer) handleGetTasks(w http.ResponseWriter, r *http.Reques
 
 	var tasks []*todoistTask
 	for _, t := range m.tasks {
+		// Real Todoist API only returns active (non-completed) tasks
+		if t.IsCompleted {
+			continue
+		}
 		if projectID == "" || t.ProjectID == projectID {
 			tasks = append(tasks, t)
 		}
@@ -368,6 +374,49 @@ func (m *mockTodoistServer) handleReopenTask(w http.ResponseWriter, r *http.Requ
 
 	task.IsCompleted = false
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleGetCompletedTasks returns completed tasks via Sync API endpoint
+func (m *mockTodoistServer) handleGetCompletedTasks(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	projectID := r.URL.Query().Get("project_id")
+
+	// Response format matches Todoist Sync API v9 completed/get_all
+	type completedItem struct {
+		ID          string `json:"id"`
+		TaskID      string `json:"task_id"`
+		Content     string `json:"content"`
+		ProjectID   string `json:"project_id"`
+		CompletedAt string `json:"completed_at"`
+	}
+
+	var items []completedItem
+	for _, t := range m.tasks {
+		if !t.IsCompleted {
+			continue
+		}
+		if projectID != "" && t.ProjectID != projectID {
+			continue
+		}
+		items = append(items, completedItem{
+			ID:          t.ID + "-completed",
+			TaskID:      t.ID,
+			Content:     t.Content,
+			ProjectID:   t.ProjectID,
+			CompletedAt: time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	response := struct {
+		Items []completedItem `json:"items"`
+	}{
+		Items: items,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // =============================================================================
@@ -1180,5 +1229,70 @@ func TestAuthFailure(t *testing.T) {
 	_, err = be.GetLists(ctx)
 	if err == nil {
 		t.Error("Expected auth error with wrong token")
+	}
+}
+
+// TestTodoistFindCompletedTaskBySummaryCLI - Issue #001: delete cannot find completed tasks
+// This test reproduces the issue where Todoist's GetTasks API only returns active tasks,
+// making it impossible to find completed tasks by summary for deletion.
+func TestTodoistFindCompletedTaskBySummaryCLI(t *testing.T) {
+	server := newMockTodoistServer("test-api-token")
+	defer server.Close()
+
+	server.AddProject("proj-1", "Inbox")
+	server.AddTask("task-1", "proj-1", "Test from todoat", 1, nil, "")
+
+	be, err := New(Config{
+		APIToken: "test-api-token",
+		BaseURL:  server.URL(),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create backend: %v", err)
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+
+	// First verify the task is visible when active
+	tasks, err := be.GetTasks(ctx, "proj-1")
+	if err != nil {
+		t.Fatalf("GetTasks failed: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0].Summary != "Test from todoat" {
+		t.Fatalf("Expected task summary 'Test from todoat', got '%s'", tasks[0].Summary)
+	}
+
+	// Now mark the task as completed
+	task := tasks[0]
+	task.Status = backend.StatusCompleted
+	_, err = be.UpdateTask(ctx, "proj-1", &task)
+	if err != nil {
+		t.Fatalf("UpdateTask (complete) failed: %v", err)
+	}
+
+	// After completion, GetTasks no longer returns the task (matching real Todoist API behavior)
+	tasksAfterComplete, err := be.GetTasks(ctx, "proj-1")
+	if err != nil {
+		t.Fatalf("GetTasks after completion failed: %v", err)
+	}
+
+	// This is the bug: completed tasks are not returned by GetTasks,
+	// so CLI cannot find the task by summary to delete it
+	// The fix should make completed tasks findable
+	foundCompletedTask := false
+	for _, t := range tasksAfterComplete {
+		if t.Summary == "Test from todoat" {
+			foundCompletedTask = true
+			break
+		}
+	}
+
+	// Currently this will fail because the mock now correctly filters out completed tasks
+	// After the fix is implemented, GetTasks should include completed tasks
+	if !foundCompletedTask {
+		t.Errorf("Bug #001: Completed task 'Test from todoat' not found in GetTasks - this prevents deletion by summary")
 	}
 }

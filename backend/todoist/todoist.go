@@ -328,8 +328,29 @@ func (b *Backend) PurgeList(ctx context.Context, listID string) error {
 // Task Operations
 // =============================================================================
 
-// GetTasks returns all tasks in a project
+// GetTasks returns all tasks in a project, including completed tasks.
+// Active tasks are fetched from the REST API, completed tasks from the Sync API.
 func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
+	// Fetch active tasks from REST API
+	activeTasks, err := b.getActiveTasks(ctx, listID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch completed tasks from Sync API
+	completedTasks, err := b.getCompletedTasks(ctx, listID)
+	if err != nil {
+		// If completed tasks fetch fails, still return active tasks
+		// This is a graceful degradation - the user can always use --uid
+		return activeTasks, nil
+	}
+
+	// Merge active and completed tasks
+	return append(activeTasks, completedTasks...), nil
+}
+
+// getActiveTasks fetches active (non-completed) tasks from the REST API
+func (b *Backend) getActiveTasks(ctx context.Context, listID string) ([]backend.Task, error) {
 	path := "/rest/v2/tasks"
 	if listID != "" {
 		path += "?project_id=" + listID
@@ -386,6 +407,55 @@ func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, 
 			if err == nil {
 				tasks[i].DueDate = &dueDate
 			}
+		}
+	}
+
+	return tasks, nil
+}
+
+// getCompletedTasks fetches completed tasks from the Sync API
+func (b *Backend) getCompletedTasks(ctx context.Context, listID string) ([]backend.Task, error) {
+	path := "/sync/v9/completed/get_all"
+	if listID != "" {
+		path += "?project_id=" + listID
+	}
+
+	resp, err := b.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get completed tasks: status %d", resp.StatusCode)
+	}
+
+	var response struct {
+		Items []struct {
+			TaskID      string `json:"task_id"`
+			Content     string `json:"content"`
+			ProjectID   string `json:"project_id"`
+			CompletedAt string `json:"completed_at"`
+		} `json:"items"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+
+	tasks := make([]backend.Task, len(response.Items))
+	for i, item := range response.Items {
+		completedAt, _ := time.Parse(time.RFC3339, item.CompletedAt)
+
+		tasks[i] = backend.Task{
+			ID:        item.TaskID,
+			Summary:   item.Content,
+			Status:    backend.StatusCompleted,
+			Priority:  5, // Default priority for completed tasks
+			ListID:    item.ProjectID,
+			Completed: &completedAt,
+			Created:   completedAt, // Use completed time as created (actual not available)
+			Modified:  completedAt,
 		}
 	}
 

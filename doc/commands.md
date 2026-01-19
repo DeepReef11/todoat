@@ -1509,6 +1509,65 @@ todoat Work complete "report"
 todoat -y Work delete "old task"
 ```
 
+## Tags Management
+
+View and manage tags used across your tasks.
+
+```bash
+# List all tags in use across all lists
+todoat tags
+
+# List tags used in a specific list
+todoat tags --list "Work"
+
+# Get tags as JSON
+todoat tags --json
+```
+
+### Tags Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `tags` | List all unique tags with usage counts |
+| `tags --list [name]` | Show tags only from the specified list |
+
+### Tags Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--list` | `-l` | Filter tags to a specific list |
+
+### Tags Output
+
+**Text output:**
+```
+Tags in use:
+  urgent (5 tasks)
+  work (12 tasks)
+  bug (3 tasks)
+  feature (8 tasks)
+```
+
+**JSON output:**
+```json
+{
+  "tags": [
+    {"name": "urgent", "count": 5},
+    {"name": "work", "count": 12},
+    {"name": "bug", "count": 3},
+    {"name": "feature", "count": 8}
+  ],
+  "list": "",
+  "result": "INFO_ONLY"
+}
+```
+
+### Use Cases
+
+- **Review tag organization**: See which tags you're using and how often
+- **Find unused tags**: Identify tags that might need cleanup
+- **Scripting**: Use JSON output to programmatically work with tags
+
 ## Version
 
 Display version and build information.

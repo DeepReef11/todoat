@@ -32,3 +32,14 @@ cp -r issues/docker-integration/* .
 ```
 
 Then access Nextcloud at http://localhost:8080 with credentials `admin` / `admin123`.
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Copied complete Docker integration setup from `issues/docker-integration/` to project root. Updated `docker-compose.yml` with PostgreSQL database, Redis cache, and proper health checks. Added helper scripts for starting/stopping/waiting for the test server.
+**Files added/updated**:
+- `docker-compose.yml` - Full stack configuration
+- `scripts/init-nextcloud.sh` - Post-installation script to install Tasks and Calendar apps
+- `scripts/start-test-server.sh` - Convenient start script with health check
+- `scripts/stop-test-server.sh` - Stop script with data cleanup option
+- `scripts/wait-for-nextcloud.sh` - CI-friendly readiness check script
