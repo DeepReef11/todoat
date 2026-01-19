@@ -20,6 +20,12 @@ type Config struct {
 	OutputFormat      string         `yaml:"output_format"`
 	Sync              SyncConfig     `yaml:"sync"`
 	AutoDetectBackend bool           `yaml:"auto_detect_backend"`
+	Trash             TrashConfig    `yaml:"trash"`
+}
+
+// TrashConfig holds trash management settings
+type TrashConfig struct {
+	RetentionDays *int `yaml:"retention_days"`
 }
 
 // SyncConfig holds synchronization settings
@@ -170,6 +176,17 @@ func (c *Config) IsSyncEnabled() bool {
 // IsAutoDetectEnabled returns true if auto-detection is enabled
 func (c *Config) IsAutoDetectEnabled() bool {
 	return c.AutoDetectBackend
+}
+
+// GetTrashRetentionDays returns the trash retention period in days.
+// Returns 30 (default) if not configured, or 0 if auto-purge is disabled.
+func (c *Config) GetTrashRetentionDays() int {
+	// If RetentionDays is nil (not set), return default of 30
+	if c.Trash.RetentionDays == nil {
+		return 30 // Default retention period
+	}
+	// Return the configured value (0 means disabled)
+	return *c.Trash.RetentionDays
 }
 
 // LoadFromPath loads configuration from a specific path without creating defaults

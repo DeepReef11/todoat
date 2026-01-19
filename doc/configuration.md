@@ -47,6 +47,10 @@ output_format: text
 # Enable automatic backend detection based on directory context
 auto_detect_backend: false
 
+# Trash configuration
+trash:
+  retention_days: 30  # Days before auto-purge (0 = disabled)
+
 # Synchronization configuration
 sync:
   enabled: false
@@ -87,6 +91,7 @@ notifications:
 | `no_prompt` | boolean | `false` | Disable interactive prompts |
 | `output_format` | string | `text` | Default output format (`text` or `json`) |
 | `auto_detect_backend` | boolean | `false` | Enable automatic backend detection (see below) |
+| `trash.retention_days` | integer | `30` | Days before auto-purging deleted lists (0 = disabled) |
 | `sync.enabled` | boolean | `false` | Enable synchronization with remote backends |
 | `sync.local_backend` | string | `sqlite` | Local backend to use for caching |
 | `sync.conflict_resolution` | string | `local` | Conflict resolution strategy (`local` or `remote`) |
@@ -205,6 +210,42 @@ Backend authentication can be configured via environment variables. See [Backend
 | `TODOAT_MSTODO_CLIENT_SECRET` | Microsoft OAuth2 client secret (optional) |
 
 Note: For better security, consider using the credential manager instead of environment variables. See [Credential Management](./commands.md#credential-management).
+
+## Trash Auto-Purge
+
+Deleted lists are automatically purged from the trash after a configurable retention period. This prevents indefinite data accumulation.
+
+### How It Works
+
+- Lists deleted with `todoat list delete` are moved to trash
+- When you access the trash (e.g., `todoat list trash`), lists older than the retention period are automatically purged
+- Purged lists and their tasks are permanently deleted (no recovery)
+
+### Configuration
+
+```yaml
+trash:
+  retention_days: 30  # Default: purge after 30 days
+```
+
+| Value | Behavior |
+|-------|----------|
+| `30` (default) | Purge lists deleted more than 30 days ago |
+| `7` | Purge lists deleted more than 7 days ago |
+| `0` | Disable auto-purge (keep lists in trash indefinitely) |
+
+### Example
+
+```bash
+# Delete a list (moved to trash)
+todoat list delete "OldProject"
+
+# 30+ days later, when you view trash
+todoat list trash
+# Output: Auto-purged 1 list(s) older than 30 days
+
+# To disable auto-purge, set retention_days to 0 in config
+```
 
 ## Backend Auto-Detection
 

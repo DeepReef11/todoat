@@ -4,13 +4,16 @@ package testutil
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	_ "modernc.org/sqlite"
 	"todoat/cmd/todoat/cmd"
 )
 
@@ -506,4 +509,86 @@ func (c *CacheCLITest) CachePath() string {
 func (c *CacheCLITest) SetCacheTTL(ttl time.Duration) {
 	c.cacheTTL = ttl
 	c.cfg.CacheTTL = ttl
+}
+
+// TrashCLITest extends CLITest with trash-specific helpers for testing auto-purge.
+type TrashCLITest struct {
+	*CLITest
+	configPath string
+}
+
+// NewCLITestWithTrash creates a new CLI test helper with config file support for trash settings.
+func NewCLITestWithTrash(t *testing.T) *TrashCLITest {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+
+	// Write initial config file
+	initialConfig := "# test config\n"
+	if err := os.WriteFile(configPath, []byte(initialConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	cfg := &cmd.Config{
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+		CachePath:  cachePath,
+	}
+
+	return &TrashCLITest{
+		CLITest: &CLITest{
+			t:          t,
+			cfg:        cfg,
+			tmpDir:     tmpDir,
+			configPath: configPath,
+		},
+		configPath: configPath,
+	}
+}
+
+// SetTrashRetentionDays sets the trash.retention_days config value.
+func (c *TrashCLITest) SetTrashRetentionDays(days int) {
+	c.t.Helper()
+
+	// Read existing config
+	data, err := os.ReadFile(c.configPath)
+	if err != nil {
+		c.t.Fatalf("failed to read config file: %v", err)
+	}
+
+	// Append the trash config section
+	newConfig := string(data) + "trash:\n  retention_days: " + strconv.Itoa(days) + "\n"
+
+	if err := os.WriteFile(c.configPath, []byte(newConfig), 0644); err != nil {
+		c.t.Fatalf("failed to write config file: %v", err)
+	}
+}
+
+// SetListDeletedAt modifies the deleted_at timestamp for a list by name.
+// This is used to simulate lists that were deleted in the past.
+func (c *TrashCLITest) SetListDeletedAt(listName string, deletedAt time.Time) {
+	c.t.Helper()
+
+	// Open the database directly
+	db, err := openTestDB(c.cfg.DBPath)
+	if err != nil {
+		c.t.Fatalf("failed to open database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Update the deleted_at timestamp
+	deletedAtStr := deletedAt.UTC().Format(time.RFC3339Nano)
+	_, err = db.Exec("UPDATE task_lists SET deleted_at = ? WHERE LOWER(name) = LOWER(?)", deletedAtStr, listName)
+	if err != nil {
+		c.t.Fatalf("failed to update deleted_at: %v", err)
+	}
+}
+
+// openTestDB opens the SQLite database for testing purposes.
+func openTestDB(dbPath string) (*sql.DB, error) {
+	return sql.Open("sqlite", dbPath)
 }

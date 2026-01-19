@@ -3269,3 +3269,95 @@ func TestAbsoluteDateStillWorksSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Task absolute")
 	testutil.AssertContains(t, stdout, "2026-01-31")
 }
+
+// =============================================================================
+// Trash Auto-Purge Tests (046-trash-auto-purge)
+// =============================================================================
+
+// TestTrashAutoPurgeDefaultSQLiteCLI verifies that lists deleted >30 days ago
+// are automatically purged on next `todoat list trash` command
+func TestTrashAutoPurgeDefaultSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithTrash(t)
+
+	// Create and delete a list
+	cli.MustExecute("-y", "list", "create", "OldTrashList")
+	cli.MustExecute("-y", "list", "delete", "OldTrashList")
+
+	// Set deleted_at to 31 days ago (beyond default 30-day retention)
+	cli.SetListDeletedAt("OldTrashList", time.Now().AddDate(0, 0, -31))
+
+	// View trash - should trigger auto-purge
+	stdout := cli.MustExecute("-y", "list", "trash")
+
+	// The old list should be purged and not visible
+	testutil.AssertNotContains(t, stdout, "OldTrashList")
+	// Output should indicate purge happened
+	testutil.AssertContains(t, stdout, "purged")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestTrashAutoPurgeConfigurableSQLiteCLI verifies that `trash.retention_days: 7`
+// in config purges lists older than 7 days
+func TestTrashAutoPurgeConfigurableSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithTrash(t)
+
+	// Set retention to 7 days
+	cli.SetTrashRetentionDays(7)
+
+	// Create and delete a list
+	cli.MustExecute("-y", "list", "create", "WeekOldList")
+	cli.MustExecute("-y", "list", "delete", "WeekOldList")
+
+	// Set deleted_at to 8 days ago (beyond 7-day retention)
+	cli.SetListDeletedAt("WeekOldList", time.Now().AddDate(0, 0, -8))
+
+	// View trash - should trigger auto-purge
+	stdout := cli.MustExecute("-y", "list", "trash")
+
+	// The old list should be purged and not visible
+	testutil.AssertNotContains(t, stdout, "WeekOldList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestTrashAutoPurgeDisabledSQLiteCLI verifies that `trash.retention_days: 0`
+// disables auto-purge
+func TestTrashAutoPurgeDisabledSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithTrash(t)
+
+	// Disable auto-purge
+	cli.SetTrashRetentionDays(0)
+
+	// Create and delete a list
+	cli.MustExecute("-y", "list", "create", "ForeverList")
+	cli.MustExecute("-y", "list", "delete", "ForeverList")
+
+	// Set deleted_at to 365 days ago
+	cli.SetListDeletedAt("ForeverList", time.Now().AddDate(0, 0, -365))
+
+	// View trash - should NOT auto-purge
+	stdout := cli.MustExecute("-y", "list", "trash")
+
+	// The list should still be visible
+	testutil.AssertContains(t, stdout, "ForeverList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestTrashAutoPurgePreservesRecentSQLiteCLI verifies that lists deleted <30 days ago
+// are NOT purged
+func TestTrashAutoPurgePreservesRecentSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithTrash(t)
+
+	// Create and delete a list
+	cli.MustExecute("-y", "list", "create", "RecentList")
+	cli.MustExecute("-y", "list", "delete", "RecentList")
+
+	// Set deleted_at to 29 days ago (within default 30-day retention)
+	cli.SetListDeletedAt("RecentList", time.Now().AddDate(0, 0, -29))
+
+	// View trash - should NOT purge recent lists
+	stdout := cli.MustExecute("-y", "list", "trash")
+
+	// The recent list should still be visible
+	testutil.AssertContains(t, stdout, "RecentList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}

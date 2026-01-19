@@ -702,15 +702,49 @@ func newListTrashCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	return trashCmd
 }
 
-// doListTrashView displays deleted lists
+// doListTrashView displays deleted lists, auto-purging expired ones first
 func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout io.Writer) error {
+	// Get all deleted lists first
 	lists, err := be.GetDeletedLists(ctx)
 	if err != nil {
 		return err
 	}
 
+	// Auto-purge expired lists based on retention policy
+	retentionDays := getTrashRetentionDays(cfg)
+	purgedCount := 0
+
+	if retentionDays > 0 {
+		cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
+		var remainingLists []backend.List
+
+		for _, l := range lists {
+			if l.DeletedAt != nil && l.DeletedAt.Before(cutoffTime) {
+				// This list has expired - purge it
+				if err := be.PurgeList(ctx, l.ID); err != nil {
+					return fmt.Errorf("failed to purge expired list %q: %w", l.Name, err)
+				}
+				purgedCount++
+			} else {
+				remainingLists = append(remainingLists, l)
+			}
+		}
+		lists = remainingLists
+	}
+
+	// Report purged lists if any
+	if purgedCount > 0 {
+		if purgedCount == 1 {
+			_, _ = fmt.Fprintln(stdout, "Auto-purged 1 expired list.")
+		} else {
+			_, _ = fmt.Fprintf(stdout, "Auto-purged %d expired lists.\n", purgedCount)
+		}
+	}
+
 	if len(lists) == 0 {
-		_, _ = fmt.Fprintln(stdout, "Trash is empty.")
+		if purgedCount == 0 {
+			_, _ = fmt.Fprintln(stdout, "Trash is empty.")
+		}
 		if cfg != nil && cfg.NoPrompt {
 			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 		}
@@ -5365,6 +5399,22 @@ func getConfigDaemonInterval(cfg *Config) time.Duration {
 		}
 	}
 	return 0
+}
+
+// getTrashRetentionDays reads the trash retention days from config file.
+// Returns 30 (default) if not configured, or 0 if auto-purge is disabled.
+func getTrashRetentionDays(cfg *Config) int {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		return 30 // Default retention period
+	}
+
+	appConfig, err := config.LoadFromPath(configPath)
+	if err != nil || appConfig == nil {
+		return 30 // Default retention period
+	}
+
+	return appConfig.GetTrashRetentionDays()
 }
 
 // =============================================================================
