@@ -52,55 +52,39 @@ func (l *Logger) IsVerbose() bool {
 	return l.verbose
 }
 
+// formatMessage formats a message with optional printf-style arguments.
+func formatMessage(msgOrFormat string, args ...interface{}) string {
+	if len(args) > 0 {
+		return fmt.Sprintf(msgOrFormat, args...)
+	}
+	return msgOrFormat
+}
+
 // Debug logs a debug message (only shown when verbose=true).
 // Can be used with a simple message or printf-style format string with args.
 func (l *Logger) Debug(msgOrFormat string, args ...interface{}) {
 	if !l.IsVerbose() {
 		return
 	}
-	var msg string
-	if len(args) > 0 {
-		msg = fmt.Sprintf(msgOrFormat, args...)
-	} else {
-		msg = msgOrFormat
-	}
-	fmt.Fprintf(os.Stderr, "[DEBUG] %s\n", msg)
+	fmt.Fprintf(os.Stderr, "[DEBUG] %s\n", formatMessage(msgOrFormat, args...))
 }
 
 // Info logs an info message (always shown).
 // Can be used with a simple message or printf-style format string with args.
 func (l *Logger) Info(msgOrFormat string, args ...interface{}) {
-	var msg string
-	if len(args) > 0 {
-		msg = fmt.Sprintf(msgOrFormat, args...)
-	} else {
-		msg = msgOrFormat
-	}
-	fmt.Fprintf(os.Stderr, "[INFO] %s\n", msg)
+	fmt.Fprintf(os.Stderr, "[INFO] %s\n", formatMessage(msgOrFormat, args...))
 }
 
 // Warn logs a warning message (always shown).
 // Can be used with a simple message or printf-style format string with args.
 func (l *Logger) Warn(msgOrFormat string, args ...interface{}) {
-	var msg string
-	if len(args) > 0 {
-		msg = fmt.Sprintf(msgOrFormat, args...)
-	} else {
-		msg = msgOrFormat
-	}
-	fmt.Fprintf(os.Stderr, "[WARN] %s\n", msg)
+	fmt.Fprintf(os.Stderr, "[WARN] %s\n", formatMessage(msgOrFormat, args...))
 }
 
 // Error logs an error message (always shown).
 // Can be used with a simple message or printf-style format string with args.
 func (l *Logger) Error(msgOrFormat string, args ...interface{}) {
-	var msg string
-	if len(args) > 0 {
-		msg = fmt.Sprintf(msgOrFormat, args...)
-	} else {
-		msg = msgOrFormat
-	}
-	fmt.Fprintf(os.Stderr, "[ERROR] %s\n", msg)
+	fmt.Fprintf(os.Stderr, "[ERROR] %s\n", formatMessage(msgOrFormat, args...))
 }
 
 // Debugf is a convenience function that logs a debug message using the global logger.
