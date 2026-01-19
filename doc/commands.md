@@ -365,6 +365,8 @@ todoat MyList u "task name" -s IN-PROGRESS
 | `--tag` | | Set tags (replaces existing; can be multiple or comma-separated) |
 | `--parent` | `-P` | Set parent task (move task under specified parent) |
 | `--no-parent` | | Remove parent relationship (make task root-level) |
+| `--uid` | | Select task by unique identifier (for scripting) |
+| `--local-id` | | Select task by SQLite internal ID (requires sync enabled) |
 
 ### Update Date and Tag Examples
 
@@ -423,7 +425,23 @@ todoat MyList complete "groceries"
 
 # Using alias
 todoat MyList c "groceries"
+
+# Complete by UID (for scripting)
+todoat MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
+
+# Complete by local ID (requires sync enabled)
+todoat MyList complete --local-id 42
+
+# Complete all children of a task (bulk operation)
+todoat MyList complete "Project/*"
 ```
+
+### Complete Flags
+
+| Flag | Description |
+|------|-------------|
+| `--uid` | Select task by unique identifier |
+| `--local-id` | Select task by SQLite internal ID (requires sync enabled) |
 
 ## Deleting Tasks
 
@@ -438,7 +456,23 @@ todoat MyList delete "groceries"
 
 # Using alias
 todoat MyList d "groceries"
+
+# Delete by UID (for scripting)
+todoat MyList delete --uid "550e8400-e29b-41d4-a716-446655440000"
+
+# Delete by local ID (requires sync enabled)
+todoat MyList delete --local-id 42
+
+# Delete all children of a task (bulk operation)
+todoat MyList delete "Project/*"
 ```
+
+### Delete Flags
+
+| Flag | Description |
+|------|-------------|
+| `--uid` | Select task by unique identifier |
+| `--local-id` | Select task by SQLite internal ID (requires sync enabled) |
 
 ### Cascade Deletion
 
@@ -469,6 +503,100 @@ todoat MyList complete "dinner"                     # Partial match
 If multiple tasks match your search term:
 - In interactive mode: Error prompting you to be more specific
 - In no-prompt mode (`-y`): Lists all matching tasks and exits
+
+### Direct Task Selection
+
+For scripting and automation, you can select tasks directly by their unique identifiers instead of summary matching:
+
+```bash
+# Select by UID (backend-assigned unique identifier)
+todoat MyList update --uid "550e8400-e29b-41d4-a716-446655440000" -s DONE
+todoat MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
+todoat MyList delete --uid "550e8400-e29b-41d4-a716-446655440000"
+
+# Select by local ID (SQLite internal ID, requires sync enabled)
+todoat MyList update --local-id 42 -s DONE
+todoat MyList complete --local-id 42
+todoat MyList delete --local-id 42
+```
+
+#### Task Selection Flags
+
+| Flag | Description |
+|------|-------------|
+| `--uid` | Select task by its unique identifier (UID) |
+| `--local-id` | Select task by its SQLite internal ID (requires sync enabled) |
+
+**Notes:**
+- `--uid` works with tasks that have been synced and have a backend-assigned UID
+- `--local-id` requires sync to be enabled and only works with the SQLite backend
+- These flags bypass summary-based search entirely for unambiguous selection
+- Use `--json` output to retrieve task UIDs and local IDs for scripting
+
+#### Scripting Workflow
+
+```bash
+# 1. Get tasks with their IDs in JSON format
+todoat MyList get --json | jq '.tasks[] | {local_id, uid, summary}'
+
+# 2. Use specific ID to operate on exact task
+todoat MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
+```
+
+## Bulk Hierarchy Operations
+
+Operate on multiple tasks at once using wildcard patterns. This is useful for completing, updating, or deleting entire task hierarchies.
+
+### Pattern Syntax
+
+| Pattern | Description |
+|---------|-------------|
+| `Parent/*` | Matches only direct children of Parent |
+| `Parent/**` | Matches all descendants of Parent (children, grandchildren, etc.) |
+
+### Examples
+
+```bash
+# Complete all direct children of a parent task
+todoat Work complete "Project/*"
+
+# Complete all descendants (recursive) of a parent task
+todoat Work complete "Project/**"
+
+# Update priority for all descendants
+todoat Work update "Release v2.0/**" -p 1
+
+# Delete all direct children only
+todoat Work delete "Old Project/*"
+
+# Delete all descendants recursively
+todoat Work delete "Archived/**"
+```
+
+### Output
+
+**Text mode:**
+```
+Completed 5 tasks under "Release v2.0"
+```
+
+**JSON mode:**
+```json
+{
+  "result": "ACTION_COMPLETED",
+  "action": "complete",
+  "affected_count": 5,
+  "parent": "Release v2.0",
+  "pattern": "**"
+}
+```
+
+### Notes
+
+- Parent task is resolved first by summary matching
+- If parent has no children, returns INFO_ONLY with zero affected tasks
+- Delete operations prompt for confirmation (use `-y` to skip)
+- All matched tasks are processed in a single transaction
 
 ## Global Flags
 

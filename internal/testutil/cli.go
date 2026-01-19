@@ -44,6 +44,7 @@ func NewCLITest(t *testing.T) *CLITest {
 }
 
 // NewCLITestWithViews creates a new CLI test helper with views directory support.
+// Returns the CLITest and the viewsDir (for placing view YAML files).
 func NewCLITestWithViews(t *testing.T) (*CLITest, string) {
 	t.Helper()
 
@@ -68,6 +69,34 @@ func NewCLITestWithViews(t *testing.T) (*CLITest, string) {
 		cfg:    cfg,
 		tmpDir: tmpDir,
 	}, viewsDir
+}
+
+// NewCLITestWithViewsAndTmpDir creates a new CLI test helper with views directory support.
+// Returns the CLITest, viewsDir, and tmpDir (base directory for config.yaml).
+func NewCLITestWithViewsAndTmpDir(t *testing.T) (*CLITest, string, string) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+	viewsDir := tmpDir + "/views"
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+
+	if err := os.MkdirAll(viewsDir, 0755); err != nil {
+		t.Fatalf("failed to create views directory: %v", err)
+	}
+
+	cfg := &cmd.Config{
+		NoPrompt:  true,
+		DBPath:    dbPath,
+		ViewsPath: viewsDir,
+		CachePath: cachePath,
+	}
+
+	return &CLITest{
+		t:      t,
+		cfg:    cfg,
+		tmpDir: tmpDir,
+	}, viewsDir, tmpDir
 }
 
 // NewCLITestWithViewsAndConfig creates a new CLI test helper with views directory and config file support.

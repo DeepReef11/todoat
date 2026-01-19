@@ -73,6 +73,12 @@ type Config struct {
 	AutoDetectBackend bool   // Enable auto-detection of backend
 }
 
+// LocalIDBackend is an interface for backends that support local_id lookup (e.g., SQLite)
+type LocalIDBackend interface {
+	GetTaskByLocalID(ctx context.Context, listID string, localID int64) (*backend.Task, error)
+	GetTaskLocalID(ctx context.Context, taskID string) (int64, error)
+}
+
 // Execute runs the CLI with the given arguments and IO writers
 func Execute(args []string, stdout, stderr io.Writer, cfg *Config) int {
 	rootCmd := NewTodoAt(stdout, stderr, cfg)
@@ -212,6 +218,8 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().BoolP("literal", "l", false, "Treat task summary literally (don't parse / as hierarchy separator)")
 	cmd.Flags().Bool("no-parent", false, "Remove parent relationship (for update, makes task root-level)")
 	cmd.Flags().StringP("view", "v", "", "View to use for displaying tasks (default, all, or custom view name)")
+	cmd.Flags().String("uid", "", "Task UID for direct task selection (bypasses summary search)")
+	cmd.Flags().Int64("local-id", 0, "Task local ID for direct task selection (requires sync enabled)")
 
 	// Add list subcommand
 	cmd.AddCommand(newListCmd(stdout, cfg))
@@ -1959,6 +1967,22 @@ func (b *syncAwareBackend) Close() error {
 	return b.TaskManager.Close()
 }
 
+// GetTaskByLocalID delegates to the underlying backend if it supports LocalIDBackend
+func (b *syncAwareBackend) GetTaskByLocalID(ctx context.Context, listID string, localID int64) (*backend.Task, error) {
+	if localBE, ok := b.TaskManager.(LocalIDBackend); ok {
+		return localBE.GetTaskByLocalID(ctx, listID, localID)
+	}
+	return nil, fmt.Errorf("underlying backend does not support local-id lookup")
+}
+
+// GetTaskLocalID delegates to the underlying backend if it supports LocalIDBackend
+func (b *syncAwareBackend) GetTaskLocalID(ctx context.Context, taskID string) (int64, error) {
+	if localBE, ok := b.TaskManager.(LocalIDBackend); ok {
+		return localBE.GetTaskLocalID(ctx, taskID)
+	}
+	return 0, fmt.Errorf("underlying backend does not support local-id lookup")
+}
+
 // resolveAction maps action names and abbreviations to canonical action names
 func resolveAction(s string) string {
 	switch strings.ToLower(s) {
@@ -2036,6 +2060,10 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		literal, _ := cmd.Flags().GetBool("literal")
 		return doAdd(ctx, be, list, taskSummary, priority, dueDate, startDate, categories, parentSummary, literal, cfg, stdout, jsonOutput)
 	case "update":
+		// Check for direct ID selection flags
+		uidFlag, _ := cmd.Flags().GetString("uid")
+		localIDFlag, _ := cmd.Flags().GetInt64("local-id")
+
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		priority, err := parsePrioritySingle(priorityStr)
 		if err != nil {
@@ -2084,11 +2112,56 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		}
 		parentSummary, _ := cmd.Flags().GetString("parent")
 		noParent, _ := cmd.Flags().GetBool("no-parent")
-		return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
+
+		// Check for bulk pattern first (before ID resolution)
+		_, _, isBulk := parseBulkPattern(taskSummary)
+		if isBulk && uidFlag == "" && !cmd.Flags().Changed("local-id") {
+			// Use original bulk update function
+			return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
+		}
+
+		// Resolve task by UID, local-id, or summary
+		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg)
+		if err != nil {
+			return err
+		}
+		return doUpdateWithTask(ctx, be, list, task, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
 	case "complete":
-		return doComplete(ctx, be, list, taskSummary, cfg, stdout, jsonOutput)
+		// Check for direct ID selection flags
+		uidFlag, _ := cmd.Flags().GetString("uid")
+		localIDFlag, _ := cmd.Flags().GetInt64("local-id")
+
+		// Check for bulk pattern first (before ID resolution)
+		_, _, isBulk := parseBulkPattern(taskSummary)
+		if isBulk && uidFlag == "" && !cmd.Flags().Changed("local-id") {
+			// Use original bulk complete function
+			return doComplete(ctx, be, list, taskSummary, cfg, stdout, jsonOutput)
+		}
+
+		// Resolve task by UID, local-id, or summary
+		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg)
+		if err != nil {
+			return err
+		}
+		return doCompleteWithTask(ctx, be, list, task, cfg, stdout, jsonOutput)
 	case "delete":
-		return doDelete(ctx, be, list, taskSummary, cfg, stdout, jsonOutput)
+		// Check for direct ID selection flags
+		uidFlag, _ := cmd.Flags().GetString("uid")
+		localIDFlag, _ := cmd.Flags().GetInt64("local-id")
+
+		// Check for bulk pattern first (before ID resolution)
+		_, _, isBulk := parseBulkPattern(taskSummary)
+		if isBulk && uidFlag == "" && !cmd.Flags().Changed("local-id") {
+			// Use original bulk delete function
+			return doDelete(ctx, be, list, taskSummary, cfg, stdout, jsonOutput)
+		}
+
+		// Resolve task by UID, local-id, or summary
+		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg)
+		if err != nil {
+			return err
+		}
+		return doDeleteWithTask(ctx, be, list, task, cfg, stdout, jsonOutput)
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
@@ -2103,7 +2176,7 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 
 	// Load and apply view if specified
 	if viewName != "" {
-		return doGetWithView(ctx, tasks, list, viewName, cfg, stdout, jsonOutput)
+		return doGetWithView(ctx, be, tasks, list, viewName, cfg, stdout, jsonOutput)
 	}
 
 	// Filter by status if specified
@@ -2144,7 +2217,7 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 	}
 
 	if jsonOutput {
-		return outputTaskListJSON(tasks, list, stdout)
+		return outputTaskListJSON(ctx, be, tasks, list, cfg, stdout)
 	}
 
 	if len(tasks) == 0 {
@@ -2162,7 +2235,7 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 }
 
 // doGetWithView lists tasks using a view configuration
-func doGetWithView(ctx context.Context, tasks []backend.Task, list *backend.List, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Load view
 	viewsDir := getViewsDir(cfg)
 	loader := views.NewLoader(viewsDir)
@@ -2176,7 +2249,7 @@ func doGetWithView(ctx context.Context, tasks []backend.Task, list *backend.List
 	sortedTasks := views.SortTasks(filteredTasks, view.Sort)
 
 	if jsonOutput {
-		return outputTaskListJSON(sortedTasks, list, stdout)
+		return outputTaskListJSON(ctx, be, sortedTasks, list, cfg, stdout)
 	}
 
 	if len(sortedTasks) == 0 {
@@ -3315,9 +3388,208 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 	return nil, fmt.Errorf("multiple tasks match '%s' - please be more specific", searchTerm)
 }
 
+// resolveTaskByID resolves a task by UID, local-id, or summary (falls back to findTask for summary-based search)
+func resolveTaskByID(ctx context.Context, cmd *cobra.Command, be backend.TaskManager, list *backend.List, taskSummary, uidFlag string, localIDFlag int64, cfg *Config) (*backend.Task, error) {
+	// Check for --uid flag
+	if uidFlag != "" {
+		// Look up task directly by UID
+		task, err := be.GetTask(ctx, list.ID, uidFlag)
+		if err != nil {
+			return nil, err
+		}
+		if task == nil {
+			return nil, fmt.Errorf("no task found with UID '%s'", uidFlag)
+		}
+		return task, nil
+	}
+
+	// Check for --local-id flag
+	if cmd.Flags().Changed("local-id") {
+		// Check if sync is enabled
+		if cfg == nil || !cfg.SyncEnabled {
+			return nil, fmt.Errorf("--local-id requires sync to be enabled")
+		}
+
+		// Check if backend supports local-id lookup
+		localBE, ok := be.(LocalIDBackend)
+		if !ok {
+			return nil, fmt.Errorf("--local-id is only supported with SQLite backend")
+		}
+
+		// Look up task by local ID
+		task, err := localBE.GetTaskByLocalID(ctx, list.ID, localIDFlag)
+		if err != nil {
+			return nil, err
+		}
+		if task == nil {
+			return nil, fmt.Errorf("no task found with local-id %d", localIDFlag)
+		}
+		return task, nil
+	}
+
+	// Fall back to summary-based search (for bulk patterns)
+	if taskSummary == "" {
+		return nil, fmt.Errorf("task summary, --uid, or --local-id is required")
+	}
+
+	// Check for bulk pattern - if so, return nil to let the do* functions handle it
+	_, _, isBulk := parseBulkPattern(taskSummary)
+	if isBulk {
+		// Return a placeholder - the do* functions will handle bulk patterns
+		return nil, nil
+	}
+
+	return findTask(ctx, be, list, taskSummary, cfg)
+}
+
+// doUpdateWithTask modifies an existing task (task already resolved)
+func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// If task is nil, fall back to original behavior (for bulk patterns)
+	if task == nil {
+		return fmt.Errorf("task not found")
+	}
+
+	// Apply updates
+	if newSummary != "" {
+		task.Summary = newSummary
+	}
+	if status != "" {
+		parsedStatus, err := parseStatusWithValidation(status)
+		if err != nil {
+			return err
+		}
+		task.Status = parsedStatus
+	}
+	if priority > 0 {
+		task.Priority = priority
+	}
+	if dueDate != nil {
+		task.DueDate = dueDate
+	}
+	if clearDueDate {
+		task.DueDate = nil
+	}
+	if startDate != nil {
+		task.StartDate = startDate
+	}
+	if clearStartDate {
+		task.StartDate = nil
+	}
+	if newCategories != nil {
+		task.Categories = *newCategories
+	}
+
+	// Handle parent updates
+	if noParent {
+		task.ParentID = ""
+	} else if parentSummary != "" {
+		parent, err := findTask(ctx, be, list, parentSummary, cfg)
+		if err != nil {
+			return fmt.Errorf("parent task not found: %w", err)
+		}
+
+		// Check for circular reference
+		if err := checkCircularReference(ctx, be, list, task.ID, parent.ID); err != nil {
+			return err
+		}
+
+		task.ParentID = parent.ID
+	}
+
+	updated, err := be.UpdateTask(ctx, list.ID, task)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		return outputActionJSON("update", updated, stdout)
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Updated task: %s\n", updated.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// doCompleteWithTask marks a task as completed (task already resolved)
+func doCompleteWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// If task is nil, this shouldn't happen for complete
+	if task == nil {
+		return fmt.Errorf("task not found")
+	}
+
+	task.Status = backend.StatusCompleted
+	// Auto-set completed timestamp
+	now := time.Now().UTC()
+	task.Completed = &now
+
+	updated, err := be.UpdateTask(ctx, list.ID, task)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		return outputActionJSON("complete", updated, stdout)
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Completed task: %s\n", updated.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// doDeleteWithTask removes a task (task already resolved)
+func doDeleteWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// If task is nil, this shouldn't happen for delete
+	if task == nil {
+		return fmt.Errorf("task not found")
+	}
+
+	// Store task info before deletion for JSON output
+	deletedTask := *task
+
+	// Find all descendants for cascade delete
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	descendantIDs := findDescendants(task.ID, tasks)
+
+	// Delete descendants first (bottom-up to avoid FK issues), then parent
+	for i := len(descendantIDs) - 1; i >= 0; i-- {
+		if err := be.DeleteTask(ctx, list.ID, descendantIDs[i]); err != nil {
+			return err
+		}
+	}
+
+	if err := be.DeleteTask(ctx, list.ID, task.ID); err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		return outputActionJSON("delete", &deletedTask, stdout)
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Deleted task: %s\n", task.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
 // JSON output structures
 type taskJSON struct {
 	UID       string   `json:"uid"`
+	LocalID   *int64   `json:"local_id,omitempty"`
 	Summary   string   `json:"summary"`
 	Status    string   `json:"status"`
 	Priority  int      `json:"priority"`
@@ -3326,6 +3598,7 @@ type taskJSON struct {
 	StartDate *string  `json:"start_date,omitempty"`
 	Completed *string  `json:"completed,omitempty"`
 	Tags      []string `json:"tags,omitempty"`
+	Synced    *bool    `json:"synced,omitempty"`
 }
 
 type listTasksResponse struct {
@@ -3393,10 +3666,27 @@ func statusToString(s backend.TaskStatus) string {
 }
 
 // outputTaskListJSON outputs tasks in JSON format
-func outputTaskListJSON(tasks []backend.Task, list *backend.List, stdout io.Writer) error {
+func outputTaskListJSON(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, cfg *Config, stdout io.Writer) error {
 	var jsonTasks []taskJSON
+
+	// Check if backend supports local-id lookup and sync is enabled
+	localBE, supportsLocalID := be.(LocalIDBackend)
+	includeLocalID := supportsLocalID && cfg != nil && cfg.SyncEnabled
+
 	for _, t := range tasks {
-		jsonTasks = append(jsonTasks, taskToJSON(&t))
+		jt := taskToJSON(&t)
+
+		// Add local_id if supported
+		if includeLocalID {
+			localID, err := localBE.GetTaskLocalID(ctx, t.ID)
+			if err == nil && localID > 0 {
+				jt.LocalID = &localID
+				synced := t.ID != "" // Task has UID if synced
+				jt.Synced = &synced
+			}
+		}
+
+		jsonTasks = append(jsonTasks, jt)
 	}
 	if jsonTasks == nil {
 		jsonTasks = []taskJSON{}

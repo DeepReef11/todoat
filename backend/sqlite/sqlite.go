@@ -291,6 +291,34 @@ func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.
 	return t, err
 }
 
+// GetTaskByLocalID returns a task by its SQLite rowid (local ID)
+func (b *Backend) GetTaskByLocalID(ctx context.Context, listID string, localID int64) (*backend.Task, error) {
+	row := b.db.QueryRowContext(ctx,
+		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories
+		 FROM tasks WHERE list_id = ? AND rowid = ?`,
+		listID, localID,
+	)
+
+	t, err := scanTaskRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return t, err
+}
+
+// GetTaskLocalID returns the SQLite rowid for a task
+func (b *Backend) GetTaskLocalID(ctx context.Context, taskID string) (int64, error) {
+	var localID int64
+	err := b.db.QueryRowContext(ctx,
+		`SELECT rowid FROM tasks WHERE id = ?`,
+		taskID,
+	).Scan(&localID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return localID, err
+}
+
 // timeToNullString converts a *time.Time to sql.NullString for database storage.
 func timeToNullString(t *time.Time) sql.NullString {
 	if t == nil {

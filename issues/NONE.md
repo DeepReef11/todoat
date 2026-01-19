@@ -47,11 +47,11 @@ Tested with clean slate (removed ~/.config/todoat and ~/.local/share/todoat).
 | `./bin/todoat -y --json MyList` | Exit code: 0, valid JSON output |
 | `./bin/todoat -y --json MyList add "JSON test"` | Exit code: 0, valid JSON output |
 | `./bin/todoat -y MyList --status=TODO` | Exit code: 0, filters correctly |
-| `./bin/todoat -y MyList --priority=1` | Exit code: 0, filters correctly |
+| `./bin/todoat -y MyList --priority=1` | Exit code: 0, filters correctly (no matching tasks) |
 
 ### Phase 4: Todoist Backend
 
-The Todoist backend is intentionally **not implemented as a primary backend**. Per design documentation (issues/resolved/003-no-backend-flag-documented.md):
+The Todoist backend is intentionally **not implemented as a primary backend**. Per design documentation:
 
 1. SQLite is the only supported primary backend for day-to-day operations
 2. Todoist is available as a **migration target only**
@@ -84,15 +84,17 @@ All error cases handled gracefully with clear messages. No panics or stack trace
 
 1. **Backend selection**: There is no `--backend` flag. The app uses auto-detection or config file settings. This is by design.
 
-2. **Todoist integration**: Todoist backend code exists but is only partially implemented. It cannot be used as a primary backend or for migrations yet. This is documented.
+2. **List listing**: Use `todoat list` command instead of `--list-lists` flag.
 
-3. **All CRUD operations** work correctly with the SQLite backend.
+3. **Todoist integration**: Todoist backend code exists but is only partially implemented. It cannot be used as a primary backend or for migrations yet. This is documented.
 
-4. **JSON output** produces valid, parseable JSON.
+4. **All CRUD operations** work correctly with the SQLite backend.
 
-5. **Error handling** is robust with user-friendly messages.
+5. **JSON output** produces valid, parseable JSON.
 
-6. **Config auto-creation** works correctly on fresh install.
+6. **Error handling** is robust with user-friendly messages.
+
+7. **Config auto-creation** works correctly on fresh install.
 
 ## Conclusion
 

@@ -2569,3 +2569,281 @@ func TestBulkCompleteJSONOutputSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, `"pattern"`)
 	testutil.AssertContains(t, stdout, `"**"`)
 }
+
+// =============================================================================
+// UID/Local-ID Task Selection Tests (041-uid-localid-task-selection)
+// =============================================================================
+
+// extractUID extracts UID from JSON output of add command
+func extractUID(t *testing.T, jsonOutput string) string {
+	t.Helper()
+	// Find "uid":"<value>" pattern
+	start := strings.Index(jsonOutput, `"uid":"`)
+	if start == -1 {
+		t.Fatalf("could not find uid in output: %s", jsonOutput)
+	}
+	start += 7 // len(`"uid":"`)
+	end := strings.Index(jsonOutput[start:], `"`)
+	if end == -1 {
+		t.Fatalf("could not find end of uid in output: %s", jsonOutput)
+	}
+	return jsonOutput[start : start+end]
+}
+
+// TestUpdateByUID tests updating a task by its UID
+func TestUpdateByUID(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and add a task with JSON output to get UID
+	cli.MustExecute("-y", "list", "create", "UIDTest")
+	addOutput := cli.MustExecute("-y", "--json", "UIDTest", "add", "Task to update")
+
+	// Extract UID from JSON output
+	uid := extractUID(t, addOutput)
+
+	// Update by UID
+	stdout := cli.MustExecute("-y", "UIDTest", "update", "--uid", uid, "-s", "DONE")
+
+	testutil.AssertContains(t, stdout, "Updated task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the update worked
+	listOutput := cli.MustExecute("-y", "UIDTest", "get")
+	testutil.AssertContains(t, listOutput, "DONE")
+}
+
+// TestCompleteByUID tests completing a task by its UID
+func TestCompleteByUID(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and add a task with JSON output to get UID
+	cli.MustExecute("-y", "list", "create", "UIDCompleteTest")
+	addOutput := cli.MustExecute("-y", "--json", "UIDCompleteTest", "add", "Task to complete")
+
+	// Extract UID from JSON output
+	uid := extractUID(t, addOutput)
+
+	// Complete by UID
+	stdout := cli.MustExecute("-y", "UIDCompleteTest", "complete", "--uid", uid)
+
+	testutil.AssertContains(t, stdout, "Completed task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// TestDeleteByUID tests deleting a task by its UID
+func TestDeleteByUID(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and add a task with JSON output to get UID
+	cli.MustExecute("-y", "list", "create", "UIDDeleteTest")
+	addOutput := cli.MustExecute("-y", "--json", "UIDDeleteTest", "add", "Task to delete")
+
+	// Extract UID from JSON output
+	uid := extractUID(t, addOutput)
+
+	// Delete by UID
+	stdout := cli.MustExecute("-y", "UIDDeleteTest", "delete", "--uid", uid)
+
+	testutil.AssertContains(t, stdout, "Deleted task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the task is deleted
+	listOutput := cli.MustExecute("-y", "UIDDeleteTest", "get")
+	testutil.AssertNotContains(t, listOutput, "Task to delete")
+}
+
+// TestUpdateByLocalID tests updating a task by its local ID (requires sync enabled)
+func TestUpdateByLocalID(t *testing.T) {
+	cli, _, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
+
+	// Create sync config
+	createSyncConfig(t, tmpDir, true)
+
+	// Create list and add a task
+	cli.MustExecute("-y", "list", "create", "LocalIDTest")
+	cli.MustExecute("-y", "LocalIDTest", "add", "Task for local ID")
+
+	// Get the task with JSON to find local_id
+	jsonOutput := cli.MustExecute("-y", "--json", "LocalIDTest", "get")
+
+	// Extract local_id from JSON output (assuming it's included in the output)
+	localID := extractLocalID(t, jsonOutput)
+
+	// Update by local-id
+	stdout := cli.MustExecute("-y", "LocalIDTest", "update", "--local-id", localID, "-s", "DONE")
+
+	testutil.AssertContains(t, stdout, "Updated task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// TestCompleteByLocalID tests completing a task by its local ID
+func TestCompleteByLocalID(t *testing.T) {
+	cli, _, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
+
+	// Create sync config
+	createSyncConfig(t, tmpDir, true)
+
+	// Create list and add a task
+	cli.MustExecute("-y", "list", "create", "LocalIDCompleteTest")
+	cli.MustExecute("-y", "LocalIDCompleteTest", "add", "Task to complete")
+
+	// Get the task with JSON to find local_id
+	jsonOutput := cli.MustExecute("-y", "--json", "LocalIDCompleteTest", "get")
+	localID := extractLocalID(t, jsonOutput)
+
+	// Complete by local-id
+	stdout := cli.MustExecute("-y", "LocalIDCompleteTest", "complete", "--local-id", localID)
+
+	testutil.AssertContains(t, stdout, "Completed task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// TestDeleteByLocalID tests deleting a task by its local ID
+func TestDeleteByLocalID(t *testing.T) {
+	cli, _, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
+
+	// Create sync config
+	createSyncConfig(t, tmpDir, true)
+
+	// Create list and add a task
+	cli.MustExecute("-y", "list", "create", "LocalIDDeleteTest")
+	cli.MustExecute("-y", "LocalIDDeleteTest", "add", "Task to delete")
+
+	// Get the task with JSON to find local_id
+	jsonOutput := cli.MustExecute("-y", "--json", "LocalIDDeleteTest", "get")
+	localID := extractLocalID(t, jsonOutput)
+
+	// Delete by local-id
+	stdout := cli.MustExecute("-y", "LocalIDDeleteTest", "delete", "--local-id", localID)
+
+	testutil.AssertContains(t, stdout, "Deleted task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// TestUIDNotFound tests that --uid with nonexistent UID returns error
+func TestUIDNotFound(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list
+	cli.MustExecute("-y", "list", "create", "UIDNotFoundTest")
+	cli.MustExecute("-y", "UIDNotFoundTest", "add", "Some task")
+
+	// Try to update with nonexistent UID
+	_, stderr, exitCode := cli.Execute("-y", "UIDNotFoundTest", "update", "--uid", "550e8400-e29b-41d4-a716-446655440000", "-s", "DONE")
+
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit code for nonexistent UID")
+	}
+	combined := stderr
+	if !strings.Contains(combined, "not found") && !strings.Contains(combined, "no task") {
+		t.Errorf("expected error about task not found, got: %s", combined)
+	}
+}
+
+// TestLocalIDNotFound tests that --local-id with nonexistent ID returns error
+func TestLocalIDNotFound(t *testing.T) {
+	cli, _, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
+
+	// Create sync config
+	createSyncConfig(t, tmpDir, true)
+
+	// Create list
+	cli.MustExecute("-y", "list", "create", "LocalIDNotFoundTest")
+	cli.MustExecute("-y", "LocalIDNotFoundTest", "add", "Some task")
+
+	// Try to update with nonexistent local-id
+	_, stderr, exitCode := cli.Execute("-y", "LocalIDNotFoundTest", "update", "--local-id", "99999", "-s", "DONE")
+
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit code for nonexistent local-id")
+	}
+	combined := stderr
+	if !strings.Contains(combined, "not found") && !strings.Contains(combined, "no task") {
+		t.Errorf("expected error about task not found, got: %s", combined)
+	}
+}
+
+// TestLocalIDRequiresSync tests that --local-id returns error when sync not enabled
+func TestLocalIDRequiresSync(t *testing.T) {
+	cli := testutil.NewCLITest(t) // No sync config
+
+	// Create list
+	cli.MustExecute("-y", "list", "create", "NoSyncTest")
+	cli.MustExecute("-y", "NoSyncTest", "add", "Some task")
+
+	// Try to use --local-id without sync enabled
+	_, stderr, exitCode := cli.Execute("-y", "NoSyncTest", "update", "--local-id", "1", "-s", "DONE")
+
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit code when using --local-id without sync")
+	}
+	combined := stderr
+	if !strings.Contains(combined, "sync") && !strings.Contains(combined, "enabled") {
+		t.Errorf("expected error about sync not enabled, got: %s", combined)
+	}
+}
+
+// TestUIDRequiresSyncedTask tests that --uid only works for tasks with backend-assigned UID
+func TestUIDRequiresSyncedTask(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and add a task with JSON output to get UID
+	cli.MustExecute("-y", "list", "create", "UIDSyncedTest")
+	addOutput := cli.MustExecute("-y", "--json", "UIDSyncedTest", "add", "Task with UID")
+
+	// Extract UID - the task should have a UID even without sync since sqlite backend generates UUIDs
+	uid := extractUID(t, addOutput)
+
+	// Update should work since the task has a UID
+	stdout := cli.MustExecute("-y", "UIDSyncedTest", "update", "--uid", uid, "-s", "DONE")
+	testutil.AssertContains(t, stdout, "Updated task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// extractLocalID extracts local_id from JSON output
+func extractLocalID(t *testing.T, jsonOutput string) string {
+	t.Helper()
+	// Find "local_id":<value> pattern (integer, not string)
+	start := strings.Index(jsonOutput, `"local_id":`)
+	if start == -1 {
+		t.Fatalf("could not find local_id in output: %s", jsonOutput)
+	}
+	start += 11 // len(`"local_id":`)
+	// Skip any whitespace
+	for start < len(jsonOutput) && (jsonOutput[start] == ' ' || jsonOutput[start] == '\t') {
+		start++
+	}
+	// Read digits
+	end := start
+	for end < len(jsonOutput) && jsonOutput[end] >= '0' && jsonOutput[end] <= '9' {
+		end++
+	}
+	if end == start {
+		t.Fatalf("could not extract local_id number from output: %s", jsonOutput)
+	}
+	return jsonOutput[start:end]
+}
+
+// createSyncConfig creates a config file with sync enabled/disabled (for local tests)
+func createSyncConfig(t *testing.T, tmpDir string, enabled bool) {
+	t.Helper()
+
+	enabledStr := "true"
+	if !enabled {
+		enabledStr = "false"
+	}
+
+	configContent := `
+sync:
+  enabled: ` + enabledStr + `
+  local_backend: sqlite
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+`
+	configPath := tmpDir + "/config.yaml"
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+}
