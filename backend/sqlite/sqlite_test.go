@@ -34,6 +34,17 @@ func mustCreateTask(t *testing.T, b *Backend, ctx context.Context, listID string
 	return created
 }
 
+// mustNewBackend creates an in-memory backend and registers cleanup
+func mustNewBackend(t *testing.T) (*Backend, context.Context) {
+	t.Helper()
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) error: %v", err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	return b, context.Background()
+}
+
 // TestNewBackend verifies that New creates a backend with the given path.
 func TestNewBackend(t *testing.T) {
 	b, err := New(":memory:")
@@ -54,13 +65,7 @@ func TestBackendImplementsInterface(t *testing.T) {
 
 // TestCreateAndGetList tests creating and retrieving a task list.
 func TestCreateAndGetList(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	// Create a list
 	list := mustCreateList(t, b, ctx, "Work Tasks")
@@ -86,13 +91,7 @@ func TestCreateAndGetList(t *testing.T) {
 
 // TestGetLists tests retrieving all lists.
 func TestGetLists(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	// Initially empty
 	lists, err := b.GetLists(ctx)
@@ -119,18 +118,12 @@ func TestGetLists(t *testing.T) {
 
 // TestDeleteList tests deleting a list.
 func TestDeleteList(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	// Create and then delete a list
 	list := mustCreateList(t, b, ctx, "Temporary")
 
-	err = b.DeleteList(ctx, list.ID)
+	err := b.DeleteList(ctx, list.ID)
 	if err != nil {
 		t.Fatalf("DeleteList error: %v", err)
 	}
@@ -144,13 +137,7 @@ func TestDeleteList(t *testing.T) {
 
 // TestCreateAndGetTask tests creating and retrieving a task.
 func TestCreateAndGetTask(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	// First create a list
 	list := mustCreateList(t, b, ctx, "My Tasks")
@@ -197,13 +184,7 @@ func TestCreateAndGetTask(t *testing.T) {
 
 // TestGetTasks tests retrieving all tasks in a list.
 func TestGetTasks(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Project")
 
@@ -232,13 +213,7 @@ func TestGetTasks(t *testing.T) {
 
 // TestUpdateTask tests updating a task.
 func TestUpdateTask(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Work")
 
@@ -282,19 +257,13 @@ func TestUpdateTask(t *testing.T) {
 
 // TestDeleteTask tests deleting a task.
 func TestDeleteTask(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Cleanup")
 
 	task := mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Delete me"})
 
-	err = b.DeleteTask(ctx, list.ID, task.ID)
+	err := b.DeleteTask(ctx, list.ID, task.ID)
 	if err != nil {
 		t.Fatalf("DeleteTask error: %v", err)
 	}
@@ -319,13 +288,7 @@ func TestDeleteTask(t *testing.T) {
 
 // TestTaskTimestamps verifies Created and Modified are properly set.
 func TestTaskTimestamps(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Timestamps")
 
@@ -383,13 +346,7 @@ func TestClose(t *testing.T) {
 
 // TestTasksIsolatedByList verifies tasks are isolated to their lists.
 func TestTasksIsolatedByList(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list1 := mustCreateList(t, b, ctx, "List 1")
 	list2 := mustCreateList(t, b, ctx, "List 2")
@@ -421,13 +378,7 @@ func TestTasksIsolatedByList(t *testing.T) {
 
 // TestDeleteListCascadesToTasks verifies that purging a list removes its tasks.
 func TestDeleteListCascadesToTasks(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Doomed List")
 
@@ -435,7 +386,7 @@ func TestDeleteListCascadesToTasks(t *testing.T) {
 	taskID := task.ID
 
 	// Soft-delete the list first
-	err = b.DeleteList(ctx, list.ID)
+	err := b.DeleteList(ctx, list.ID)
 	if err != nil {
 		t.Fatalf("DeleteList error: %v", err)
 	}
@@ -455,19 +406,13 @@ func TestDeleteListCascadesToTasks(t *testing.T) {
 
 // TestDeleteListSoftDelete verifies that DeleteList is a soft-delete.
 func TestDeleteListSoftDelete(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "ToTrash")
 	_ = mustCreateTask(t, b, ctx, list.ID, &backend.Task{Summary: "Task in list"})
 
 	// Soft-delete the list
-	err = b.DeleteList(ctx, list.ID)
+	err := b.DeleteList(ctx, list.ID)
 	if err != nil {
 		t.Fatalf("DeleteList error: %v", err)
 	}
@@ -504,18 +449,12 @@ func TestDeleteListSoftDelete(t *testing.T) {
 
 // TestRestoreList verifies that RestoreList restores a soft-deleted list.
 func TestRestoreList(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "ToRestore")
 
 	// Soft-delete and restore
-	err = b.DeleteList(ctx, list.ID)
+	err := b.DeleteList(ctx, list.ID)
 	if err != nil {
 		t.Fatalf("DeleteList error: %v", err)
 	}
@@ -548,13 +487,7 @@ func TestRestoreList(t *testing.T) {
 
 // TestGetNonExistentList tests getting a list that doesn't exist.
 func TestGetNonExistentList(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list, err := b.GetList(ctx, "nonexistent-id")
 	// Should return nil or an error for non-existent list
@@ -565,13 +498,7 @@ func TestGetNonExistentList(t *testing.T) {
 
 // TestGetNonExistentTask tests getting a task that doesn't exist.
 func TestGetNonExistentTask(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Test List")
 
@@ -584,13 +511,7 @@ func TestGetNonExistentTask(t *testing.T) {
 
 // TestTaskDescription tests that task description is properly stored.
 func TestTaskDescription(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Test")
 
@@ -613,13 +534,7 @@ func TestTaskDescription(t *testing.T) {
 
 // TestTaskDueDate tests that task due date is properly stored.
 func TestTaskDueDate(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Test")
 
@@ -646,13 +561,7 @@ func TestTaskDueDate(t *testing.T) {
 
 // TestAllTaskStatuses tests all task statuses are properly stored.
 func TestAllTaskStatuses(t *testing.T) {
-	b, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer func() { _ = b.Close() }()
-
-	ctx := context.Background()
+	b, ctx := mustNewBackend(t)
 
 	list := mustCreateList(t, b, ctx, "Status Test")
 

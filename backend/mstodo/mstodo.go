@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"todoat/backend"
@@ -319,14 +318,7 @@ func (b *Backend) GetListByName(ctx context.Context, name string) (*backend.List
 	if err != nil {
 		return nil, err
 	}
-
-	for _, l := range lists {
-		if strings.EqualFold(l.Name, name) {
-			return &l, nil
-		}
-	}
-
-	return nil, nil
+	return backend.FindListByName(lists, name), nil
 }
 
 // CreateList creates a new Microsoft To Do task list

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -65,4 +66,15 @@ type TaskManager interface {
 
 	// Connection management
 	Close() error
+}
+
+// FindListByName searches for a list by name (case-insensitive) in a slice of lists.
+// Returns nil if no match is found. This helper reduces code duplication across backends.
+func FindListByName(lists []List, name string) *List {
+	for _, l := range lists {
+		if strings.EqualFold(l.Name, name) {
+			return &l
+		}
+	}
+	return nil
 }
