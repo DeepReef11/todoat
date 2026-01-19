@@ -211,6 +211,7 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().StringP("priority", "p", "", "Task priority (0-9) for add/update, or filter (1,2,3 or high/medium/low) for get")
 	cmd.Flags().StringP("status", "s", "", "Task status (TODO, IN-PROGRESS, DONE, CANCELLED)")
 	cmd.Flags().String("summary", "", "New task summary (for update)")
+	cmd.Flags().StringP("description", "d", "", "Task description/notes (for add/update, use \"\" to clear)")
 	cmd.Flags().String("due-date", "", "Due date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
 	cmd.Flags().String("start-date", "", "Start date in YYYY-MM-DD format (for add/update, use \"\" to clear)")
 	cmd.Flags().StringSlice("tag", nil, "Tag/category for add/update, or filter by tag for get (can be specified multiple times or comma-separated)")
@@ -2043,6 +2044,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if err != nil {
 			return err
 		}
+		description, _ := cmd.Flags().GetString("description")
 		dueDateStr, _ := cmd.Flags().GetString("due-date")
 		startDateStr, _ := cmd.Flags().GetString("start-date")
 		dueDate, err := parseDate(dueDateStr)
@@ -2058,7 +2060,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		categories := strings.Join(tags, ",")
 		parentSummary, _ := cmd.Flags().GetString("parent")
 		literal, _ := cmd.Flags().GetBool("literal")
-		return doAdd(ctx, be, list, taskSummary, priority, dueDate, startDate, categories, parentSummary, literal, cfg, stdout, jsonOutput)
+		return doAdd(ctx, be, list, taskSummary, priority, description, dueDate, startDate, categories, parentSummary, literal, cfg, stdout, jsonOutput)
 	case "update":
 		// Check for direct ID selection flags
 		uidFlag, _ := cmd.Flags().GetString("uid")
@@ -2071,6 +2073,12 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		}
 		status, _ := cmd.Flags().GetString("status")
 		newSummary, _ := cmd.Flags().GetString("summary")
+		descriptionStr, _ := cmd.Flags().GetString("description")
+		descriptionFlagSet := cmd.Flags().Changed("description")
+		var newDescription *string
+		if descriptionFlagSet {
+			newDescription = &descriptionStr
+		}
 		dueDateStr, dueDateChanged := cmd.Flags().GetString("due-date")
 		startDateStr, startDateChanged := cmd.Flags().GetString("start-date")
 		// Check if flags were actually set (not just empty)
@@ -2117,7 +2125,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		_, _, isBulk := parseBulkPattern(taskSummary)
 		if isBulk && uidFlag == "" && !cmd.Flags().Changed("local-id") {
 			// Use original bulk update function
-			return doUpdate(ctx, be, list, taskSummary, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
+			return doUpdate(ctx, be, list, taskSummary, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
 		}
 
 		// Resolve task by UID, local-id, or summary
@@ -2125,7 +2133,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if err != nil {
 			return err
 		}
-		return doUpdateWithTask(ctx, be, list, task, newSummary, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
+		return doUpdateWithTask(ctx, be, list, task, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, parentSummary, noParent, cfg, stdout, jsonOutput)
 	case "complete":
 		// Check for direct ID selection flags
 		uidFlag, _ := cmd.Flags().GetString("uid")
@@ -2589,7 +2597,7 @@ func getStatusIcon(status backend.TaskStatus) string {
 }
 
 // doAdd creates a new task
-func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, dueDate, startDate *time.Time, categories string, parentSummary string, literal bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, description string, dueDate, startDate *time.Time, categories string, parentSummary string, literal bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	if summary == "" {
 		return fmt.Errorf("task summary is required")
 	}
@@ -2607,17 +2615,18 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 
 	// Handle path-based hierarchy creation unless --literal flag is set
 	if !literal && strings.Contains(summary, "/") && parentSummary == "" {
-		return doAddHierarchy(ctx, be, list, summary, priority, dueDate, startDate, categories, cfg, stdout, jsonOutput)
+		return doAddHierarchy(ctx, be, list, summary, priority, description, dueDate, startDate, categories, cfg, stdout, jsonOutput)
 	}
 
 	task := &backend.Task{
-		Summary:    summary,
-		Priority:   priority,
-		Status:     backend.StatusNeedsAction,
-		DueDate:    dueDate,
-		StartDate:  startDate,
-		Categories: categories,
-		ParentID:   parentID,
+		Summary:     summary,
+		Description: description,
+		Priority:    priority,
+		Status:      backend.StatusNeedsAction,
+		DueDate:     dueDate,
+		StartDate:   startDate,
+		Categories:  categories,
+		ParentID:    parentID,
 	}
 
 	created, err := be.CreateTask(ctx, list.ID, task)
@@ -2639,7 +2648,7 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 }
 
 // doAddHierarchy creates a task hierarchy from a path like "A/B/C"
-func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.List, path string, priority int, dueDate, startDate *time.Time, categories string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.List, path string, priority int, description string, dueDate, startDate *time.Time, categories string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	parts := strings.Split(path, "/")
 	if len(parts) == 0 {
 		return fmt.Errorf("invalid path")
@@ -2674,25 +2683,28 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 			lastCreated = existingTask
 		} else {
 			// Create the task
-			// Only apply priority, dates, and categories to the leaf task
+			// Only apply priority, description, dates, and categories to the leaf task
 			taskPriority := 0
+			taskDescription := ""
 			var taskDueDate, taskStartDate *time.Time
 			taskCategories := ""
 			if i == len(parts)-1 {
 				taskPriority = priority
+				taskDescription = description
 				taskDueDate = dueDate
 				taskStartDate = startDate
 				taskCategories = categories
 			}
 
 			task := &backend.Task{
-				Summary:    part,
-				Priority:   taskPriority,
-				Status:     backend.StatusNeedsAction,
-				DueDate:    taskDueDate,
-				StartDate:  taskStartDate,
-				Categories: taskCategories,
-				ParentID:   parentID,
+				Summary:     part,
+				Description: taskDescription,
+				Priority:    taskPriority,
+				Status:      backend.StatusNeedsAction,
+				DueDate:     taskDueDate,
+				StartDate:   taskStartDate,
+				Categories:  taskCategories,
+				ParentID:    parentID,
 			}
 
 			created, err := be.CreateTask(ctx, list.ID, task)
@@ -2726,11 +2738,11 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 }
 
 // doUpdate modifies an existing task
-func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Check for bulk pattern
 	bulkParentSummary, pattern, isBulk := parseBulkPattern(taskSummary)
 	if isBulk {
-		return doBulkUpdate(ctx, be, list, bulkParentSummary, pattern, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, cfg, stdout, jsonOutput)
+		return doBulkUpdate(ctx, be, list, bulkParentSummary, pattern, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, cfg, stdout, jsonOutput)
 	}
 
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
@@ -2741,6 +2753,9 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	// Apply updates
 	if newSummary != "" {
 		task.Summary = newSummary
+	}
+	if newDescription != nil {
+		task.Description = *newDescription
 	}
 	if status != "" {
 		parsedStatus, err := parseStatusWithValidation(status)
@@ -2804,7 +2819,7 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 }
 
 // doBulkUpdate modifies all children/descendants of a parent task
-func doBulkUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, parentSummary, pattern, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doBulkUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, parentSummary, pattern string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Find the parent task
 	parent, err := findTask(ctx, be, list, parentSummary, cfg)
 	if err != nil {
@@ -2855,6 +2870,9 @@ func doBulkUpdate(ctx context.Context, be backend.TaskManager, list *backend.Lis
 	// Update each child
 	var affectedUIDs []string
 	for i := range children {
+		if newDescription != nil {
+			children[i].Description = *newDescription
+		}
 		if status != "" {
 			children[i].Status = parsedStatus
 		}
@@ -3443,7 +3461,7 @@ func resolveTaskByID(ctx context.Context, cmd *cobra.Command, be backend.TaskMan
 }
 
 // doUpdateWithTask modifies an existing task (task already resolved)
-func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// If task is nil, fall back to original behavior (for bulk patterns)
 	if task == nil {
 		return fmt.Errorf("task not found")
@@ -3452,6 +3470,9 @@ func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend
 	// Apply updates
 	if newSummary != "" {
 		task.Summary = newSummary
+	}
+	if newDescription != nil {
+		task.Description = *newDescription
 	}
 	if status != "" {
 		parsedStatus, err := parseStatusWithValidation(status)
@@ -3588,17 +3609,18 @@ func doDeleteWithTask(ctx context.Context, be backend.TaskManager, list *backend
 
 // JSON output structures
 type taskJSON struct {
-	UID       string   `json:"uid"`
-	LocalID   *int64   `json:"local_id,omitempty"`
-	Summary   string   `json:"summary"`
-	Status    string   `json:"status"`
-	Priority  int      `json:"priority"`
-	ParentID  string   `json:"parent_id,omitempty"`
-	DueDate   *string  `json:"due_date,omitempty"`
-	StartDate *string  `json:"start_date,omitempty"`
-	Completed *string  `json:"completed,omitempty"`
-	Tags      []string `json:"tags,omitempty"`
-	Synced    *bool    `json:"synced,omitempty"`
+	UID         string   `json:"uid"`
+	LocalID     *int64   `json:"local_id,omitempty"`
+	Summary     string   `json:"summary"`
+	Description string   `json:"description"`
+	Status      string   `json:"status"`
+	Priority    int      `json:"priority"`
+	ParentID    string   `json:"parent_id,omitempty"`
+	DueDate     *string  `json:"due_date,omitempty"`
+	StartDate   *string  `json:"start_date,omitempty"`
+	Completed   *string  `json:"completed,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Synced      *bool    `json:"synced,omitempty"`
 }
 
 type listTasksResponse struct {
@@ -3623,11 +3645,12 @@ type errorResponse struct {
 // taskToJSON converts a backend.Task to taskJSON
 func taskToJSON(t *backend.Task) taskJSON {
 	result := taskJSON{
-		UID:      t.ID,
-		Summary:  t.Summary,
-		Status:   statusToString(t.Status),
-		Priority: t.Priority,
-		ParentID: t.ParentID,
+		UID:         t.ID,
+		Summary:     t.Summary,
+		Description: t.Description,
+		Status:      statusToString(t.Status),
+		Priority:    t.Priority,
+		ParentID:    t.ParentID,
 	}
 	if t.DueDate != nil {
 		s := t.DueDate.Format(views.DefaultDateFormat)

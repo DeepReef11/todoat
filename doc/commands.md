@@ -273,13 +273,14 @@ todoat MyList add "Urgent task" -p 1
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--priority` | `-p` | Task priority (0-9, 0=undefined, 1=highest) |
+| `--description` | `-d` | Task description/notes (multi-line text supported) |
 | `--due-date` | | Due date in YYYY-MM-DD format |
 | `--start-date` | | Start date in YYYY-MM-DD format |
 | `--tag` | | Tag/category (can be specified multiple times or comma-separated) |
 | `--parent` | `-P` | Parent task summary (creates subtask under specified parent) |
 | `--literal` | `-l` | Treat task summary literally (don't parse `/` as hierarchy separator) |
 
-### Add Examples with Dates and Tags
+### Add Examples with Dates, Tags, and Descriptions
 
 ```bash
 # Add task with due date
@@ -295,6 +296,12 @@ todoat Work add "Urgent deadline" -p 1 --due-date 2026-01-25
 todoat Work add "Review PR" --tag code-review
 todoat Work add "Urgent fix" --tag urgent,bug
 todoat Work add "Feature work" --tag feature --tag frontend
+
+# Add task with description
+todoat Work add "Research options" -d "Compare pricing, features, and integration complexity"
+
+# Add task with description and other flags
+todoat Work add "Write proposal" -p 1 -d "Include budget estimates and timeline" --due-date 2026-02-01
 ```
 
 ### Subtasks and Hierarchy
@@ -360,6 +367,7 @@ todoat MyList u "task name" -s IN-PROGRESS
 | `--priority` | `-p` | New priority (0-9) |
 | `--status` | `-s` | New status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 | `--summary` | | New task summary/name |
+| `--description` | `-d` | Task description/notes (use "" to clear) |
 | `--due-date` | | Due date (YYYY-MM-DD format, use "" to clear) |
 | `--start-date` | | Start date (YYYY-MM-DD format, use "" to clear) |
 | `--tag` | | Set tags (replaces existing; can be multiple or comma-separated) |
@@ -368,7 +376,7 @@ todoat MyList u "task name" -s IN-PROGRESS
 | `--uid` | | Select task by unique identifier (for scripting) |
 | `--local-id` | | Select task by SQLite internal ID (requires sync enabled) |
 
-### Update Date and Tag Examples
+### Update Date, Tag, and Description Examples
 
 ```bash
 # Set a due date
@@ -386,6 +394,12 @@ todoat Work update "task" --tag work,meeting
 
 # Clear all tags
 todoat Work update "task" --tag ""
+
+# Set a description
+todoat Work update "task" -d "Updated notes with more details"
+
+# Clear a description
+todoat Work update "task" -d ""
 ```
 
 ### Update Parent Examples
@@ -693,6 +707,7 @@ todoat MyList add "New task" --json
     {
       "uid": "abc123",
       "summary": "Buy groceries",
+      "description": "Get milk, bread, and eggs",
       "status": "TODO",
       "priority": 1,
       "due_date": "2026-01-31",
@@ -712,6 +727,7 @@ todoat MyList add "New task" --json
   "task": {
     "uid": "abc123",
     "summary": "New task",
+    "description": "Detailed notes about this task",
     "status": "TODO",
     "priority": 0
   },

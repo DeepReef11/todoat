@@ -2847,3 +2847,103 @@ backends:
 		t.Fatalf("failed to write config: %v", err)
 	}
 }
+
+// =============================================================================
+// Task Description Flag Tests (042-task-description-flag)
+// =============================================================================
+
+// TestAddTaskWithDescriptionSQLiteCLI verifies that `todoat -y MyList add "Task" -d "Detailed notes"` creates task with description
+func TestAddTaskWithDescriptionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list first
+	cli.MustExecute("-y", "list", "create", "DescTest")
+
+	// Add task with description
+	stdout := cli.MustExecute("-y", "DescTest", "add", "Task with notes", "-d", "Detailed notes about this task")
+
+	testutil.AssertContains(t, stdout, "Task with notes")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify description is stored by getting task in JSON format
+	jsonOut := cli.MustExecute("-y", "--json", "DescTest", "get")
+	testutil.AssertContains(t, jsonOut, `"description"`)
+	testutil.AssertContains(t, jsonOut, "Detailed notes about this task")
+}
+
+// TestUpdateTaskDescriptionSQLiteCLI verifies that `todoat -y MyList update "Task" -d "Updated notes"` updates description
+func TestUpdateTaskDescriptionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add a task
+	cli.MustExecute("-y", "list", "create", "UpdateDescTest")
+	cli.MustExecute("-y", "UpdateDescTest", "add", "Task to update desc")
+
+	// Update the description
+	stdout := cli.MustExecute("-y", "UpdateDescTest", "update", "Task to update desc", "-d", "Updated description")
+
+	testutil.AssertContains(t, stdout, "Updated task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify description was updated via JSON output
+	jsonOut := cli.MustExecute("-y", "--json", "UpdateDescTest", "get")
+	testutil.AssertContains(t, jsonOut, "Updated description")
+}
+
+// TestClearTaskDescriptionSQLiteCLI verifies that `todoat -y MyList update "Task" -d ""` clears description
+func TestClearTaskDescriptionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add a task with description
+	cli.MustExecute("-y", "list", "create", "ClearDescTest")
+	cli.MustExecute("-y", "ClearDescTest", "add", "Task with desc", "-d", "Initial description")
+
+	// Verify description was set
+	jsonOut := cli.MustExecute("-y", "--json", "ClearDescTest", "get")
+	testutil.AssertContains(t, jsonOut, "Initial description")
+
+	// Clear the description
+	stdout := cli.MustExecute("-y", "ClearDescTest", "update", "Task with desc", "-d", "")
+
+	testutil.AssertContains(t, stdout, "Updated task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify description was cleared
+	jsonOut = cli.MustExecute("-y", "--json", "ClearDescTest", "get")
+	// Description should be empty string now
+	testutil.AssertContains(t, jsonOut, `"description":""`)
+}
+
+// TestDescriptionInJSONSQLiteCLI verifies that `todoat -y --json MyList` includes description field in output
+func TestDescriptionInJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add a task with description
+	cli.MustExecute("-y", "list", "create", "DescJSONTest")
+	cli.MustExecute("-y", "DescJSONTest", "add", "JSON desc task", "-d", "JSON test description")
+
+	// Get tasks in JSON format
+	jsonOut := cli.MustExecute("-y", "--json", "DescJSONTest", "get")
+
+	// Verify description field is present
+	testutil.AssertContains(t, jsonOut, `"description"`)
+	testutil.AssertContains(t, jsonOut, "JSON test description")
+}
+
+// TestDescriptionLongFlagSQLiteCLI verifies that `todoat -y MyList add "Task" --description "Notes"` works with long flag
+func TestDescriptionLongFlagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list first
+	cli.MustExecute("-y", "list", "create", "LongFlagTest")
+
+	// Add task with long --description flag
+	stdout := cli.MustExecute("-y", "LongFlagTest", "add", "Task long flag", "--description", "Notes with long flag")
+
+	testutil.AssertContains(t, stdout, "Task long flag")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify description is stored
+	jsonOut := cli.MustExecute("-y", "--json", "LongFlagTest", "get")
+	testutil.AssertContains(t, jsonOut, "Notes with long flag")
+}
