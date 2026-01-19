@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +55,108 @@ func TestVersionFlagCoreCLI(t *testing.T) {
 	output := stdout.String()
 	if !strings.Contains(output, "todoat") {
 		t.Errorf("version output should contain 'todoat', got: %s", output)
+	}
+}
+
+// --- Version Command Tests ---
+// CLI Tests for 051-version-command
+
+// TestVersionCommand verifies that 'todoat version' displays version string
+func TestVersionCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"version"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should contain version number
+	if !strings.Contains(output, "Version:") {
+		t.Errorf("version output should contain 'Version:', got: %s", output)
+	}
+	// Should contain commit hash
+	if !strings.Contains(output, "Commit:") {
+		t.Errorf("version output should contain 'Commit:', got: %s", output)
+	}
+	// Should contain build date
+	if !strings.Contains(output, "Built:") {
+		t.Errorf("version output should contain 'Built:', got: %s", output)
+	}
+}
+
+// TestVersionVerbose verifies that 'todoat version -v' shows extended build info
+func TestVersionVerbose(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"version", "-v"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should contain Go version
+	if !strings.Contains(output, "Go Version:") {
+		t.Errorf("verbose version output should contain 'Go Version:', got: %s", output)
+	}
+	// Should contain platform info (OS/Arch)
+	if !strings.Contains(output, "Platform:") {
+		t.Errorf("verbose version output should contain 'Platform:', got: %s", output)
+	}
+}
+
+// TestVersionJSON verifies that 'todoat --json version' returns JSON with version fields
+func TestVersionJSON(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "version"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should be valid JSON with expected fields
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("expected valid JSON output, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields exist
+	requiredFields := []string{"version", "commit", "build_date", "go_version", "platform"}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestVersionShort verifies that 'todoat --version' works as alias for version info
+// Note: This is already tested in TestVersionFlagCoreCLI, but we verify it still works
+// and outputs similar content to 'todoat version'
+func TestVersionShort(t *testing.T) {
+	var stdout1, stderr1, stdout2, stderr2 bytes.Buffer
+
+	// Test --version flag
+	exitCode1 := Execute([]string{"--version"}, &stdout1, &stderr1, nil)
+	if exitCode1 != 0 {
+		t.Fatalf("expected exit code 0 for --version, got %d: %s", exitCode1, stderr1.String())
+	}
+
+	// Test version command
+	exitCode2 := Execute([]string{"version"}, &stdout2, &stderr2, nil)
+	if exitCode2 != 0 {
+		t.Fatalf("expected exit code 0 for version command, got %d: %s", exitCode2, stderr2.String())
+	}
+
+	// Both should contain the version number
+	if !strings.Contains(stdout1.String(), "todoat") {
+		t.Errorf("--version should contain 'todoat', got: %s", stdout1.String())
+	}
+	if !strings.Contains(stdout2.String(), "Version:") {
+		t.Errorf("version command should contain 'Version:', got: %s", stdout2.String())
 	}
 }
 

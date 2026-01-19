@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,8 +34,12 @@ import (
 	"todoat/internal/views"
 )
 
-// Version is set at build time
-var Version = "dev"
+// Version info - set at build time via ldflags
+var (
+	Version   = "dev"
+	Commit    = "unknown"
+	BuildDate = "unknown"
+)
 
 // Result codes for CLI output (used in no-prompt mode)
 const (
@@ -255,6 +260,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add config subcommand
 	cmd.AddCommand(newConfigCmd(stdout, stderr, cfg))
+
+	// Add version subcommand
+	cmd.AddCommand(newVersionCmd(stdout, cfg))
 
 	return cmd
 }
@@ -7590,4 +7598,68 @@ func newConfigResetCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+}
+
+// VersionInfo holds version information for JSON output
+type VersionInfo struct {
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildDate string `json:"build_date"`
+	GoVersion string `json:"go_version"`
+	Platform  string `json:"platform"`
+}
+
+// newVersionCmd creates the 'version' subcommand
+func newVersionCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Display version information",
+		Long:  "Display the application version, build information, and optionally extended details.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+
+			info := VersionInfo{
+				Version:   Version,
+				Commit:    Commit,
+				BuildDate: BuildDate,
+				GoVersion: runtime.Version(),
+				Platform:  runtime.GOOS + "/" + runtime.GOARCH,
+			}
+
+			if jsonOutput {
+				return outputVersionJSON(stdout, info)
+			}
+
+			return outputVersionText(stdout, info, verbose)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	versionCmd.Flags().BoolP("verbose", "v", false, "Show extended build information")
+
+	return versionCmd
+}
+
+// outputVersionJSON outputs version info as JSON
+func outputVersionJSON(stdout io.Writer, info VersionInfo) error {
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(info)
+}
+
+// outputVersionText outputs version info as formatted text
+func outputVersionText(stdout io.Writer, info VersionInfo, verbose bool) error {
+	_, _ = fmt.Fprintf(stdout, "Version: %s\n", info.Version)
+	_, _ = fmt.Fprintf(stdout, "Commit:  %s\n", info.Commit)
+	_, _ = fmt.Fprintf(stdout, "Built:   %s\n", info.BuildDate)
+
+	if verbose {
+		_, _ = fmt.Fprintf(stdout, "Go Version: %s\n", info.GoVersion)
+		_, _ = fmt.Fprintf(stdout, "Platform:   %s\n", info.Platform)
+	}
+
+	return nil
 }

@@ -1509,5 +1509,57 @@ todoat Work complete "report"
 todoat -y Work delete "old task"
 ```
 
+## Version
+
+Display version and build information.
+
+```bash
+# Show version information
+todoat version
+
+# Show extended build information
+todoat version -v
+
+# Get version as JSON
+todoat --json version
+```
+
+### Version Output
+
+**Standard output:**
+```
+Version: 1.0.0
+Commit:  abc1234
+Built:   2026-01-19T12:00:00Z
+```
+
+**Verbose output (`-v`):**
+```
+Version: 1.0.0
+Commit:  abc1234
+Built:   2026-01-19T12:00:00Z
+Go Version: go1.23.0
+Platform:   linux/amd64
+```
+
+**JSON output:**
+```json
+{
+  "version": "1.0.0",
+  "commit": "abc1234",
+  "build_date": "2026-01-19T12:00:00Z",
+  "go_version": "go1.23.0",
+  "platform": "linux/amd64"
+}
+```
+
+### Version Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--verbose` | `-v` | Show extended build information (Go version, platform) |
+
+**Note:** `todoat --version` is also available as a shorthand for `todoat version`.
+
 ---
 *Last updated: 2026-01-19*

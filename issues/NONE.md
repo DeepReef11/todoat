@@ -1,6 +1,6 @@
 # Manual CLI Testing Results
 
-**Date**: 2026-01-19
+**Date**: 2026-01-19 (Re-verified)
 **Go Version**: go1.25.5 linux/amd64
 **todoat Version**: dev
 
