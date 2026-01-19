@@ -1,0 +1,241 @@
+# Getting Started with todoat
+
+This guide walks you through installing, configuring, and using todoat for the first time.
+
+## Installation
+
+### From Source
+
+```bash
+git clone https://github.com/yourusername/todoat
+cd todoat
+go build -o todoat ./cmd/todoat
+```
+
+### Adding to PATH
+
+```bash
+# Add to your shell profile (.bashrc, .zshrc, etc.)
+export PATH="$PATH:/path/to/todoat"
+```
+
+## First Run
+
+When you first run todoat, it will offer to create a configuration file:
+
+```bash
+$ todoat
+No configuration file found.
+Do you want to copy config sample to ~/.config/todoat/config.yaml? (y/n)
+```
+
+Select "yes" to create a starter configuration with examples and documentation.
+
+## Configuration
+
+Configuration is stored at `~/.config/todoat/config.yaml`.
+
+### Minimal SQLite Configuration
+
+For local-only task management:
+
+```yaml
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+    db_path: ""  # Uses default location
+
+default_backend: sqlite
+ui: cli
+```
+
+### Nextcloud Configuration
+
+To sync with Nextcloud:
+
+```yaml
+backends:
+  nextcloud:
+    type: nextcloud
+    enabled: true
+    host: "nextcloud.example.com"
+    username: "myuser"
+
+default_backend: nextcloud
+ui: cli
+```
+
+Store your password securely:
+
+```bash
+todoat credentials set nextcloud myuser --prompt
+```
+
+### Todoist Configuration
+
+To use Todoist:
+
+```yaml
+backends:
+  todoist:
+    type: todoist
+    enabled: true
+    username: "token"
+
+default_backend: todoist
+ui: cli
+```
+
+Store your API token:
+
+```bash
+todoat credentials set todoist token --prompt
+# Enter your Todoist API token when prompted
+```
+
+## Basic Usage
+
+### View Your Task Lists
+
+```bash
+# Interactive list selection
+todoat
+
+# Or list all available lists
+todoat list
+```
+
+### View Tasks in a List
+
+```bash
+todoat MyList
+```
+
+### Add a Task
+
+```bash
+# Simple task
+todoat MyList add "Buy groceries"
+
+# Task with priority (1=highest, 9=lowest)
+todoat MyList add "Urgent report" -p 1
+
+# Task with due date
+todoat MyList add "Project deadline" --due-date 2026-01-31
+
+# Task with description
+todoat MyList add "Meeting notes" -d "Prepare agenda for Monday meeting"
+```
+
+### Update a Task
+
+```bash
+# Change status
+todoat MyList update "groceries" -s DONE
+
+# Change priority
+todoat MyList update "report" -p 2
+
+# Rename a task
+todoat MyList update "old name" --summary "new name"
+```
+
+### Complete a Task
+
+```bash
+todoat MyList complete "groceries"
+```
+
+### Delete a Task
+
+```bash
+todoat MyList delete "old task"
+```
+
+## Action Abbreviations
+
+Use shortcuts for common actions:
+
+| Abbreviation | Full Command |
+|--------------|--------------|
+| `a` | `add` |
+| `u` | `update` |
+| `c` | `complete` |
+| `d` | `delete` |
+| `g` | `get` |
+
+Example:
+
+```bash
+todoat MyList a "New task"     # add
+todoat MyList c "Task name"    # complete
+```
+
+## Status Values
+
+Tasks have four possible statuses:
+
+| Status | Abbreviation | Meaning |
+|--------|--------------|---------|
+| TODO | T | Not started |
+| PROCESSING | P | In progress |
+| DONE | D | Completed |
+| CANCELLED | C | Abandoned |
+
+Filter by status:
+
+```bash
+# Show only incomplete tasks
+todoat MyList -s TODO,PROCESSING
+
+# Show only completed tasks
+todoat MyList -s DONE
+```
+
+## Creating Task Lists
+
+```bash
+# Create a new list
+todoat list create "Personal"
+
+# Create with description and color
+todoat list create "Work" --description "Work tasks" --color "#0066cc"
+```
+
+## Shell Completion
+
+Enable tab completion for faster command entry:
+
+```bash
+# Zsh (add to .zshrc)
+eval "$(todoat completion zsh)"
+
+# Bash (add to .bashrc)
+eval "$(todoat completion bash)"
+
+# Fish (add to config.fish)
+todoat completion fish | source
+```
+
+## Getting Help
+
+```bash
+# General help
+todoat --help
+
+# Command-specific help
+todoat add --help
+todoat list --help
+
+# Version information
+todoat version
+```
+
+## Next Steps
+
+- [Task Management](task-management.md) - Learn about all task operations
+- [List Management](list-management.md) - Organize tasks into lists
+- [Backends](backends.md) - Configure Nextcloud, Todoist, and other backends
+- [Views](views.md) - Customize how tasks are displayed
+- [Synchronization](sync.md) - Work offline and sync across devices

@@ -15,11 +15,19 @@ type View struct {
 
 // Field represents a field configuration in a view
 type Field struct {
-	Name     string `yaml:"name"`
-	Width    int    `yaml:"width,omitempty"`
-	Align    string `yaml:"align,omitempty"`  // left, center, right
-	Format   string `yaml:"format,omitempty"` // format string for dates
-	Truncate bool   `yaml:"truncate,omitempty"`
+	Name     string        `yaml:"name"`
+	Width    int           `yaml:"width,omitempty"`
+	Align    string        `yaml:"align,omitempty"`  // left, center, right
+	Format   string        `yaml:"format,omitempty"` // format string for dates
+	Truncate bool          `yaml:"truncate,omitempty"`
+	Plugin   *PluginConfig `yaml:"plugin,omitempty"`
+}
+
+// PluginConfig represents configuration for an external plugin formatter
+type PluginConfig struct {
+	Command string            `yaml:"command"`
+	Timeout int               `yaml:"timeout,omitempty"` // in milliseconds, default 1000ms
+	Env     map[string]string `yaml:"env,omitempty"`
 }
 
 // Filter represents a filter condition
