@@ -3,6 +3,9 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -434,14 +437,157 @@ func (b *Backend) Close() error {
 	return nil
 }
 
+// DatabaseStats contains statistics about the SQLite database
+type DatabaseStats struct {
+	TotalTasks        int            `json:"total_tasks"`
+	Lists             []ListStats    `json:"lists"`
+	ByStatus          map[string]int `json:"by_status"`
+	DatabaseSizeBytes int64          `json:"database_size_bytes"`
+	LastVacuum        *time.Time     `json:"last_vacuum,omitempty"`
+}
+
+// ListStats contains task statistics for a single list
+type ListStats struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// VacuumResult contains the result of a vacuum operation
+type VacuumResult struct {
+	SizeBefore int64 `json:"size_before"`
+	SizeAfter  int64 `json:"size_after"`
+	Reclaimed  int64 `json:"reclaimed"`
+}
+
+// Stats returns database statistics
+func (b *Backend) Stats(ctx context.Context, listName string) (*DatabaseStats, error) {
+	stats := &DatabaseStats{
+		ByStatus: make(map[string]int),
+	}
+
+	// Get all lists
+	lists, err := b.GetLists(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// If specific list requested, filter
+	if listName != "" {
+		var filtered []backend.List
+		for _, l := range lists {
+			if l.Name == listName {
+				filtered = append(filtered, l)
+				break
+			}
+		}
+		lists = filtered
+	}
+
+	// Get stats per list
+	for _, l := range lists {
+		tasks, err := b.GetTasks(ctx, l.ID)
+		if err != nil {
+			return nil, err
+		}
+		stats.Lists = append(stats.Lists, ListStats{Name: l.Name, Count: len(tasks)})
+		stats.TotalTasks += len(tasks)
+
+		// Count by status
+		for _, t := range tasks {
+			statusKey := string(t.Status)
+			// Map internal status to display status
+			switch t.Status {
+			case backend.StatusNeedsAction:
+				statusKey = "TODO"
+			case backend.StatusCompleted:
+				statusKey = "DONE"
+			case backend.StatusInProgress:
+				statusKey = "PROCESSING"
+			case backend.StatusCancelled:
+				statusKey = "CANCELLED"
+			}
+			stats.ByStatus[statusKey]++
+		}
+	}
+
+	// Get database size using PRAGMA
+	var pageCount, pageSize int64
+	if err := b.db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return nil, err
+	}
+	if err := b.db.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize); err != nil {
+		return nil, err
+	}
+	stats.DatabaseSizeBytes = pageCount * pageSize
+
+	// Try to get last vacuum time from metadata (if table exists)
+	var lastVacuumStr string
+	err = b.db.QueryRowContext(ctx, "SELECT value FROM metadata WHERE key = 'last_vacuum'").Scan(&lastVacuumStr)
+	if err == nil {
+		if t, err := time.Parse(time.RFC3339, lastVacuumStr); err == nil {
+			stats.LastVacuum = &t
+		}
+	}
+
+	return stats, nil
+}
+
+// Vacuum runs the SQLite VACUUM command to reclaim space
+func (b *Backend) Vacuum(ctx context.Context) (*VacuumResult, error) {
+	result := &VacuumResult{}
+
+	// Get size before vacuum
+	var pageCount, pageSize int64
+	if err := b.db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return nil, err
+	}
+	if err := b.db.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize); err != nil {
+		return nil, err
+	}
+	result.SizeBefore = pageCount * pageSize
+
+	// Run VACUUM
+	if _, err := b.db.ExecContext(ctx, "VACUUM"); err != nil {
+		return nil, fmt.Errorf("vacuum failed: %w", err)
+	}
+
+	// Get size after vacuum
+	if err := b.db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return nil, err
+	}
+	result.SizeAfter = pageCount * pageSize
+	result.Reclaimed = result.SizeBefore - result.SizeAfter
+
+	// Store last vacuum time in metadata table
+	b.ensureMetadataTable(ctx)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, _ = b.db.ExecContext(ctx, "INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_vacuum', ?)", now)
+
+	return result, nil
+}
+
+// ensureMetadataTable creates the metadata table if it doesn't exist
+func (b *Backend) ensureMetadataTable(ctx context.Context) {
+	_, _ = b.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT)`)
+}
+
 // DetectableBackend wraps Backend with auto-detection capabilities
 type DetectableBackend struct {
 	*Backend
 	dbPath string
 }
 
-// NewDetectable creates a DetectableBackend for the given database path
+// NewDetectable creates a DetectableBackend for the given database path.
+// It ensures the parent directory exists before opening the database,
+// since SQLite is designed to be "always available" as a fallback.
 func NewDetectable(dbPath string) (*DetectableBackend, error) {
+	// Ensure parent directory exists before opening database
+	// This prevents confusing "out of memory" errors on fresh installs
+	dir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create database directory: %w", err)
+	}
+
 	be, err := New(dbPath)
 	if err != nil {
 		return nil, err

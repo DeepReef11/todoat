@@ -239,3 +239,73 @@ auto_detect_backend: true
 		}
 	})
 }
+
+// TestDetectBackendFreshInstallCLI reproduces issue #001 - misleading error on fresh install
+// When parent directories don't exist, --detect-backend should not show confusing errors
+func TestDetectBackendFreshInstallCLI(t *testing.T) {
+	t.Run("shows sqlite available when parent dirs do not exist", func(t *testing.T) {
+		// Use a temp dir that does NOT have the todoat subdirectory created
+		tmpDir := t.TempDir()
+		// Point to a non-existent subdirectory (simulates fresh install)
+		dbPath := filepath.Join(tmpDir, "todoat", "data", "tasks.db")
+
+		var stdout, stderr bytes.Buffer
+		cfg := &cmd.Config{
+			DBPath:  dbPath,
+			WorkDir: tmpDir,
+		}
+
+		exitCode := cmd.Execute([]string{"--detect-backend"}, &stdout, &stderr, cfg)
+
+		output := stdout.String()
+
+		// Should exit 0 (not fail)
+		if exitCode != 0 {
+			t.Errorf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+		}
+
+		// Should show sqlite as available (not show "out of memory" error)
+		if strings.Contains(output, "out of memory") {
+			t.Errorf("should not show 'out of memory' error, got: %s", output)
+		}
+
+		// Should show sqlite as available
+		if !strings.Contains(output, "sqlite:") || strings.Contains(output, "(not available)") && strings.Contains(output, "sqlite:") {
+			// If sqlite shows as not available, that's the bug we're testing for
+			if strings.Contains(output, "failed to initialize") {
+				t.Errorf("sqlite should be available even when parent dirs don't exist, got: %s", output)
+			}
+		}
+
+		// Should show "Would use:" indicating a backend is available
+		if !strings.Contains(output, "Would use:") {
+			t.Errorf("expected 'Would use:' output, got: %s", output)
+		}
+	})
+
+	t.Run("does not show misleading error message", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		// Deep nested path that doesn't exist
+		dbPath := filepath.Join(tmpDir, "nonexistent", "path", "to", "tasks.db")
+
+		var stdout, stderr bytes.Buffer
+		cfg := &cmd.Config{
+			DBPath:  dbPath,
+			WorkDir: tmpDir,
+		}
+
+		exitCode := cmd.Execute([]string{"--detect-backend"}, &stdout, &stderr, cfg)
+
+		output := stdout.String()
+
+		// Should exit 0
+		if exitCode != 0 {
+			t.Errorf("expected exit code 0, got %d", exitCode)
+		}
+
+		// Error message should be clear, not "out of memory" or cryptic SQLite errors
+		if strings.Contains(output, "out of memory") {
+			t.Errorf("should not show 'out of memory' error (SQLite error 14), got: %s", output)
+		}
+	})
+}

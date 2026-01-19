@@ -30,8 +30,10 @@ A command-line task manager with multiple backend support.
 - **Views**: Customizable task display with built-in and custom views
 - **JSON Output**: Machine-readable JSON output for scripting
 - **Multiple Backends**: SQLite (local), Nextcloud CalDAV, Todoist, Google Tasks, Microsoft To-Do, Git/Markdown, File
+- **Export/Import**: Export and import lists in JSON, CSV, iCal, or SQLite formats
 - **Backend Migration**: Migrate tasks between different backends
 - **Synchronization**: Sync tasks with remote backends with conflict resolution
+- **Database Maintenance**: View statistics and compact the SQLite database
 - **Secure Credentials**: System keyring integration for secure credential storage
 - **Notifications**: Desktop and log notifications for sync events
 - **Reminders**: Configurable task due date reminders

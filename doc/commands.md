@@ -60,6 +60,10 @@ todoat list trash purge "MyList"
 | `list trash` | View lists in trash |
 | `list trash restore [name]` | Restore a list from trash |
 | `list trash purge [name]` | Permanently delete a list from trash |
+| `list export [name]` | Export a list to a file |
+| `list import [file]` | Import a list from a file |
+| `list stats [name]` | Show database statistics |
+| `list vacuum` | Compact the database (SQLite only) |
 
 ### Output Example
 
@@ -86,6 +90,101 @@ OldProject           2026-01-18 14:30
 $ todoat list trash restore "OldProject"
 Restored list: OldProject
 ```
+
+### Export and Import
+
+Export and import lists to/from files in various formats.
+
+```bash
+# Export a list to JSON (default format)
+todoat list export "Work"
+
+# Export to a specific format
+todoat list export "Work" --format json
+todoat list export "Work" --format csv
+todoat list export "Work" --format ical
+todoat list export "Work" --format sqlite
+
+# Export to a specific file
+todoat list export "Work" --output ~/backup/work-tasks.json
+
+# Import a list from a file (format auto-detected from extension)
+todoat list import ./work-tasks.json
+todoat list import ./tasks.csv
+todoat list import ./calendar.ics
+
+# Import with explicit format
+todoat list import ./data.txt --format csv
+```
+
+#### Export Flags
+
+| Flag | Description |
+|------|-------------|
+| `--format` | Export format: sqlite, json, csv, ical (default: json) |
+| `--output` | Output file path (default: ./<list-name>.<ext>) |
+
+#### Import Flags
+
+| Flag | Description |
+|------|-------------|
+| `--format` | Import format (auto-detected from extension if not specified) |
+
+#### Supported Formats
+
+| Format | Extension | Description |
+|--------|-----------|-------------|
+| `json` | .json | JSON array of tasks |
+| `csv` | .csv | Comma-separated values |
+| `ical` | .ics, .ical | iCalendar format (VTODO) |
+| `sqlite` | .db, .sqlite, .sqlite3 | SQLite database |
+
+### Database Maintenance
+
+Commands for managing the SQLite database.
+
+```bash
+# View database statistics
+todoat list stats
+
+# View statistics for a specific list
+todoat list stats "Work"
+
+# Compact the database (reclaim space from deleted data)
+todoat list vacuum
+```
+
+#### Stats Output
+
+```bash
+$ todoat list stats
+Database Statistics
+==================
+Total tasks: 42
+
+Tasks per list:
+  Work                 15
+  Personal             27
+
+Tasks by status:
+  TODO                 25
+  IN-PROGRESS          8
+  DONE                 9
+
+Database size: 128 KB
+```
+
+#### Vacuum Output
+
+```bash
+$ todoat list vacuum
+Vacuum completed
+Size before: 256 KB
+Size after:  128 KB
+Reclaimed:   128 KB
+```
+
+**Note:** The stats and vacuum commands are only supported for the SQLite backend.
 
 ## Viewing Tasks
 

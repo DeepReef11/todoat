@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2252,4 +2253,153 @@ func TestListImportPreservesMetadataCLI(t *testing.T) {
 	if !strings.Contains(stdout, "work") || !strings.Contains(stdout, "urgent") {
 		t.Errorf("expected tags to be preserved, got: %s", stdout)
 	}
+}
+
+// =============================================================================
+// Database Maintenance Tests (039-database-maintenance)
+// =============================================================================
+
+// TestListStatsSQLiteCLI verifies `todoat -y list stats` displays database statistics
+func TestListStatsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create lists with varying task counts
+	cli.MustExecute("-y", "list", "create", "StatsWork")
+	cli.MustExecute("-y", "StatsWork", "add", "Task 1")
+	cli.MustExecute("-y", "StatsWork", "add", "Task 2")
+	cli.MustExecute("-y", "StatsWork", "complete", "Task 2")
+
+	cli.MustExecute("-y", "list", "create", "StatsPersonal")
+	cli.MustExecute("-y", "StatsPersonal", "add", "Task A")
+
+	// Get database stats
+	stdout := cli.MustExecute("-y", "list", "stats")
+
+	// Should show total tasks
+	testutil.AssertContains(t, stdout, "3") // 3 total tasks
+
+	// Should show tasks per list
+	testutil.AssertContains(t, stdout, "StatsWork")
+	testutil.AssertContains(t, stdout, "StatsPersonal")
+
+	// Should show tasks by status
+	testutil.AssertContains(t, stdout, "TODO")
+	testutil.AssertContains(t, stdout, "DONE")
+
+	// Should show database size info
+	if !strings.Contains(strings.ToLower(stdout), "size") && !strings.Contains(strings.ToLower(stdout), "bytes") && !strings.Contains(strings.ToLower(stdout), "kb") {
+		t.Errorf("expected database size info, got: %s", stdout)
+	}
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListStatsJSONSQLiteCLI verifies `todoat -y --json list stats` returns JSON statistics
+func TestListStatsJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with tasks in different statuses
+	cli.MustExecute("-y", "list", "create", "JSONStats")
+	cli.MustExecute("-y", "JSONStats", "add", "Task TODO")
+	cli.MustExecute("-y", "JSONStats", "add", "Task DONE")
+	cli.MustExecute("-y", "JSONStats", "complete", "Task DONE")
+
+	// Get stats with JSON output
+	stdout := cli.MustExecute("-y", "--json", "list", "stats")
+
+	// Should contain JSON structure
+	testutil.AssertContains(t, stdout, "{")
+	testutil.AssertContains(t, stdout, "}")
+
+	// Should contain expected JSON fields
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"INFO_ONLY"`)
+	testutil.AssertContains(t, stdout, `"stats"`)
+	testutil.AssertContains(t, stdout, `"total_tasks"`)
+	testutil.AssertContains(t, stdout, `"lists"`)
+	testutil.AssertContains(t, stdout, `"by_status"`)
+	testutil.AssertContains(t, stdout, `"database_size_bytes"`)
+}
+
+// TestListStatsSpecificListSQLiteCLI verifies `todoat -y list stats "ListName"` shows stats for specific list
+func TestListStatsSpecificListSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create multiple lists
+	cli.MustExecute("-y", "list", "create", "SpecificList")
+	cli.MustExecute("-y", "SpecificList", "add", "Task A")
+	cli.MustExecute("-y", "SpecificList", "add", "Task B")
+
+	cli.MustExecute("-y", "list", "create", "OtherList")
+	cli.MustExecute("-y", "OtherList", "add", "Task X")
+
+	// Get stats for specific list
+	stdout := cli.MustExecute("-y", "list", "stats", "SpecificList")
+
+	// Should show specific list stats
+	testutil.AssertContains(t, stdout, "SpecificList")
+	testutil.AssertContains(t, stdout, "2") // 2 tasks in this list
+
+	// Should not show other list prominently
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListVacuumSQLiteCLI verifies `todoat -y list vacuum` reclaims space from deleted data
+func TestListVacuumSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with many tasks
+	cli.MustExecute("-y", "list", "create", "VacuumTest")
+	for i := 0; i < 10; i++ {
+		cli.MustExecute("-y", "VacuumTest", "add", "Task "+strconv.Itoa(i))
+	}
+
+	// Delete some tasks
+	for i := 0; i < 5; i++ {
+		cli.MustExecute("-y", "VacuumTest", "delete", "Task "+strconv.Itoa(i))
+	}
+
+	// Run vacuum (with -y to skip confirmation)
+	stdout := cli.MustExecute("-y", "list", "vacuum")
+
+	// Should show before/after size comparison or completion message
+	if !strings.Contains(strings.ToLower(stdout), "vacuum") && !strings.Contains(strings.ToLower(stdout), "complet") {
+		t.Errorf("expected vacuum completion message, got: %s", stdout)
+	}
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// TestListVacuumConfirmationSQLiteCLI verifies vacuum prompts for confirmation without -y flag
+func TestListVacuumConfirmationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "VacuumConfirm")
+	cli.MustExecute("-y", "VacuumConfirm", "add", "Task")
+
+	// Run vacuum with -y flag - should work without prompt
+	stdout := cli.MustExecute("-y", "list", "vacuum")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Note: Testing actual interactive prompt is not possible with current test harness
+	// The -y flag should bypass the confirmation, which is the main testable scenario
+}
+
+// TestListVacuumJSONSQLiteCLI verifies `todoat -y --json list vacuum` returns JSON output
+func TestListVacuumJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "VacuumJSON")
+	cli.MustExecute("-y", "VacuumJSON", "add", "Task")
+
+	// Run vacuum with JSON output
+	stdout := cli.MustExecute("-y", "--json", "list", "vacuum")
+
+	// Should contain JSON structure
+	testutil.AssertContains(t, stdout, "{")
+	testutil.AssertContains(t, stdout, "}")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
 }

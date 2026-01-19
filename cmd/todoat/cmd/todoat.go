@@ -272,6 +272,8 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	listCmd.AddCommand(newListTrashCmd(stdout, cfg))
 	listCmd.AddCommand(newListExportCmd(stdout, cfg))
 	listCmd.AddCommand(newListImportCmd(stdout, cfg))
+	listCmd.AddCommand(newListStatsCmd(stdout, cfg))
+	listCmd.AddCommand(newListVacuumCmd(stdout, cfg))
 
 	return listCmd
 }
@@ -1612,6 +1614,204 @@ func parseVTODOContent(vtodo, dateFormat string) backend.Task {
 	}
 
 	return task
+}
+
+// newListStatsCmd creates the 'list stats' subcommand
+func newListStatsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "stats [name]",
+		Short: "Show database statistics",
+		Long:  "Display statistics about the database including task counts, status breakdown, and storage usage.",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			listName := ""
+			if len(args) > 0 {
+				listName = args[0]
+			}
+
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListStats(context.Background(), be, listName, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doListStats displays database statistics
+func doListStats(ctx context.Context, be backend.TaskManager, listName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check if backend supports stats
+	sqliteBe, ok := be.(*sqlite.Backend)
+	if !ok {
+		// Try unwrapping syncAwareBackend
+		if sab, sabOk := be.(*syncAwareBackend); sabOk {
+			sqliteBe, ok = sab.TaskManager.(*sqlite.Backend)
+		}
+	}
+	if !ok || sqliteBe == nil {
+		return fmt.Errorf("stats command is only supported for SQLite backend")
+	}
+
+	stats, err := sqliteBe.Stats(ctx, listName)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		type statsJSON struct {
+			Result string                `json:"result"`
+			Stats  *sqlite.DatabaseStats `json:"stats"`
+		}
+		output := statsJSON{
+			Result: ResultInfoOnly,
+			Stats:  stats,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	// Format text output
+	_, _ = fmt.Fprintln(stdout, "Database Statistics")
+	_, _ = fmt.Fprintln(stdout, "==================")
+	_, _ = fmt.Fprintf(stdout, "Total tasks: %d\n\n", stats.TotalTasks)
+
+	if len(stats.Lists) > 0 {
+		_, _ = fmt.Fprintln(stdout, "Tasks per list:")
+		for _, l := range stats.Lists {
+			_, _ = fmt.Fprintf(stdout, "  %-20s %d\n", l.Name, l.Count)
+		}
+		_, _ = fmt.Fprintln(stdout)
+	}
+
+	if len(stats.ByStatus) > 0 {
+		_, _ = fmt.Fprintln(stdout, "Tasks by status:")
+		for status, count := range stats.ByStatus {
+			_, _ = fmt.Fprintf(stdout, "  %-20s %d\n", status, count)
+		}
+		_, _ = fmt.Fprintln(stdout)
+	}
+
+	// Format database size
+	sizeStr := formatBytes(stats.DatabaseSizeBytes)
+	_, _ = fmt.Fprintf(stdout, "Database size: %s (%d bytes)\n", sizeStr, stats.DatabaseSizeBytes)
+
+	if stats.LastVacuum != nil {
+		_, _ = fmt.Fprintf(stdout, "Last vacuum: %s\n", stats.LastVacuum.Format("2006-01-02 15:04:05"))
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// formatBytes converts bytes to human-readable format (KB, MB, etc.)
+func formatBytes(bytes int64) string {
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GB", float64(bytes)/GB)
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MB", float64(bytes)/MB)
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KB", float64(bytes)/KB)
+	default:
+		return fmt.Sprintf("%d bytes", bytes)
+	}
+}
+
+// newListVacuumCmd creates the 'list vacuum' subcommand
+func newListVacuumCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "vacuum",
+		Short: "Compact the database",
+		Long:  "Run SQLite VACUUM to reclaim space from deleted data and optimize the database file.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListVacuum(context.Background(), be, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doListVacuum runs the SQLite VACUUM command
+func doListVacuum(ctx context.Context, be backend.TaskManager, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check if backend supports vacuum
+	sqliteBe, ok := be.(*sqlite.Backend)
+	if !ok {
+		// Try unwrapping syncAwareBackend
+		if sab, sabOk := be.(*syncAwareBackend); sabOk {
+			sqliteBe, ok = sab.TaskManager.(*sqlite.Backend)
+		}
+	}
+	if !ok || sqliteBe == nil {
+		return fmt.Errorf("vacuum command is only supported for SQLite backend")
+	}
+
+	result, err := sqliteBe.Vacuum(ctx)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		type vacuumJSON struct {
+			Result      string               `json:"result"`
+			VacuumStats *sqlite.VacuumResult `json:"vacuum"`
+		}
+		output := vacuumJSON{
+			Result:      ResultActionCompleted,
+			VacuumStats: result,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintln(stdout, "Vacuum completed")
+	_, _ = fmt.Fprintf(stdout, "Size before: %s\n", formatBytes(result.SizeBefore))
+	_, _ = fmt.Fprintf(stdout, "Size after:  %s\n", formatBytes(result.SizeAfter))
+	if result.Reclaimed > 0 {
+		_, _ = fmt.Fprintf(stdout, "Reclaimed:   %s\n", formatBytes(result.Reclaimed))
+	}
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
 }
 
 // getDefaultDBPath returns the default database path following XDG spec
