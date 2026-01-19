@@ -47,6 +47,38 @@ func TestAddCommandWithPrioritySQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Urgent task")
 }
 
+// TestAddCommandInvalidStatusSQLiteCLI tests issue #001: add command should reject invalid status values
+func TestAddCommandInvalidStatusSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Try to add a task with invalid status - should fail
+	stdout, stderr := cli.ExecuteAndFail("-y", "Work", "add", "-s", "INVALID", "Test task")
+
+	// Should show error about invalid status
+	errOutput := stderr
+	if !strings.Contains(strings.ToLower(errOutput), "invalid") || !strings.Contains(strings.ToLower(errOutput), "status") {
+		t.Errorf("error should mention invalid status, got stderr: %s, stdout: %s", errOutput, stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestAddCommandValidStatusSQLiteCLI tests that add command accepts valid status values
+func TestAddCommandValidStatusSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with valid statuses
+	cli.MustExecute("-y", "Work", "add", "-s", "TODO", "Task TODO")
+	cli.MustExecute("-y", "Work", "add", "-s", "IN-PROGRESS", "Task Progress")
+	cli.MustExecute("-y", "Work", "add", "-s", "DONE", "Task Done")
+
+	// Verify tasks were created with correct statuses using the "all" view
+	stdout := cli.MustExecute("-y", "Work", "get", "-v", "all")
+
+	testutil.AssertContains(t, stdout, "Task TODO")
+	testutil.AssertContains(t, stdout, "Task Progress")
+	testutil.AssertContains(t, stdout, "Task Done")
+}
+
 // --- Get Command Tests ---
 
 func TestGetCommandExplicitSQLiteCLI(t *testing.T) {

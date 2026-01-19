@@ -2,6 +2,7 @@
 package config
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,14 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+//go:embed config.sample.yaml
+var sampleConfig string
+
+// GetSampleConfig returns the embedded sample configuration content
+func GetSampleConfig() string {
+	return sampleConfig
+}
 
 // Config represents the application configuration
 type Config struct {
@@ -122,13 +131,8 @@ func (c *Config) save(path string) error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	data, err := yaml.Marshal(c)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	// Add a header comment
-	content := "# todoat configuration\n" + string(data)
+	// Use the embedded sample config which includes all documentation and comments
+	content := sampleConfig
 
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)

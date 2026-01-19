@@ -1,0 +1,124 @@
+# todoat Configuration File
+# This file is automatically created on first run.
+# Edit values as needed for your setup.
+
+# =============================================================================
+# Backend Configurations
+# =============================================================================
+# Configure backends you want to use for task storage.
+# Multiple backends can be enabled; use default_backend to select active one.
+
+backends:
+  # SQLite backend - local database storage (recommended default)
+  sqlite:
+    type: sqlite
+    enabled: true
+    # path: "~/.local/share/todoat/tasks.db"  # Optional: custom database path
+
+  # Nextcloud backend - sync with Nextcloud Tasks via CalDAV
+  # nextcloud:
+  #   type: nextcloud
+  #   enabled: false
+  #   host: "nextcloud.example.com"
+  #   username: "your-username"
+  #   # Password: stored in system keyring or TODOAT_NEXTCLOUD_PASSWORD env var
+  #   # To set password in keyring: todoat backend nextcloud set-password
+  #   # TLS options (for self-signed certificates):
+  #   # insecure_skip_verify: true
+  #   # suppress_ssl_warning: true
+
+  # Todoist backend - sync with Todoist
+  # todoist:
+  #   type: todoist
+  #   enabled: false
+  #   username: "token"  # Fixed value for Todoist authentication
+  #   # API token: stored in keyring as TODOAT_TODOIST_TOKEN or set via env var
+  #   # To set token in keyring: todoat backend todoist set-token
+
+  # Git backend - store tasks in markdown files in a git repository
+  # git:
+  #   type: git
+  #   enabled: false
+  #   file: "TODO.md"                          # Primary task file
+  #   fallback_files: ["todo.md", ".todoat.md"]  # Alternative file names
+  #   auto_detect: true                        # Auto-detect git repo in cwd
+  #   auto_commit: false                       # Auto-commit changes
+
+  # File backend - store tasks in a plain text/markdown file
+  # file:
+  #   type: file
+  #   enabled: false
+  #   path: "~/tasks.md"                       # Path to task file
+
+# =============================================================================
+# Default Backend Selection
+# =============================================================================
+
+# Default backend when multiple are enabled
+default_backend: sqlite
+
+# Auto-detect backend based on current directory (e.g., use git backend in git repos)
+auto_detect_backend: false
+
+# Backend priority for selection when auto-detect is enabled
+# backend_priority:
+#   - git
+#   - sqlite
+
+# =============================================================================
+# Synchronization Settings
+# =============================================================================
+
+sync:
+  enabled: false
+  # local_backend: sqlite                    # Cache backend for remote syncing
+  # conflict_resolution: server_wins         # Options: server_wins | local_wins | merge | keep_both
+  # offline_mode: auto                       # Options: auto | online | offline
+  # connectivity_timeout: "5s"               # Timeout for connectivity checks
+
+# =============================================================================
+# User Interface Settings
+# =============================================================================
+
+# Disable interactive prompts (for scripting)
+no_prompt: false
+
+# Output format for command results
+output_format: text  # Options: text | json
+
+# Default view for task display (omit for built-in "default" view)
+# default_view: "my-custom-view"
+
+# =============================================================================
+# Trash Settings
+# =============================================================================
+
+# trash:
+#   retention_days: 30                       # Days to keep deleted tasks (0 = keep forever)
+
+# =============================================================================
+# Notification Settings
+# =============================================================================
+
+# notification:
+#   enabled: true
+#   os_notification:
+#     enabled: true
+#     on_sync_error: true                    # Notify on sync failures
+#     on_conflict: true                      # Notify on sync conflicts
+#   log_notification:
+#     enabled: true
+#     path: "~/.local/share/todoat/notifications.log"
+
+# =============================================================================
+# Credentials
+# =============================================================================
+# todoat supports secure credential storage via system keyring.
+# Credentials can also be set via environment variables:
+#
+#   TODOAT_NEXTCLOUD_PASSWORD  - Nextcloud CalDAV password
+#   TODOAT_TODOIST_TOKEN       - Todoist API token
+#
+# To store credentials in keyring (more secure):
+#   todoat backend nextcloud set-password
+#   todoat backend todoist set-token

@@ -2329,6 +2329,14 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if err != nil {
 			return err
 		}
+		statusStr, _ := cmd.Flags().GetString("status")
+		status := backend.StatusNeedsAction // default to TODO
+		if statusStr != "" {
+			status, err = parseStatusWithValidation(statusStr)
+			if err != nil {
+				return err
+			}
+		}
 		description, _ := cmd.Flags().GetString("description")
 		dueDateStr, _ := cmd.Flags().GetString("due-date")
 		startDateStr, _ := cmd.Flags().GetString("start-date")
@@ -2347,7 +2355,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		categories := strings.Join(tags, ",")
 		parentSummary, _ := cmd.Flags().GetString("parent")
 		literal, _ := cmd.Flags().GetBool("literal")
-		return doAdd(ctx, be, list, taskSummary, priority, description, dueDate, startDate, categories, parentSummary, literal, cfg, stdout, jsonOutput)
+		return doAdd(ctx, be, list, taskSummary, priority, status, description, dueDate, startDate, categories, parentSummary, literal, cfg, stdout, jsonOutput)
 	case "update":
 		// Check for direct ID selection flags
 		uidFlag, _ := cmd.Flags().GetString("uid")
@@ -3029,7 +3037,7 @@ func getStatusIcon(status backend.TaskStatus) string {
 }
 
 // doAdd creates a new task
-func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, description string, dueDate, startDate *time.Time, categories string, parentSummary string, literal bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, status backend.TaskStatus, description string, dueDate, startDate *time.Time, categories string, parentSummary string, literal bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	if summary == "" {
 		return fmt.Errorf("task summary is required")
 	}
@@ -3047,14 +3055,14 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 
 	// Handle path-based hierarchy creation unless --literal flag is set
 	if !literal && strings.Contains(summary, "/") && parentSummary == "" {
-		return doAddHierarchy(ctx, be, list, summary, priority, description, dueDate, startDate, categories, cfg, stdout, jsonOutput)
+		return doAddHierarchy(ctx, be, list, summary, priority, status, description, dueDate, startDate, categories, cfg, stdout, jsonOutput)
 	}
 
 	task := &backend.Task{
 		Summary:     summary,
 		Description: description,
 		Priority:    priority,
-		Status:      backend.StatusNeedsAction,
+		Status:      status,
 		DueDate:     dueDate,
 		StartDate:   startDate,
 		Categories:  categories,
@@ -3080,7 +3088,7 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 }
 
 // doAddHierarchy creates a task hierarchy from a path like "A/B/C"
-func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.List, path string, priority int, description string, dueDate, startDate *time.Time, categories string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.List, path string, priority int, status backend.TaskStatus, description string, dueDate, startDate *time.Time, categories string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	parts := strings.Split(path, "/")
 	if len(parts) == 0 {
 		return fmt.Errorf("invalid path")
@@ -3115,13 +3123,15 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 			lastCreated = existingTask
 		} else {
 			// Create the task
-			// Only apply priority, description, dates, and categories to the leaf task
+			// Only apply priority, status, description, dates, and categories to the leaf task
 			taskPriority := 0
+			taskStatus := backend.StatusNeedsAction
 			taskDescription := ""
 			var taskDueDate, taskStartDate *time.Time
 			taskCategories := ""
 			if i == len(parts)-1 {
 				taskPriority = priority
+				taskStatus = status
 				taskDescription = description
 				taskDueDate = dueDate
 				taskStartDate = startDate
@@ -3132,7 +3142,7 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 				Summary:     part,
 				Description: taskDescription,
 				Priority:    taskPriority,
-				Status:      backend.StatusNeedsAction,
+				Status:      taskStatus,
 				DueDate:     taskDueDate,
 				StartDate:   taskStartDate,
 				Categories:  taskCategories,
