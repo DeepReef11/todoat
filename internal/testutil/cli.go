@@ -102,6 +102,37 @@ func NewCLITestWithViewsAndTmpDir(t *testing.T) (*CLITest, string, string) {
 	}, viewsDir, tmpDir
 }
 
+// NewCLITestWithConfig creates a new CLI test helper with config file support.
+// This is used for testing configuration CLI commands.
+func NewCLITestWithConfig(t *testing.T) *CLITest {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+	configPath := tmpDir + "/config.yaml"
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+
+	// Write initial config file
+	initialConfig := "# test config\n"
+	if err := os.WriteFile(configPath, []byte(initialConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	cfg := &cmd.Config{
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+		CachePath:  cachePath,
+	}
+
+	return &CLITest{
+		t:          t,
+		cfg:        cfg,
+		tmpDir:     tmpDir,
+		configPath: configPath,
+	}
+}
+
 // NewCLITestWithViewsAndConfig creates a new CLI test helper with views directory and config file support.
 // This is used for testing features that depend on configuration (like default_view).
 func NewCLITestWithViewsAndConfig(t *testing.T) (*CLITest, string) {
@@ -179,7 +210,7 @@ func (c *CLITest) SetConfigValue(key, value string) {
 	c.t.Helper()
 
 	if c.configPath == "" {
-		c.t.Fatalf("SetConfigValue requires a CLITest created with NewCLITestWithViewsAndConfig")
+		c.t.Fatalf("SetConfigValue requires a CLITest created with NewCLITestWithViewsAndConfig or NewCLITestWithConfig")
 	}
 
 	// Read existing config
@@ -194,6 +225,25 @@ func (c *CLITest) SetConfigValue(key, value string) {
 	if err := os.WriteFile(c.configPath, []byte(newConfig), 0644); err != nil {
 		c.t.Fatalf("failed to write config file: %v", err)
 	}
+}
+
+// SetFullConfig replaces the entire config file with the given YAML content.
+// This is used for testing configuration CLI commands.
+func (c *CLITest) SetFullConfig(yamlContent string) {
+	c.t.Helper()
+
+	if c.configPath == "" {
+		c.t.Fatalf("SetFullConfig requires a CLITest created with NewCLITestWithConfig")
+	}
+
+	if err := os.WriteFile(c.configPath, []byte(yamlContent), 0644); err != nil {
+		c.t.Fatalf("failed to write config file: %v", err)
+	}
+}
+
+// ConfigPath returns the path to the config file.
+func (c *CLITest) ConfigPath() string {
+	return c.configPath
 }
 
 // Execute runs a CLI command with the given arguments and returns stdout, stderr, and exit code.

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	_ "modernc.org/sqlite"
 	"todoat/backend"
 	_ "todoat/backend/git" // Register git as detectable backend
@@ -250,6 +252,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add TUI subcommand
 	cmd.AddCommand(newTUICmd(stdout, stderr, cfg))
+
+	// Add config subcommand
+	cmd.AddCommand(newConfigCmd(stdout, stderr, cfg))
 
 	return cmd
 }
@@ -6877,4 +6882,559 @@ func registerDetectableBackends(cfg *Config) {
 	backend.RegisterDetectable("sqlite", func(workDir string) (backend.DetectableBackend, error) {
 		return sqlite.NewDetectable(dbPath)
 	})
+}
+
+// =============================================================================
+// Config Command (049-config-cli-commands)
+// =============================================================================
+
+// newConfigCmd creates the 'config' subcommand for configuration management
+func newConfigCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	configCmd := &cobra.Command{
+		Use:   "config",
+		Short: "View and manage configuration",
+		Long:  "View and modify todoat configuration without manually editing YAML files.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Default action is to show all config (same as 'config get')
+			return doConfigGet(cmd, stdout, cfg, "", false)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	configCmd.AddCommand(newConfigGetCmd(stdout, cfg))
+	configCmd.AddCommand(newConfigSetCmd(stdout, stderr, cfg))
+	configCmd.AddCommand(newConfigPathCmd(stdout, cfg))
+	configCmd.AddCommand(newConfigEditCmd(stdout, stderr, cfg))
+	configCmd.AddCommand(newConfigResetCmd(stdout, stderr, cfg))
+
+	return configCmd
+}
+
+// newConfigGetCmd creates the 'config get' subcommand
+func newConfigGetCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get [key]",
+		Short: "Display configuration value(s)",
+		Long:  "Display a specific configuration value or all config if no key specified.\nSupports dot notation for nested keys (e.g., sync.enabled, backends.sqlite.path).",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key := ""
+			if len(args) > 0 {
+				key = args[0]
+			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doConfigGet(cmd, stdout, cfg, key, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doConfigGet handles the config get command
+func doConfigGet(cmd *cobra.Command, stdout io.Writer, cfg *Config, key string, jsonOutput bool) error {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+	}
+
+	// Load the configuration
+	appConfig, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if key == "" {
+		// Show all config
+		return outputConfig(stdout, appConfig, jsonOutput, cfg.NoPrompt)
+	}
+
+	// Get specific key value
+	value, err := getConfigValue(appConfig, key)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		result := map[string]interface{}{
+			"key":   key,
+			"value": value,
+		}
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+
+	_, _ = fmt.Fprintln(stdout, value)
+	if cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// outputConfig outputs the full configuration
+func outputConfig(stdout io.Writer, appConfig *config.Config, jsonOutput bool, noPrompt bool) error {
+	if jsonOutput {
+		result := configToMap(appConfig)
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+
+	// Output as YAML
+	data, err := yaml.Marshal(appConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	_, _ = fmt.Fprint(stdout, string(data))
+	if noPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	}
+	return nil
+}
+
+// configToMap converts a Config struct to a map for JSON output
+func configToMap(c *config.Config) map[string]interface{} {
+	return map[string]interface{}{
+		"backends": map[string]interface{}{
+			"sqlite": map[string]interface{}{
+				"enabled": c.Backends.SQLite.Enabled,
+				"path":    c.Backends.SQLite.Path,
+			},
+		},
+		"default_backend":     c.DefaultBackend,
+		"default_view":        c.DefaultView,
+		"no_prompt":           c.NoPrompt,
+		"output_format":       c.OutputFormat,
+		"auto_detect_backend": c.AutoDetectBackend,
+		"sync": map[string]interface{}{
+			"enabled":              c.Sync.Enabled,
+			"local_backend":        c.Sync.LocalBackend,
+			"conflict_resolution":  c.Sync.ConflictResolution,
+			"offline_mode":         c.GetOfflineMode(),
+			"connectivity_timeout": c.GetConnectivityTimeout(),
+		},
+		"trash": map[string]interface{}{
+			"retention_days": c.GetTrashRetentionDays(),
+		},
+	}
+}
+
+// getConfigValue gets a value from the config using dot notation
+func getConfigValue(c *config.Config, key string) (interface{}, error) {
+	key = strings.ToLower(key)
+	parts := strings.Split(key, ".")
+
+	switch parts[0] {
+	case "default_backend":
+		return c.DefaultBackend, nil
+	case "default_view":
+		return c.DefaultView, nil
+	case "no_prompt":
+		return c.NoPrompt, nil
+	case "output_format":
+		return c.OutputFormat, nil
+	case "auto_detect_backend":
+		return c.AutoDetectBackend, nil
+	case "backends":
+		if len(parts) < 2 {
+			return map[string]interface{}{
+				"sqlite": map[string]interface{}{
+					"enabled": c.Backends.SQLite.Enabled,
+					"path":    c.Backends.SQLite.Path,
+				},
+			}, nil
+		}
+		switch parts[1] {
+		case "sqlite":
+			if len(parts) < 3 {
+				return map[string]interface{}{
+					"enabled": c.Backends.SQLite.Enabled,
+					"path":    c.Backends.SQLite.Path,
+				}, nil
+			}
+			switch parts[2] {
+			case "enabled":
+				return c.Backends.SQLite.Enabled, nil
+			case "path":
+				return c.Backends.SQLite.Path, nil
+			}
+		}
+	case "sync":
+		if len(parts) < 2 {
+			return map[string]interface{}{
+				"enabled":              c.Sync.Enabled,
+				"local_backend":        c.Sync.LocalBackend,
+				"conflict_resolution":  c.Sync.ConflictResolution,
+				"offline_mode":         c.GetOfflineMode(),
+				"connectivity_timeout": c.GetConnectivityTimeout(),
+			}, nil
+		}
+		switch parts[1] {
+		case "enabled":
+			return c.Sync.Enabled, nil
+		case "local_backend":
+			return c.Sync.LocalBackend, nil
+		case "conflict_resolution":
+			return c.Sync.ConflictResolution, nil
+		case "offline_mode":
+			return c.GetOfflineMode(), nil
+		case "connectivity_timeout":
+			return c.GetConnectivityTimeout(), nil
+		}
+	case "trash":
+		if len(parts) < 2 {
+			return map[string]interface{}{
+				"retention_days": c.GetTrashRetentionDays(),
+			}, nil
+		}
+		switch parts[1] {
+		case "retention_days":
+			return c.GetTrashRetentionDays(), nil
+		}
+	}
+
+	return nil, fmt.Errorf("unknown config key: %s", key)
+}
+
+// newConfigSetCmd creates the 'config set' subcommand
+func newConfigSetCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "set <key> <value>",
+		Short: "Update configuration value",
+		Long:  "Update a configuration value with validation.\nSupports dot notation for nested keys (e.g., sync.offline_mode auto).",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key := args[0]
+			value := args[1]
+			return doConfigSet(stdout, stderr, cfg, key, value)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doConfigSet handles the config set command
+func doConfigSet(stdout, stderr io.Writer, cfg *Config, key, value string) error {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+	}
+
+	// Load the configuration
+	appConfig, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Set the value
+	if err := setConfigValue(appConfig, key, value); err != nil {
+		return err
+	}
+
+	// Save the configuration
+	if err := saveConfig(configPath, appConfig); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Set %s = %s\n", key, value)
+	if cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// setConfigValue sets a value in the config using dot notation
+func setConfigValue(c *config.Config, key, value string) error {
+	key = strings.ToLower(key)
+	parts := strings.Split(key, ".")
+
+	switch parts[0] {
+	case "default_backend":
+		validBackends := []string{"sqlite"}
+		if !contains(validBackends, value) {
+			return fmt.Errorf("invalid value for default_backend: %s (valid: %s)", value, strings.Join(validBackends, ", "))
+		}
+		c.DefaultBackend = value
+		return nil
+	case "default_view":
+		c.DefaultView = value
+		return nil
+	case "no_prompt":
+		boolVal, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid value for no_prompt: %s (valid: true, false, yes, no, 1, 0)", value)
+		}
+		c.NoPrompt = boolVal
+		return nil
+	case "output_format":
+		validFormats := []string{"text", "json"}
+		if !contains(validFormats, value) {
+			return fmt.Errorf("invalid value for output_format: %s (valid: %s)", value, strings.Join(validFormats, ", "))
+		}
+		c.OutputFormat = value
+		return nil
+	case "auto_detect_backend":
+		boolVal, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid value for auto_detect_backend: %s (valid: true, false, yes, no, 1, 0)", value)
+		}
+		c.AutoDetectBackend = boolVal
+		return nil
+	case "backends":
+		if len(parts) < 3 {
+			return fmt.Errorf("invalid key: %s (use backends.<backend>.<setting>)", key)
+		}
+		switch parts[1] {
+		case "sqlite":
+			switch parts[2] {
+			case "enabled":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.sqlite.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.SQLite.Enabled = boolVal
+				return nil
+			case "path":
+				c.Backends.SQLite.Path = config.ExpandPath(value)
+				return nil
+			}
+		}
+	case "sync":
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid key: %s (use sync.<setting>)", key)
+		}
+		switch parts[1] {
+		case "enabled":
+			boolVal, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid value for sync.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+			}
+			c.Sync.Enabled = boolVal
+			return nil
+		case "local_backend":
+			c.Sync.LocalBackend = value
+			return nil
+		case "conflict_resolution":
+			validValues := []string{"local", "remote", "manual"}
+			if !contains(validValues, value) {
+				return fmt.Errorf("invalid value for sync.conflict_resolution: %s (valid: %s)", value, strings.Join(validValues, ", "))
+			}
+			c.Sync.ConflictResolution = value
+			return nil
+		case "offline_mode":
+			validValues := []string{"auto", "online", "offline"}
+			if !contains(validValues, value) {
+				return fmt.Errorf("invalid value for sync.offline_mode: %s (valid: %s)", value, strings.Join(validValues, ", "))
+			}
+			c.Sync.OfflineMode = value
+			return nil
+		case "connectivity_timeout":
+			c.Sync.ConnectivityTimeout = value
+			return nil
+		}
+	case "trash":
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid key: %s (use trash.<setting>)", key)
+		}
+		switch parts[1] {
+		case "retention_days":
+			days, err := strconv.Atoi(value)
+			if err != nil || days < 0 {
+				return fmt.Errorf("invalid value for trash.retention_days: %s (must be a non-negative integer)", value)
+			}
+			c.Trash.RetentionDays = &days
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unknown config key: %s", key)
+}
+
+// parseBool parses a boolean value from various formats
+func parseBool(value string) (bool, error) {
+	switch strings.ToLower(value) {
+	case "true", "yes", "1":
+		return true, nil
+	case "false", "no", "0":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid boolean value: %s", value)
+	}
+}
+
+// contains checks if a string is in a slice
+func contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}
+
+// saveConfig saves the configuration to a file
+func saveConfig(configPath string, c *config.Config) error {
+	// Ensure directory exists
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Add a header comment
+	content := "# todoat configuration\n" + string(data)
+
+	// Write atomically using temp file + rename
+	tmpPath := configPath + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	if err := os.Rename(tmpPath, configPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename config file: %w", err)
+	}
+
+	return nil
+}
+
+// newConfigPathCmd creates the 'config path' subcommand
+func newConfigPathCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "path",
+		Short: "Show config file location",
+		Long:  "Display the path to the active configuration file.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath := cfg.ConfigPath
+			if configPath == "" {
+				configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+			}
+
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			if jsonOutput {
+				result := map[string]string{"path": configPath}
+				enc := json.NewEncoder(stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(result)
+			}
+
+			_, _ = fmt.Fprintln(stdout, configPath)
+			if cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+			}
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// newConfigEditCmd creates the 'config edit' subcommand
+func newConfigEditCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "edit",
+		Short: "Open config file in editor",
+		Long:  "Open the configuration file in the system editor ($EDITOR or vi).",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath := cfg.ConfigPath
+			if configPath == "" {
+				configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+			}
+
+			// Ensure config file exists
+			if _, err := os.Stat(configPath); os.IsNotExist(err) {
+				// Create default config
+				_, err := config.Load(configPath)
+				if err != nil {
+					return fmt.Errorf("failed to create config file: %w", err)
+				}
+			}
+
+			// Get editor from environment
+			editor := os.Getenv("EDITOR")
+			if editor == "" {
+				editor = os.Getenv("VISUAL")
+			}
+			if editor == "" {
+				editor = "vi"
+			}
+
+			// Run the editor
+			execCmd := newExecCommand(editor, configPath)
+			execCmd.Stdin = os.Stdin
+			execCmd.Stdout = os.Stdout
+			execCmd.Stderr = os.Stderr
+
+			if err := execCmd.Run(); err != nil {
+				return fmt.Errorf("failed to run editor: %w", err)
+			}
+
+			if cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+			}
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// newExecCommand creates an exec.Cmd - extracted for testing
+var newExecCommand = func(name string, arg ...string) *exec.Cmd {
+	return exec.Command(name, arg...)
+}
+
+// newConfigResetCmd creates the 'config reset' subcommand
+func newConfigResetCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "reset",
+		Short: "Reset to default configuration",
+		Long:  "Reset the configuration file to default values. Requires confirmation unless --no-prompt is set.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if cfg.NoPrompt {
+				noPrompt = true
+			}
+
+			configPath := cfg.ConfigPath
+			if configPath == "" {
+				configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+			}
+
+			// Require confirmation unless --no-prompt
+			if !noPrompt {
+				_, _ = fmt.Fprint(stdout, "This will reset your configuration to defaults. Continue? [y/N] ")
+				var response string
+				_, _ = fmt.Fscanln(os.Stdin, &response)
+				if response != "y" && response != "Y" {
+					_, _ = fmt.Fprintln(stdout, "Cancelled.")
+					return nil
+				}
+			}
+
+			// Create default config
+			defaultCfg := config.DefaultConfig()
+
+			// Save the default configuration
+			if err := saveConfig(configPath, defaultCfg); err != nil {
+				return err
+			}
+
+			_, _ = fmt.Fprintln(stdout, "Configuration reset to defaults.")
+			if noPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+			}
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
 }

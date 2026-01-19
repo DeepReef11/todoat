@@ -807,6 +807,133 @@ todoat MyList add "New task" --json
 ```
 
 
+## Configuration Management
+
+View and modify todoat configuration from the command line without manually editing YAML files.
+
+```bash
+# Show all configuration
+todoat config
+
+# Show specific configuration value
+todoat config get default_backend
+
+# Show nested configuration value
+todoat config get sync.enabled
+
+# Set a configuration value
+todoat config set no_prompt true
+
+# Set a nested configuration value
+todoat config set sync.offline_mode auto
+
+# Show config file path
+todoat config path
+
+# Open config file in editor
+todoat config edit
+
+# Reset to default configuration
+todoat config reset
+```
+
+### Config Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `config` | Show all configuration (alias for `config get`) |
+| `config get [key]` | Display config value(s), supports dot notation for nested keys |
+| `config set <key> <value>` | Update a config value with validation |
+| `config path` | Show the path to the active config file |
+| `config edit` | Open config file in system editor ($EDITOR or vi) |
+| `config reset` | Reset configuration to defaults (requires confirmation) |
+
+### Supported Configuration Keys
+
+| Key | Type | Valid Values |
+|-----|------|--------------|
+| `default_backend` | string | `sqlite` |
+| `default_view` | string | Any view name |
+| `no_prompt` | boolean | `true`, `false`, `yes`, `no`, `1`, `0` |
+| `output_format` | string | `text`, `json` |
+| `auto_detect_backend` | boolean | `true`, `false`, `yes`, `no`, `1`, `0` |
+| `backends.sqlite.enabled` | boolean | `true`, `false`, `yes`, `no`, `1`, `0` |
+| `backends.sqlite.path` | string | File path (supports `~` expansion) |
+| `sync.enabled` | boolean | `true`, `false`, `yes`, `no`, `1`, `0` |
+| `sync.local_backend` | string | Backend name |
+| `sync.conflict_resolution` | string | `local`, `remote`, `manual` |
+| `sync.offline_mode` | string | `auto`, `online`, `offline` |
+| `sync.connectivity_timeout` | string | Duration (e.g., `5s`, `30s`) |
+| `trash.retention_days` | integer | Non-negative integer (0 disables auto-purge) |
+
+### Config Get Examples
+
+```bash
+# Show all configuration as YAML
+todoat config get
+
+# Show all configuration as JSON
+todoat config get --json
+
+# Get a specific value
+todoat config get default_backend
+# Output: sqlite
+
+# Get a nested value
+todoat config get sync.offline_mode
+# Output: auto
+
+# Get value as JSON
+todoat config get sync.enabled --json
+# Output: {"key": "sync.enabled", "value": true}
+```
+
+### Config Set Examples
+
+```bash
+# Enable non-interactive mode
+todoat config set no_prompt true
+
+# Change output format to JSON
+todoat config set output_format json
+
+# Set sync offline mode
+todoat config set sync.offline_mode offline
+
+# Set trash retention period
+todoat config set trash.retention_days 7
+
+# Change database path
+todoat config set backends.sqlite.path ~/.local/share/todoat/my-tasks.db
+```
+
+### Config Edit
+
+Opens the configuration file in your preferred editor:
+
+```bash
+todoat config edit
+```
+
+The editor is selected in this order:
+1. `$EDITOR` environment variable
+2. `$VISUAL` environment variable
+3. `vi` (fallback)
+
+### Config Reset
+
+Reset all configuration to default values:
+
+```bash
+# Interactive confirmation
+todoat config reset
+# Output: This will reset your configuration to defaults. Continue? [y/N]
+
+# Skip confirmation
+todoat -y config reset
+# Output: Configuration reset to defaults.
+```
+
 ## Credential Management
 
 Manage credentials for backend services (Nextcloud, Todoist, etc.) securely using system keyrings.
