@@ -221,6 +221,11 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().StringP("view", "v", "", "View to use for displaying tasks (default, all, or custom view name)")
 	cmd.Flags().String("uid", "", "Task UID for direct task selection (bypasses summary search)")
 	cmd.Flags().Int64("local-id", 0, "Task local ID for direct task selection (requires sync enabled)")
+	// Date filtering flags for get command
+	cmd.Flags().String("due-before", "", "Filter tasks due before date (YYYY-MM-DD, inclusive)")
+	cmd.Flags().String("due-after", "", "Filter tasks due on or after date (YYYY-MM-DD, inclusive)")
+	cmd.Flags().String("created-before", "", "Filter tasks created before date (YYYY-MM-DD, inclusive)")
+	cmd.Flags().String("created-after", "", "Filter tasks created on or after date (YYYY-MM-DD, inclusive)")
 
 	// Add list subcommand
 	cmd.AddCommand(newListCmd(stdout, cfg))
@@ -2037,7 +2042,16 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if !cmd.Flags().Changed("view") {
 			viewName = getDefaultView(cfg, cmd.ErrOrStderr())
 		}
-		return doGet(ctx, be, list, statusFilter, priorityFilter, tagFilter, viewName, cfg, stdout, jsonOutput)
+		// Parse date filter flags
+		dueBeforeStr, _ := cmd.Flags().GetString("due-before")
+		dueAfterStr, _ := cmd.Flags().GetString("due-after")
+		createdBeforeStr, _ := cmd.Flags().GetString("created-before")
+		createdAfterStr, _ := cmd.Flags().GetString("created-after")
+		dateFilter, err := parseDateFilter(dueBeforeStr, dueAfterStr, createdBeforeStr, createdAfterStr)
+		if err != nil {
+			return err
+		}
+		return doGet(ctx, be, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, cfg, stdout, jsonOutput)
 	case "add":
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		priority, err := parsePrioritySingle(priorityStr)
@@ -2175,8 +2189,8 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 	}
 }
 
-// doGet lists all tasks in a list, optionally filtering by status, priority, and/or tags
-func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+// doGet lists all tasks in a list, optionally filtering by status, priority, tags, and/or dates
+func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, dateFilter DateFilter, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	tasks, err := be.GetTasks(ctx, list.ID)
 	if err != nil {
 		return err
@@ -2218,6 +2232,17 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		var filteredTasks []backend.Task
 		for _, t := range tasks {
 			if matchesTagFilter(t.Categories, tagFilter) {
+				filteredTasks = append(filteredTasks, t)
+			}
+		}
+		tasks = filteredTasks
+	}
+
+	// Filter by date if specified (AND logic - must match all date criteria)
+	if !dateFilter.IsEmpty() {
+		var filteredTasks []backend.Task
+		for _, t := range tasks {
+			if matchesDateFilter(t, dateFilter) {
 				filteredTasks = append(filteredTasks, t)
 			}
 		}
@@ -2580,6 +2605,99 @@ func parseDate(s string) (*time.Time, error) {
 		return nil, fmt.Errorf("date must be in YYYY-MM-DD format (e.g., 2026-01-31)")
 	}
 	return &t, nil
+}
+
+// DateFilter holds date filtering criteria for tasks
+type DateFilter struct {
+	DueBefore     *time.Time
+	DueAfter      *time.Time
+	CreatedBefore *time.Time
+	CreatedAfter  *time.Time
+}
+
+// IsEmpty returns true if no date filters are set
+func (f DateFilter) IsEmpty() bool {
+	return f.DueBefore == nil && f.DueAfter == nil && f.CreatedBefore == nil && f.CreatedAfter == nil
+}
+
+// parseDateFilter parses date filter flag values into a DateFilter struct
+func parseDateFilter(dueBefore, dueAfter, createdBefore, createdAfter string) (DateFilter, error) {
+	var filter DateFilter
+	var err error
+
+	if dueBefore != "" {
+		filter.DueBefore, err = parseDate(dueBefore)
+		if err != nil {
+			return filter, fmt.Errorf("invalid --due-before: %w", err)
+		}
+	}
+	if dueAfter != "" {
+		filter.DueAfter, err = parseDate(dueAfter)
+		if err != nil {
+			return filter, fmt.Errorf("invalid --due-after: %w", err)
+		}
+	}
+	if createdBefore != "" {
+		filter.CreatedBefore, err = parseDate(createdBefore)
+		if err != nil {
+			return filter, fmt.Errorf("invalid --created-before: %w", err)
+		}
+	}
+	if createdAfter != "" {
+		filter.CreatedAfter, err = parseDate(createdAfter)
+		if err != nil {
+			return filter, fmt.Errorf("invalid --created-after: %w", err)
+		}
+	}
+
+	return filter, nil
+}
+
+// matchesDateFilter checks if a task matches the given date filter criteria.
+// Date filters use inclusive ranges. Tasks without dates are excluded from date filters.
+func matchesDateFilter(task backend.Task, filter DateFilter) bool {
+	// If no filters are set, all tasks match
+	if filter.IsEmpty() {
+		return true
+	}
+
+	// Due date filters
+	if filter.DueBefore != nil || filter.DueAfter != nil {
+		// Tasks without due date don't match due date filters
+		if task.DueDate == nil {
+			return false
+		}
+		// Check due-before (inclusive: task due date < filter date + 1 day)
+		if filter.DueBefore != nil {
+			// Use start of next day for inclusive comparison
+			beforeEndOfDay := filter.DueBefore.AddDate(0, 0, 1)
+			if !task.DueDate.Before(beforeEndOfDay) {
+				return false
+			}
+		}
+		// Check due-after (inclusive: task due date >= filter date)
+		if filter.DueAfter != nil {
+			if task.DueDate.Before(*filter.DueAfter) {
+				return false
+			}
+		}
+	}
+
+	// Created date filters
+	if filter.CreatedBefore != nil {
+		// Use start of next day for inclusive comparison
+		beforeEndOfDay := filter.CreatedBefore.AddDate(0, 0, 1)
+		if !task.Created.Before(beforeEndOfDay) {
+			return false
+		}
+	}
+	if filter.CreatedAfter != nil {
+		if task.Created.Before(*filter.CreatedAfter) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // getStatusIcon returns a visual indicator for task status

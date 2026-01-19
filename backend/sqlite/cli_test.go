@@ -2947,3 +2947,182 @@ func TestDescriptionLongFlagSQLiteCLI(t *testing.T) {
 	jsonOut := cli.MustExecute("-y", "--json", "LongFlagTest", "get")
 	testutil.AssertContains(t, jsonOut, "Notes with long flag")
 }
+
+// =============================================================================
+// Date Filtering Tests (043-date-filtering)
+// =============================================================================
+
+// TestFilterDueBeforeSQLiteCLI verifies that `todoat -y MyList --due-before 2026-02-01` shows only tasks due before date
+func TestFilterDueBeforeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "DueBeforeTest")
+
+	// Add tasks with different due dates
+	cli.MustExecute("-y", "DueBeforeTest", "add", "Task due Jan 15", "--due-date", "2026-01-15")
+	cli.MustExecute("-y", "DueBeforeTest", "add", "Task due Jan 31", "--due-date", "2026-01-31")
+	cli.MustExecute("-y", "DueBeforeTest", "add", "Task due Feb 15", "--due-date", "2026-02-15")
+	cli.MustExecute("-y", "DueBeforeTest", "add", "Task no due date")
+
+	// Filter to show only tasks due before Feb 1
+	stdout := cli.MustExecute("-y", "DueBeforeTest", "--due-before", "2026-02-01")
+
+	// Should show tasks due before Feb 1 (Jan 15, Jan 31)
+	testutil.AssertContains(t, stdout, "Task due Jan 15")
+	testutil.AssertContains(t, stdout, "Task due Jan 31")
+	// Should not show tasks due on/after Feb 1
+	testutil.AssertNotContains(t, stdout, "Task due Feb 15")
+	// Tasks without due date should not match due date filters
+	testutil.AssertNotContains(t, stdout, "Task no due date")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterDueAfterSQLiteCLI verifies that `todoat -y MyList --due-after 2026-01-15` shows only tasks due after date
+func TestFilterDueAfterSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "DueAfterTest")
+
+	// Add tasks with different due dates
+	cli.MustExecute("-y", "DueAfterTest", "add", "Task due Jan 10", "--due-date", "2026-01-10")
+	cli.MustExecute("-y", "DueAfterTest", "add", "Task due Jan 15", "--due-date", "2026-01-15")
+	cli.MustExecute("-y", "DueAfterTest", "add", "Task due Jan 20", "--due-date", "2026-01-20")
+	cli.MustExecute("-y", "DueAfterTest", "add", "Task no due date")
+
+	// Filter to show only tasks due after Jan 15
+	stdout := cli.MustExecute("-y", "DueAfterTest", "--due-after", "2026-01-15")
+
+	// Should show tasks due after Jan 15 (includes Jan 15 as inclusive)
+	testutil.AssertContains(t, stdout, "Task due Jan 15")
+	testutil.AssertContains(t, stdout, "Task due Jan 20")
+	// Should not show tasks due before Jan 15
+	testutil.AssertNotContains(t, stdout, "Task due Jan 10")
+	// Tasks without due date should not match due date filters
+	testutil.AssertNotContains(t, stdout, "Task no due date")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterDueRangeSQLiteCLI verifies that `todoat -y MyList --due-after 2026-01-15 --due-before 2026-02-01` shows tasks in range
+func TestFilterDueRangeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "DueRangeTest")
+
+	// Add tasks with different due dates
+	cli.MustExecute("-y", "DueRangeTest", "add", "Task due Jan 10", "--due-date", "2026-01-10")
+	cli.MustExecute("-y", "DueRangeTest", "add", "Task due Jan 20", "--due-date", "2026-01-20")
+	cli.MustExecute("-y", "DueRangeTest", "add", "Task due Jan 31", "--due-date", "2026-01-31")
+	cli.MustExecute("-y", "DueRangeTest", "add", "Task due Feb 15", "--due-date", "2026-02-15")
+	cli.MustExecute("-y", "DueRangeTest", "add", "Task no due date")
+
+	// Filter to show tasks due between Jan 15 and Feb 1 (inclusive range)
+	stdout := cli.MustExecute("-y", "DueRangeTest", "--due-after", "2026-01-15", "--due-before", "2026-02-01")
+
+	// Should show tasks in range
+	testutil.AssertContains(t, stdout, "Task due Jan 20")
+	testutil.AssertContains(t, stdout, "Task due Jan 31")
+	// Should not show tasks outside range
+	testutil.AssertNotContains(t, stdout, "Task due Jan 10")
+	testutil.AssertNotContains(t, stdout, "Task due Feb 15")
+	testutil.AssertNotContains(t, stdout, "Task no due date")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterCreatedAfterSQLiteCLI verifies that `todoat -y MyList --created-after 2026-01-01` shows tasks created after date
+func TestFilterCreatedAfterSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "CreatedAfterTest")
+
+	// Add tasks - they will have creation time of "now"
+	cli.MustExecute("-y", "CreatedAfterTest", "add", "Task created now")
+
+	// Filter for tasks created after a past date (should include all tasks)
+	stdout := cli.MustExecute("-y", "CreatedAfterTest", "--created-after", "2020-01-01")
+	testutil.AssertContains(t, stdout, "Task created now")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+
+	// Filter for tasks created after a future date (should include no tasks)
+	stdout = cli.MustExecute("-y", "CreatedAfterTest", "--created-after", "2030-01-01")
+	testutil.AssertNotContains(t, stdout, "Task created now")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterCreatedBeforeSQLiteCLI verifies that `todoat -y MyList --created-before 2026-01-15` shows tasks created before date
+func TestFilterCreatedBeforeSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "CreatedBeforeTest")
+
+	// Add tasks - they will have creation time of "now"
+	cli.MustExecute("-y", "CreatedBeforeTest", "add", "Task created now")
+
+	// Filter for tasks created before a future date (should include all tasks)
+	stdout := cli.MustExecute("-y", "CreatedBeforeTest", "--created-before", "2030-01-01")
+	testutil.AssertContains(t, stdout, "Task created now")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+
+	// Filter for tasks created before a past date (should include no tasks)
+	stdout = cli.MustExecute("-y", "CreatedBeforeTest", "--created-before", "2020-01-01")
+	testutil.AssertNotContains(t, stdout, "Task created now")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterNoDueDateSQLiteCLI verifies that tasks without due dates are excluded from due date filters
+func TestFilterNoDueDateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "NoDueDateTest")
+
+	// Add tasks - some with due dates, some without
+	cli.MustExecute("-y", "NoDueDateTest", "add", "Task with due date", "--due-date", "2026-01-20")
+	cli.MustExecute("-y", "NoDueDateTest", "add", "Task without due date")
+
+	// Without filter, both should appear
+	stdout := cli.MustExecute("-y", "NoDueDateTest")
+	testutil.AssertContains(t, stdout, "Task with due date")
+	testutil.AssertContains(t, stdout, "Task without due date")
+
+	// With due-before filter, only task with due date should appear
+	stdout = cli.MustExecute("-y", "NoDueDateTest", "--due-before", "2026-02-01")
+	testutil.AssertContains(t, stdout, "Task with due date")
+	testutil.AssertNotContains(t, stdout, "Task without due date")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+
+	// With due-after filter, only task with due date should appear
+	stdout = cli.MustExecute("-y", "NoDueDateTest", "--due-after", "2026-01-01")
+	testutil.AssertContains(t, stdout, "Task with due date")
+	testutil.AssertNotContains(t, stdout, "Task without due date")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestFilterCombinedStatusAndDateSQLiteCLI verifies that `todoat -y MyList -s TODO --due-before 2026-02-01` combines status and date filters
+func TestFilterCombinedStatusAndDateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "CombinedFilterTest")
+
+	// Add tasks with different statuses and due dates
+	cli.MustExecute("-y", "CombinedFilterTest", "add", "TODO task due soon", "--due-date", "2026-01-20")
+	cli.MustExecute("-y", "CombinedFilterTest", "add", "TODO task due later", "--due-date", "2026-03-01")
+	cli.MustExecute("-y", "CombinedFilterTest", "add", "Done task due soon", "--due-date", "2026-01-25")
+	cli.MustExecute("-y", "CombinedFilterTest", "complete", "Done task due soon")
+
+	// Filter for TODO tasks due before Feb 1
+	stdout := cli.MustExecute("-y", "CombinedFilterTest", "-s", "TODO", "--due-before", "2026-02-01")
+
+	// Should only show TODO tasks due before Feb 1
+	testutil.AssertContains(t, stdout, "TODO task due soon")
+	// Should not show TODO tasks due after Feb 1
+	testutil.AssertNotContains(t, stdout, "TODO task due later")
+	// Should not show DONE tasks even if due date matches
+	testutil.AssertNotContains(t, stdout, "Done task due soon")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}

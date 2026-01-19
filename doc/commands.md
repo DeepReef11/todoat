@@ -217,6 +217,19 @@ todoat MyList get --tag work              # Show tasks with "work" tag
 todoat MyList get --tag work,urgent       # Show tasks with "work" OR "urgent" tag
 todoat MyList get --tag work --tag urgent # Same as above (multiple flags)
 
+# Filter by due date
+todoat MyList get --due-before 2026-02-01      # Tasks due before Feb 1
+todoat MyList get --due-after 2026-01-15       # Tasks due on or after Jan 15
+todoat MyList get --due-after 2026-01-15 --due-before 2026-02-01  # Tasks in date range
+
+# Filter by creation date
+todoat MyList get --created-after 2026-01-01   # Tasks created on or after Jan 1
+todoat MyList get --created-before 2026-01-15  # Tasks created before Jan 15
+
+# Combine filters
+todoat MyList get -s TODO --due-before 2026-02-01  # TODO tasks due before Feb 1
+todoat MyList get -p high --due-after 2026-01-15   # High priority tasks due after Jan 15
+
 # JSON output
 todoat MyList get --json
 ```
@@ -228,6 +241,17 @@ todoat MyList get --json
 | `--status` | `-s` | Filter tasks by status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 | `--priority` | `-p` | Filter by priority: single value (1), comma-separated (1,2,3), or alias (high, medium, low) |
 | `--tag` | | Filter by tag (can be specified multiple times or comma-separated; OR logic) |
+| `--due-before` | | Filter tasks due before date (YYYY-MM-DD, inclusive) |
+| `--due-after` | | Filter tasks due on or after date (YYYY-MM-DD, inclusive) |
+| `--created-before` | | Filter tasks created before date (YYYY-MM-DD, inclusive) |
+| `--created-after` | | Filter tasks created on or after date (YYYY-MM-DD, inclusive) |
+
+### Date Filter Notes
+
+- Date filters use inclusive range (boundary dates are included)
+- Tasks without dates are excluded from date filters
+- Multiple filters combine with AND logic
+- Date format: YYYY-MM-DD
 
 ### Priority Aliases
 

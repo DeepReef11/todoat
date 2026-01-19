@@ -59,7 +59,7 @@ The Todoist backend is **not available as a primary backend**. Per design:
 2. There is no `--backend` flag to switch backends at runtime
 3. Todoist exists as a migration target but returns: "real todoist backend not yet implemented for migration"
 
-**Note**: The .env file has `TODOIST_API_TOKEN` but the app expects `TODOAT_TODOIST_TOKEN`. This is a documentation/config naming inconsistency but does not affect functionality since Todoist backend isn't fully implemented.
+**Note**: The .env file has `TODOIST_API_TOKEN` but the credentials system uses username/password. This is a design limitation for API-token-based backends.
 
 **Tests Run:**
 
@@ -78,8 +78,6 @@ The Todoist backend is **not available as a primary backend**. Per design:
 | `./bin/todoat -y MyList invalidcommand` | Error message | "Error: unknown action" - Exit code: 1 |
 | `./bin/todoat -y MyList add` | Error message | "Error: task summary is required" - Exit code: 1 |
 | `./bin/todoat -y MyList update` | Error message | "Error: task summary, --uid, or --local-id is required" - Exit code: 1 |
-| `./bin/todoat -y MyList delete` | Error message | "Error: task summary, --uid, or --local-id is required" - Exit code: 1 |
-| `./bin/todoat -y MyList complete` | Error message | "Error: task summary, --uid, or --local-id is required" - Exit code: 1 |
 
 All error cases handled gracefully with clear messages. No panics or stack traces observed.
 
