@@ -260,6 +260,135 @@ func TestCredentialsListJSONCLI(t *testing.T) {
 	}
 }
 
+// TestCredentialUpdate tests the CLI command: todoat credentials update nextcloud myuser --prompt
+func TestCredentialUpdate(t *testing.T) {
+	mockKeyring := NewMockKeyring()
+	// Pre-set existing credential
+	_ = mockKeyring.Set("todoat-nextcloud", "myuser", "oldpassword")
+	manager := NewManager(WithKeyring(mockKeyring))
+
+	// Simulate CLI input with new password
+	stdin := bytes.NewBufferString("newpassword\n")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	handler := NewCLIHandler(manager, stdin, stdout, stderr)
+	err := handler.Update("nextcloud", "myuser", true, false) // --prompt, no --verify
+
+	if err != nil {
+		t.Fatalf("Update command failed: %v", err)
+	}
+
+	// Check success message
+	output := stdout.String()
+	if !strings.Contains(output, "Credential updated") {
+		t.Errorf("Expected success message, got: %s", output)
+	}
+	if !strings.Contains(output, "nextcloud/myuser") {
+		t.Errorf("Expected backend/user in output, got: %s", output)
+	}
+
+	// Verify credential was updated
+	info, _ := manager.Get(context.TODO(), "nextcloud", "myuser")
+	if !info.Found {
+		t.Error("Credentials should still exist")
+	}
+	if info.Password != "newpassword" {
+		t.Errorf("Expected password 'newpassword', got '%s'", info.Password)
+	}
+}
+
+// TestCredentialUpdateNonExistent tests that update on non-existent credential shows appropriate error
+func TestCredentialUpdateNonExistent(t *testing.T) {
+	mockKeyring := NewMockKeyring()
+	// No pre-existing credentials
+	manager := NewManager(WithKeyring(mockKeyring))
+
+	stdin := bytes.NewBufferString("newpassword\n")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	handler := NewCLIHandler(manager, stdin, stdout, stderr)
+	err := handler.Update("nextcloud", "nonexistent", true, false)
+
+	// Should fail
+	if err == nil {
+		t.Fatal("Expected error for non-existent credential")
+	}
+
+	// Error message should be helpful
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "no credential found") {
+		t.Errorf("Expected 'no credential found' in error, got: %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "credentials set") {
+		t.Errorf("Expected suggestion to use 'credentials set', got: %s", errMsg)
+	}
+}
+
+// TestCredentialUpdateVerify tests that updated credential can be retrieved and verified
+func TestCredentialUpdateVerify(t *testing.T) {
+	mockKeyring := NewMockKeyring()
+	// Pre-set existing credential
+	_ = mockKeyring.Set("todoat-nextcloud", "myuser", "oldpassword")
+	manager := NewManager(WithKeyring(mockKeyring))
+
+	stdin := bytes.NewBufferString("verifiedpassword\n")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	handler := NewCLIHandler(manager, stdin, stdout, stderr)
+	err := handler.Update("nextcloud", "myuser", true, false)
+
+	if err != nil {
+		t.Fatalf("Update command failed: %v", err)
+	}
+
+	// Now retrieve it to verify
+	info, err := manager.Get(context.TODO(), "nextcloud", "myuser")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if !info.Found {
+		t.Error("Credential should be found after update")
+	}
+	if info.Password != "verifiedpassword" {
+		t.Errorf("Expected password 'verifiedpassword', got '%s'", info.Password)
+	}
+	if info.Source != SourceKeyring {
+		t.Errorf("Expected source 'keyring', got '%s'", info.Source)
+	}
+}
+
+// TestCredentialUpdateNoChange tests that update with same password succeeds (idempotent)
+func TestCredentialUpdateNoChange(t *testing.T) {
+	mockKeyring := NewMockKeyring()
+	// Pre-set existing credential
+	_ = mockKeyring.Set("todoat-nextcloud", "myuser", "samepassword")
+	manager := NewManager(WithKeyring(mockKeyring))
+
+	// Update with same password
+	stdin := bytes.NewBufferString("samepassword\n")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	handler := NewCLIHandler(manager, stdin, stdout, stderr)
+	err := handler.Update("nextcloud", "myuser", true, false)
+
+	if err != nil {
+		t.Fatalf("Update with same password should succeed: %v", err)
+	}
+
+	// Verify credential still exists with same value
+	info, _ := manager.Get(context.TODO(), "nextcloud", "myuser")
+	if !info.Found {
+		t.Error("Credential should exist")
+	}
+	if info.Password != "samepassword" {
+		t.Errorf("Expected password 'samepassword', got '%s'", info.Password)
+	}
+}
+
 // TestCredentialsSetKeyringNotAvailableCLI tests that helpful error message is shown
 // when keyring is not available. This is a regression test for issue #003.
 func TestCredentialsSetKeyringNotAvailableCLI(t *testing.T) {

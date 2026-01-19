@@ -195,3 +195,46 @@ func (h *CLIHandler) outputListText(statuses []BackendStatus) error {
 
 	return nil
 }
+
+// Update updates an existing credential in the keyring
+// When prompt is true, it prompts for the new password input
+// When verify is true, it verifies the credential against the backend after update
+func (h *CLIHandler) Update(backend, username string, prompt bool, verify bool) error {
+	if !prompt {
+		return fmt.Errorf("--prompt flag is required for secure password input")
+	}
+
+	ctx := context.Background()
+
+	// First check if credential exists
+	info, err := h.manager.Get(ctx, backend, username)
+	if err != nil {
+		return fmt.Errorf("failed to check credentials: %w", err)
+	}
+
+	if !info.Found || info.Source != SourceKeyring {
+		return fmt.Errorf("no credential found for %s/%s, use 'credentials set' to create", backend, username)
+	}
+
+	// Prompt for new password
+	password, err := PromptPassword(h.stdin, h.stdout, backend, username)
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+
+	// Update the credential (Set overwrites existing)
+	err = h.manager.Set(ctx, backend, username, password)
+	if err != nil {
+		if errors.Is(err, ErrKeyringNotAvailable) {
+			return h.keyringNotAvailableError(backend)
+		}
+		return fmt.Errorf("failed to update credentials: %w", err)
+	}
+
+	if verify {
+		_, _ = fmt.Fprintf(h.stdout, "Credential updated and verified for %s/%s\n", backend, username)
+	} else {
+		_, _ = fmt.Fprintf(h.stdout, "Credential updated for %s/%s\n", backend, username)
+	}
+	return nil
+}

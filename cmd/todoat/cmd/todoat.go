@@ -4527,6 +4527,7 @@ func newCredentialsCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	credentialsCmd.AddCommand(newCredentialsGetCmd(stdout, stderr, cfg))
 	credentialsCmd.AddCommand(newCredentialsDeleteCmd(stdout, stderr, cfg))
 	credentialsCmd.AddCommand(newCredentialsListCmd(stdout, stderr, cfg))
+	credentialsCmd.AddCommand(newCredentialsUpdateCmd(stdout, stderr, cfg))
 
 	return credentialsCmd
 }
@@ -4619,6 +4620,32 @@ func newCredentialsListCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+}
+
+// newCredentialsUpdateCmd creates the 'credentials update' subcommand
+func newCredentialsUpdateCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update [backend] [username]",
+		Short: "Update existing credentials in system keyring",
+		Long:  "Update the password for existing credentials stored in the system keyring. The credential must exist (use 'set' to create new credentials).",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			backend := args[0]
+			username := args[1]
+			prompt, _ := cmd.Flags().GetBool("prompt")
+			verify, _ := cmd.Flags().GetBool("verify")
+
+			manager := credentials.NewManager()
+			handler := credentials.NewCLIHandler(manager, os.Stdin, stdout, stderr)
+			return handler.Update(backend, username, prompt, verify)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().Bool("prompt", false, "Prompt for password input (required for security)")
+	cmd.Flags().Bool("verify", false, "Verify the updated credential against the backend")
+	return cmd
 }
 
 // newSyncCmd creates the 'sync' subcommand for synchronization management

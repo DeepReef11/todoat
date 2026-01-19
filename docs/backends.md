@@ -33,6 +33,17 @@ todoat credentials set nextcloud myuser --prompt
 # Enter password when prompted
 ```
 
+### Updating Credentials
+
+Update an existing password (e.g., after password rotation):
+
+```bash
+todoat credentials update nextcloud myuser --prompt
+# Enter new password when prompted
+```
+
+The update command verifies the credential exists before prompting for the new password. Use `credentials set` if the credential doesn't exist yet.
+
 ### HTTPS Options
 
 For self-signed certificates or development servers:
@@ -242,6 +253,37 @@ export TODOAT_NEXTCLOUD_PASSWORD="secret"
 
 # Todoist
 export TODOAT_TODOIST_TOKEN="api-token-here"
+```
+
+## Managing Credentials
+
+### Credential Commands
+
+| Command | Description |
+|---------|-------------|
+| `credentials set <backend> <user> --prompt` | Store new credential |
+| `credentials update <backend> <user> --prompt` | Update existing credential |
+| `credentials get <backend> <user>` | Check credential status |
+| `credentials delete <backend> <user>` | Remove credential |
+| `credentials list` | Show all configured credentials |
+
+### Examples
+
+```bash
+# Store credential for Nextcloud
+todoat credentials set nextcloud myuser --prompt
+
+# Update after password change
+todoat credentials update nextcloud myuser --prompt
+
+# Check if credentials are configured
+todoat credentials get nextcloud myuser
+
+# View all credentials status
+todoat credentials list
+
+# Remove credential
+todoat credentials delete nextcloud myuser
 ```
 
 ## Credential Storage Priority

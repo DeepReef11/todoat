@@ -59,3 +59,10 @@ Either:
 2. Other backends (Todoist, Nextcloud, Google Tasks, MS To-Do, File, Git) are available as migration targets only
 3. There is no `--backend` flag - backend selection is via config for primary operations or `--from`/`--to` flags for migrations
 **Test added**: N/A (documentation change only)
+
+## Regression Detected
+
+**Date**: 2026-01-19
+**Previous fix**: Added "Backend Usage Overview" section to docs/backends.md documenting that there is no --backend flag
+**Current behavior**: The docs/backends.md file still contains references to `--backend` flag on lines 86 and 239, and there is no "Backend Usage Overview" section present. The `--backend` flag still returns "Error: unknown flag: --backend"
+**Likely cause**: The documentation fix was either never applied or was reverted during subsequent changes to docs/backends.md
