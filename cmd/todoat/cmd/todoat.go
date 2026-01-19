@@ -18,6 +18,7 @@ import (
 	_ "modernc.org/sqlite"
 	"todoat/backend"
 	"todoat/backend/sqlite"
+	"todoat/internal/cache"
 	"todoat/internal/config"
 	"todoat/internal/credentials"
 	"todoat/internal/notification"
@@ -61,6 +62,9 @@ type Config struct {
 	// Reminder-related config fields (for testing)
 	ReminderConfigPath   string      // Path to reminder config file
 	NotificationCallback interface{} // Callback for notification testing
+	// Cache-related config fields
+	CachePath string        // Path to list cache file (for testing)
+	CacheTTL  time.Duration // Cache TTL duration
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -288,9 +292,50 @@ func newListCreateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 // doListView displays all task lists with their task counts
 func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout io.Writer, jsonOutput bool) error {
-	lists, err := be.GetLists(ctx)
-	if err != nil {
-		return err
+	// Try to use cache if available
+	cachePath := getListCachePath(cfg)
+	cacheTTL := getListCacheTTL(cfg)
+
+	// Check if we have a valid cache
+	cachedData, cacheValid := tryReadListCache(cachePath, cacheTTL)
+
+	var lists []backend.List
+	var err error
+	var cachedLists []cache.CachedList
+
+	if cacheValid {
+		// Use cached data
+		for _, cl := range cachedData.Lists {
+			lists = append(lists, backend.List{
+				ID:       cl.ID,
+				Name:     cl.Name,
+				Color:    cl.Color,
+				Modified: cl.Modified,
+			})
+		}
+		cachedLists = cachedData.Lists
+	} else {
+		// Fetch fresh data from backend
+		lists, err = be.GetLists(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Build cache data with task counts
+		cachedLists = make([]cache.CachedList, 0, len(lists))
+		for _, l := range lists {
+			tasks, _ := be.GetTasks(ctx, l.ID)
+			cachedLists = append(cachedLists, cache.CachedList{
+				ID:        l.ID,
+				Name:      l.Name,
+				Color:     l.Color,
+				TaskCount: len(tasks),
+				Modified:  l.Modified,
+			})
+		}
+
+		// Write cache
+		writeListCache(cachePath, cachedLists, getBackendName(be))
 	}
 
 	if jsonOutput {
@@ -303,14 +348,13 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 			Modified string `json:"modified"`
 		}
 		var output []listJSON
-		for _, l := range lists {
-			tasks, _ := be.GetTasks(ctx, l.ID)
+		for _, cl := range cachedLists {
 			output = append(output, listJSON{
-				ID:       l.ID,
-				Name:     l.Name,
-				Color:    l.Color,
-				Tasks:    len(tasks),
-				Modified: l.Modified.Format("2006-01-02T15:04:05Z"),
+				ID:       cl.ID,
+				Name:     cl.Name,
+				Color:    cl.Color,
+				Tasks:    cl.TaskCount,
+				Modified: cl.Modified.Format("2006-01-02T15:04:05Z"),
 			})
 		}
 		if output == nil {
@@ -336,15 +380,98 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 	_, _ = fmt.Fprintf(stdout, "Available lists (%d):\n\n", len(lists))
 	_, _ = fmt.Fprintf(stdout, "%-20s %s\n", "NAME", "TASKS")
 
-	for _, l := range lists {
-		tasks, _ := be.GetTasks(ctx, l.ID)
-		_, _ = fmt.Fprintf(stdout, "%-20s %d\n", l.Name, len(tasks))
+	for _, cl := range cachedLists {
+		_, _ = fmt.Fprintf(stdout, "%-20s %d\n", cl.Name, cl.TaskCount)
 	}
 
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
 	return nil
+}
+
+// getListCachePath returns the path to the list cache file
+func getListCachePath(cfg *Config) string {
+	if cfg != nil && cfg.CachePath != "" {
+		return cfg.CachePath
+	}
+	// Default to XDG cache path
+	cacheDir := os.Getenv("XDG_CACHE_HOME")
+	if cacheDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		cacheDir = filepath.Join(homeDir, ".cache")
+	}
+	return filepath.Join(cacheDir, "todoat", "lists.json")
+}
+
+// getListCacheTTL returns the cache TTL duration
+func getListCacheTTL(cfg *Config) time.Duration {
+	if cfg != nil && cfg.CacheTTL > 0 {
+		return cfg.CacheTTL
+	}
+	return 5 * time.Minute // Default 5 minute TTL
+}
+
+// tryReadListCache attempts to read and validate the cache file
+func tryReadListCache(cachePath string, ttl time.Duration) (*cache.ListCache, bool) {
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		return nil, false
+	}
+
+	var cacheData cache.ListCache
+	if err := json.Unmarshal(data, &cacheData); err != nil {
+		// Corrupt cache - delete it
+		_ = os.Remove(cachePath)
+		return nil, false
+	}
+
+	// Check TTL
+	if time.Since(cacheData.CreatedAt) > ttl {
+		return nil, false
+	}
+
+	return &cacheData, true
+}
+
+// writeListCache writes the cache file with proper permissions
+func writeListCache(cachePath string, lists []cache.CachedList, backendName string) {
+	cacheData := cache.ListCache{
+		CreatedAt: time.Now(),
+		Backend:   backendName,
+		Lists:     lists,
+	}
+
+	data, err := json.Marshal(cacheData)
+	if err != nil {
+		return
+	}
+
+	// Ensure cache directory exists
+	cacheDir := filepath.Dir(cachePath)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return
+	}
+
+	// Write cache file with 0644 permissions
+	_ = os.WriteFile(cachePath, data, 0644)
+}
+
+// invalidateListCache deletes the cache file to force a refresh
+func invalidateListCache(cfg *Config) {
+	cachePath := getListCachePath(cfg)
+	_ = os.Remove(cachePath)
+}
+
+// getBackendName returns a name for the backend for cache isolation
+func getBackendName(be backend.TaskManager) string {
+	// Use type name as backend identifier
+	switch be.(type) {
+	case *sqlite.Backend:
+		return "sqlite"
+	default:
+		return "unknown"
+	}
 }
 
 // doListCreate creates a new task list
@@ -366,6 +493,9 @@ func doListCreate(ctx context.Context, be backend.TaskManager, name string, cfg 
 	if err != nil {
 		return err
 	}
+
+	// Invalidate cache after creating a list
+	invalidateListCache(cfg)
 
 	if jsonOutput {
 		type listJSON struct {
@@ -440,6 +570,9 @@ func doListDelete(ctx context.Context, be backend.TaskManager, name string, cfg 
 	if err := be.DeleteList(ctx, list.ID); err != nil {
 		return err
 	}
+
+	// Invalidate cache after deleting a list
+	invalidateListCache(cfg)
 
 	_, _ = fmt.Fprintf(stdout, "Deleted list: %s\n", list.Name)
 	if cfg != nil && cfg.NoPrompt {

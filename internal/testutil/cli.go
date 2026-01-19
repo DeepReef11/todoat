@@ -28,10 +28,12 @@ func NewCLITest(t *testing.T) *CLITest {
 
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/test.db"
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
 	cfg := &cmd.Config{
-		NoPrompt: true,
-		DBPath:   dbPath,
+		NoPrompt:  true,
+		DBPath:    dbPath,
+		CachePath: cachePath, // Use test-specific cache path
 	}
 
 	return &CLITest{
@@ -48,6 +50,7 @@ func NewCLITestWithViews(t *testing.T) (*CLITest, string) {
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/test.db"
 	viewsDir := tmpDir + "/views"
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
 	if err := os.MkdirAll(viewsDir, 0755); err != nil {
 		t.Fatalf("failed to create views directory: %v", err)
@@ -57,6 +60,7 @@ func NewCLITestWithViews(t *testing.T) (*CLITest, string) {
 		NoPrompt:  true,
 		DBPath:    dbPath,
 		ViewsPath: viewsDir,
+		CachePath: cachePath,
 	}
 
 	return &CLITest{
@@ -75,6 +79,7 @@ func NewCLITestWithViewsAndConfig(t *testing.T) (*CLITest, string) {
 	dbPath := tmpDir + "/test.db"
 	viewsDir := tmpDir + "/views"
 	configPath := tmpDir + "/config.yaml"
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
 	if err := os.MkdirAll(viewsDir, 0755); err != nil {
 		t.Fatalf("failed to create views directory: %v", err)
@@ -91,6 +96,7 @@ func NewCLITestWithViewsAndConfig(t *testing.T) (*CLITest, string) {
 		DBPath:     dbPath,
 		ViewsPath:  viewsDir,
 		ConfigPath: configPath,
+		CachePath:  cachePath,
 	}
 
 	return &CLITest{
@@ -108,12 +114,14 @@ func NewCLITestWithNotification(t *testing.T) *CLITest {
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/test.db"
 	notificationLogPath := tmpDir + "/notifications.log"
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
 	cfg := &cmd.Config{
 		NoPrompt:            true,
 		DBPath:              dbPath,
 		NotificationLogPath: notificationLogPath,
 		NotificationMock:    true, // Use mock executor for OS notifications
+		CachePath:           cachePath,
 	}
 
 	return &CLITest{
@@ -252,6 +260,7 @@ func NewCLITestWithDaemon(t *testing.T) *DaemonCLITest {
 	pidFile := filepath.Join(tmpDir, "daemon.pid")
 	logFile := filepath.Join(tmpDir, "daemon.log")
 	configPath := filepath.Join(tmpDir, "config.yaml")
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
 	cfg := &cmd.Config{
 		NoPrompt:            true,
@@ -262,6 +271,7 @@ func NewCLITestWithDaemon(t *testing.T) *DaemonCLITest {
 		DaemonPIDPath:       pidFile,
 		DaemonLogPath:       logFile,
 		DaemonTestMode:      true, // Use in-process daemon for testing
+		CachePath:           cachePath,
 	}
 
 	return &DaemonCLITest{
@@ -318,6 +328,7 @@ func NewCLITestWithMigrate(t *testing.T) *MigrateCLITest {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 	migrateTargetDir := filepath.Join(tmpDir, "migrate-target")
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
 	if err := os.MkdirAll(migrateTargetDir, 0755); err != nil {
 		t.Fatalf("failed to create migrate target directory: %v", err)
@@ -328,6 +339,7 @@ func NewCLITestWithMigrate(t *testing.T) *MigrateCLITest {
 		DBPath:           dbPath,
 		MigrateTargetDir: migrateTargetDir,
 		MigrateMockMode:  true, // Enable mock backends for testing
+		CachePath:        cachePath,
 	}
 
 	return &MigrateCLITest{
@@ -370,6 +382,7 @@ func NewCLITestWithReminder(t *testing.T) *ReminderCLITest {
 	dbPath := filepath.Join(tmpDir, "test.db")
 	notificationLogPath := filepath.Join(tmpDir, "notifications.log")
 	reminderConfigPath := filepath.Join(tmpDir, "reminder-config.json")
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
 
 	cfg := &cmd.Config{
 		NoPrompt:            true,
@@ -377,6 +390,7 @@ func NewCLITestWithReminder(t *testing.T) *ReminderCLITest {
 		NotificationLogPath: notificationLogPath,
 		NotificationMock:    true,
 		ReminderConfigPath:  reminderConfigPath,
+		CachePath:           cachePath,
 	}
 
 	return &ReminderCLITest{
@@ -414,4 +428,53 @@ func (r *ReminderCLITest) GetNotificationLog() string {
 // ClearNotificationLog clears the notification log file.
 func (r *ReminderCLITest) ClearNotificationLog() {
 	_ = os.WriteFile(r.notificationLogPath, []byte{}, 0644)
+}
+
+// CacheCLITest extends CLITest with cache-specific helpers for testing list caching.
+type CacheCLITest struct {
+	*CLITest
+	cachePath string
+	cacheTTL  time.Duration
+}
+
+// NewCLITestWithCache creates a new CLI test helper with cache support.
+func NewCLITestWithCache(t *testing.T) *CacheCLITest {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	cacheDir := filepath.Join(tmpDir, "cache")
+	cachePath := filepath.Join(cacheDir, "lists.json")
+
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("failed to create cache directory: %v", err)
+	}
+
+	cfg := &cmd.Config{
+		NoPrompt:  true,
+		DBPath:    dbPath,
+		CachePath: cachePath,
+		CacheTTL:  5 * time.Minute, // Default 5 minute TTL
+	}
+
+	return &CacheCLITest{
+		CLITest: &CLITest{
+			t:      t,
+			cfg:    cfg,
+			tmpDir: tmpDir,
+		},
+		cachePath: cachePath,
+		cacheTTL:  5 * time.Minute,
+	}
+}
+
+// CachePath returns the path to the cache file.
+func (c *CacheCLITest) CachePath() string {
+	return c.cachePath
+}
+
+// SetCacheTTL sets the cache TTL for testing.
+func (c *CacheCLITest) SetCacheTTL(ttl time.Duration) {
+	c.cacheTTL = ttl
+	c.cfg.CacheTTL = ttl
 }

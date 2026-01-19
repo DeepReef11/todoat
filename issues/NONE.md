@@ -49,7 +49,10 @@
 ### Phase 4: Todoist Backend
 | Test | Result |
 |------|--------|
-| SKIPPED | No TODOAT_TODOIST_TOKEN environment variable set |
+| Backend available via config | NOT IMPLEMENTED (by design) |
+| Backend available via migrate command | PASS (returns "not yet implemented" error) |
+
+**Note**: The Todoist backend exists as a library implementation with integration tests, but is not wired to the CLI for normal task operations. The CLI currently only supports SQLite as the default backend. The `--backend` flag does not exist - backend selection is done via config file (`default_backend` field) or the `migrate` command for data migration.
 
 ### Phase 5: Error Handling
 | Test | Result |
@@ -60,6 +63,7 @@
 | Missing arguments (add) | PASS (error: "task summary is required") |
 | Missing arguments (update) | PASS (error: "task summary is required") |
 | Missing arguments (delete) | PASS (error: "task summary is required") |
+| Missing arguments (complete) | PASS (error: "task summary is required") |
 | Update non-existent task | PASS (error: "no task found matching") |
 | Delete non-existent task | PASS (error: "no task found matching") |
 
@@ -68,5 +72,6 @@
 1. All error messages are user-friendly with no stack traces or panics
 2. Config and database are automatically created on first use
 3. JSON output is valid and parseable
-4. The `--backend` flag is not available (possibly removed or not implemented for global scope) - commands use the default backend configured in config.yaml
-5. Todoist backend tests were skipped due to missing token - this is expected behavior in CI/test environments
+4. The `--backend` flag is not available - backend is configured via config.yaml's `default_backend` field
+5. Todoist backend exists as library code with integration tests but CLI integration is not yet complete
+6. TUI command correctly reports error when no TTY available (expected in non-terminal environments)
