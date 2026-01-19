@@ -2595,16 +2595,9 @@ func parsePrioritySingle(s string) (int, error) {
 	return val, nil
 }
 
-// parseDate parses a date string in YYYY-MM-DD format
+// parseDate parses a date string in YYYY-MM-DD format or relative formats (today, tomorrow, yesterday, +Nd, -Nd, +Nw, +Nm)
 func parseDate(s string) (*time.Time, error) {
-	if s == "" {
-		return nil, nil
-	}
-	t, err := time.Parse(views.DefaultDateFormat, s)
-	if err != nil {
-		return nil, fmt.Errorf("date must be in YYYY-MM-DD format (e.g., 2026-01-31)")
-	}
-	return &t, nil
+	return utils.ParseDateFlag(s)
 }
 
 // DateFilter holds date filtering criteria for tasks

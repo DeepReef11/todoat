@@ -96,7 +96,6 @@ func TestParseDateFlagInvalid(t *testing.T) {
 		"01-15-2026", // Wrong order
 		"2026-1-15",  // Missing leading zeros (may be valid depending on parser)
 		"not-a-date",
-		"tomorrow",
 		"2026-13-01", // Invalid month
 		"2026-01-32", // Invalid day
 	}

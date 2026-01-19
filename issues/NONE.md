@@ -59,7 +59,7 @@ The Todoist backend is **not available as a primary backend**. Per design:
 2. There is no `--backend` flag to switch backends at runtime
 3. Todoist exists as a migration target but returns: "real todoist backend not yet implemented for migration"
 
-**Note**: The .env file has `TODOIST_API_TOKEN` but the credentials system uses username/password. This is a design limitation for API-token-based backends.
+**Note**: The .env file has `TODOIST_API_TOKEN` but the app uses `TODOAT_TODOIST_TOKEN` environment variable. This is documented behavior.
 
 **Tests Run:**
 

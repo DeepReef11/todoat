@@ -3126,3 +3126,146 @@ func TestFilterCombinedStatusAndDateSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "Done task due soon")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
+
+// =============================================================================
+// Relative Date Input Tests (044-relative-date-input)
+// =============================================================================
+
+// TestRelativeDateTodaySQLiteCLI verifies that `todoat -y MyList add "Task" --due-date today` sets due date to current date
+func TestRelativeDateTodaySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task today", "--due-date", "today")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date is today
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	today := time.Now().Format("2006-01-02")
+	testutil.AssertContains(t, stdout, "Task today")
+	testutil.AssertContains(t, stdout, today)
+}
+
+// TestRelativeDateTomorrowSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date tomorrow` sets due date to next day
+func TestRelativeDateTomorrowSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task tomorrow", "--due-date", "tomorrow")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date is tomorrow
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	testutil.AssertContains(t, stdout, "Task tomorrow")
+	testutil.AssertContains(t, stdout, tomorrow)
+}
+
+// TestRelativeDateYesterdaySQLiteCLI verifies that `todoat -y MyList --due-after yesterday` filters from yesterday
+func TestRelativeDateYesterdaySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list
+	cli.MustExecute("-y", "list", "create", "YesterdayTest")
+
+	// Add tasks with dates relative to today
+	today := time.Now().Format("2006-01-02")
+	twoDaysAgo := time.Now().AddDate(0, 0, -2).Format("2006-01-02")
+
+	cli.MustExecute("-y", "YesterdayTest", "add", "Task due today", "--due-date", today)
+	cli.MustExecute("-y", "YesterdayTest", "add", "Task due 2 days ago", "--due-date", twoDaysAgo)
+
+	// Filter from yesterday - should include today but not 2 days ago
+	stdout := cli.MustExecute("-y", "YesterdayTest", "--due-after", "yesterday")
+
+	testutil.AssertContains(t, stdout, "Task due today")
+	testutil.AssertNotContains(t, stdout, "Task due 2 days ago")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestRelativeDateDaysAheadSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date +7d` sets due date 7 days from now
+func TestRelativeDateDaysAheadSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task in 7 days", "--due-date", "+7d")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date is 7 days from now
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	sevenDays := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
+	testutil.AssertContains(t, stdout, "Task in 7 days")
+	testutil.AssertContains(t, stdout, sevenDays)
+}
+
+// TestRelativeDateDaysBackSQLiteCLI verifies that `todoat -y MyList --due-after -3d` filters from 3 days ago
+func TestRelativeDateDaysBackSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list
+	cli.MustExecute("-y", "list", "create", "DaysBackTest")
+
+	// Add tasks with dates relative to today
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	fiveDaysAgo := time.Now().AddDate(0, 0, -5).Format("2006-01-02")
+
+	cli.MustExecute("-y", "DaysBackTest", "add", "Task due yesterday", "--due-date", yesterday)
+	cli.MustExecute("-y", "DaysBackTest", "add", "Task due 5 days ago", "--due-date", fiveDaysAgo)
+
+	// Filter from 3 days ago - should include yesterday but not 5 days ago
+	stdout := cli.MustExecute("-y", "DaysBackTest", "--due-after", "-3d")
+
+	testutil.AssertContains(t, stdout, "Task due yesterday")
+	testutil.AssertNotContains(t, stdout, "Task due 5 days ago")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestRelativeDateWeeksSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date +2w` sets due date 2 weeks from now
+func TestRelativeDateWeeksSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task in 2 weeks", "--due-date", "+2w")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date is 2 weeks from now
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	twoWeeks := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	testutil.AssertContains(t, stdout, "Task in 2 weeks")
+	testutil.AssertContains(t, stdout, twoWeeks)
+}
+
+// TestRelativeDateMonthsSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date +1m` sets due date 1 month from now
+func TestRelativeDateMonthsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task in 1 month", "--due-date", "+1m")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date is 1 month from now
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	oneMonth := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	testutil.AssertContains(t, stdout, "Task in 1 month")
+	testutil.AssertContains(t, stdout, oneMonth)
+}
+
+// TestAbsoluteDateStillWorksSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date 2026-01-31` still works
+func TestAbsoluteDateStillWorksSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Task absolute", "--due-date", "2026-01-31")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify by listing tasks with JSON to check due_date
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Task absolute")
+	testutil.AssertContains(t, stdout, "2026-01-31")
+}
