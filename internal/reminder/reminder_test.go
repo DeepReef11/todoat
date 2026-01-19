@@ -56,7 +56,7 @@ func TestReminderNotification(t *testing.T) {
 	})
 
 	// Add a task due tomorrow (within 1-day reminder window)
-	dueDate := time.Now().Add(12 * time.Hour).Format("2006-01-02")
+	dueDate := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
 	cli.MustExecute("-y", "Work", "add", "Upcoming task", "--due-date", dueDate)
 
 	// Check reminders - should trigger notification
