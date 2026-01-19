@@ -456,6 +456,8 @@ todoat MyList u "task name" -s IN-PROGRESS
 | `--due-date` | | Due date (see [Date Formats](#date-formats), use "" to clear) |
 | `--start-date` | | Start date (see [Date Formats](#date-formats), use "" to clear) |
 | `--tag` | | Set tags (replaces existing; can be multiple or comma-separated) |
+| `--add-tag` | | Add tag(s) to existing tags (can be multiple or comma-separated) |
+| `--remove-tag` | | Remove tag(s) from existing tags (can be multiple or comma-separated) |
 | `--parent` | `-P` | Set parent task (move task under specified parent) |
 | `--no-parent` | | Remove parent relationship (make task root-level) |
 | `--uid` | | Select task by unique identifier (for scripting) |
@@ -476,6 +478,14 @@ todoat Work update "task" --start-date 2026-01-15 --due-date 2026-01-30
 # Set tags (replaces all existing tags)
 todoat Work update "task" --tag urgent
 todoat Work update "task" --tag work,meeting
+
+# Add tags to existing (without replacing)
+todoat Work update "task" --add-tag urgent
+todoat Work update "task" --add-tag bug,priority
+
+# Remove specific tags
+todoat Work update "task" --remove-tag urgent
+todoat Work update "task" --remove-tag bug,stale
 
 # Clear all tags
 todoat Work update "task" --tag ""

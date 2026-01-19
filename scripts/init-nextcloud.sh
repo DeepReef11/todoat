@@ -19,9 +19,9 @@ php /var/www/html/occ app:enable tasks
 php /var/www/html/occ app:install calendar || echo "Calendar app already installed"
 php /var/www/html/occ app:enable calendar
 
-# Create a default task list for testing
-echo "Creating default task list..."
-# This will be created automatically when first accessed via CalDAV
+# Create a test calendar for integration tests
+echo "Creating test calendar..."
+php /var/www/html/occ dav:create-calendar admin testcalendar "Test Calendar" || echo "Test calendar already exists"
 
 echo "=== Initialization Complete ==="
 echo ""

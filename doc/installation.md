@@ -45,6 +45,42 @@ todoat --version
 todoat --help
 ```
 
+## Shell Completion
+
+todoat supports shell completion for bash, zsh, fish, and PowerShell.
+
+### Bash
+
+```bash
+# Add to ~/.bashrc
+source <(todoat completion bash)
+
+# Or generate and save the script
+todoat completion bash > /etc/bash_completion.d/todoat
+```
+
+### Zsh
+
+```bash
+# Add to ~/.zshrc
+source <(todoat completion zsh)
+
+# Or generate and add to fpath
+todoat completion zsh > "${fpath[1]}/_todoat"
+```
+
+### Fish
+
+```bash
+todoat completion fish > ~/.config/fish/completions/todoat.fish
+```
+
+### PowerShell
+
+```powershell
+todoat completion powershell | Out-String | Invoke-Expression
+```
+
 ## Data Location
 
 todoat stores data following XDG conventions:

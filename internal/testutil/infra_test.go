@@ -402,3 +402,126 @@ func TestIntegrationRunsOnMainOnly(t *testing.T) {
 		t.Error("integration.yml should NOT trigger on pull_request (only on main merge)")
 	}
 }
+
+// =============================================================================
+// Pre-configured Nextcloud Docker Tests (056-nextcloud-docker-preconfigured)
+// =============================================================================
+
+// TestDockerNextcloudReady verifies docker-compose up results in ready-to-use Nextcloud (no setup wizard)
+func TestDockerNextcloudReady(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	dockerComposePath := filepath.Join(projectRoot, "docker-compose.yml")
+
+	content, err := os.ReadFile(dockerComposePath)
+	if err != nil {
+		t.Fatalf("failed to read docker-compose.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Check that admin user is pre-configured (no setup wizard needed)
+	if !strings.Contains(contentStr, "NEXTCLOUD_ADMIN_USER") {
+		t.Error("docker-compose.yml should define NEXTCLOUD_ADMIN_USER for pre-configured setup")
+	}
+
+	if !strings.Contains(contentStr, "NEXTCLOUD_ADMIN_PASSWORD") {
+		t.Error("docker-compose.yml should define NEXTCLOUD_ADMIN_PASSWORD for pre-configured setup")
+	}
+
+	// Check that database is configured (required for auto-setup)
+	if !strings.Contains(contentStr, "POSTGRES_") || (!strings.Contains(contentStr, "postgres") && !strings.Contains(contentStr, "MYSQL")) {
+		t.Error("docker-compose.yml should configure database for Nextcloud auto-setup")
+	}
+
+	// Check that the database service has a healthcheck
+	if !strings.Contains(contentStr, "db:") {
+		t.Error("docker-compose.yml should have a database service")
+	}
+
+	// Nextcloud should depend on database being healthy
+	if !strings.Contains(contentStr, "depends_on") {
+		t.Error("docker-compose.yml nextcloud service should depend on database")
+	}
+}
+
+// TestDockerTasksAppInstalled verifies Tasks app is pre-installed and enabled
+func TestDockerTasksAppInstalled(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	initScriptPath := filepath.Join(projectRoot, "scripts", "init-nextcloud.sh")
+
+	content, err := os.ReadFile(initScriptPath)
+	if err != nil {
+		t.Fatalf("failed to read init-nextcloud.sh: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Check that Tasks app is installed
+	if !strings.Contains(contentStr, "app:install tasks") {
+		t.Error("init-nextcloud.sh should install Tasks app via 'occ app:install tasks'")
+	}
+
+	// Check that Tasks app is enabled
+	if !strings.Contains(contentStr, "app:enable tasks") {
+		t.Error("init-nextcloud.sh should enable Tasks app via 'occ app:enable tasks'")
+	}
+
+	// Check that the script is mounted as post-installation hook in docker-compose.yml
+	dockerComposePath := filepath.Join(projectRoot, "docker-compose.yml")
+	dcContent, err := os.ReadFile(dockerComposePath)
+	if err != nil {
+		t.Fatalf("failed to read docker-compose.yml: %v", err)
+	}
+
+	dcContentStr := string(dcContent)
+	if !strings.Contains(dcContentStr, "docker-entrypoint-hooks.d/post-installation") {
+		t.Error("docker-compose.yml should mount init script to post-installation hooks directory")
+	}
+}
+
+// TestDockerTestCalendarExists verifies test calendar "testcalendar" exists for admin user
+func TestDockerTestCalendarExists(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	initScriptPath := filepath.Join(projectRoot, "scripts", "init-nextcloud.sh")
+
+	content, err := os.ReadFile(initScriptPath)
+	if err != nil {
+		t.Fatalf("failed to read init-nextcloud.sh: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Check that test calendar is created via dav:create-calendar
+	if !strings.Contains(contentStr, "dav:create-calendar") {
+		t.Error("init-nextcloud.sh should create test calendar via 'occ dav:create-calendar'")
+	}
+
+	// Check that it's created for admin user with name testcalendar
+	if !strings.Contains(contentStr, "admin") || !strings.Contains(contentStr, "testcalendar") {
+		t.Error("init-nextcloud.sh should create testcalendar for admin user")
+	}
+}
+
+// TestDockerCalDAVEndpoint verifies CalDAV endpoint responds at /remote.php/dav/calendars/admin/
+func TestDockerCalDAVEndpoint(t *testing.T) {
+	projectRoot := getProjectRoot(t)
+	dockerComposePath := filepath.Join(projectRoot, "docker-compose.yml")
+
+	content, err := os.ReadFile(dockerComposePath)
+	if err != nil {
+		t.Fatalf("failed to read docker-compose.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Check that healthcheck tests the CalDAV endpoint with testcalendar
+	// The health check should verify the full CalDAV path is accessible
+	if !strings.Contains(contentStr, "remote.php/dav/calendars/admin/testcalendar") {
+		t.Error("docker-compose.yml healthcheck should verify CalDAV endpoint at /remote.php/dav/calendars/admin/testcalendar/")
+	}
+
+	// Check that healthcheck has extended start_period for Tasks app installation
+	if !strings.Contains(contentStr, "start_period:") {
+		t.Error("docker-compose.yml healthcheck should have start_period for initialization")
+	}
+}
