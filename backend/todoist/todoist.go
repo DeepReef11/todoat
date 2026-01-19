@@ -250,6 +250,41 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	}, nil
 }
 
+// UpdateList updates a Todoist project
+func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.List, error) {
+	body := map[string]string{"name": list.Name}
+	if list.Color != "" {
+		body["color"] = list.Color
+	}
+
+	resp, err := b.doRequest(ctx, http.MethodPost, "/rest/v2/projects/"+list.ID, body)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to update project: status %d", resp.StatusCode)
+	}
+
+	var project struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Color string `json:"color"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&project); err != nil {
+		return nil, err
+	}
+
+	return &backend.List{
+		ID:       project.ID,
+		Name:     project.Name,
+		Color:    project.Color,
+		Modified: time.Now(),
+	}, nil
+}
+
 // DeleteList deletes a Todoist project (permanent deletion)
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	resp, err := b.doRequest(ctx, http.MethodDelete, "/rest/v2/projects/"+listID, nil)

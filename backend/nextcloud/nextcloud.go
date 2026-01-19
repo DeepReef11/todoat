@@ -186,6 +186,11 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	return nil, fmt.Errorf("creating calendars is not supported via CalDAV")
 }
 
+// UpdateList updates a calendar (not fully supported in CalDAV)
+func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.List, error) {
+	return nil, fmt.Errorf("updating calendars is not supported via CalDAV")
+}
+
 // DeleteList soft-deletes a calendar (moves to trash)
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	// CalDAV DELETE is a hard delete, not soft delete

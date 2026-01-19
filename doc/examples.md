@@ -452,6 +452,16 @@ todoat list trash restore "Archive"
 todoat list trash purge "Temp"
 ```
 
+### Renaming Lists
+
+```bash
+# Rename a list
+todoat list update "Work" --name "Work Projects"
+
+# Rename using partial match
+todoat list update "Proj" --name "My Projects"
+```
+
 ## Renaming Tasks
 
 ```bash

@@ -55,6 +55,7 @@ todoat list trash purge "MyList"
 |---------|-------------|
 | `list` | View all lists with task counts |
 | `list create [name]` | Create a new list |
+| `list update [name] --name [new-name]` | Rename a list |
 | `list info [name]` | Show list details (name, ID, task count) |
 | `list delete [name]` | Soft-delete a list (moves to trash) |
 | `list trash` | View lists in trash |
@@ -89,6 +90,28 @@ OldProject           2026-01-18 14:30
 
 $ todoat list trash restore "OldProject"
 Restored list: OldProject
+```
+
+### Renaming Lists
+
+Rename a list using the `list update` command:
+
+```bash
+# Rename a list
+todoat list update "OldName" --name "NewName"
+```
+
+#### Rename Flags
+
+| Flag | Description |
+|------|-------------|
+| `--name` | New name for the list (required) |
+
+#### Rename Example
+
+```bash
+$ todoat list update "Work" --name "Work Projects"
+Renamed list: Work → Work Projects
 ```
 
 ### Export and Import

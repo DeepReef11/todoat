@@ -325,6 +325,38 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	}, nil
 }
 
+// UpdateList updates a Google task list
+func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.List, error) {
+	body := map[string]string{"title": list.Name}
+
+	resp, err := b.doRequest(ctx, http.MethodPatch, "/tasks/v1/users/@me/lists/"+list.ID, body)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to update task list: status %d", resp.StatusCode)
+	}
+
+	var item struct {
+		ID      string `json:"id"`
+		Title   string `json:"title"`
+		Updated string `json:"updated"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&item); err != nil {
+		return nil, err
+	}
+
+	modified, _ := time.Parse(time.RFC3339, item.Updated)
+	return &backend.List{
+		ID:       item.ID,
+		Name:     item.Title,
+		Modified: modified,
+	}, nil
+}
+
 // DeleteList deletes a Google task list (permanent deletion)
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	resp, err := b.doRequest(ctx, http.MethodDelete, "/tasks/v1/users/@me/lists/"+listID, nil)

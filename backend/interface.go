@@ -51,6 +51,7 @@ type TaskManager interface {
 	GetList(ctx context.Context, listID string) (*List, error)
 	GetListByName(ctx context.Context, name string) (*List, error)
 	CreateList(ctx context.Context, name string) (*List, error)
+	UpdateList(ctx context.Context, list *List) (*List, error)
 	DeleteList(ctx context.Context, listID string) error // Soft-delete (move to trash)
 
 	// Trash operations

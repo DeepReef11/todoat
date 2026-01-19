@@ -129,6 +129,31 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	return &list, nil
 }
 
+// UpdateList updates a list's properties
+func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.List, error) {
+	if err := b.ensureLoaded(); err != nil {
+		return nil, err
+	}
+
+	// Find and update the list
+	for i, l := range b.lists {
+		if l.ID == list.ID {
+			b.lists[i].Name = list.Name
+			b.lists[i].Color = list.Color
+			b.lists[i].Modified = time.Now()
+
+			// Save changes
+			if err := b.saveFile(); err != nil {
+				return nil, err
+			}
+
+			return &b.lists[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("list not found")
+}
+
 // DeleteList removes a list and all its tasks
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	if err := b.ensureLoaded(); err != nil {

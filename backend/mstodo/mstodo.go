@@ -346,6 +346,31 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	}, nil
 }
 
+// UpdateList updates a Microsoft To Do task list
+func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.List, error) {
+	body := map[string]string{"displayName": list.Name}
+
+	resp, err := b.doRequest(ctx, http.MethodPatch, "/v1.0/me/todo/lists/"+list.ID, body)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to update task list: status %d", resp.StatusCode)
+	}
+
+	var item msTaskList
+	if err := json.NewDecoder(resp.Body).Decode(&item); err != nil {
+		return nil, err
+	}
+
+	return &backend.List{
+		ID:   item.ID,
+		Name: item.DisplayName,
+	}, nil
+}
+
 // DeleteList deletes a Microsoft To Do task list (permanent deletion)
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	resp, err := b.doRequest(ctx, http.MethodDelete, "/v1.0/me/todo/lists/"+listID, nil)

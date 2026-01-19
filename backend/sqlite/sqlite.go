@@ -229,6 +229,23 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	}, nil
 }
 
+// UpdateList updates an existing task list
+func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.List, error) {
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
+
+	_, err := b.db.ExecContext(ctx,
+		"UPDATE task_lists SET name = ?, color = ?, modified = ? WHERE id = ? AND deleted_at IS NULL",
+		list.Name, list.Color, nowStr, list.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	list.Modified = now
+	return list, nil
+}
+
 // DeleteList soft-deletes a task list (moves to trash)
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)

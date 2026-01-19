@@ -287,6 +287,7 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 	// Add subcommands
 	listCmd.AddCommand(newListCreateCmd(stdout, cfg))
+	listCmd.AddCommand(newListUpdateCmd(stdout, cfg))
 	listCmd.AddCommand(newListDeleteCmd(stdout, cfg))
 	listCmd.AddCommand(newListInfoCmd(stdout, cfg))
 	listCmd.AddCommand(newListTrashCmd(stdout, cfg))
@@ -555,6 +556,146 @@ func doListCreate(ctx context.Context, be backend.TaskManager, name string, cfg 
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Created list: %s\n", list.Name)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListUpdateCmd creates the 'list update' subcommand
+func newListUpdateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update [name]",
+		Short: "Update a list's properties",
+		Long:  "Update a task list's name or other properties.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			newName, _ := cmd.Flags().GetString("name")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListUpdate(context.Background(), be, args[0], newName, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.Flags().String("name", "", "New name for the list")
+	return cmd
+}
+
+// doListUpdate updates a list's properties (currently only name)
+func doListUpdate(ctx context.Context, be backend.TaskManager, name, newName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Validate new name
+	if newName == "" {
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return fmt.Errorf("new name is required (use --name flag)")
+	}
+
+	// Get all lists for matching and validation
+	lists, err := be.GetLists(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Find list by name (exact or partial match)
+	var matchedList *backend.List
+	var matches []backend.List
+	nameLower := strings.ToLower(name)
+
+	// First try exact match (case-insensitive)
+	for i := range lists {
+		if strings.EqualFold(lists[i].Name, name) {
+			matchedList = &lists[i]
+			break
+		}
+	}
+
+	// If no exact match, try partial match
+	if matchedList == nil {
+		for i := range lists {
+			if strings.Contains(strings.ToLower(lists[i].Name), nameLower) {
+				matches = append(matches, lists[i])
+			}
+		}
+
+		if len(matches) == 0 {
+			if cfg != nil && cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultError)
+			}
+			return fmt.Errorf("list '%s' not found", name)
+		}
+
+		if len(matches) == 1 {
+			matchedList = &matches[0]
+		} else {
+			// Multiple matches - error in no-prompt mode
+			if cfg != nil && cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultError)
+				return fmt.Errorf("multiple lists match '%s' - ambiguous, please be more specific", name)
+			}
+			// In interactive mode, we would prompt - but for now return error
+			return fmt.Errorf("multiple lists match '%s' - please be more specific", name)
+		}
+	}
+
+	// Check if new name already exists (case-insensitive)
+	for _, l := range lists {
+		if l.ID != matchedList.ID && strings.EqualFold(l.Name, newName) {
+			if cfg != nil && cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultError)
+			}
+			return fmt.Errorf("list '%s' already exists - choose a different name", newName)
+		}
+	}
+
+	// Update the list
+	oldName := matchedList.Name
+	matchedList.Name = newName
+	updatedList, err := be.UpdateList(ctx, matchedList)
+	if err != nil {
+		return err
+	}
+
+	// Invalidate cache after updating a list
+	invalidateListCache(cfg)
+
+	if jsonOutput {
+		type listJSON struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			OldName  string `json:"old_name"`
+			Color    string `json:"color,omitempty"`
+			Modified string `json:"modified"`
+			Result   string `json:"result"`
+		}
+		output := listJSON{
+			ID:       updatedList.ID,
+			Name:     updatedList.Name,
+			OldName:  oldName,
+			Color:    updatedList.Color,
+			Modified: updatedList.Modified.Format("2006-01-02T15:04:05Z"),
+			Result:   "ACTION_COMPLETED",
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Renamed list '%s' to '%s'\n", oldName, updatedList.Name)
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
@@ -5744,6 +5885,18 @@ func (m *MockBackend) CreateList(ctx context.Context, name string) (*backend.Lis
 	m.lists = append(m.lists, list)
 	m.tasks[list.ID] = []backend.Task{}
 	return &m.lists[len(m.lists)-1], nil
+}
+
+func (m *MockBackend) UpdateList(ctx context.Context, list *backend.List) (*backend.List, error) {
+	for i := range m.lists {
+		if m.lists[i].ID == list.ID {
+			m.lists[i].Name = list.Name
+			m.lists[i].Color = list.Color
+			m.lists[i].Modified = time.Now()
+			return &m.lists[i], nil
+		}
+	}
+	return nil, fmt.Errorf("list not found")
 }
 
 func (m *MockBackend) DeleteList(ctx context.Context, listID string) error {

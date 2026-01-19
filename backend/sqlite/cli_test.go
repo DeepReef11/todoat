@@ -3361,3 +3361,150 @@ func TestTrashAutoPurgePreservesRecentSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "RecentList")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
+
+// =============================================================================
+// List Rename Tests (050-list-rename)
+// =============================================================================
+
+// TestListRename verifies that `todoat list update "OldName" --name "NewName"` renames list
+func TestListRenameSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "OldListName")
+
+	// Rename the list
+	stdout := cli.MustExecute("-y", "list", "update", "OldListName", "--name", "NewListName")
+
+	testutil.AssertContains(t, stdout, "NewListName")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the list was renamed by viewing lists
+	stdout = cli.MustExecute("-y", "list")
+
+	testutil.AssertContains(t, stdout, "NewListName")
+	testutil.AssertNotContains(t, stdout, "OldListName")
+}
+
+// TestListRenameNotFound verifies that renaming non-existent list returns ERROR
+func TestListRenameNotFoundSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Try to rename a list that doesn't exist
+	stdout, _, exitCode := cli.Execute("-y", "list", "update", "NonExistent", "--name", "NewName")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestListRenameDuplicate verifies that renaming to existing name returns ERROR with suggestion
+func TestListRenameDuplicateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create two lists
+	cli.MustExecute("-y", "list", "create", "FirstList")
+	cli.MustExecute("-y", "list", "create", "SecondList")
+
+	// Try to rename FirstList to SecondList (which already exists)
+	stdout, stderr, exitCode := cli.Execute("-y", "list", "update", "FirstList", "--name", "SecondList")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+
+	// Should mention the name already exists
+	errOutput := stderr
+	if !strings.Contains(strings.ToLower(errOutput), "exists") && !strings.Contains(strings.ToLower(errOutput), "already") {
+		t.Errorf("error should mention name already exists, got: %s", errOutput)
+	}
+}
+
+// TestListRenameJSON verifies that `todoat --json list update "OldName" --name "NewName"` returns JSON with result
+func TestListRenameJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "JSONRenameList")
+
+	// Rename with JSON output
+	stdout := cli.MustExecute("-y", "--json", "list", "update", "JSONRenameList", "--name", "RenamedJSONList")
+
+	// Should contain JSON structure with list details
+	testutil.AssertContains(t, stdout, "{")
+	testutil.AssertContains(t, stdout, "}")
+	testutil.AssertContains(t, stdout, "RenamedJSONList")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+}
+
+// TestListRenameNoPrompt verifies that `todoat -y list update "Partial" --name "NewName"` handles partial match
+func TestListRenameNoPromptSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with a distinctive name
+	cli.MustExecute("-y", "list", "create", "PartialMatchList")
+
+	// Rename using partial match with -y flag (should work if unique match)
+	stdout := cli.MustExecute("-y", "list", "update", "PartialMatch", "--name", "RenamedPartialList")
+
+	testutil.AssertContains(t, stdout, "RenamedPartialList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the rename happened
+	stdout = cli.MustExecute("-y", "list")
+	testutil.AssertContains(t, stdout, "RenamedPartialList")
+	testutil.AssertNotContains(t, stdout, "PartialMatchList")
+}
+
+// TestListRenamePreservesProperties verifies that renaming preserves other list properties
+func TestListRenamePreservesPropertiesSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add some tasks
+	cli.MustExecute("-y", "list", "create", "PropertiesTestList")
+	cli.MustExecute("-y", "PropertiesTestList", "add", "Task 1")
+	cli.MustExecute("-y", "PropertiesTestList", "add", "Task 2")
+
+	// Rename the list
+	cli.MustExecute("-y", "list", "update", "PropertiesTestList", "--name", "RenamedPropertiesList")
+
+	// Verify tasks are preserved
+	stdout := cli.MustExecute("-y", "RenamedPropertiesList")
+
+	testutil.AssertContains(t, stdout, "Task 1")
+	testutil.AssertContains(t, stdout, "Task 2")
+}
+
+// TestListRenameEmptyName verifies that renaming to empty name returns ERROR
+func TestListRenameEmptyNameSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "EmptyNameTest")
+
+	// Try to rename to empty name
+	stdout, _, exitCode := cli.Execute("-y", "list", "update", "EmptyNameTest", "--name", "")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestListRenameMultipleMatches verifies that multiple partial matches in no-prompt mode returns ERROR
+func TestListRenameMultipleMatchesSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create lists with similar names
+	cli.MustExecute("-y", "list", "create", "SimilarOne")
+	cli.MustExecute("-y", "list", "create", "SimilarTwo")
+
+	// Try to rename with partial match that matches multiple lists
+	stdout, stderr, exitCode := cli.Execute("-y", "list", "update", "Similar", "--name", "NewName")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+
+	// Should mention multiple matches or ambiguous
+	errOutput := stderr
+	if !strings.Contains(strings.ToLower(errOutput), "multiple") && !strings.Contains(strings.ToLower(errOutput), "ambiguous") {
+		t.Errorf("error should mention multiple matches or ambiguous, got: %s", errOutput)
+	}
+}
