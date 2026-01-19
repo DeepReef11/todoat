@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -24,6 +25,7 @@ import (
 	"todoat/backend"
 	_ "todoat/backend/git" // Register git as detectable backend
 	"todoat/backend/sqlite"
+	_ "todoat/backend/todoist" // Register todoist as detectable backend
 	"todoat/internal/cache"
 	"todoat/internal/config"
 	"todoat/internal/credentials"
@@ -84,6 +86,30 @@ type Config struct {
 type LocalIDBackend interface {
 	GetTaskByLocalID(ctx context.Context, listID string, localID int64) (*backend.Task, error)
 	GetTaskLocalID(ctx context.Context, taskID string) (int64, error)
+}
+
+// colorHexRegex matches valid hex color formats: #RGB, #RRGGBB, RGB, RRGGBB
+var colorHexRegex = regexp.MustCompile(`^#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$`)
+
+// validateAndNormalizeColor validates a hex color string and normalizes it to #RRGGBB format.
+// Returns the normalized color and an error if the input is invalid.
+func validateAndNormalizeColor(color string) (string, error) {
+	if !colorHexRegex.MatchString(color) {
+		return "", fmt.Errorf("invalid color format: %s (expected hex format like #RGB, #RRGGBB, RGB, or RRGGBB)", color)
+	}
+
+	// Remove # if present
+	color = strings.TrimPrefix(color, "#")
+	color = strings.ToUpper(color)
+
+	// Expand 3-char to 6-char format
+	if len(color) == 3 {
+		color = string(color[0]) + string(color[0]) +
+			string(color[1]) + string(color[1]) +
+			string(color[2]) + string(color[2])
+	}
+
+	return "#" + color, nil
 }
 
 // Execute runs the CLI with the given arguments and IO writers
@@ -575,7 +601,7 @@ func newListUpdateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update [name]",
 		Short: "Update a list's properties",
-		Long:  "Update a task list's name or other properties.",
+		Long:  "Update a task list's name, color, or description.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
@@ -590,24 +616,42 @@ func newListUpdateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			defer func() { _ = be.Close() }()
 
 			newName, _ := cmd.Flags().GetString("name")
+			color, _ := cmd.Flags().GetString("color")
+			description, _ := cmd.Flags().GetString("description")
+			descriptionSet := cmd.Flags().Changed("description")
 			jsonOutput, _ := cmd.Flags().GetBool("json")
-			return doListUpdate(context.Background(), be, args[0], newName, cfg, stdout, jsonOutput)
+			return doListUpdate(context.Background(), be, args[0], newName, color, description, descriptionSet, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 	cmd.Flags().String("name", "", "New name for the list")
+	cmd.Flags().String("color", "", "Hex color for the list (e.g., #FF5733, ABC)")
+	cmd.Flags().String("description", "", "Description for the list")
 	return cmd
 }
 
-// doListUpdate updates a list's properties (currently only name)
-func doListUpdate(ctx context.Context, be backend.TaskManager, name, newName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
-	// Validate new name
-	if newName == "" {
+// doListUpdate updates a list's properties (name, color, description)
+func doListUpdate(ctx context.Context, be backend.TaskManager, name, newName, color, description string, descriptionSet bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check that at least one update is requested
+	if newName == "" && color == "" && !descriptionSet {
 		if cfg != nil && cfg.NoPrompt {
 			_, _ = fmt.Fprintln(stdout, ResultError)
 		}
-		return fmt.Errorf("new name is required (use --name flag)")
+		return fmt.Errorf("at least one of --name, --color, or --description is required")
+	}
+
+	// Validate and normalize color if provided
+	var normalizedColor string
+	if color != "" {
+		var err error
+		normalizedColor, err = validateAndNormalizeColor(color)
+		if err != nil {
+			if cfg != nil && cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultError)
+			}
+			return err
+		}
 	}
 
 	// Get all lists for matching and validation
@@ -658,18 +702,29 @@ func doListUpdate(ctx context.Context, be backend.TaskManager, name, newName str
 	}
 
 	// Check if new name already exists (case-insensitive)
-	for _, l := range lists {
-		if l.ID != matchedList.ID && strings.EqualFold(l.Name, newName) {
-			if cfg != nil && cfg.NoPrompt {
-				_, _ = fmt.Fprintln(stdout, ResultError)
+	if newName != "" {
+		for _, l := range lists {
+			if l.ID != matchedList.ID && strings.EqualFold(l.Name, newName) {
+				if cfg != nil && cfg.NoPrompt {
+					_, _ = fmt.Fprintln(stdout, ResultError)
+				}
+				return fmt.Errorf("list '%s' already exists - choose a different name", newName)
 			}
-			return fmt.Errorf("list '%s' already exists - choose a different name", newName)
 		}
 	}
 
-	// Update the list
+	// Update the list properties
 	oldName := matchedList.Name
-	matchedList.Name = newName
+	if newName != "" {
+		matchedList.Name = newName
+	}
+	if normalizedColor != "" {
+		matchedList.Color = normalizedColor
+	}
+	if descriptionSet {
+		matchedList.Description = description
+	}
+
 	updatedList, err := be.UpdateList(ctx, matchedList)
 	if err != nil {
 		return err
@@ -680,20 +735,24 @@ func doListUpdate(ctx context.Context, be backend.TaskManager, name, newName str
 
 	if jsonOutput {
 		type listJSON struct {
-			ID       string `json:"id"`
-			Name     string `json:"name"`
-			OldName  string `json:"old_name"`
-			Color    string `json:"color,omitempty"`
-			Modified string `json:"modified"`
-			Result   string `json:"result"`
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			OldName     string `json:"old_name,omitempty"`
+			Color       string `json:"color,omitempty"`
+			Description string `json:"description,omitempty"`
+			Modified    string `json:"modified"`
+			Result      string `json:"result"`
 		}
 		output := listJSON{
-			ID:       updatedList.ID,
-			Name:     updatedList.Name,
-			OldName:  oldName,
-			Color:    updatedList.Color,
-			Modified: updatedList.Modified.Format("2006-01-02T15:04:05Z"),
-			Result:   "ACTION_COMPLETED",
+			ID:          updatedList.ID,
+			Name:        updatedList.Name,
+			Color:       updatedList.Color,
+			Description: updatedList.Description,
+			Modified:    updatedList.Modified.Format("2006-01-02T15:04:05Z"),
+			Result:      "ACTION_COMPLETED",
+		}
+		if newName != "" && newName != oldName {
+			output.OldName = oldName
 		}
 		jsonBytes, err := json.Marshal(output)
 		if err != nil {
@@ -703,7 +762,8 @@ func doListUpdate(ctx context.Context, be backend.TaskManager, name, newName str
 		return nil
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Renamed list '%s' to '%s'\n", oldName, updatedList.Name)
+	// Build output message
+	_, _ = fmt.Fprintf(stdout, "Updated list '%s'\n", updatedList.Name)
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
@@ -817,6 +877,9 @@ func doListInfo(ctx context.Context, be backend.TaskManager, name string, cfg *C
 	_, _ = fmt.Fprintf(stdout, "ID:    %s\n", list.ID)
 	if list.Color != "" {
 		_, _ = fmt.Fprintf(stdout, "Color: %s\n", list.Color)
+	}
+	if list.Description != "" {
+		_, _ = fmt.Fprintf(stdout, "Description: %s\n", list.Description)
 	}
 	_, _ = fmt.Fprintf(stdout, "Tasks: %d\n", len(tasks))
 
@@ -7163,6 +7226,9 @@ func configToMap(c *config.Config) map[string]interface{} {
 				"enabled": c.Backends.SQLite.Enabled,
 				"path":    c.Backends.SQLite.Path,
 			},
+			"todoist": map[string]interface{}{
+				"enabled": c.Backends.Todoist.Enabled,
+			},
 		},
 		"default_backend":     c.DefaultBackend,
 		"default_view":        c.DefaultView,
@@ -7205,6 +7271,9 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 					"enabled": c.Backends.SQLite.Enabled,
 					"path":    c.Backends.SQLite.Path,
 				},
+				"todoist": map[string]interface{}{
+					"enabled": c.Backends.Todoist.Enabled,
+				},
 			}, nil
 		}
 		switch parts[1] {
@@ -7220,6 +7289,16 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 				return c.Backends.SQLite.Enabled, nil
 			case "path":
 				return c.Backends.SQLite.Path, nil
+			}
+		case "todoist":
+			if len(parts) < 3 {
+				return map[string]interface{}{
+					"enabled": c.Backends.Todoist.Enabled,
+				}, nil
+			}
+			switch parts[2] {
+			case "enabled":
+				return c.Backends.Todoist.Enabled, nil
 			}
 		}
 	case "sync":
@@ -7313,7 +7392,7 @@ func setConfigValue(c *config.Config, key, value string) error {
 
 	switch parts[0] {
 	case "default_backend":
-		validBackends := []string{"sqlite"}
+		validBackends := []string{"sqlite", "todoist"}
 		if !contains(validBackends, value) {
 			return fmt.Errorf("invalid value for default_backend: %s (valid: %s)", value, strings.Join(validBackends, ", "))
 		}
@@ -7359,6 +7438,16 @@ func setConfigValue(c *config.Config, key, value string) error {
 				return nil
 			case "path":
 				c.Backends.SQLite.Path = config.ExpandPath(value)
+				return nil
+			}
+		case "todoist":
+			switch parts[2] {
+			case "enabled":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.todoist.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.Todoist.Enabled = boolVal
 				return nil
 			}
 		}

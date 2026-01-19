@@ -72,6 +72,9 @@ func createHTTPClient() *http.Client {
 
 // Close closes the backend
 func (b *Backend) Close() error {
+	if b.client == nil {
+		return nil
+	}
 	if transport, ok := b.client.Transport.(*http.Transport); ok {
 		transport.CloseIdleConnections()
 	}
@@ -633,5 +636,35 @@ func categoriesToLabels(categories string) []string {
 	return strings.Split(categories, ",")
 }
 
+// =============================================================================
+// DetectableBackend Interface Implementation
+// =============================================================================
+
+// CanDetect checks if the Todoist backend can be used.
+// It returns true if TODOAT_TODOIST_TOKEN environment variable is set.
+func (b *Backend) CanDetect() (bool, error) {
+	// Todoist is available if we have an API token
+	return b.config.APIToken != "", nil
+}
+
+// DetectionInfo returns human-readable information about the Todoist backend.
+func (b *Backend) DetectionInfo() string {
+	return "Todoist API (token from TODOAT_TODOIST_TOKEN)"
+}
+
 // Verify interface compliance at compile time
 var _ backend.TaskManager = (*Backend)(nil)
+var _ backend.DetectableBackend = (*Backend)(nil)
+
+// init registers the todoist backend as detectable
+func init() {
+	// Todoist has priority 50 (higher than sqlite's 100, lower than git's 10)
+	backend.RegisterDetectableWithPriority("todoist", func(workDir string) (backend.DetectableBackend, error) {
+		cfg := ConfigFromEnv()
+		if cfg.APIToken == "" {
+			// Return a backend that will report not available
+			return &Backend{config: cfg}, nil
+		}
+		return New(cfg)
+	}, 50)
+}

@@ -64,6 +64,14 @@ var migrations = []Migration{
 			return err
 		},
 	},
+	{
+		Version: 2,
+		Name:    "add_list_description",
+		Up: func(db *sql.DB) error {
+			_, err := db.Exec("ALTER TABLE task_lists ADD COLUMN description TEXT DEFAULT ''")
+			return err
+		},
+	},
 }
 
 // New creates a new SQLite backend and initializes the database schema
@@ -144,7 +152,7 @@ func (b *Backend) GetSchemaVersion() (int, error) {
 
 // GetLists returns all active (non-deleted) task lists
 func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
-	rows, err := b.db.QueryContext(ctx, "SELECT id, name, color, modified FROM task_lists WHERE deleted_at IS NULL")
+	rows, err := b.db.QueryContext(ctx, "SELECT id, name, color, description, modified FROM task_lists WHERE deleted_at IS NULL")
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +162,7 @@ func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
 	for rows.Next() {
 		var l backend.List
 		var modifiedStr string
-		if err := rows.Scan(&l.ID, &l.Name, &l.Color, &modifiedStr); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Color, &l.Description, &modifiedStr); err != nil {
 			return nil, err
 		}
 		l.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr)
@@ -172,9 +180,9 @@ func (b *Backend) GetList(ctx context.Context, listID string) (*backend.List, er
 	var l backend.List
 	var modifiedStr string
 	err := b.db.QueryRowContext(ctx,
-		"SELECT id, name, color, modified FROM task_lists WHERE id = ? AND deleted_at IS NULL",
+		"SELECT id, name, color, description, modified FROM task_lists WHERE id = ? AND deleted_at IS NULL",
 		listID,
-	).Scan(&l.ID, &l.Name, &l.Color, &modifiedStr)
+	).Scan(&l.ID, &l.Name, &l.Color, &l.Description, &modifiedStr)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -192,9 +200,9 @@ func (b *Backend) GetListByName(ctx context.Context, name string) (*backend.List
 	var l backend.List
 	var modifiedStr string
 	err := b.db.QueryRowContext(ctx,
-		"SELECT id, name, color, modified FROM task_lists WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL",
+		"SELECT id, name, color, description, modified FROM task_lists WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL",
 		name,
-	).Scan(&l.ID, &l.Name, &l.Color, &modifiedStr)
+	).Scan(&l.ID, &l.Name, &l.Color, &l.Description, &modifiedStr)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -214,7 +222,7 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	nowStr := now.Format(time.RFC3339Nano)
 
 	_, err := b.db.ExecContext(ctx,
-		"INSERT INTO task_lists (id, name, color, modified) VALUES (?, ?, '', ?)",
+		"INSERT INTO task_lists (id, name, color, description, modified) VALUES (?, ?, '', '', ?)",
 		id, name, nowStr,
 	)
 	if err != nil {
@@ -222,10 +230,11 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	}
 
 	return &backend.List{
-		ID:       id,
-		Name:     name,
-		Color:    "",
-		Modified: now,
+		ID:          id,
+		Name:        name,
+		Color:       "",
+		Description: "",
+		Modified:    now,
 	}, nil
 }
 
@@ -235,8 +244,8 @@ func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.
 	nowStr := now.Format(time.RFC3339Nano)
 
 	_, err := b.db.ExecContext(ctx,
-		"UPDATE task_lists SET name = ?, color = ?, modified = ? WHERE id = ? AND deleted_at IS NULL",
-		list.Name, list.Color, nowStr, list.ID,
+		"UPDATE task_lists SET name = ?, color = ?, description = ?, modified = ? WHERE id = ? AND deleted_at IS NULL",
+		list.Name, list.Color, list.Description, nowStr, list.ID,
 	)
 	if err != nil {
 		return nil, err
@@ -255,7 +264,7 @@ func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 
 // GetDeletedLists returns all deleted (trashed) task lists
 func (b *Backend) GetDeletedLists(ctx context.Context) ([]backend.List, error) {
-	rows, err := b.db.QueryContext(ctx, "SELECT id, name, color, modified, deleted_at FROM task_lists WHERE deleted_at IS NOT NULL")
+	rows, err := b.db.QueryContext(ctx, "SELECT id, name, color, description, modified, deleted_at FROM task_lists WHERE deleted_at IS NOT NULL")
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +275,7 @@ func (b *Backend) GetDeletedLists(ctx context.Context) ([]backend.List, error) {
 		var l backend.List
 		var modifiedStr string
 		var deletedAtStr sql.NullString
-		if err := rows.Scan(&l.ID, &l.Name, &l.Color, &modifiedStr, &deletedAtStr); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Color, &l.Description, &modifiedStr, &deletedAtStr); err != nil {
 			return nil, err
 		}
 		l.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr)
@@ -289,9 +298,9 @@ func (b *Backend) GetDeletedListByName(ctx context.Context, name string) (*backe
 	var modifiedStr string
 	var deletedAtStr sql.NullString
 	err := b.db.QueryRowContext(ctx,
-		"SELECT id, name, color, modified, deleted_at FROM task_lists WHERE LOWER(name) = LOWER(?) AND deleted_at IS NOT NULL",
+		"SELECT id, name, color, description, modified, deleted_at FROM task_lists WHERE LOWER(name) = LOWER(?) AND deleted_at IS NOT NULL",
 		name,
-	).Scan(&l.ID, &l.Name, &l.Color, &modifiedStr, &deletedAtStr)
+	).Scan(&l.ID, &l.Name, &l.Color, &l.Description, &modifiedStr, &deletedAtStr)
 
 	if err == sql.ErrNoRows {
 		return nil, nil

@@ -37,11 +37,12 @@ const (
 
 // List represents a task list
 type List struct {
-	ID        string
-	Name      string
-	Color     string
-	Modified  time.Time
-	DeletedAt *time.Time // nil if not deleted, timestamp if in trash
+	ID          string
+	Name        string
+	Color       string
+	Description string
+	Modified    time.Time
+	DeletedAt   *time.Time // nil if not deleted, timestamp if in trash
 }
 
 // TaskManager defines the interface for task storage backends

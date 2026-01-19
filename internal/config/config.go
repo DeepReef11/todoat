@@ -39,7 +39,13 @@ type SyncConfig struct {
 
 // BackendsConfig holds configuration for all backends
 type BackendsConfig struct {
-	SQLite SQLiteConfig `yaml:"sqlite"`
+	SQLite  SQLiteConfig  `yaml:"sqlite"`
+	Todoist TodoistConfig `yaml:"todoist"`
+}
+
+// TodoistConfig holds Todoist backend configuration
+type TodoistConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // SQLiteConfig holds SQLite backend configuration
@@ -139,7 +145,7 @@ func (c *Config) Validate() error {
 	}
 
 	// Check default backend
-	validBackends := map[string]bool{"sqlite": true}
+	validBackends := map[string]bool{"sqlite": true, "todoist": true}
 	if !validBackends[c.DefaultBackend] {
 		return fmt.Errorf("unknown default_backend: %q", c.DefaultBackend)
 	}
@@ -149,6 +155,10 @@ func (c *Config) Validate() error {
 	case "sqlite":
 		if !c.Backends.SQLite.Enabled {
 			return errors.New("default backend 'sqlite' is not enabled in backends configuration")
+		}
+	case "todoist":
+		if !c.Backends.Todoist.Enabled {
+			return errors.New("default backend 'todoist' is not enabled in backends configuration")
 		}
 	}
 

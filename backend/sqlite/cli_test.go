@@ -3508,3 +3508,221 @@ func TestListRenameMultipleMatchesSQLiteCLI(t *testing.T) {
 		t.Errorf("error should mention multiple matches or ambiguous, got: %s", errOutput)
 	}
 }
+
+// =============================================================================
+// List Color and Description Update Tests (052)
+// =============================================================================
+
+// TestListUpdateColor verifies that `todoat list update "Work" --color "#FF5733"` sets list color
+func TestListUpdateColorSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "ColorTestList")
+
+	// Update the list color
+	stdout := cli.MustExecute("-y", "list", "update", "ColorTestList", "--color", "#FF5733")
+
+	testutil.AssertContains(t, stdout, "ColorTestList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the color was set by checking list info
+	stdout = cli.MustExecute("-y", "list", "info", "ColorTestList")
+
+	testutil.AssertContains(t, stdout, "#FF5733")
+}
+
+// TestListUpdateDescription verifies that `todoat list update "Work" --description "Work tasks"` sets description
+func TestListUpdateDescriptionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "DescTestList")
+
+	// Update the list description
+	stdout := cli.MustExecute("-y", "list", "update", "DescTestList", "--description", "Work-related tasks and projects")
+
+	testutil.AssertContains(t, stdout, "DescTestList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the description was set by checking list info
+	stdout = cli.MustExecute("-y", "list", "info", "DescTestList")
+
+	testutil.AssertContains(t, stdout, "Work-related tasks and projects")
+}
+
+// TestListUpdateMultiple verifies that `todoat list update "Work" --color "#FF5733" --description "Text"` updates both
+func TestListUpdateMultipleSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "MultiUpdateList")
+
+	// Update both color and description at once
+	stdout := cli.MustExecute("-y", "list", "update", "MultiUpdateList", "--color", "#00FF00", "--description", "Multi-update test")
+
+	testutil.AssertContains(t, stdout, "MultiUpdateList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify both were set
+	stdout = cli.MustExecute("-y", "list", "info", "MultiUpdateList")
+
+	testutil.AssertContains(t, stdout, "#00FF00")
+	testutil.AssertContains(t, stdout, "Multi-update test")
+}
+
+// TestListUpdateColorValidation verifies that invalid hex color returns ERROR with format hint
+func TestListUpdateColorValidationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "ColorValidateList")
+
+	// Try to set invalid color
+	stdout, stderr, exitCode := cli.Execute("-y", "list", "update", "ColorValidateList", "--color", "not-a-color")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+
+	// Error should mention valid format
+	errOutput := stderr
+	if !strings.Contains(strings.ToLower(errOutput), "hex") && !strings.Contains(strings.ToLower(errOutput), "#") {
+		t.Errorf("error should mention hex format, got: %s", errOutput)
+	}
+}
+
+// TestListShowProperties verifies that `todoat list info "Work"` displays all properties (id, name, color, description, task count)
+func TestListShowPropertiesSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and set all properties
+	cli.MustExecute("-y", "list", "create", "ShowPropsTestList")
+	cli.MustExecute("-y", "list", "update", "ShowPropsTestList", "--color", "#AABBCC", "--description", "Test description for show")
+	cli.MustExecute("-y", "ShowPropsTestList", "add", "Task 1")
+	cli.MustExecute("-y", "ShowPropsTestList", "add", "Task 2")
+
+	// Show list info
+	stdout := cli.MustExecute("-y", "list", "info", "ShowPropsTestList")
+
+	// Should show all properties
+	testutil.AssertContains(t, stdout, "ShowPropsTestList")         // Name
+	testutil.AssertContains(t, stdout, "#AABBCC")                   // Color
+	testutil.AssertContains(t, stdout, "Test description for show") // Description
+	testutil.AssertContains(t, stdout, "2")                         // Task count
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestListUpdateJSON verifies that `todoat --json list update "Work" --color "#FF5733"` returns JSON
+func TestListUpdateJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "JSONColorList")
+
+	// Update color with JSON output
+	stdout := cli.MustExecute("-y", "--json", "list", "update", "JSONColorList", "--color", "#DEADBE")
+
+	// Should contain JSON structure with list details
+	testutil.AssertContains(t, stdout, "{")
+	testutil.AssertContains(t, stdout, "}")
+	testutil.AssertContains(t, stdout, "JSONColorList")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+	testutil.AssertContains(t, stdout, "#DEADBE")
+}
+
+// TestListUpdateColorNormalization verifies that color formats are normalized to #RRGGBB
+func TestListUpdateColorNormalizationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Test various valid formats
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"#ABC", "#AABBCC"},    // 3-char with #
+		{"ABC", "#AABBCC"},     // 3-char without #
+		{"#aabbcc", "#AABBCC"}, // lowercase
+		{"aabbcc", "#AABBCC"},  // no # lowercase
+		{"#AABBCC", "#AABBCC"}, // already normalized
+	}
+
+	for i, tc := range testCases {
+		listName := "NormTestList" + strconv.Itoa(i)
+		cli.MustExecute("-y", "list", "create", listName)
+		cli.MustExecute("-y", "list", "update", listName, "--color", tc.input)
+
+		stdout := cli.MustExecute("-y", "list", "info", listName)
+		testutil.AssertContains(t, stdout, tc.expected)
+	}
+}
+
+// TestListUpdateClearDescription verifies that empty description clears the field
+func TestListUpdateClearDescriptionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with description
+	cli.MustExecute("-y", "list", "create", "ClearDescList")
+	cli.MustExecute("-y", "list", "update", "ClearDescList", "--description", "Initial description")
+
+	// Verify description is set
+	stdout := cli.MustExecute("-y", "list", "info", "ClearDescList")
+	testutil.AssertContains(t, stdout, "Initial description")
+
+	// Clear description with empty string
+	cli.MustExecute("-y", "list", "update", "ClearDescList", "--description", "")
+
+	// Verify description is cleared (should not appear in output)
+	stdout = cli.MustExecute("-y", "list", "info", "ClearDescList")
+	testutil.AssertNotContains(t, stdout, "Initial description")
+}
+
+// TestListUpdateColorOnlyNoName verifies color update works without --name flag
+func TestListUpdateColorOnlyNoNameSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "ColorOnlyList")
+
+	// Update only color (no --name flag)
+	stdout := cli.MustExecute("-y", "list", "update", "ColorOnlyList", "--color", "#123456")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify color was set and name unchanged
+	stdout = cli.MustExecute("-y", "list", "info", "ColorOnlyList")
+	testutil.AssertContains(t, stdout, "ColorOnlyList")
+	testutil.AssertContains(t, stdout, "#123456")
+}
+
+// TestListUpdateDescriptionOnlyNoName verifies description update works without --name flag
+func TestListUpdateDescriptionOnlyNoNameSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "DescOnlyList")
+
+	// Update only description (no --name flag)
+	stdout := cli.MustExecute("-y", "list", "update", "DescOnlyList", "--description", "Only updating description")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify description was set and name unchanged
+	stdout = cli.MustExecute("-y", "list", "info", "DescOnlyList")
+	testutil.AssertContains(t, stdout, "DescOnlyList")
+	testutil.AssertContains(t, stdout, "Only updating description")
+}
+
+// TestListUpdateNoChanges verifies that update with no flags returns error
+func TestListUpdateNoChangesSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "NoChangesTestList")
+
+	// Try to update without any flags
+	stdout, _, exitCode := cli.Execute("-y", "list", "update", "NoChangesTestList")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
