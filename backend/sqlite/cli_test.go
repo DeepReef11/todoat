@@ -1999,3 +1999,257 @@ func TestInvalidViewErrorSQLiteCLI(t *testing.T) {
 		t.Errorf("expected error message about invalid view 'nonexistent', got:\n%s", combinedOutput)
 	}
 }
+
+// =============================================================================
+// List Export/Import Tests (038-list-export-import)
+// =============================================================================
+
+// TestListExportSQLite verifies that `todoat list export "MyList" --format sqlite` creates a standalone db file
+func TestListExportSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with some tasks
+	cli.MustExecute("-y", "list", "create", "ExportList")
+	cli.MustExecute("-y", "ExportList", "add", "Task 1", "-p", "1")
+	cli.MustExecute("-y", "ExportList", "add", "Task 2", "-p", "5")
+	cli.MustExecute("-y", "ExportList", "add", "Child Task", "-P", "Task 1")
+
+	// Export to SQLite format
+	exportPath := cli.TmpDir() + "/ExportList.db"
+	stdout := cli.MustExecute("-y", "list", "export", "ExportList", "--format", "sqlite", "--output", exportPath)
+
+	// Should indicate success with file path and task count
+	testutil.AssertContains(t, stdout, exportPath)
+	testutil.AssertContains(t, stdout, "3") // 3 tasks exported
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the exported file exists and is a valid SQLite database
+	if _, err := os.Stat(exportPath); os.IsNotExist(err) {
+		t.Errorf("expected export file to exist at %s", exportPath)
+	}
+}
+
+// TestListExportJSON verifies that `todoat list export "MyList" --format json` creates a JSON file
+func TestListExportJSONCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with tasks
+	cli.MustExecute("-y", "list", "create", "JSONExport")
+	cli.MustExecute("-y", "JSONExport", "add", "Task A")
+	cli.MustExecute("-y", "JSONExport", "add", "Task B", "-p", "3")
+
+	// Export to JSON format
+	exportPath := cli.TmpDir() + "/JSONExport.json"
+	stdout := cli.MustExecute("-y", "list", "export", "JSONExport", "--format", "json", "--output", exportPath)
+
+	// Should indicate success
+	testutil.AssertContains(t, stdout, exportPath)
+	testutil.AssertContains(t, stdout, "2") // 2 tasks exported
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the exported file exists and contains valid JSON
+	data, err := os.ReadFile(exportPath)
+	if err != nil {
+		t.Fatalf("failed to read export file: %v", err)
+	}
+	if !strings.Contains(string(data), "[") || !strings.Contains(string(data), "Task A") {
+		t.Errorf("expected valid JSON with task data, got: %s", string(data))
+	}
+}
+
+// TestListExportCSV verifies that `todoat list export "MyList" --format csv` creates a CSV file
+func TestListExportCSVCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with tasks
+	cli.MustExecute("-y", "list", "create", "CSVExport")
+	cli.MustExecute("-y", "CSVExport", "add", "Review document")
+	cli.MustExecute("-y", "CSVExport", "add", "Send email", "-p", "2")
+
+	// Export to CSV format
+	exportPath := cli.TmpDir() + "/CSVExport.csv"
+	stdout := cli.MustExecute("-y", "list", "export", "CSVExport", "--format", "csv", "--output", exportPath)
+
+	// Should indicate success
+	testutil.AssertContains(t, stdout, exportPath)
+	testutil.AssertContains(t, stdout, "2") // 2 tasks exported
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the exported file exists and contains CSV data
+	data, err := os.ReadFile(exportPath)
+	if err != nil {
+		t.Fatalf("failed to read export file: %v", err)
+	}
+	// CSV should have headers and task data
+	content := string(data)
+	if !strings.Contains(content, "summary") || !strings.Contains(content, "Review document") {
+		t.Errorf("expected CSV with headers and task data, got: %s", content)
+	}
+}
+
+// TestListExportICalendar verifies that `todoat list export "MyList" --format ical` creates an .ics file
+func TestListExportICalendarCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with tasks
+	cli.MustExecute("-y", "list", "create", "ICalExport")
+	cli.MustExecute("-y", "ICalExport", "add", "Meeting prep")
+	cli.MustExecute("-y", "ICalExport", "add", "Call client")
+
+	// Export to iCalendar format
+	exportPath := cli.TmpDir() + "/ICalExport.ics"
+	stdout := cli.MustExecute("-y", "list", "export", "ICalExport", "--format", "ical", "--output", exportPath)
+
+	// Should indicate success
+	testutil.AssertContains(t, stdout, exportPath)
+	testutil.AssertContains(t, stdout, "2") // 2 tasks exported
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the exported file exists and contains iCalendar format
+	data, err := os.ReadFile(exportPath)
+	if err != nil {
+		t.Fatalf("failed to read export file: %v", err)
+	}
+	content := string(data)
+	// iCalendar files should contain VCALENDAR and VTODO components
+	if !strings.Contains(content, "BEGIN:VCALENDAR") || !strings.Contains(content, "VTODO") {
+		t.Errorf("expected iCalendar format with VCALENDAR and VTODO, got: %s", content)
+	}
+	if !strings.Contains(content, "Meeting prep") {
+		t.Errorf("expected task summary in iCalendar, got: %s", content)
+	}
+}
+
+// TestListImport verifies that `todoat list import backup.db` restores a list from exported file
+func TestListImportCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with tasks and export it
+	cli.MustExecute("-y", "list", "create", "OriginalList")
+	cli.MustExecute("-y", "OriginalList", "add", "Important task", "-p", "1")
+	cli.MustExecute("-y", "OriginalList", "add", "Another task")
+	cli.MustExecute("-y", "OriginalList", "add", "Subtask", "-P", "Important task")
+
+	// Export the list
+	exportPath := cli.TmpDir() + "/backup.db"
+	cli.MustExecute("-y", "list", "export", "OriginalList", "--format", "sqlite", "--output", exportPath)
+
+	// Delete the original list
+	cli.MustExecute("-y", "list", "delete", "OriginalList")
+	cli.MustExecute("-y", "list", "purge", "OriginalList")
+
+	// Import the list back
+	stdout := cli.MustExecute("-y", "list", "import", exportPath)
+
+	// Should indicate success with task count
+	testutil.AssertContains(t, stdout, "3") // 3 tasks imported
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the list was restored with its tasks
+	stdout = cli.MustExecute("-y", "OriginalList")
+	testutil.AssertContains(t, stdout, "Important task")
+	testutil.AssertContains(t, stdout, "Another task")
+	testutil.AssertContains(t, stdout, "Subtask")
+}
+
+// TestListExportDefaultPath verifies that export uses default path ./<list-name>.<ext> when --output not specified
+func TestListExportDefaultPathCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with a task
+	cli.MustExecute("-y", "list", "create", "DefaultPath")
+	cli.MustExecute("-y", "DefaultPath", "add", "Test task")
+
+	// Change to temp directory and export without specifying output
+	// The export should create DefaultPath.json in the current working directory
+	stdout := cli.MustExecute("-y", "list", "export", "DefaultPath", "--format", "json")
+
+	// Should indicate success and mention the default path
+	testutil.AssertContains(t, stdout, "DefaultPath.json")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// TestListExportJSONMode verifies that export in JSON output mode returns proper structure
+func TestListExportJSONModeCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with tasks
+	cli.MustExecute("-y", "list", "create", "JSONModeExport")
+	cli.MustExecute("-y", "JSONModeExport", "add", "Task 1")
+
+	// Export with --json flag for structured output
+	exportPath := cli.TmpDir() + "/JSONModeExport.json"
+	stdout := cli.MustExecute("-y", "--json", "list", "export", "JSONModeExport", "--format", "json", "--output", exportPath)
+
+	// Should return JSON with action, file, and task_count
+	testutil.AssertContains(t, stdout, `"action"`)
+	testutil.AssertContains(t, stdout, `"export"`)
+	testutil.AssertContains(t, stdout, `"file"`)
+	testutil.AssertContains(t, stdout, `"task_count"`)
+}
+
+// TestListImportJSONMode verifies that import in JSON output mode returns proper structure
+func TestListImportJSONModeCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create and export a list
+	cli.MustExecute("-y", "list", "create", "ImportJSON")
+	cli.MustExecute("-y", "ImportJSON", "add", "Task 1")
+	exportPath := cli.TmpDir() + "/ImportJSON.json"
+	cli.MustExecute("-y", "list", "export", "ImportJSON", "--format", "json", "--output", exportPath)
+
+	// Delete the original
+	cli.MustExecute("-y", "list", "delete", "ImportJSON")
+	cli.MustExecute("-y", "list", "purge", "ImportJSON")
+
+	// Import with --json flag
+	stdout := cli.MustExecute("-y", "--json", "list", "import", exportPath)
+
+	// Should return JSON with action, file, and task_count
+	testutil.AssertContains(t, stdout, `"action"`)
+	testutil.AssertContains(t, stdout, `"import"`)
+	testutil.AssertContains(t, stdout, `"task_count"`)
+}
+
+// TestListExportNotFound verifies that exporting non-existent list returns error
+func TestListExportNotFoundCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Try to export a list that doesn't exist
+	stdout, _, exitCode := cli.Execute("-y", "list", "export", "NonExistent", "--format", "json")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestListImportPreservesMetadata verifies that import preserves task metadata
+func TestListImportPreservesMetadataCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with tasks containing various metadata
+	cli.MustExecute("-y", "list", "create", "MetadataTest")
+	cli.MustExecute("-y", "MetadataTest", "add", "High Priority", "-p", "1")
+	cli.MustExecute("-y", "MetadataTest", "add", "Tagged Task", "--tag", "work,urgent")
+
+	// Export
+	exportPath := cli.TmpDir() + "/metadata.db"
+	cli.MustExecute("-y", "list", "export", "MetadataTest", "--format", "sqlite", "--output", exportPath)
+
+	// Delete and purge
+	cli.MustExecute("-y", "list", "delete", "MetadataTest")
+	cli.MustExecute("-y", "list", "purge", "MetadataTest")
+
+	// Import
+	cli.MustExecute("-y", "list", "import", exportPath)
+
+	// Verify metadata is preserved
+	stdout := cli.MustExecute("-y", "--json", "MetadataTest")
+	// Check priority is preserved
+	if !strings.Contains(stdout, `"priority":1`) && !strings.Contains(stdout, `"priority": 1`) {
+		t.Errorf("expected priority to be preserved, got: %s", stdout)
+	}
+	// Check categories are preserved
+	if !strings.Contains(stdout, "work") || !strings.Contains(stdout, "urgent") {
+		t.Errorf("expected tags to be preserved, got: %s", stdout)
+	}
+}

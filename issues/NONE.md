@@ -31,8 +31,8 @@
 | `todoat MyList add "Test task"` | PASS |
 | `todoat MyList` (list tasks) | PASS |
 | `todoat MyList update "Test task" -s DONE` | PASS |
-| `todoat MyList complete "Test task"` | PASS |
-| `todoat MyList delete "Test task"` | PASS |
+| `todoat MyList complete "Task2"` | PASS |
+| `todoat MyList delete "Task2"` | PASS |
 
 ### Phase 3: SQLite Backend (With Config)
 | Test | Result |
@@ -42,19 +42,20 @@
 | `todoat list` (list all lists) | PASS |
 | `todoat list create "TestList"` | PASS |
 | `todoat list delete "TestList"` | PASS |
-| `todoat --json MyList` (JSON output) | PASS (valid JSON) |
+| `todoat --json MyList` (JSON output) | PASS (valid JSON verified with jq) |
 | `todoat --json MyList add "JSON test"` | PASS (valid JSON) |
 | `todoat MyList --status=TODO` (filter) | PASS |
 | `todoat MyList --priority=1` (filter) | PASS |
+| `todoat MyList add "Test" -p 5` (priority) | PASS |
+| `todoat MyList add "Test" --due-date 2026-02-01` | PASS |
 
 ### Phase 4: Todoist Backend
 | Test | Result |
 |------|--------|
 | Todoist token available | SKIP (no token set) |
-| `--backend` flag test | PASS (correctly errors: "unknown flag: --backend") |
 | `migrate --help` | PASS (shows backend options) |
 
-**Note**: The Todoist backend exists as a library implementation with integration tests, but is not directly selectable via CLI flags. Backend selection is configured via config file (`default_backend` field) or the `migrate` command for data migration.
+**Note**: The Todoist backend exists as a library implementation but is not directly selectable via CLI flags. Backend selection is configured via config file (`default_backend` field) or the `migrate` command for data migration.
 
 ### Phase 5: Error Handling
 | Test | Result |
@@ -70,12 +71,23 @@
 | Delete non-existent task | PASS (error: "no task found matching") |
 | TUI command in non-TTY | PASS (expected error about TTY) |
 
+### Additional Commands Tested
+| Test | Result |
+|------|--------|
+| `todoat --detect-backend` | PASS (shows sqlite as available) |
+| `todoat credentials --help` | PASS |
+| `todoat view list` | PASS (shows default and all views) |
+| `todoat reminder --help` | PASS |
+| `todoat notification --help` | PASS |
+| `todoat sync --help` | PASS |
+
 ## Notes
 
 1. All error messages are user-friendly with no stack traces or panics
 2. Config and database are automatically created on first use when accessing a list
-3. JSON output is valid and parseable
+3. JSON output is valid and parseable (verified with jq)
 4. The `--backend` flag is not available - backend is configured via config.yaml's `default_backend` field
-5. Todoist backend exists as library code with integration tests but CLI uses config-based backend selection
+5. Todoist backend exists as library code but CLI uses config-based backend selection
 6. TUI command correctly reports error when no TTY available (expected in non-terminal environments)
 7. All exit codes are appropriate (0 for success, 1 for errors)
+8. All subcommands (credentials, view, reminder, notification, sync) have proper help output

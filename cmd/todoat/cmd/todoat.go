@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -269,6 +270,8 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	listCmd.AddCommand(newListDeleteCmd(stdout, cfg))
 	listCmd.AddCommand(newListInfoCmd(stdout, cfg))
 	listCmd.AddCommand(newListTrashCmd(stdout, cfg))
+	listCmd.AddCommand(newListExportCmd(stdout, cfg))
+	listCmd.AddCommand(newListImportCmd(stdout, cfg))
 
 	return listCmd
 }
@@ -818,6 +821,797 @@ func doListPurge(ctx context.Context, be backend.TaskManager, name string, cfg *
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
 	return nil
+}
+
+// newListExportCmd creates the 'list export' subcommand
+func newListExportCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "export [name]",
+		Short: "Export a list to a file",
+		Long:  "Export a task list to a file in various formats (sqlite, json, csv, ical).",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			format, _ := cmd.Flags().GetString("format")
+			output, _ := cmd.Flags().GetString("output")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+
+			return doListExport(context.Background(), be, args[0], format, output, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().String("format", "json", "Export format: sqlite, json, csv, ical")
+	cmd.Flags().String("output", "", "Output file path (default: ./<list-name>.<ext>)")
+
+	return cmd
+}
+
+// doListExport exports a list to a file
+func doListExport(ctx context.Context, be backend.TaskManager, name, format, outputPath string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Find the list by name
+	list, err := be.GetListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return fmt.Errorf("list '%s' not found", name)
+	}
+
+	// Get all tasks for the list
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	// Determine output path
+	if outputPath == "" {
+		ext := format
+		switch format {
+		case "ical":
+			ext = "ics"
+		case "sqlite":
+			ext = "db"
+		}
+		outputPath = fmt.Sprintf("%s.%s", list.Name, ext)
+	}
+
+	// Export based on format
+	var exportErr error
+	switch format {
+	case "sqlite":
+		exportErr = exportSQLite(ctx, list, tasks, outputPath)
+	case "json":
+		exportErr = exportJSON(tasks, outputPath)
+	case "csv":
+		exportErr = exportCSV(tasks, outputPath)
+	case "ical":
+		exportErr = exportICalendar(tasks, outputPath)
+	default:
+		return fmt.Errorf("unsupported export format: %s", format)
+	}
+
+	if exportErr != nil {
+		return exportErr
+	}
+
+	taskCount := len(tasks)
+
+	if jsonOutput {
+		type exportResult struct {
+			Action    string `json:"action"`
+			File      string `json:"file"`
+			TaskCount int    `json:"task_count"`
+		}
+		result := exportResult{
+			Action:    "export",
+			File:      outputPath,
+			TaskCount: taskCount,
+		}
+		jsonBytes, err := json.Marshal(result)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Exported %d tasks to %s\n", taskCount, outputPath)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// exportSQLite exports tasks to a standalone SQLite database
+func exportSQLite(ctx context.Context, list *backend.List, tasks []backend.Task, outputPath string) error {
+	// Remove existing file if any
+	_ = os.Remove(outputPath)
+
+	// Create new database
+	db, err := sql.Open("sqlite", outputPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+
+	// Create schema
+	schema := `
+		CREATE TABLE IF NOT EXISTS task_lists (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			color TEXT DEFAULT '',
+			modified TEXT NOT NULL,
+			deleted_at TEXT
+		);
+
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			list_id TEXT NOT NULL,
+			summary TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
+			priority INTEGER DEFAULT 0,
+			due_date TEXT,
+			start_date TEXT,
+			completed TEXT,
+			created TEXT NOT NULL,
+			modified TEXT NOT NULL,
+			parent_id TEXT DEFAULT '',
+			categories TEXT DEFAULT '',
+			FOREIGN KEY (list_id) REFERENCES task_lists(id) ON DELETE CASCADE
+		);
+	`
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Insert list
+	_, err = db.ExecContext(ctx, `INSERT INTO task_lists (id, name, color, modified) VALUES (?, ?, ?, ?)`,
+		list.ID, list.Name, list.Color, list.Modified.Format(time.RFC3339Nano))
+	if err != nil {
+		return err
+	}
+
+	// Insert tasks
+	for _, task := range tasks {
+		var dueDate, startDate, completed *string
+		if task.DueDate != nil {
+			s := task.DueDate.Format(time.RFC3339Nano)
+			dueDate = &s
+		}
+		if task.StartDate != nil {
+			s := task.StartDate.Format(time.RFC3339Nano)
+			startDate = &s
+		}
+		if task.Completed != nil {
+			s := task.Completed.Format(time.RFC3339Nano)
+			completed = &s
+		}
+
+		_, err = db.ExecContext(ctx, `INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			task.ID, task.ListID, task.Summary, task.Description, string(task.Status), task.Priority,
+			dueDate, startDate, completed,
+			task.Created.Format(time.RFC3339Nano), task.Modified.Format(time.RFC3339Nano),
+			task.ParentID, task.Categories)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// exportJSON exports tasks to a JSON file
+func exportJSON(tasks []backend.Task, outputPath string) error {
+	type taskJSON struct {
+		ID          string     `json:"id"`
+		Summary     string     `json:"summary"`
+		Description string     `json:"description,omitempty"`
+		Status      string     `json:"status"`
+		Priority    int        `json:"priority"`
+		DueDate     *time.Time `json:"due_date,omitempty"`
+		StartDate   *time.Time `json:"start_date,omitempty"`
+		Completed   *time.Time `json:"completed,omitempty"`
+		Created     time.Time  `json:"created"`
+		Modified    time.Time  `json:"modified"`
+		ListID      string     `json:"list_id"`
+		ParentID    string     `json:"parent_id,omitempty"`
+		Categories  string     `json:"categories,omitempty"`
+	}
+
+	output := make([]taskJSON, len(tasks))
+	for i, task := range tasks {
+		output[i] = taskJSON{
+			ID:          task.ID,
+			Summary:     task.Summary,
+			Description: task.Description,
+			Status:      string(task.Status),
+			Priority:    task.Priority,
+			DueDate:     task.DueDate,
+			StartDate:   task.StartDate,
+			Completed:   task.Completed,
+			Created:     task.Created,
+			Modified:    task.Modified,
+			ListID:      task.ListID,
+			ParentID:    task.ParentID,
+			Categories:  task.Categories,
+		}
+	}
+
+	data, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(outputPath, data, 0644)
+}
+
+// exportCSV exports tasks to a CSV file
+func exportCSV(tasks []backend.Task, outputPath string) error {
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{"id", "summary", "description", "status", "priority", "due_date", "start_date", "completed", "created", "modified", "list_id", "parent_id", "categories"}
+	if err := writer.Write(header); err != nil {
+		return err
+	}
+
+	// Write tasks
+	for _, task := range tasks {
+		var dueDate, startDate, completed string
+		if task.DueDate != nil {
+			dueDate = task.DueDate.Format(time.RFC3339)
+		}
+		if task.StartDate != nil {
+			startDate = task.StartDate.Format(time.RFC3339)
+		}
+		if task.Completed != nil {
+			completed = task.Completed.Format(time.RFC3339)
+		}
+
+		row := []string{
+			task.ID,
+			task.Summary,
+			task.Description,
+			string(task.Status),
+			strconv.Itoa(task.Priority),
+			dueDate,
+			startDate,
+			completed,
+			task.Created.Format(time.RFC3339),
+			task.Modified.Format(time.RFC3339),
+			task.ListID,
+			task.ParentID,
+			task.Categories,
+		}
+		if err := writer.Write(row); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// exportICalendar exports tasks to an iCalendar file
+func exportICalendar(tasks []backend.Task, outputPath string) error {
+	const iCalDateFormat = "20060102T150405Z"
+
+	var lines []string
+	lines = append(lines, "BEGIN:VCALENDAR")
+	lines = append(lines, "VERSION:2.0")
+	lines = append(lines, "PRODID:-//todoat//todoat//EN")
+
+	for _, task := range tasks {
+		lines = append(lines, "BEGIN:VTODO")
+		lines = append(lines, fmt.Sprintf("UID:%s", task.ID))
+		lines = append(lines, fmt.Sprintf("DTSTAMP:%s", time.Now().UTC().Format(iCalDateFormat)))
+
+		if task.Summary != "" {
+			lines = append(lines, fmt.Sprintf("SUMMARY:%s", task.Summary))
+		}
+		if task.Description != "" {
+			lines = append(lines, fmt.Sprintf("DESCRIPTION:%s", task.Description))
+		}
+
+		// Convert status
+		status := "NEEDS-ACTION"
+		switch task.Status {
+		case backend.StatusCompleted:
+			status = "COMPLETED"
+		case backend.StatusInProgress:
+			status = "IN-PROGRESS"
+		case backend.StatusCancelled:
+			status = "CANCELLED"
+		}
+		lines = append(lines, fmt.Sprintf("STATUS:%s", status))
+
+		if task.Priority > 0 {
+			lines = append(lines, fmt.Sprintf("PRIORITY:%d", task.Priority))
+		}
+		if task.Categories != "" {
+			lines = append(lines, fmt.Sprintf("CATEGORIES:%s", task.Categories))
+		}
+		if task.DueDate != nil {
+			lines = append(lines, fmt.Sprintf("DUE:%s", task.DueDate.UTC().Format(iCalDateFormat)))
+		}
+		if task.StartDate != nil {
+			lines = append(lines, fmt.Sprintf("DTSTART:%s", task.StartDate.UTC().Format(iCalDateFormat)))
+		}
+		if !task.Created.IsZero() {
+			lines = append(lines, fmt.Sprintf("CREATED:%s", task.Created.UTC().Format(iCalDateFormat)))
+		}
+		if !task.Modified.IsZero() {
+			lines = append(lines, fmt.Sprintf("LAST-MODIFIED:%s", task.Modified.UTC().Format(iCalDateFormat)))
+		}
+		if task.Completed != nil {
+			lines = append(lines, fmt.Sprintf("COMPLETED:%s", task.Completed.UTC().Format(iCalDateFormat)))
+		}
+
+		lines = append(lines, "END:VTODO")
+	}
+
+	lines = append(lines, "END:VCALENDAR")
+
+	return os.WriteFile(outputPath, []byte(strings.Join(lines, "\r\n")), 0644)
+}
+
+// newListImportCmd creates the 'list import' subcommand
+func newListImportCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "import [file]",
+		Short: "Import a list from a file",
+		Long:  "Import a task list from a file. Supported formats: sqlite, json, csv, ical.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			format, _ := cmd.Flags().GetString("format")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+
+			return doListImport(context.Background(), be, args[0], format, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().String("format", "", "Import format (auto-detect from extension if not specified)")
+
+	return cmd
+}
+
+// doListImport imports a list from a file
+func doListImport(ctx context.Context, be backend.TaskManager, inputPath, format string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Auto-detect format from extension if not specified
+	if format == "" {
+		ext := strings.ToLower(filepath.Ext(inputPath))
+		switch ext {
+		case ".db", ".sqlite", ".sqlite3":
+			format = "sqlite"
+		case ".json":
+			format = "json"
+		case ".csv":
+			format = "csv"
+		case ".ics", ".ical":
+			format = "ical"
+		default:
+			return fmt.Errorf("cannot detect format from extension '%s', please specify --format", ext)
+		}
+	}
+
+	var list *backend.List
+	var tasks []backend.Task
+	var importErr error
+
+	switch format {
+	case "sqlite":
+		list, tasks, importErr = importSQLite(ctx, inputPath)
+	case "json":
+		list, tasks, importErr = importJSON(inputPath)
+	case "csv":
+		list, tasks, importErr = importCSV(inputPath)
+	case "ical":
+		list, tasks, importErr = importICalendar(inputPath)
+	default:
+		return fmt.Errorf("unsupported import format: %s", format)
+	}
+
+	if importErr != nil {
+		return importErr
+	}
+
+	// Create the list in the backend
+	newList, err := be.CreateList(ctx, list.Name)
+	if err != nil {
+		return fmt.Errorf("failed to create list: %w", err)
+	}
+
+	// Build a map of old task IDs to new task IDs for parent relationships
+	idMap := make(map[string]string)
+
+	// First pass: create tasks without parent relationships (to get new IDs)
+	createdTasks := make(map[string]*backend.Task)
+	for _, task := range tasks {
+		newTask := task
+		newTask.ListID = newList.ID
+		oldID := task.ID
+		newTask.ParentID = "" // Clear parent, will set in second pass
+
+		created, err := be.CreateTask(ctx, newList.ID, &newTask)
+		if err != nil {
+			return fmt.Errorf("failed to create task '%s': %w", task.Summary, err)
+		}
+		idMap[oldID] = created.ID
+		createdTasks[oldID] = created
+	}
+
+	// Second pass: update parent relationships
+	for _, task := range tasks {
+		if task.ParentID != "" {
+			if newParentID, ok := idMap[task.ParentID]; ok {
+				newTaskID := idMap[task.ID]
+				createdTask := createdTasks[task.ID]
+				createdTask.ParentID = newParentID
+				_, err := be.UpdateTask(ctx, newList.ID, createdTask)
+				if err != nil {
+					return fmt.Errorf("failed to update parent for task '%s': %w", task.Summary, err)
+				}
+				_ = newTaskID // suppress unused variable warning
+			}
+		}
+	}
+
+	// Invalidate list cache
+	invalidateListCache(cfg)
+
+	taskCount := len(tasks)
+
+	if jsonOutput {
+		type importResult struct {
+			Action    string `json:"action"`
+			File      string `json:"file"`
+			TaskCount int    `json:"task_count"`
+		}
+		result := importResult{
+			Action:    "import",
+			File:      inputPath,
+			TaskCount: taskCount,
+		}
+		jsonBytes, err := json.Marshal(result)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Imported %d tasks from %s\n", taskCount, inputPath)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// importSQLite imports a list from a SQLite database
+func importSQLite(ctx context.Context, inputPath string) (*backend.List, []backend.Task, error) {
+	db, err := sql.Open("sqlite", inputPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = db.Close() }()
+
+	// Read list
+	var list backend.List
+	var modifiedStr string
+	err = db.QueryRowContext(ctx, "SELECT id, name, color, modified FROM task_lists LIMIT 1").Scan(
+		&list.ID, &list.Name, &list.Color, &modifiedStr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read list: %w", err)
+	}
+	list.Modified, _ = time.Parse(time.RFC3339Nano, modifiedStr)
+
+	// Read tasks
+	rows, err := db.QueryContext(ctx, `SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories FROM tasks`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var tasks []backend.Task
+	for rows.Next() {
+		var task backend.Task
+		var dueDate, startDate, completed, created, modified sql.NullString
+		err := rows.Scan(&task.ID, &task.ListID, &task.Summary, &task.Description, &task.Status, &task.Priority,
+			&dueDate, &startDate, &completed, &created, &modified, &task.ParentID, &task.Categories)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if dueDate.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, dueDate.String)
+			task.DueDate = &t
+		}
+		if startDate.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, startDate.String)
+			task.StartDate = &t
+		}
+		if completed.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, completed.String)
+			task.Completed = &t
+		}
+		if created.Valid {
+			task.Created, _ = time.Parse(time.RFC3339Nano, created.String)
+		}
+		if modified.Valid {
+			task.Modified, _ = time.Parse(time.RFC3339Nano, modified.String)
+		}
+
+		tasks = append(tasks, task)
+	}
+
+	return &list, tasks, nil
+}
+
+// importJSON imports a list from a JSON file
+func importJSON(inputPath string) (*backend.List, []backend.Task, error) {
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	type taskJSON struct {
+		ID          string     `json:"id"`
+		Summary     string     `json:"summary"`
+		Description string     `json:"description"`
+		Status      string     `json:"status"`
+		Priority    int        `json:"priority"`
+		DueDate     *time.Time `json:"due_date"`
+		StartDate   *time.Time `json:"start_date"`
+		Completed   *time.Time `json:"completed"`
+		Created     time.Time  `json:"created"`
+		Modified    time.Time  `json:"modified"`
+		ListID      string     `json:"list_id"`
+		ParentID    string     `json:"parent_id"`
+		Categories  string     `json:"categories"`
+	}
+
+	var taskList []taskJSON
+	if err := json.Unmarshal(data, &taskList); err != nil {
+		return nil, nil, err
+	}
+
+	// Extract list name from filename
+	listName := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
+
+	tasks := make([]backend.Task, len(taskList))
+	for i, t := range taskList {
+		tasks[i] = backend.Task{
+			ID:          t.ID,
+			Summary:     t.Summary,
+			Description: t.Description,
+			Status:      backend.TaskStatus(t.Status),
+			Priority:    t.Priority,
+			DueDate:     t.DueDate,
+			StartDate:   t.StartDate,
+			Completed:   t.Completed,
+			Created:     t.Created,
+			Modified:    t.Modified,
+			ListID:      t.ListID,
+			ParentID:    t.ParentID,
+			Categories:  t.Categories,
+		}
+	}
+
+	list := &backend.List{
+		Name:     listName,
+		Modified: time.Now(),
+	}
+
+	return list, tasks, nil
+}
+
+// importCSV imports a list from a CSV file
+func importCSV(inputPath string) (*backend.List, []backend.Task, error) {
+	file, err := os.Open(inputPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = file.Close() }()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(records) < 2 {
+		return nil, nil, fmt.Errorf("CSV file is empty or has no data rows")
+	}
+
+	// Skip header row
+	records = records[1:]
+
+	tasks := make([]backend.Task, 0, len(records))
+	for _, record := range records {
+		if len(record) < 13 {
+			continue
+		}
+
+		priority, _ := strconv.Atoi(record[4])
+
+		task := backend.Task{
+			ID:          record[0],
+			Summary:     record[1],
+			Description: record[2],
+			Status:      backend.TaskStatus(record[3]),
+			Priority:    priority,
+			ListID:      record[10],
+			ParentID:    record[11],
+			Categories:  record[12],
+		}
+
+		if record[5] != "" {
+			t, _ := time.Parse(time.RFC3339, record[5])
+			task.DueDate = &t
+		}
+		if record[6] != "" {
+			t, _ := time.Parse(time.RFC3339, record[6])
+			task.StartDate = &t
+		}
+		if record[7] != "" {
+			t, _ := time.Parse(time.RFC3339, record[7])
+			task.Completed = &t
+		}
+		if record[8] != "" {
+			task.Created, _ = time.Parse(time.RFC3339, record[8])
+		}
+		if record[9] != "" {
+			task.Modified, _ = time.Parse(time.RFC3339, record[9])
+		}
+
+		tasks = append(tasks, task)
+	}
+
+	// Extract list name from filename
+	listName := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
+	list := &backend.List{
+		Name:     listName,
+		Modified: time.Now(),
+	}
+
+	return list, tasks, nil
+}
+
+// importICalendar imports a list from an iCalendar file
+func importICalendar(inputPath string) (*backend.List, []backend.Task, error) {
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	const iCalDateFormat = "20060102T150405Z"
+
+	content := string(data)
+	var tasks []backend.Task
+
+	// Parse VTODOs
+	vtodoStart := 0
+	for {
+		start := strings.Index(content[vtodoStart:], "BEGIN:VTODO")
+		if start == -1 {
+			break
+		}
+		start += vtodoStart
+		end := strings.Index(content[start:], "END:VTODO")
+		if end == -1 {
+			break
+		}
+		end += start + len("END:VTODO")
+
+		vtodo := content[start:end]
+		task := parseVTODOContent(vtodo, iCalDateFormat)
+		if task.ID != "" || task.Summary != "" {
+			tasks = append(tasks, task)
+		}
+
+		vtodoStart = end
+	}
+
+	// Extract list name from filename
+	listName := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
+	list := &backend.List{
+		Name:     listName,
+		Modified: time.Now(),
+	}
+
+	return list, tasks, nil
+}
+
+// parseVTODOContent parses a VTODO block into a Task
+func parseVTODOContent(vtodo, dateFormat string) backend.Task {
+	var task backend.Task
+
+	lines := strings.Split(vtodo, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		line = strings.TrimSuffix(line, "\r")
+
+		if strings.HasPrefix(line, "UID:") {
+			task.ID = strings.TrimPrefix(line, "UID:")
+		} else if strings.HasPrefix(line, "SUMMARY:") {
+			task.Summary = strings.TrimPrefix(line, "SUMMARY:")
+		} else if strings.HasPrefix(line, "DESCRIPTION:") {
+			task.Description = strings.TrimPrefix(line, "DESCRIPTION:")
+		} else if strings.HasPrefix(line, "STATUS:") {
+			status := strings.TrimPrefix(line, "STATUS:")
+			switch status {
+			case "COMPLETED":
+				task.Status = backend.StatusCompleted
+			case "IN-PROGRESS":
+				task.Status = backend.StatusInProgress
+			case "CANCELLED":
+				task.Status = backend.StatusCancelled
+			default:
+				task.Status = backend.StatusNeedsAction
+			}
+		} else if strings.HasPrefix(line, "PRIORITY:") {
+			task.Priority, _ = strconv.Atoi(strings.TrimPrefix(line, "PRIORITY:"))
+		} else if strings.HasPrefix(line, "CATEGORIES:") {
+			task.Categories = strings.TrimPrefix(line, "CATEGORIES:")
+		} else if strings.HasPrefix(line, "DUE:") {
+			if t, err := time.Parse(dateFormat, strings.TrimPrefix(line, "DUE:")); err == nil {
+				task.DueDate = &t
+			}
+		} else if strings.HasPrefix(line, "DTSTART:") {
+			if t, err := time.Parse(dateFormat, strings.TrimPrefix(line, "DTSTART:")); err == nil {
+				task.StartDate = &t
+			}
+		} else if strings.HasPrefix(line, "CREATED:") {
+			if t, err := time.Parse(dateFormat, strings.TrimPrefix(line, "CREATED:")); err == nil {
+				task.Created = t
+			}
+		} else if strings.HasPrefix(line, "LAST-MODIFIED:") {
+			if t, err := time.Parse(dateFormat, strings.TrimPrefix(line, "LAST-MODIFIED:")); err == nil {
+				task.Modified = t
+			}
+		} else if strings.HasPrefix(line, "COMPLETED:") {
+			if t, err := time.Parse(dateFormat, strings.TrimPrefix(line, "COMPLETED:")); err == nil {
+				task.Completed = &t
+			}
+		}
+	}
+
+	return task
 }
 
 // getDefaultDBPath returns the default database path following XDG spec
