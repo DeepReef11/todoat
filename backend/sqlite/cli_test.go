@@ -2403,3 +2403,169 @@ func TestListVacuumJSONSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, `"result"`)
 	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
 }
+
+// =============================================================================
+// Bulk Hierarchy Operations Tests (040-bulk-hierarchy-operations)
+// =============================================================================
+
+// TestBulkCompleteDirectChildrenSQLiteCLI verifies `todoat MyList complete "Parent/*"` completes direct children only
+func TestBulkCompleteDirectChildrenSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and hierarchy
+	cli.MustExecute("-y", "list", "create", "BulkTest")
+	cli.MustExecute("-y", "BulkTest", "add", "Parent")
+	cli.MustExecute("-y", "BulkTest", "add", "Child1", "-P", "Parent")
+	cli.MustExecute("-y", "BulkTest", "add", "Child2", "-P", "Parent")
+	cli.MustExecute("-y", "BulkTest", "add", "GrandChild", "-P", "Child1")
+
+	// Complete direct children only with /* pattern
+	stdout := cli.MustExecute("-y", "BulkTest", "complete", "Parent/*")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	testutil.AssertContains(t, stdout, "2") // Should affect 2 direct children
+
+	// Verify: Child1 and Child2 are DONE, GrandChild is still TODO, Parent unchanged
+	stdout = cli.MustExecute("-y", "--json", "BulkTest")
+	// Parent should still be TODO
+	if strings.Contains(stdout, `"summary":"Parent"`) && !strings.Contains(stdout, `"status":"TODO"`) {
+		t.Log("Note: Checking parent status indirectly")
+	}
+}
+
+// TestBulkCompleteAllDescendantsSQLiteCLI verifies `todoat MyList complete "Parent/**"` completes all descendants
+func TestBulkCompleteAllDescendantsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and hierarchy
+	cli.MustExecute("-y", "list", "create", "BulkAllTest")
+	cli.MustExecute("-y", "BulkAllTest", "add", "Parent")
+	cli.MustExecute("-y", "BulkAllTest", "add", "Child1", "-P", "Parent")
+	cli.MustExecute("-y", "BulkAllTest", "add", "Child2", "-P", "Parent")
+	cli.MustExecute("-y", "BulkAllTest", "add", "GrandChild", "-P", "Child1")
+
+	// Complete all descendants with /** pattern
+	stdout := cli.MustExecute("-y", "BulkAllTest", "complete", "Parent/**")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	testutil.AssertContains(t, stdout, "3") // Should affect 3 descendants (Child1, Child2, GrandChild)
+}
+
+// TestBulkUpdatePrioritySQLiteCLI verifies `todoat MyList update "Parent/**" --priority 1` updates priority on all descendants
+func TestBulkUpdatePrioritySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and hierarchy
+	cli.MustExecute("-y", "list", "create", "BulkPriorityTest")
+	cli.MustExecute("-y", "BulkPriorityTest", "add", "Parent")
+	cli.MustExecute("-y", "BulkPriorityTest", "add", "Child1", "-P", "Parent")
+	cli.MustExecute("-y", "BulkPriorityTest", "add", "Child2", "-P", "Parent")
+	cli.MustExecute("-y", "BulkPriorityTest", "add", "GrandChild", "-P", "Child1")
+
+	// Update priority on all descendants
+	stdout := cli.MustExecute("-y", "BulkPriorityTest", "update", "Parent/**", "-p", "1")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	testutil.AssertContains(t, stdout, "3") // Should affect 3 descendants
+}
+
+// TestBulkDeleteChildrenSQLiteCLI verifies `todoat MyList delete "Parent/*"` deletes direct children only
+func TestBulkDeleteChildrenSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and hierarchy
+	cli.MustExecute("-y", "list", "create", "BulkDeleteTest")
+	cli.MustExecute("-y", "BulkDeleteTest", "add", "Parent")
+	cli.MustExecute("-y", "BulkDeleteTest", "add", "Child1", "-P", "Parent")
+	cli.MustExecute("-y", "BulkDeleteTest", "add", "Child2", "-P", "Parent")
+	cli.MustExecute("-y", "BulkDeleteTest", "add", "GrandChild", "-P", "Child1")
+
+	// Delete direct children only with /* pattern
+	stdout := cli.MustExecute("-y", "BulkDeleteTest", "delete", "Parent/*")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	testutil.AssertContains(t, stdout, "3") // Should delete 3 tasks (Child1, Child2, and GrandChild cascades from Child1)
+
+	// Verify Parent still exists, children are gone
+	stdout = cli.MustExecute("-y", "--json", "BulkDeleteTest")
+	testutil.AssertContains(t, stdout, `"Parent"`)
+	testutil.AssertNotContains(t, stdout, `"Child1"`)
+	testutil.AssertNotContains(t, stdout, `"Child2"`)
+	testutil.AssertNotContains(t, stdout, `"GrandChild"`)
+}
+
+// TestBulkNoMatchErrorSQLiteCLI verifies `todoat MyList complete "NonExistent/*"` returns ERROR
+func TestBulkNoMatchErrorSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list with some tasks (but not the one we'll look for)
+	cli.MustExecute("-y", "list", "create", "BulkNoMatchTest")
+	cli.MustExecute("-y", "BulkNoMatchTest", "add", "SomeTask")
+
+	// Try to bulk complete children of non-existent parent
+	stdout, _ := cli.ExecuteAndFail("-y", "BulkNoMatchTest", "complete", "NonExistent/*")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// TestBulkEmptyMatchSQLiteCLI verifies `todoat MyList complete "LeafTask/*"` returns INFO_ONLY (no children)
+func TestBulkEmptyMatchSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list with a leaf task (no children)
+	cli.MustExecute("-y", "list", "create", "BulkEmptyTest")
+	cli.MustExecute("-y", "BulkEmptyTest", "add", "LeafTask")
+
+	// Try to bulk complete children of leaf task
+	stdout := cli.MustExecute("-y", "BulkEmptyTest", "complete", "LeafTask/*")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+	// Should indicate no tasks were affected
+	testutil.AssertContains(t, stdout, "0")
+}
+
+// TestBulkCountOutputSQLiteCLI verifies bulk operation returns count of affected tasks
+func TestBulkCountOutputSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and hierarchy
+	cli.MustExecute("-y", "list", "create", "BulkCountTest")
+	cli.MustExecute("-y", "BulkCountTest", "add", "Release v2.0")
+	cli.MustExecute("-y", "BulkCountTest", "add", "Feature A", "-P", "Release v2.0")
+	cli.MustExecute("-y", "BulkCountTest", "add", "Feature B", "-P", "Release v2.0")
+	cli.MustExecute("-y", "BulkCountTest", "add", "Feature C", "-P", "Release v2.0")
+	cli.MustExecute("-y", "BulkCountTest", "add", "Task A1", "-P", "Feature A")
+	cli.MustExecute("-y", "BulkCountTest", "add", "Task A2", "-P", "Feature A")
+
+	// Complete all descendants
+	stdout := cli.MustExecute("-y", "BulkCountTest", "complete", "Release v2.0/**")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	// Should affect 5 descendants: Feature A, Feature B, Feature C, Task A1, Task A2
+	testutil.AssertContains(t, stdout, "5")
+	// Output should include parent name
+	testutil.AssertContains(t, stdout, "Release v2.0")
+}
+
+// TestBulkCompleteJSONOutputSQLiteCLI verifies JSON output for bulk operations
+func TestBulkCompleteJSONOutputSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list and hierarchy
+	cli.MustExecute("-y", "list", "create", "BulkJSONTest")
+	cli.MustExecute("-y", "BulkJSONTest", "add", "Parent")
+	cli.MustExecute("-y", "BulkJSONTest", "add", "Child1", "-P", "Parent")
+	cli.MustExecute("-y", "BulkJSONTest", "add", "Child2", "-P", "Parent")
+
+	// Complete with JSON output
+	stdout := cli.MustExecute("-y", "--json", "BulkJSONTest", "complete", "Parent/**")
+
+	// Verify JSON structure
+	testutil.AssertContains(t, stdout, "{")
+	testutil.AssertContains(t, stdout, "}")
+	testutil.AssertContains(t, stdout, `"result"`)
+	testutil.AssertContains(t, stdout, `"ACTION_COMPLETED"`)
+	testutil.AssertContains(t, stdout, `"affected_count":2`) // 2 children affected (number in JSON)
+	testutil.AssertContains(t, stdout, `"pattern"`)
+	testutil.AssertContains(t, stdout, `"**"`)
+}

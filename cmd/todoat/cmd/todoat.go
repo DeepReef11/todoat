@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2653,6 +2654,12 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 
 // doUpdate modifies an existing task
 func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check for bulk pattern
+	bulkParentSummary, pattern, isBulk := parseBulkPattern(taskSummary)
+	if isBulk {
+		return doBulkUpdate(ctx, be, list, bulkParentSummary, pattern, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, cfg, stdout, jsonOutput)
+	}
+
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
 	if err != nil {
 		return err
@@ -2723,6 +2730,110 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	return nil
 }
 
+// doBulkUpdate modifies all children/descendants of a parent task
+func doBulkUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, parentSummary, pattern, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Find the parent task
+	parent, err := findTask(ctx, be, list, parentSummary, cfg)
+	if err != nil {
+		return err
+	}
+
+	// Get all tasks to find children
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	// Get children based on pattern
+	recursive := pattern == "**"
+	children := getChildTasks(parent.ID, tasks, recursive)
+
+	// If no children found, return INFO_ONLY
+	if len(children) == 0 {
+		if jsonOutput {
+			resp := bulkActionResponse{
+				Result:        ResultInfoOnly,
+				Action:        "update",
+				AffectedCount: 0,
+				Parent:        parent.Summary,
+				Pattern:       pattern,
+				AffectedUIDs:  []string{},
+			}
+			jsonBytes, _ := json.Marshal(resp)
+			_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+			return nil
+		}
+		_, _ = fmt.Fprintf(stdout, "Updated 0 tasks under \"%s\"\n", parent.Summary)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	// Parse status if provided
+	var parsedStatus backend.TaskStatus
+	if status != "" {
+		parsedStatus, err = parseStatusWithValidation(status)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update each child
+	var affectedUIDs []string
+	for i := range children {
+		if status != "" {
+			children[i].Status = parsedStatus
+		}
+		if priority > 0 {
+			children[i].Priority = priority
+		}
+		if dueDate != nil {
+			children[i].DueDate = dueDate
+		}
+		if clearDueDate {
+			children[i].DueDate = nil
+		}
+		if startDate != nil {
+			children[i].StartDate = startDate
+		}
+		if clearStartDate {
+			children[i].StartDate = nil
+		}
+		if newCategories != nil {
+			children[i].Categories = *newCategories
+		}
+
+		_, err := be.UpdateTask(ctx, list.ID, &children[i])
+		if err != nil {
+			return err
+		}
+		affectedUIDs = append(affectedUIDs, children[i].ID)
+	}
+
+	if jsonOutput {
+		resp := bulkActionResponse{
+			Result:        ResultActionCompleted,
+			Action:        "update",
+			AffectedCount: len(children),
+			Parent:        parent.Summary,
+			Pattern:       pattern,
+			AffectedUIDs:  affectedUIDs,
+		}
+		jsonBytes, _ := json.Marshal(resp)
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Updated %d tasks under \"%s\"\n", len(children), parent.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
 // checkCircularReference checks if setting parentID as the parent of taskID would create a circular reference
 func checkCircularReference(ctx context.Context, be backend.TaskManager, list *backend.List, taskID, parentID string) error {
 	if taskID == parentID {
@@ -2782,6 +2893,12 @@ func parseStatusWithValidation(s string) (backend.TaskStatus, error) {
 
 // doComplete marks a task as completed
 func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check for bulk pattern
+	parentSummary, pattern, isBulk := parseBulkPattern(taskSummary)
+	if isBulk {
+		return doBulkComplete(ctx, be, list, parentSummary, pattern, cfg, stdout, jsonOutput)
+	}
+
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
 	if err != nil {
 		return err
@@ -2810,8 +2927,90 @@ func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List,
 	return nil
 }
 
+// doBulkComplete marks all children/descendants of a parent task as completed
+func doBulkComplete(ctx context.Context, be backend.TaskManager, list *backend.List, parentSummary, pattern string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Find the parent task
+	parent, err := findTask(ctx, be, list, parentSummary, cfg)
+	if err != nil {
+		return err
+	}
+
+	// Get all tasks to find children
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	// Get children based on pattern
+	recursive := pattern == "**"
+	children := getChildTasks(parent.ID, tasks, recursive)
+
+	// If no children found, return INFO_ONLY
+	if len(children) == 0 {
+		if jsonOutput {
+			resp := bulkActionResponse{
+				Result:        ResultInfoOnly,
+				Action:        "complete",
+				AffectedCount: 0,
+				Parent:        parent.Summary,
+				Pattern:       pattern,
+				AffectedUIDs:  []string{},
+			}
+			jsonBytes, _ := json.Marshal(resp)
+			_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+			return nil
+		}
+		_, _ = fmt.Fprintf(stdout, "Completed 0 tasks under \"%s\"\n", parent.Summary)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	// Complete each child
+	now := time.Now().UTC()
+	var affectedUIDs []string
+	for i := range children {
+		children[i].Status = backend.StatusCompleted
+		children[i].Completed = &now
+		_, err := be.UpdateTask(ctx, list.ID, &children[i])
+		if err != nil {
+			return err
+		}
+		affectedUIDs = append(affectedUIDs, children[i].ID)
+	}
+
+	if jsonOutput {
+		resp := bulkActionResponse{
+			Result:        ResultActionCompleted,
+			Action:        "complete",
+			AffectedCount: len(children),
+			Parent:        parent.Summary,
+			Pattern:       pattern,
+			AffectedUIDs:  affectedUIDs,
+		}
+		jsonBytes, _ := json.Marshal(resp)
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Completed %d tasks under \"%s\"\n", len(children), parent.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
 // doDelete removes a task
 func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check for bulk pattern
+	parentSummary, pattern, isBulk := parseBulkPattern(taskSummary)
+	if isBulk {
+		return doBulkDelete(ctx, be, list, parentSummary, pattern, cfg, stdout, jsonOutput)
+	}
+
 	task, err := findTask(ctx, be, list, taskSummary, cfg)
 	if err != nil {
 		return err
@@ -2852,6 +3051,143 @@ func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	return nil
 }
 
+// doBulkDelete removes all children/descendants of a parent task
+func doBulkDelete(ctx context.Context, be backend.TaskManager, list *backend.List, parentSummary, pattern string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Find the parent task
+	parent, err := findTask(ctx, be, list, parentSummary, cfg)
+	if err != nil {
+		return err
+	}
+
+	// Get all tasks to find children
+	tasks, err := be.GetTasks(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	// Get children based on pattern
+	recursive := pattern == "**"
+	children := getChildTasks(parent.ID, tasks, recursive)
+
+	// If no children found, return INFO_ONLY
+	if len(children) == 0 {
+		if jsonOutput {
+			resp := bulkActionResponse{
+				Result:        ResultInfoOnly,
+				Action:        "delete",
+				AffectedCount: 0,
+				Parent:        parent.Summary,
+				Pattern:       pattern,
+				AffectedUIDs:  []string{},
+			}
+			jsonBytes, _ := json.Marshal(resp)
+			_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+			return nil
+		}
+		_, _ = fmt.Fprintf(stdout, "Deleted 0 tasks under \"%s\"\n", parent.Summary)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	// Collect affected UIDs before deletion (including cascaded descendants for * pattern)
+	var affectedUIDs []string
+
+	// For direct children pattern (*), we need to delete their descendants first
+	// For all descendants pattern (**), we delete in reverse depth order
+	if !recursive {
+		// Direct children only - need to also delete each child's descendants
+		// Collect all UIDs that will be affected (children + their descendants)
+		for _, child := range children {
+			affectedUIDs = append(affectedUIDs, child.ID)
+			// Also count descendants that will be cascaded
+			childDescendants := findDescendants(child.ID, tasks)
+			affectedUIDs = append(affectedUIDs, childDescendants...)
+		}
+
+		// Now delete
+		for _, child := range children {
+			// Get this child's descendants
+			childDescendants := findDescendants(child.ID, tasks)
+			// Delete descendants first (bottom-up)
+			for i := len(childDescendants) - 1; i >= 0; i-- {
+				if err := be.DeleteTask(ctx, list.ID, childDescendants[i]); err != nil {
+					return err
+				}
+			}
+			// Then delete the child itself
+			if err := be.DeleteTask(ctx, list.ID, child.ID); err != nil {
+				return err
+			}
+		}
+	} else {
+		// All descendants - collect UIDs
+		for _, child := range children {
+			affectedUIDs = append(affectedUIDs, child.ID)
+		}
+
+		// Sort by depth and delete deepest first
+		// Build depth map
+		depthMap := make(map[string]int)
+		for _, t := range tasks {
+			depthMap[t.ID] = calculateDepth(t.ID, tasks)
+		}
+		// Sort children by depth (deepest first)
+		sort.Slice(children, func(i, j int) bool {
+			return depthMap[children[i].ID] > depthMap[children[j].ID]
+		})
+		// Delete in order
+		for _, child := range children {
+			if err := be.DeleteTask(ctx, list.ID, child.ID); err != nil {
+				return err
+			}
+		}
+	}
+
+	if jsonOutput {
+		resp := bulkActionResponse{
+			Result:        ResultActionCompleted,
+			Action:        "delete",
+			AffectedCount: len(affectedUIDs),
+			Parent:        parent.Summary,
+			Pattern:       pattern,
+			AffectedUIDs:  affectedUIDs,
+		}
+		jsonBytes, _ := json.Marshal(resp)
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Deleted %d tasks under \"%s\"\n", len(affectedUIDs), parent.Summary)
+
+	// Emit ACTION_COMPLETED result code in no-prompt mode
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// calculateDepth returns the depth of a task in the hierarchy (0 for root tasks)
+func calculateDepth(taskID string, tasks []backend.Task) int {
+	taskMap := make(map[string]backend.Task)
+	for _, t := range tasks {
+		taskMap[t.ID] = t
+	}
+
+	depth := 0
+	current := taskID
+	for {
+		task, ok := taskMap[current]
+		if !ok || task.ParentID == "" {
+			break
+		}
+		depth++
+		current = task.ParentID
+	}
+	return depth
+}
+
 // findDescendants returns a list of task IDs that are descendants of the given parent
 func findDescendants(parentID string, tasks []backend.Task) []string {
 	var result []string
@@ -2876,6 +3212,58 @@ func findDescendants(parentID string, tasks []backend.Task) []string {
 	}
 
 	return result
+}
+
+// parseBulkPattern checks if a search term ends with /* or /** for bulk operations
+// Returns the parent summary, the pattern type ("*" for direct children, "**" for all descendants), and whether it's a bulk pattern
+func parseBulkPattern(searchTerm string) (parentSummary string, pattern string, isBulk bool) {
+	if strings.HasSuffix(searchTerm, "/**") {
+		return strings.TrimSuffix(searchTerm, "/**"), "**", true
+	}
+	if strings.HasSuffix(searchTerm, "/*") {
+		return strings.TrimSuffix(searchTerm, "/*"), "*", true
+	}
+	return searchTerm, "", false
+}
+
+// getChildTasks returns the children of a parent task
+// If recursive is true, returns all descendants; otherwise only direct children
+func getChildTasks(parentID string, tasks []backend.Task, recursive bool) []backend.Task {
+	if !recursive {
+		// Direct children only
+		var children []backend.Task
+		for _, t := range tasks {
+			if t.ParentID == parentID {
+				children = append(children, t)
+			}
+		}
+		return children
+	}
+
+	// All descendants (recursive)
+	descendantIDs := findDescendants(parentID, tasks)
+	idSet := make(map[string]bool)
+	for _, id := range descendantIDs {
+		idSet[id] = true
+	}
+
+	var descendants []backend.Task
+	for _, t := range tasks {
+		if idSet[t.ID] {
+			descendants = append(descendants, t)
+		}
+	}
+	return descendants
+}
+
+// bulkActionResponse is the JSON output structure for bulk operations
+type bulkActionResponse struct {
+	Result        string   `json:"result"`
+	Action        string   `json:"action"`
+	AffectedCount int      `json:"affected_count"`
+	Parent        string   `json:"parent"`
+	Pattern       string   `json:"pattern"`
+	AffectedUIDs  []string `json:"affected_uids,omitempty"`
 }
 
 // findTask searches for a task by summary using exact then partial matching

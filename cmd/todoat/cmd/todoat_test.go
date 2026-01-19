@@ -105,9 +105,9 @@ func TestVerboseFlagCoreCLI(t *testing.T) {
 	}
 }
 
-// TestVerboseModeEnabled verifies that -V flag outputs debug messages to stderr
+// TestVerboseModeEnabledCoreCLI verifies that -V flag outputs debug messages to stderr
 // CLI Test for 034-logging-utilities
-func TestVerboseModeEnabled(t *testing.T) {
+func TestVerboseModeEnabledCoreCLI(t *testing.T) {
 	// Create temp directory for test database
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -152,9 +152,9 @@ func TestVerboseModeEnabled(t *testing.T) {
 	}
 }
 
-// TestVerboseModeDisabled verifies that without -V flag, no debug messages output
+// TestVerboseModeDisabledCoreCLI verifies that without -V flag, no debug messages output
 // CLI Test for 034-logging-utilities
-func TestVerboseModeDisabled(t *testing.T) {
+func TestVerboseModeDisabledCoreCLI(t *testing.T) {
 	// Create temp directory for test database
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
