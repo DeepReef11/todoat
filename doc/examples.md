@@ -241,11 +241,16 @@ todoat Work add "Fix A/B test bug" --literal
 
 ## Due Dates
 
-Set start and due dates for task scheduling:
+Set start and due dates for task scheduling using absolute or relative formats:
 
 ```bash
-# Add task with due date
+# Absolute date format (YYYY-MM-DD)
 todoat Work add "Submit report" --due-date 2026-01-31
+
+# Relative date formats
+todoat Work add "Follow up call" --due-date tomorrow
+todoat Work add "Weekly review" --due-date +7d
+todoat Work add "Monthly check-in" --due-date +1m
 
 # Add task with start and due date
 todoat Work add "Project phase 1" --start-date 2026-01-20 --due-date 2026-02-15
@@ -258,6 +263,28 @@ todoat Work update "report" --due-date ""
 
 # Combine with priority
 todoat Work add "Urgent deadline" -p 1 --due-date 2026-01-25
+```
+
+### Relative Date Formats
+
+| Format | Description |
+|--------|-------------|
+| `today` | Current date |
+| `tomorrow` | Next day |
+| `yesterday` | Previous day |
+| `+Nd` / `-Nd` | N days from/before today |
+| `+Nw` | N weeks from today |
+| `+Nm` | N months from today |
+
+```bash
+# Tasks due within the next week
+todoat Work get --due-before +7d
+
+# Tasks created in the last 30 days
+todoat Work get --created-after -30d
+
+# Filter for tasks due today or tomorrow
+todoat Work get --due-before +2d --due-after today
 ```
 
 ## Multiple Lists
@@ -549,4 +576,4 @@ todoat Work complete "task with spaces"
 ```
 
 ---
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*

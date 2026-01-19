@@ -59,7 +59,7 @@ The Todoist backend is **not available as a primary backend**. Per design:
 2. There is no `--backend` flag to switch backends at runtime
 3. Todoist exists as a migration target but returns: "real todoist backend not yet implemented for migration"
 
-**Note**: The .env file has `TODOIST_API_TOKEN` but the app uses `TODOAT_TODOIST_TOKEN` environment variable. This is documented behavior.
+**Note**: The .env file has `TODOIST_API_TOKEN` but the app expects `TODOAT_TODOIST_TOKEN` environment variable. This is documented behavior.
 
 **Tests Run:**
 
@@ -98,5 +98,3 @@ These are intentional design decisions, not bugs:
 ## Conclusion
 
 The todoat CLI is functioning correctly for all tested scenarios with the SQLite backend. All CRUD operations work, JSON output is valid, error handling is robust with user-friendly messages, and config auto-creation works correctly.
-
-**RALPH_COMPLETE: Manual CLI tests complete. All tests passed. Output: issues/NONE.md**

@@ -241,17 +241,50 @@ todoat MyList get --json
 | `--status` | `-s` | Filter tasks by status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 | `--priority` | `-p` | Filter by priority: single value (1), comma-separated (1,2,3), or alias (high, medium, low) |
 | `--tag` | | Filter by tag (can be specified multiple times or comma-separated; OR logic) |
-| `--due-before` | | Filter tasks due before date (YYYY-MM-DD, inclusive) |
-| `--due-after` | | Filter tasks due on or after date (YYYY-MM-DD, inclusive) |
-| `--created-before` | | Filter tasks created before date (YYYY-MM-DD, inclusive) |
-| `--created-after` | | Filter tasks created on or after date (YYYY-MM-DD, inclusive) |
+| `--due-before` | | Filter tasks due before date (see [Date Formats](#date-formats)) |
+| `--due-after` | | Filter tasks due on or after date (see [Date Formats](#date-formats)) |
+| `--created-before` | | Filter tasks created before date (see [Date Formats](#date-formats)) |
+| `--created-after` | | Filter tasks created on or after date (see [Date Formats](#date-formats)) |
+
+### Date Formats
+
+Date flags (`--due-date`, `--start-date`, `--due-before`, `--due-after`, `--created-before`, `--created-after`) accept both absolute and relative formats:
+
+**Absolute format:**
+- `YYYY-MM-DD` (e.g., `2026-01-31`)
+
+**Relative formats:**
+
+| Format | Description | Example |
+|--------|-------------|---------|
+| `today` | Current date | `--due-date today` |
+| `tomorrow` | Next day | `--due-date tomorrow` |
+| `yesterday` | Previous day | `--due-after yesterday` |
+| `+Nd` | N days from today | `--due-date +7d` (in 7 days) |
+| `-Nd` | N days ago | `--created-after -30d` (last 30 days) |
+| `+Nw` | N weeks from today | `--due-date +2w` (in 2 weeks) |
+| `+Nm` | N months from today | `--due-date +1m` (in 1 month) |
+
+**Examples:**
+```bash
+# Due tomorrow
+todoat Work add "Follow up" --due-date tomorrow
+
+# Due in one week
+todoat Work add "Weekly review" --due-date +7d
+
+# Tasks created in the last 7 days
+todoat Work get --created-after -7d
+
+# Tasks due within the next 2 weeks
+todoat Work get --due-before +2w
+```
 
 ### Date Filter Notes
 
 - Date filters use inclusive range (boundary dates are included)
 - Tasks without dates are excluded from date filters
 - Multiple filters combine with AND logic
-- Date format: YYYY-MM-DD
 
 ### Priority Aliases
 
@@ -298,8 +331,8 @@ todoat MyList add "Urgent task" -p 1
 |------|-------|-------------|
 | `--priority` | `-p` | Task priority (0-9, 0=undefined, 1=highest) |
 | `--description` | `-d` | Task description/notes (multi-line text supported) |
-| `--due-date` | | Due date in YYYY-MM-DD format |
-| `--start-date` | | Start date in YYYY-MM-DD format |
+| `--due-date` | | Due date (see [Date Formats](#date-formats)) |
+| `--start-date` | | Start date (see [Date Formats](#date-formats)) |
 | `--tag` | | Tag/category (can be specified multiple times or comma-separated) |
 | `--parent` | `-P` | Parent task summary (creates subtask under specified parent) |
 | `--literal` | `-l` | Treat task summary literally (don't parse `/` as hierarchy separator) |
@@ -307,8 +340,13 @@ todoat MyList add "Urgent task" -p 1
 ### Add Examples with Dates, Tags, and Descriptions
 
 ```bash
-# Add task with due date
+# Add task with due date (absolute)
 todoat Work add "Submit report" --due-date 2026-01-31
+
+# Add task with relative due date
+todoat Work add "Follow up" --due-date tomorrow
+todoat Work add "Weekly review" --due-date +7d
+todoat Work add "Next month check-in" --due-date +1m
 
 # Add task with start and due date
 todoat Work add "Project milestone" --start-date 2026-01-20 --due-date 2026-02-15
@@ -392,8 +430,8 @@ todoat MyList u "task name" -s IN-PROGRESS
 | `--status` | `-s` | New status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 | `--summary` | | New task summary/name |
 | `--description` | `-d` | Task description/notes (use "" to clear) |
-| `--due-date` | | Due date (YYYY-MM-DD format, use "" to clear) |
-| `--start-date` | | Start date (YYYY-MM-DD format, use "" to clear) |
+| `--due-date` | | Due date (see [Date Formats](#date-formats), use "" to clear) |
+| `--start-date` | | Start date (see [Date Formats](#date-formats), use "" to clear) |
 | `--tag` | | Set tags (replaces existing; can be multiple or comma-separated) |
 | `--parent` | `-P` | Set parent task (move task under specified parent) |
 | `--no-parent` | | Remove parent relationship (make task root-level) |

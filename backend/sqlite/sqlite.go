@@ -18,6 +18,54 @@ type Backend struct {
 	db *sql.DB
 }
 
+// Migration represents a database schema migration
+type Migration struct {
+	Version int
+	Name    string
+	Up      func(db *sql.DB) error
+}
+
+// migrations is the ordered list of all schema migrations
+var migrations = []Migration{
+	{
+		Version: 1,
+		Name:    "initial_schema",
+		Up: func(db *sql.DB) error {
+			schema := `
+				CREATE TABLE IF NOT EXISTS task_lists (
+					id TEXT PRIMARY KEY,
+					name TEXT NOT NULL,
+					color TEXT DEFAULT '',
+					modified TEXT NOT NULL,
+					deleted_at TEXT
+				);
+
+				CREATE TABLE IF NOT EXISTS tasks (
+					id TEXT PRIMARY KEY,
+					list_id TEXT NOT NULL,
+					summary TEXT NOT NULL,
+					description TEXT DEFAULT '',
+					status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
+					priority INTEGER DEFAULT 0,
+					due_date TEXT,
+					start_date TEXT,
+					completed TEXT,
+					created TEXT NOT NULL,
+					modified TEXT NOT NULL,
+					parent_id TEXT DEFAULT '',
+					categories TEXT DEFAULT '',
+					FOREIGN KEY (list_id) REFERENCES task_lists(id) ON DELETE CASCADE
+				);
+
+				CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks(list_id);
+				CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+			`
+			_, err := db.Exec(schema)
+			return err
+		},
+	},
+}
+
 // New creates a new SQLite backend and initializes the database schema
 func New(path string) (*Backend, error) {
 	db, err := sql.Open("sqlite", path)
@@ -34,52 +82,64 @@ func New(path string) (*Backend, error) {
 	return b, nil
 }
 
-// initSchema creates the database tables if they don't exist
+// initSchema runs database migrations to ensure the schema is up to date
 func (b *Backend) initSchema() error {
-	schema := `
-		CREATE TABLE IF NOT EXISTS task_lists (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			color TEXT DEFAULT '',
-			modified TEXT NOT NULL,
-			deleted_at TEXT
-		);
-
-		CREATE TABLE IF NOT EXISTS tasks (
-			id TEXT PRIMARY KEY,
-			list_id TEXT NOT NULL,
-			summary TEXT NOT NULL,
-			description TEXT DEFAULT '',
-			status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
-			priority INTEGER DEFAULT 0,
-			due_date TEXT,
-			start_date TEXT,
-			completed TEXT,
-			created TEXT NOT NULL,
-			modified TEXT NOT NULL,
-			parent_id TEXT DEFAULT '',
-			categories TEXT DEFAULT '',
-			FOREIGN KEY (list_id) REFERENCES task_lists(id) ON DELETE CASCADE
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks(list_id);
-		CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-	`
-
 	// Enable foreign keys
 	if _, err := b.db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		return err
 	}
 
-	_, err := b.db.Exec(schema)
+	// Create schema_version table if it doesn't exist
+	_, err := b.db.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_version (
+			version INTEGER PRIMARY KEY,
+			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create schema_version table: %w", err)
 	}
 
-	// Migration: add deleted_at column if it doesn't exist
-	_, _ = b.db.Exec("ALTER TABLE task_lists ADD COLUMN deleted_at TEXT")
+	// Get current schema version
+	currentVersion, err := b.getSchemaVersionInternal()
+	if err != nil {
+		return fmt.Errorf("failed to get schema version: %w", err)
+	}
+
+	// Apply pending migrations in order
+	for _, m := range migrations {
+		if m.Version <= currentVersion {
+			continue
+		}
+
+		// Run the migration
+		if err := m.Up(b.db); err != nil {
+			return fmt.Errorf("migration %d (%s) failed: %w", m.Version, m.Name, err)
+		}
+
+		// Record the migration
+		_, err = b.db.Exec("INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)", m.Version)
+		if err != nil {
+			return fmt.Errorf("failed to record migration %d: %w", m.Version, err)
+		}
+	}
 
 	return nil
+}
+
+// getSchemaVersionInternal returns the current schema version (0 if no migrations applied)
+func (b *Backend) getSchemaVersionInternal() (int, error) {
+	var version int
+	err := b.db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&version)
+	if err != nil {
+		return 0, err
+	}
+	return version, nil
+}
+
+// GetSchemaVersion returns the current schema version
+func (b *Backend) GetSchemaVersion() (int, error) {
+	return b.getSchemaVersionInternal()
 }
 
 // GetLists returns all active (non-deleted) task lists
