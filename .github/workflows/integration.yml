@@ -52,7 +52,8 @@ jobs:
 
   todoist:
     runs-on: ubuntu-latest
-    if: ${{ secrets.TODOAT_TODOIST_TOKEN != '' }}
+    env:
+      TODOAT_TODOIST_TOKEN: ${{ secrets.TODOAT_TODOIST_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +63,5 @@ jobs:
           cache: true
 
       - name: Run Todoist integration tests
-        env:
-          TODOAT_TODOIST_TOKEN: ${{ secrets.TODOAT_TODOIST_TOKEN }}
+        if: env.TODOAT_TODOIST_TOKEN != ''
         run: go test -tags=integration -v ./backend/todoist/...
