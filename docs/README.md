@@ -61,7 +61,8 @@ todoat
 | `-s, --status` | Filter or set task status (TODO, DONE, PROCESSING, CANCELLED) |
 | `-p, --priority` | Set task priority (0-9, 1=highest) |
 | `-d, --description` | Set task description |
-| `--due-date` | Set due date (YYYY-MM-DD) |
+| `--due-date` | Set due date (YYYY-MM-DD or with time: YYYY-MM-DDTHH:MM) |
+| `--recur` | Set recurrence (daily, weekly, monthly, or "every N days") |
 | `-v, --view` | Use a custom view |
 | `--json` | Output in JSON format |
 | `-y, --no-prompt` | Non-interactive mode for scripting |

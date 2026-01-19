@@ -126,6 +126,60 @@ TODO   Team meeting                       Jan 20 14:30
 TODO   Client call                        Jan 20 14:30
 ```
 
+### Recurring Tasks
+
+Create tasks that automatically regenerate when completed:
+
+```bash
+# Basic recurrence patterns
+todoat MyList add "Daily standup" --recur daily
+todoat MyList add "Weekly review" --recur weekly
+todoat MyList add "Monthly report" --recur monthly
+
+# Custom intervals
+todoat MyList add "Check logs" --recur "every 3 days"
+
+# Recurring task with due date
+todoat MyList add "Team meeting" --recur weekly --due-date "2026-01-20"
+```
+
+By default, the next occurrence is calculated from the original due date. To base it on when you complete the task:
+
+```bash
+# Next due date = completion date + interval
+todoat MyList add "Water plants" --recur "every 3 days" --recur-from-completion
+```
+
+Recurring tasks display with an indicator in the task list:
+
+```
+🔄 TODO   Daily standup                    Jan 20
+   TODO   One-time task                    Jan 21
+```
+
+When you complete a recurring task, a new task is automatically created with the next due date:
+
+```bash
+todoat MyList complete "Daily standup"
+# Original task marked DONE
+# New task created with tomorrow's date
+```
+
+Remove recurrence from an existing task:
+
+```bash
+todoat MyList update "Daily standup" --recur none
+```
+
+| Pattern | Meaning |
+|---------|---------|
+| `daily` | Every day |
+| `weekly` | Every week |
+| `monthly` | Every month |
+| `every N days` | Every N days |
+| `every N weeks` | Every N weeks |
+| `none` | Remove recurrence |
+
 ### Task with Description
 
 ```bash

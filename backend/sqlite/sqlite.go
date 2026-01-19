@@ -72,6 +72,17 @@ var migrations = []Migration{
 			return err
 		},
 	},
+	{
+		Version: 3,
+		Name:    "add_recurrence_fields",
+		Up: func(db *sql.DB) error {
+			if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN recurrence TEXT DEFAULT ''"); err != nil {
+				return err
+			}
+			_, err := db.Exec("ALTER TABLE tasks ADD COLUMN recur_from_due INTEGER DEFAULT 1")
+			return err
+		},
+	},
 }
 
 // New creates a new SQLite backend and initializes the database schema
@@ -92,6 +103,17 @@ func New(path string) (*Backend, error) {
 
 // initSchema runs database migrations to ensure the schema is up to date
 func (b *Backend) initSchema() error {
+	// Configure SQLite for concurrent access
+	// Set busy timeout to 5 seconds (5000ms) to wait when database is locked
+	if _, err := b.db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		return err
+	}
+
+	// Enable WAL mode for better concurrent access (allows concurrent reads and writes)
+	if _, err := b.db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		return err
+	}
+
 	// Enable foreign keys
 	if _, err := b.db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		return err
@@ -338,7 +360,7 @@ func (b *Backend) PurgeList(ctx context.Context, listID string) error {
 // GetTasks returns all tasks in a list
 func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
 	rows, err := b.db.QueryContext(ctx,
-		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories
+		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due
 		 FROM tasks WHERE list_id = ?`,
 		listID,
 	)
@@ -365,7 +387,7 @@ func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, 
 // GetTask returns a specific task
 func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.Task, error) {
 	row := b.db.QueryRowContext(ctx,
-		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories
+		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due
 		 FROM tasks WHERE list_id = ? AND id = ?`,
 		listID, taskID,
 	)
@@ -380,7 +402,7 @@ func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.
 // GetTaskByLocalID returns a task by its SQLite rowid (local ID)
 func (b *Backend) GetTaskByLocalID(ctx context.Context, listID string, localID int64) (*backend.Task, error) {
 	row := b.db.QueryRowContext(ctx,
-		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories
+		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due
 		 FROM tasks WHERE list_id = ? AND rowid = ?`,
 		listID, localID,
 	)
@@ -445,11 +467,13 @@ type scanner interface {
 func scanTaskFrom(s scanner) (*backend.Task, error) {
 	var t backend.Task
 	var dueDateStr, startDateStr, completedStr, createdStr, modifiedStr sql.NullString
-	var categoriesStr sql.NullString
+	var categoriesStr, recurrenceStr sql.NullString
+	var recurFromDue sql.NullInt64
 
 	err := s.Scan(
 		&t.ID, &t.ListID, &t.Summary, &t.Description, &t.Status,
 		&t.Priority, &dueDateStr, &startDateStr, &completedStr, &createdStr, &modifiedStr, &t.ParentID, &categoriesStr,
+		&recurrenceStr, &recurFromDue,
 	)
 	if err != nil {
 		return nil, err
@@ -458,6 +482,14 @@ func scanTaskFrom(s scanner) (*backend.Task, error) {
 	parseDateStrings(&t, dueDateStr, startDateStr, completedStr, createdStr, modifiedStr)
 	if categoriesStr.Valid {
 		t.Categories = categoriesStr.String
+	}
+	if recurrenceStr.Valid {
+		t.Recurrence = recurrenceStr.String
+	}
+	if recurFromDue.Valid {
+		t.RecurFromDue = recurFromDue.Int64 == 1
+	} else {
+		t.RecurFromDue = true // default to from due date
 	}
 	return &t, nil
 }
@@ -487,30 +519,38 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 		status = backend.StatusNeedsAction
 	}
 
+	// Convert bool to int for SQLite storage
+	recurFromDueInt := 1
+	if !task.RecurFromDue {
+		recurFromDueInt = 0
+	}
+
 	_, err := b.db.ExecContext(ctx,
-		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, listID, task.Summary, task.Description, status, task.Priority,
-		dueDateStr, startDateStr, completedStr, nowStr, nowStr, task.ParentID, task.Categories,
+		dueDateStr, startDateStr, completedStr, nowStr, nowStr, task.ParentID, task.Categories, task.Recurrence, recurFromDueInt,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &backend.Task{
-		ID:          id,
-		ListID:      listID,
-		Summary:     task.Summary,
-		Description: task.Description,
-		Status:      status,
-		Priority:    task.Priority,
-		DueDate:     task.DueDate,
-		StartDate:   task.StartDate,
-		Completed:   task.Completed,
-		Created:     now,
-		Modified:    now,
-		ParentID:    task.ParentID,
-		Categories:  task.Categories,
+		ID:           id,
+		ListID:       listID,
+		Summary:      task.Summary,
+		Description:  task.Description,
+		Status:       status,
+		Priority:     task.Priority,
+		DueDate:      task.DueDate,
+		StartDate:    task.StartDate,
+		Completed:    task.Completed,
+		Created:      now,
+		Modified:     now,
+		ParentID:     task.ParentID,
+		Categories:   task.Categories,
+		Recurrence:   task.Recurrence,
+		RecurFromDue: task.RecurFromDue,
 	}, nil
 }
 
@@ -523,10 +563,16 @@ func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.T
 	startDateStr := timeToNullString(task.StartDate)
 	completedStr := timeToNullString(task.Completed)
 
+	// Convert bool to int for SQLite storage
+	recurFromDueInt := 1
+	if !task.RecurFromDue {
+		recurFromDueInt = 0
+	}
+
 	_, err := b.db.ExecContext(ctx,
-		`UPDATE tasks SET summary = ?, description = ?, status = ?, priority = ?, due_date = ?, start_date = ?, completed = ?, modified = ?, parent_id = ?, categories = ?
+		`UPDATE tasks SET summary = ?, description = ?, status = ?, priority = ?, due_date = ?, start_date = ?, completed = ?, modified = ?, parent_id = ?, categories = ?, recurrence = ?, recur_from_due = ?
 		 WHERE id = ? AND list_id = ?`,
-		task.Summary, task.Description, task.Status, task.Priority, dueDateStr, startDateStr, completedStr, nowStr, task.ParentID, task.Categories,
+		task.Summary, task.Description, task.Status, task.Priority, dueDateStr, startDateStr, completedStr, nowStr, task.ParentID, task.Categories, task.Recurrence, recurFromDueInt,
 		task.ID, listID,
 	)
 	if err != nil {

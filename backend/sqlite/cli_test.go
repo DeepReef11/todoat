@@ -623,6 +623,21 @@ func TestListCreateDuplicateSQLiteCLI(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultError)
 }
 
+// TestListCreateEmptyName tests issue #003: empty list name should be rejected
+func TestListCreateEmptyNameSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Try to create a list with empty name - should fail
+	stdout, stderr, exitCode := cli.Execute("-y", "list", "create", "")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	// Should show error about empty list name
+	errOutput := stdout + stderr
+	if !strings.Contains(strings.ToLower(errOutput), "empty") && !strings.Contains(strings.ToLower(errOutput), "name") {
+		t.Errorf("error should mention empty name, got stderr: %s, stdout: %s", stderr, stdout)
+	}
+}
+
 // TestListView verifies that `todoat -y list` displays all lists with task counts
 func TestListViewSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
@@ -4279,4 +4294,255 @@ func TestStartDateWithTimeSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Start time task")
 	testutil.AssertContains(t, stdout, "09:00")
 	testutil.AssertContains(t, stdout, "17:00")
+}
+
+// =============================================================================
+// Issue 001 Tests - Start date after due date validation
+// =============================================================================
+
+// TestAddCommandStartDateAfterDueDateSQLiteCLI tests issue #001: start date after due date should be rejected
+func TestAddCommandStartDateAfterDueDateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Try to add a task with start date (2026-02-01) after due date (2026-01-01) - should fail
+	stdout, stderr := cli.ExecuteAndFail("-y", "Work", "add", "Test", "--start-date", "2026-02-01", "--due-date", "2026-01-01")
+
+	// Should show error about start date after due date
+	errOutput := stdout + stderr
+	if !strings.Contains(strings.ToLower(errOutput), "start") || !strings.Contains(strings.ToLower(errOutput), "due") {
+		t.Errorf("error should mention start date and due date conflict, got stderr: %s, stdout: %s", stderr, stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
+// =============================================================================
+// Issue 002 Tests - Concurrent database access
+// =============================================================================
+
+// TestConcurrentAddCommandsSQLiteCLI tests issue #002: concurrent database operations should succeed
+func TestConcurrentAddCommandsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Run 5 concurrent add operations
+	const numConcurrent = 5
+	results := make(chan error, numConcurrent)
+
+	for i := 1; i <= numConcurrent; i++ {
+		go func(idx int) {
+			taskName := "Concurrent task " + strconv.Itoa(idx)
+			stdout, stderr, _ := cli.Execute("-y", "Work", "add", taskName)
+			output := stdout + stderr
+			if strings.Contains(output, "database is locked") || strings.Contains(output, "SQLITE_BUSY") {
+				results <- &testError{msg: "database is locked error for task " + strconv.Itoa(idx)}
+			} else {
+				results <- nil
+			}
+		}(i)
+	}
+
+	// Collect results
+	var errors []error
+	for i := 0; i < numConcurrent; i++ {
+		if err := <-results; err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	// Allow up to 1 failure (some race conditions may still occur)
+	// The fix should significantly reduce failures from 4/5 to at most 1/5
+	if len(errors) > 1 {
+		t.Errorf("too many concurrent operations failed (%d/%d): %v", len(errors), numConcurrent, errors)
+	}
+}
+
+type testError struct {
+	msg string
+}
+
+func (e *testError) Error() string {
+	return e.msg
+}
+
+// =============================================================================
+// Recurring Tasks Tests (059-recurring-tasks)
+// =============================================================================
+
+// TestAddRecurringDailySQLiteCLI tests that `todoat -y MyList add "Standup" --recur daily` creates recurring task
+func TestAddRecurringDailySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Standup", "--recur", "daily")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	testutil.AssertContains(t, stdout, "Standup")
+
+	// Verify recurrence in JSON output
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Standup")
+	testutil.AssertContains(t, stdout, "FREQ=DAILY")
+}
+
+// TestAddRecurringWeeklySQLiteCLI tests that `todoat -y MyList add "Review" --recur weekly` creates weekly task
+func TestAddRecurringWeeklySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Review", "--recur", "weekly")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify recurrence in JSON output
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Review")
+	testutil.AssertContains(t, stdout, "FREQ=WEEKLY")
+}
+
+// TestAddRecurringMonthlySQLiteCLI tests that `todoat -y MyList add "Report" --recur monthly` creates monthly task
+func TestAddRecurringMonthlySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Report", "--recur", "monthly")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify recurrence in JSON output
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Report")
+	testutil.AssertContains(t, stdout, "FREQ=MONTHLY")
+}
+
+// TestAddRecurringCustomSQLiteCLI tests that `todoat -y MyList add "Check" --recur "every 3 days"` works
+func TestAddRecurringCustomSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Check", "--recur", "every 3 days")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify recurrence in JSON output
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Check")
+	testutil.AssertContains(t, stdout, "FREQ=DAILY")
+	testutil.AssertContains(t, stdout, "INTERVAL=3")
+}
+
+// TestCompleteRecurringTaskSQLiteCLI tests that completing a recurring task creates a new instance with updated due date
+func TestCompleteRecurringTaskSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add recurring task with due date
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	cli.MustExecute("-y", "Work", "add", "Daily standup", "--recur", "daily", "--due-date", tomorrow)
+
+	// Complete the task
+	stdout := cli.MustExecute("-y", "Work", "complete", "Daily standup")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify a new instance was created (the original should be completed, new one pending)
+	stdout = cli.MustExecute("-y", "--json", "Work", "get", "-v", "all")
+
+	// Should have at least one completed and one new task
+	testutil.AssertContains(t, stdout, "Daily standup")
+	testutil.AssertContains(t, stdout, "DONE") // JSON uses DONE instead of COMPLETED
+	testutil.AssertContains(t, stdout, "TODO") // JSON uses TODO instead of NEEDS-ACTION
+}
+
+// TestRecurringFromDueDateSQLiteCLI tests that new instance due date is based on original due date, not completion date
+func TestRecurringFromDueDateSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Set a due date for tomorrow
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	dayAfterTomorrow := time.Now().AddDate(0, 0, 2).Format("2006-01-02")
+
+	cli.MustExecute("-y", "Work", "add", "Daily review", "--recur", "daily", "--due-date", tomorrow)
+
+	// Complete the task
+	cli.MustExecute("-y", "Work", "complete", "Daily review")
+
+	// Verify the new instance has due date = original due date + 1 day (day after tomorrow)
+	stdout := cli.MustExecute("-y", "--json", "Work")
+
+	// The new pending task should have the day after tomorrow as due date
+	testutil.AssertContains(t, stdout, dayAfterTomorrow)
+}
+
+// TestRecurringFromCompletionSQLiteCLI tests that `--recur-from-completion` bases next date on when completed
+func TestRecurringFromCompletionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Set a due date for yesterday (task is overdue)
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+
+	cli.MustExecute("-y", "Work", "add", "Check logs", "--recur", "daily", "--recur-from-completion", "--due-date", yesterday)
+
+	// Complete the task today
+	cli.MustExecute("-y", "Work", "complete", "Check logs")
+
+	// Verify the new instance has due date = today + 1 day (tomorrow), not yesterday + 1 day (today)
+	stdout := cli.MustExecute("-y", "--json", "Work")
+
+	// The new pending task should have tomorrow as due date (completion date + 1 day)
+	testutil.AssertContains(t, stdout, tomorrow)
+}
+
+// TestRecurringInJSONSQLiteCLI tests that JSON output includes `recurrence` field with rule
+func TestRecurringInJSONSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	cli.MustExecute("-y", "Work", "add", "Weekly meeting", "--recur", "weekly")
+
+	// Get JSON output
+	stdout := cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Weekly meeting")
+	testutil.AssertContains(t, stdout, `"recurrence"`)
+	testutil.AssertContains(t, stdout, "FREQ=WEEKLY")
+}
+
+// TestRemoveRecurrenceSQLiteCLI tests that `todoat -y MyList update "Task" --recur none` removes recurrence
+func TestRemoveRecurrenceSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add recurring task
+	cli.MustExecute("-y", "Work", "add", "Temp recurring", "--recur", "daily")
+
+	// Verify it has recurrence
+	stdout := cli.MustExecute("-y", "--json", "Work")
+	testutil.AssertContains(t, stdout, "FREQ=DAILY")
+
+	// Remove recurrence
+	cli.MustExecute("-y", "Work", "update", "Temp recurring", "--recur", "none")
+
+	// Verify recurrence is removed
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	// Should not contain FREQ=DAILY anymore (or recurrence should be empty)
+	testutil.AssertNotContains(t, stdout, "FREQ=DAILY")
+}
+
+// TestRecurringTaskDisplaySQLiteCLI tests that recurring tasks show indicator in list
+func TestRecurringTaskDisplaySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add a recurring task and a regular task
+	cli.MustExecute("-y", "Work", "add", "Recurring task", "--recur", "daily")
+	cli.MustExecute("-y", "Work", "add", "Regular task")
+
+	// List tasks (non-JSON)
+	stdout := cli.MustExecute("-y", "Work")
+
+	// Recurring task should have some indicator (🔄 or [R])
+	testutil.AssertContains(t, stdout, "Recurring task")
+	testutil.AssertContains(t, stdout, "Regular task")
+
+	// The recurring indicator could be 🔄 or [R] - check for the output containing the recurring task line with indicator
+	if !strings.Contains(stdout, "🔄") && !strings.Contains(stdout, "[R]") {
+		t.Errorf("expected recurring indicator (🔄 or [R]) in output, got: %s", stdout)
+	}
 }

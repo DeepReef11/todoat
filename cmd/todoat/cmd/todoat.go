@@ -255,6 +255,8 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().BoolP("literal", "l", false, "Treat task summary literally (don't parse / as hierarchy separator)")
 	cmd.Flags().Bool("no-parent", false, "Remove parent relationship (for update, makes task root-level)")
 	cmd.Flags().StringP("view", "v", "", "View to use for displaying tasks (default, all, or custom view name)")
+	cmd.Flags().String("recur", "", "Recurrence rule (daily, weekly, monthly, yearly, or 'every N days/weeks/months')")
+	cmd.Flags().Bool("recur-from-completion", false, "Base next occurrence on completion date instead of due date")
 	cmd.Flags().String("uid", "", "Task UID for direct task selection (bypasses summary search)")
 	cmd.Flags().Int64("local-id", 0, "Task local ID for direct task selection (requires sync enabled)")
 	// Date filtering flags for get command
@@ -553,6 +555,12 @@ func getBackendName(be backend.TaskManager) string {
 
 // doListCreate creates a new task list
 func doListCreate(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Validate list name
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("list name cannot be empty")
+	}
+
 	// Check for duplicate list name
 	lists, err := be.GetLists(ctx)
 	if err != nil {
@@ -2355,7 +2363,14 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		categories := strings.Join(tags, ",")
 		parentSummary, _ := cmd.Flags().GetString("parent")
 		literal, _ := cmd.Flags().GetBool("literal")
-		return doAdd(ctx, be, list, taskSummary, priority, status, description, dueDate, startDate, categories, parentSummary, literal, cfg, stdout, jsonOutput)
+		recurStr, _ := cmd.Flags().GetString("recur")
+		recurrence, err := parseRecurrence(recurStr)
+		if err != nil {
+			return fmt.Errorf("invalid --recur: %w", err)
+		}
+		recurFromCompletion, _ := cmd.Flags().GetBool("recur-from-completion")
+		recurFromDue := !recurFromCompletion // default is from due date
+		return doAdd(ctx, be, list, taskSummary, priority, status, description, dueDate, startDate, categories, parentSummary, literal, recurrence, recurFromDue, cfg, stdout, jsonOutput)
 	case "update":
 		// Check for direct ID selection flags
 		uidFlag, _ := cmd.Flags().GetString("uid")
@@ -2422,12 +2437,22 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		removeTagsSlice = normalizeTagSlice(removeTagsSlice)
 		parentSummary, _ := cmd.Flags().GetString("parent")
 		noParent, _ := cmd.Flags().GetBool("no-parent")
+		recurFlagSet := cmd.Flags().Changed("recur")
+		var newRecurrence *string
+		if recurFlagSet {
+			recurStr, _ := cmd.Flags().GetString("recur")
+			recurrence, err := parseRecurrence(recurStr)
+			if err != nil {
+				return fmt.Errorf("invalid --recur: %w", err)
+			}
+			newRecurrence = &recurrence
+		}
 
 		// Check for bulk pattern first (before ID resolution)
 		_, _, isBulk := parseBulkPattern(taskSummary)
 		if isBulk && uidFlag == "" && !cmd.Flags().Changed("local-id") {
 			// Use original bulk update function
-			return doUpdate(ctx, be, list, taskSummary, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, addTagsSlice, removeTagsSlice, parentSummary, noParent, cfg, stdout, jsonOutput)
+			return doUpdate(ctx, be, list, taskSummary, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, addTagsSlice, removeTagsSlice, parentSummary, noParent, newRecurrence, cfg, stdout, jsonOutput)
 		}
 
 		// Resolve task by UID, local-id, or summary
@@ -2435,7 +2460,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if err != nil {
 			return err
 		}
-		return doUpdateWithTask(ctx, be, list, task, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, addTagsSlice, removeTagsSlice, parentSummary, noParent, cfg, stdout, jsonOutput)
+		return doUpdateWithTask(ctx, be, list, task, newSummary, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, addTagsSlice, removeTagsSlice, parentSummary, noParent, newRecurrence, cfg, stdout, jsonOutput)
 	case "complete":
 		// Check for direct ID selection flags
 		uidFlag, _ := cmd.Flags().GetString("uid")
@@ -2774,6 +2799,10 @@ func printTaskNode(node *taskNode, prefix string, isLast bool, stdout io.Writer)
 	if t.DueDate != nil {
 		dateStr = fmt.Sprintf(" (%s)", formatDateDisplay(t.DueDate))
 	}
+	recurStr := ""
+	if t.Recurrence != "" {
+		recurStr = " [R]"
+	}
 
 	// Choose the appropriate tree character
 	var treeChar string
@@ -2786,7 +2815,7 @@ func printTaskNode(node *taskNode, prefix string, isLast bool, stdout io.Writer)
 		treeChar = "├─ "
 	}
 
-	_, _ = fmt.Fprintf(stdout, "%s%s%s %s%s%s%s\n", prefix, treeChar, statusIcon, t.Summary, priorityStr, dateStr, tagsStr)
+	_, _ = fmt.Fprintf(stdout, "%s%s%s %s%s%s%s%s\n", prefix, treeChar, statusIcon, t.Summary, priorityStr, dateStr, tagsStr, recurStr)
 
 	// Build the prefix for children
 	var childPrefix string
@@ -2992,6 +3021,159 @@ func parseDateFilter(dueBefore, dueAfter, createdBefore, createdAfter string) (D
 	return filter, nil
 }
 
+// parseRecurrence parses a human-readable recurrence string into an RFC 5545 RRULE.
+// Supported formats:
+// - daily, weekly, monthly, yearly
+// - every N days, every N weeks, every N months
+// - every monday, weekdays, weekends
+// - none (to remove recurrence)
+func parseRecurrence(s string) (string, error) {
+	if s == "" {
+		return "", nil
+	}
+
+	s = strings.ToLower(strings.TrimSpace(s))
+
+	// Simple frequencies
+	switch s {
+	case "daily":
+		return "FREQ=DAILY;INTERVAL=1", nil
+	case "weekly":
+		return "FREQ=WEEKLY;INTERVAL=1", nil
+	case "monthly":
+		return "FREQ=MONTHLY;INTERVAL=1", nil
+	case "yearly":
+		return "FREQ=YEARLY;INTERVAL=1", nil
+	case "none":
+		return "", nil // Signal to remove recurrence
+	case "weekdays":
+		return "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", nil
+	case "weekends":
+		return "FREQ=WEEKLY;BYDAY=SA,SU", nil
+	}
+
+	// Weekday patterns: every monday, every tuesday, etc.
+	weekdays := map[string]string{
+		"monday":    "MO",
+		"tuesday":   "TU",
+		"wednesday": "WE",
+		"thursday":  "TH",
+		"friday":    "FR",
+		"saturday":  "SA",
+		"sunday":    "SU",
+	}
+	if strings.HasPrefix(s, "every ") {
+		rest := strings.TrimPrefix(s, "every ")
+
+		// Check for weekday
+		if dayCode, ok := weekdays[rest]; ok {
+			return fmt.Sprintf("FREQ=WEEKLY;BYDAY=%s", dayCode), nil
+		}
+
+		// Check for "every N days/weeks/months" pattern
+		parts := strings.Fields(rest)
+		if len(parts) == 2 {
+			n, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return "", fmt.Errorf("invalid interval '%s': must be a number", parts[0])
+			}
+			if n < 1 {
+				return "", fmt.Errorf("interval must be at least 1")
+			}
+
+			unit := strings.TrimSuffix(parts[1], "s") // Remove trailing 's' for plural
+			switch unit {
+			case "day":
+				return fmt.Sprintf("FREQ=DAILY;INTERVAL=%d", n), nil
+			case "week":
+				return fmt.Sprintf("FREQ=WEEKLY;INTERVAL=%d", n), nil
+			case "month":
+				return fmt.Sprintf("FREQ=MONTHLY;INTERVAL=%d", n), nil
+			case "year":
+				return fmt.Sprintf("FREQ=YEARLY;INTERVAL=%d", n), nil
+			default:
+				return "", fmt.Errorf("unknown interval unit '%s': use day(s), week(s), month(s), or year(s)", parts[1])
+			}
+		}
+	}
+
+	return "", fmt.Errorf("unknown recurrence rule '%s': use daily, weekly, monthly, yearly, or 'every N days/weeks/months'", s)
+}
+
+// calculateNextOccurrence calculates the next occurrence date based on RRULE.
+// If fromDate is nil, returns nil. The RRULE is parsed to determine the interval.
+func calculateNextOccurrence(rrule string, fromDate *time.Time) *time.Time {
+	if fromDate == nil || rrule == "" {
+		return nil
+	}
+
+	// Parse RRULE components
+	parts := strings.Split(rrule, ";")
+	var freq string
+	interval := 1
+	var byDay string
+
+	for _, part := range parts {
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		switch kv[0] {
+		case "FREQ":
+			freq = kv[1]
+		case "INTERVAL":
+			if n, err := strconv.Atoi(kv[1]); err == nil {
+				interval = n
+			}
+		case "BYDAY":
+			byDay = kv[1]
+		}
+	}
+
+	next := *fromDate
+
+	// Handle BYDAY patterns
+	if byDay != "" && freq == "WEEKLY" {
+		// For BYDAY patterns, advance to next matching day
+		days := strings.Split(byDay, ",")
+		dayMap := map[string]time.Weekday{
+			"MO": time.Monday,
+			"TU": time.Tuesday,
+			"WE": time.Wednesday,
+			"TH": time.Thursday,
+			"FR": time.Friday,
+			"SA": time.Saturday,
+			"SU": time.Sunday,
+		}
+
+		// Find the next matching day (after today)
+		for i := 1; i <= 7*interval; i++ {
+			candidate := next.AddDate(0, 0, i)
+			for _, d := range days {
+				if targetDay, ok := dayMap[d]; ok && candidate.Weekday() == targetDay {
+					return &candidate
+				}
+			}
+		}
+	}
+
+	// Handle simple frequency patterns
+	switch freq {
+	case "DAILY":
+		next = next.AddDate(0, 0, interval)
+	case "WEEKLY":
+		next = next.AddDate(0, 0, 7*interval)
+	case "MONTHLY":
+		next = next.AddDate(0, interval, 0)
+	case "YEARLY":
+		next = next.AddDate(interval, 0, 0)
+	default:
+		return nil
+	}
+
+	return &next
+}
+
 // matchesDateFilter checks if a task matches the given date filter criteria.
 // Date filters use inclusive ranges. Tasks without dates are excluded from date filters.
 func matchesDateFilter(task backend.Task, filter DateFilter) bool {
@@ -3054,9 +3236,14 @@ func getStatusIcon(status backend.TaskStatus) string {
 }
 
 // doAdd creates a new task
-func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, status backend.TaskStatus, description string, dueDate, startDate *time.Time, categories string, parentSummary string, literal bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summary string, priority int, status backend.TaskStatus, description string, dueDate, startDate *time.Time, categories string, parentSummary string, literal bool, recurrence string, recurFromDue bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	if summary == "" {
 		return fmt.Errorf("task summary is required")
+	}
+
+	// Validate date range
+	if err := utils.ValidateDateRange(startDate, dueDate); err != nil {
+		return err
 	}
 
 	var parentID string
@@ -3072,18 +3259,20 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 
 	// Handle path-based hierarchy creation unless --literal flag is set
 	if !literal && strings.Contains(summary, "/") && parentSummary == "" {
-		return doAddHierarchy(ctx, be, list, summary, priority, status, description, dueDate, startDate, categories, cfg, stdout, jsonOutput)
+		return doAddHierarchy(ctx, be, list, summary, priority, status, description, dueDate, startDate, categories, recurrence, recurFromDue, cfg, stdout, jsonOutput)
 	}
 
 	task := &backend.Task{
-		Summary:     summary,
-		Description: description,
-		Priority:    priority,
-		Status:      status,
-		DueDate:     dueDate,
-		StartDate:   startDate,
-		Categories:  categories,
-		ParentID:    parentID,
+		Summary:      summary,
+		Description:  description,
+		Priority:     priority,
+		Status:       status,
+		DueDate:      dueDate,
+		StartDate:    startDate,
+		Categories:   categories,
+		ParentID:     parentID,
+		Recurrence:   recurrence,
+		RecurFromDue: recurFromDue,
 	}
 
 	created, err := be.CreateTask(ctx, list.ID, task)
@@ -3105,10 +3294,15 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 }
 
 // doAddHierarchy creates a task hierarchy from a path like "A/B/C"
-func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.List, path string, priority int, status backend.TaskStatus, description string, dueDate, startDate *time.Time, categories string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.List, path string, priority int, status backend.TaskStatus, description string, dueDate, startDate *time.Time, categories string, recurrence string, recurFromDue bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	parts := strings.Split(path, "/")
 	if len(parts) == 0 {
 		return fmt.Errorf("invalid path")
+	}
+
+	// Validate date range (applied to leaf task)
+	if err := utils.ValidateDateRange(startDate, dueDate); err != nil {
+		return err
 	}
 
 	tasks, err := be.GetTasks(ctx, list.ID)
@@ -3140,12 +3334,14 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 			lastCreated = existingTask
 		} else {
 			// Create the task
-			// Only apply priority, status, description, dates, and categories to the leaf task
+			// Only apply priority, status, description, dates, categories, and recurrence to the leaf task
 			taskPriority := 0
 			taskStatus := backend.StatusNeedsAction
 			taskDescription := ""
 			var taskDueDate, taskStartDate *time.Time
 			taskCategories := ""
+			taskRecurrence := ""
+			taskRecurFromDue := true
 			if i == len(parts)-1 {
 				taskPriority = priority
 				taskStatus = status
@@ -3153,17 +3349,21 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 				taskDueDate = dueDate
 				taskStartDate = startDate
 				taskCategories = categories
+				taskRecurrence = recurrence
+				taskRecurFromDue = recurFromDue
 			}
 
 			task := &backend.Task{
-				Summary:     part,
-				Description: taskDescription,
-				Priority:    taskPriority,
-				Status:      taskStatus,
-				DueDate:     taskDueDate,
-				StartDate:   taskStartDate,
-				Categories:  taskCategories,
-				ParentID:    parentID,
+				Summary:      part,
+				Description:  taskDescription,
+				Priority:     taskPriority,
+				Status:       taskStatus,
+				DueDate:      taskDueDate,
+				StartDate:    taskStartDate,
+				Categories:   taskCategories,
+				ParentID:     parentID,
+				Recurrence:   taskRecurrence,
+				RecurFromDue: taskRecurFromDue,
 			}
 
 			created, err := be.CreateTask(ctx, list.ID, task)
@@ -3197,7 +3397,7 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 }
 
 // doUpdate modifies an existing task
-func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, addTags, removeTags []string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, taskSummary, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, addTags, removeTags []string, parentSummary string, noParent bool, newRecurrence *string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Check for bulk pattern
 	bulkParentSummary, pattern, isBulk := parseBulkPattern(taskSummary)
 	if isBulk {
@@ -3244,6 +3444,15 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	// Handle --add-tag and --remove-tag (only if --tags was not set)
 	if newCategories == nil {
 		task.Categories = applyTagChanges(task.Categories, addTags, removeTags)
+	}
+	// Handle recurrence update
+	if newRecurrence != nil {
+		task.Recurrence = *newRecurrence
+	}
+
+	// Validate date range after updates
+	if err := utils.ValidateDateRange(task.StartDate, task.DueDate); err != nil {
+		return err
 	}
 
 	// Handle parent updates
@@ -3458,27 +3667,8 @@ func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List,
 		return err
 	}
 
-	task.Status = backend.StatusCompleted
-	// Auto-set completed timestamp
-	now := time.Now().UTC()
-	task.Completed = &now
-
-	updated, err := be.UpdateTask(ctx, list.ID, task)
-	if err != nil {
-		return err
-	}
-
-	if jsonOutput {
-		return outputActionJSON("complete", updated, stdout)
-	}
-
-	_, _ = fmt.Fprintf(stdout, "Completed task: %s\n", updated.Summary)
-
-	// Emit ACTION_COMPLETED result code in no-prompt mode
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
-	}
-	return nil
+	// Delegate to doCompleteWithTask to handle recurring tasks properly
+	return doCompleteWithTask(ctx, be, list, task, cfg, stdout, jsonOutput)
 }
 
 // doBulkComplete marks all children/descendants of a parent task as completed
@@ -3924,7 +4114,7 @@ func resolveTaskByID(ctx context.Context, cmd *cobra.Command, be backend.TaskMan
 }
 
 // doUpdateWithTask modifies an existing task (task already resolved)
-func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, addTags, removeTags []string, parentSummary string, noParent bool, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend.List, task *backend.Task, newSummary string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, addTags, removeTags []string, parentSummary string, noParent bool, newRecurrence *string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// If task is nil, fall back to original behavior (for bulk patterns)
 	if task == nil {
 		return fmt.Errorf("task not found")
@@ -3965,6 +4155,15 @@ func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend
 	// Handle --add-tag and --remove-tag (only if --tags was not set)
 	if newCategories == nil {
 		task.Categories = applyTagChanges(task.Categories, addTags, removeTags)
+	}
+	// Handle recurrence update
+	if newRecurrence != nil {
+		task.Recurrence = *newRecurrence
+	}
+
+	// Validate date range after updates
+	if err := utils.ValidateDateRange(task.StartDate, task.DueDate); err != nil {
+		return err
 	}
 
 	// Handle parent updates
@@ -4019,17 +4218,84 @@ func doCompleteWithTask(ctx context.Context, be backend.TaskManager, list *backe
 		return err
 	}
 
+	// Handle recurring tasks: create a new instance with the next due date
+	var newTask *backend.Task
+	if task.Recurrence != "" {
+		// Calculate next due date
+		var baseDate *time.Time
+		if task.RecurFromDue && task.DueDate != nil {
+			// From due date (default): Next = due_date + interval
+			baseDate = task.DueDate
+		} else {
+			// From completion: Next = completed_date + interval
+			baseDate = &now
+		}
+
+		nextDue := calculateNextOccurrence(task.Recurrence, baseDate)
+
+		// Create new task instance
+		newTaskData := &backend.Task{
+			Summary:      task.Summary,
+			Description:  task.Description,
+			Priority:     task.Priority,
+			Status:       backend.StatusNeedsAction,
+			DueDate:      nextDue,
+			StartDate:    task.StartDate,
+			Categories:   task.Categories,
+			ParentID:     task.ParentID,
+			Recurrence:   task.Recurrence,
+			RecurFromDue: task.RecurFromDue,
+		}
+
+		newTask, err = be.CreateTask(ctx, list.ID, newTaskData)
+		if err != nil {
+			return fmt.Errorf("failed to create recurring task instance: %w", err)
+		}
+	}
+
 	if jsonOutput {
+		// For recurring tasks, output both completed and new task
+		if newTask != nil {
+			return outputRecurringCompleteJSON(updated, newTask, stdout)
+		}
 		return outputActionJSON("complete", updated, stdout)
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Completed task: %s\n", updated.Summary)
+	if newTask != nil {
+		nextDueStr := ""
+		if newTask.DueDate != nil {
+			nextDueStr = newTask.DueDate.Format(views.DefaultDateFormat)
+		}
+		_, _ = fmt.Fprintf(stdout, "Created next occurrence: %s (due: %s)\n", newTask.Summary, nextDueStr)
+	}
 
 	// Emit ACTION_COMPLETED result code in no-prompt mode
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
 	return nil
+}
+
+// outputRecurringCompleteJSON outputs the result of completing a recurring task
+func outputRecurringCompleteJSON(completedTask, newTask *backend.Task, stdout io.Writer) error {
+	type recurringCompleteResponse struct {
+		Action        string   `json:"action"`
+		CompletedTask taskJSON `json:"completed_task"`
+		NewTask       taskJSON `json:"new_task"`
+		Result        string   `json:"result"`
+	}
+
+	response := recurringCompleteResponse{
+		Action:        "complete_recurring",
+		CompletedTask: taskToJSON(completedTask),
+		NewTask:       taskToJSON(newTask),
+		Result:        ResultActionCompleted,
+	}
+
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(response)
 }
 
 // doDeleteWithTask removes a task (task already resolved)
@@ -4076,18 +4342,20 @@ func doDeleteWithTask(ctx context.Context, be backend.TaskManager, list *backend
 
 // JSON output structures
 type taskJSON struct {
-	UID         string   `json:"uid"`
-	LocalID     *int64   `json:"local_id,omitempty"`
-	Summary     string   `json:"summary"`
-	Description string   `json:"description"`
-	Status      string   `json:"status"`
-	Priority    int      `json:"priority"`
-	ParentID    string   `json:"parent_id,omitempty"`
-	DueDate     *string  `json:"due_date,omitempty"`
-	StartDate   *string  `json:"start_date,omitempty"`
-	Completed   *string  `json:"completed,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	Synced      *bool    `json:"synced,omitempty"`
+	UID          string   `json:"uid"`
+	LocalID      *int64   `json:"local_id,omitempty"`
+	Summary      string   `json:"summary"`
+	Description  string   `json:"description"`
+	Status       string   `json:"status"`
+	Priority     int      `json:"priority"`
+	ParentID     string   `json:"parent_id,omitempty"`
+	DueDate      *string  `json:"due_date,omitempty"`
+	StartDate    *string  `json:"start_date,omitempty"`
+	Completed    *string  `json:"completed,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
+	Synced       *bool    `json:"synced,omitempty"`
+	Recurrence   string   `json:"recurrence,omitempty"`
+	RecurFromDue *bool    `json:"recur_from_due,omitempty"`
 }
 
 type listTasksResponse struct {
@@ -4150,6 +4418,10 @@ func taskToJSON(t *backend.Task) taskJSON {
 		for i, tag := range result.Tags {
 			result.Tags[i] = strings.TrimSpace(tag)
 		}
+	}
+	if t.Recurrence != "" {
+		result.Recurrence = t.Recurrence
+		result.RecurFromDue = &t.RecurFromDue
 	}
 	return result
 }

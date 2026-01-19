@@ -10,19 +10,21 @@ import (
 
 // Task represents a todo item
 type Task struct {
-	ID          string
-	Summary     string
-	Description string
-	Status      TaskStatus
-	Priority    int
-	DueDate     *time.Time
-	StartDate   *time.Time
-	Completed   *time.Time
-	Created     time.Time
-	Modified    time.Time
-	ListID      string
-	ParentID    string // For subtasks
-	Categories  string // Comma-separated list of tags/categories
+	ID           string
+	Summary      string
+	Description  string
+	Status       TaskStatus
+	Priority     int
+	DueDate      *time.Time
+	StartDate    *time.Time
+	Completed    *time.Time
+	Created      time.Time
+	Modified     time.Time
+	ListID       string
+	ParentID     string // For subtasks
+	Categories   string // Comma-separated list of tags/categories
+	Recurrence   string // RRULE string: "FREQ=WEEKLY;INTERVAL=1"
+	RecurFromDue bool   // true = from due date, false = from completion
 }
 
 // TaskStatus represents the completion state of a task
