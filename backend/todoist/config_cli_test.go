@@ -128,8 +128,8 @@ no_prompt: true
 }
 
 // TestDefaultBackendTodoistUsedCLI verifies that when default_backend is set to todoist,
-// the CLI attempts to use Todoist backend (not SQLite).
-// This test reproduces issue #001 - default_backend config is ignored.
+// but credentials are missing, the CLI warns and falls back to SQLite gracefully.
+// This test relates to issue 001 (backend detection fallback warning).
 func TestDefaultBackendTodoistUsedCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithConfig(t)
 
@@ -143,29 +143,30 @@ default_backend: todoist
 no_prompt: true
 `)
 
-	// Clear the token env var to ensure we get a credentials error
+	// Clear the token env var to ensure backend is unavailable
 	t.Setenv("TODOAT_TODOIST_TOKEN", "")
 
-	// When default_backend is todoist but no credentials, we should get an error
-	// about Todoist credentials, NOT silently fall back to SQLite
+	// When default_backend is todoist but no credentials, the CLI should:
+	// 1. Warn the user about todoist being unavailable
+	// 2. Fall back to SQLite gracefully (exit code 0)
 	stdout, stderr, exitCode := cli.Execute("-y", "list")
 
-	// With the bug (issue #001), this would succeed using SQLite silently
-	// After the fix, this should fail with a Todoist credentials error
 	combined := stdout + stderr
+	lowerCombined := strings.ToLower(combined)
 
-	if exitCode == 0 {
-		// If it succeeds, check if it's using SQLite (bug) or Todoist
-		// The test should fail if we see SQLite being used
-		if !strings.Contains(combined, "todoist") && !strings.Contains(combined, "Todoist") {
-			t.Errorf("default_backend is set to todoist but CLI silently used SQLite. Output: %s", combined)
-		}
-	} else {
-		// If it fails, verify it's because of Todoist credentials (correct behavior)
-		lowerCombined := strings.ToLower(combined)
-		if !strings.Contains(lowerCombined, "todoist") && !strings.Contains(lowerCombined, "token") && !strings.Contains(lowerCombined, "credential") {
-			t.Errorf("expected error about Todoist credentials, got: %s", combined)
-		}
+	// Should succeed using fallback
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 (graceful fallback), got %d. Output: %s", exitCode, combined)
+	}
+
+	// Should show warning about todoist being unavailable
+	if !strings.Contains(lowerCombined, "warning") || !strings.Contains(lowerCombined, "todoist") {
+		t.Errorf("expected warning about todoist being unavailable, got: %s", combined)
+	}
+
+	// Should mention sqlite as the fallback
+	if !strings.Contains(lowerCombined, "sqlite") {
+		t.Errorf("expected mention of sqlite fallback, got: %s", combined)
 	}
 }
 

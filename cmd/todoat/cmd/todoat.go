@@ -83,6 +83,8 @@ type Config struct {
 	AutoDetectBackend bool   // Enable auto-detection of backend
 	// Backend selection
 	Backend string // Backend name to use (from --backend flag)
+	// IO writers for output (for testing)
+	Stderr io.Writer // Writer for warnings/errors (defaults to os.Stderr)
 }
 
 // LocalIDBackend is an interface for backends that support local_id lookup (e.g., SQLite)
@@ -2213,28 +2215,45 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 			// Create Todoist backend using environment variable credentials
 			todoistCfg := todoist.ConfigFromEnv()
 			if todoistCfg.APIToken == "" {
-				return nil, fmt.Errorf("todoist backend is configured as default but TODOAT_TODOIST_TOKEN environment variable is not set")
+				// Warn user and fall back to sqlite
+				warnBackendFallback(cfg, "todoist", "TODOAT_TODOIST_TOKEN environment variable is not set")
+			} else {
+				utils.Debugf("Using default backend: todoist")
+				return todoist.New(todoistCfg)
 			}
-			utils.Debugf("Using default backend: todoist")
-			return todoist.New(todoistCfg)
 		case "nextcloud":
 			// Create Nextcloud backend using environment variable credentials
 			nextcloudCfg := nextcloud.ConfigFromEnv()
+			var missingCreds []string
 			if nextcloudCfg.Host == "" {
-				return nil, fmt.Errorf("nextcloud backend is configured as default but TODOAT_NEXTCLOUD_HOST environment variable is not set")
+				missingCreds = append(missingCreds, "TODOAT_NEXTCLOUD_HOST")
 			}
 			if nextcloudCfg.Username == "" {
-				return nil, fmt.Errorf("nextcloud backend is configured as default but TODOAT_NEXTCLOUD_USERNAME environment variable is not set")
+				missingCreds = append(missingCreds, "TODOAT_NEXTCLOUD_USERNAME")
 			}
 			if nextcloudCfg.Password == "" {
-				return nil, fmt.Errorf("nextcloud backend is configured as default but TODOAT_NEXTCLOUD_PASSWORD environment variable is not set")
+				missingCreds = append(missingCreds, "TODOAT_NEXTCLOUD_PASSWORD")
 			}
-			utils.Debugf("Using default backend: nextcloud")
-			return nextcloud.New(nextcloudCfg)
+			if len(missingCreds) > 0 {
+				// Warn user and fall back to sqlite
+				warnBackendFallback(cfg, "nextcloud", strings.Join(missingCreds, ", ")+" environment variable(s) not set")
+			} else {
+				utils.Debugf("Using default backend: nextcloud")
+				return nextcloud.New(nextcloudCfg)
+			}
 		}
 	}
 
 	return sqlite.New(dbPath)
+}
+
+// warnBackendFallback writes a warning message about backend fallback to stderr
+func warnBackendFallback(cfg *Config, backendName string, reason string) {
+	stderr := cfg.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	_, _ = fmt.Fprintf(stderr, "Warning: Default backend '%s' unavailable (%s). Using 'sqlite' instead.\n", backendName, reason)
 }
 
 // createBackendByName creates a backend based on the given name

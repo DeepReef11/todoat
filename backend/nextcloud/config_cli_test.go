@@ -37,8 +37,8 @@ no_prompt: true
 }
 
 // TestDefaultBackendNextcloudUsedCLI verifies that when default_backend is set to nextcloud,
-// the CLI attempts to use Nextcloud backend (not SQLite).
-// This test reproduces issue #2 - config doesn't seem to be read by app.
+// but credentials are missing, the CLI warns and falls back to SQLite gracefully.
+// This test relates to issue 001 (backend detection fallback warning).
 func TestDefaultBackendNextcloudUsedCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithConfig(t)
 
@@ -52,31 +52,32 @@ default_backend: nextcloud
 no_prompt: true
 `)
 
-	// Clear the nextcloud env vars to ensure we get a credentials error
+	// Clear the nextcloud env vars to ensure backend is unavailable
 	t.Setenv("TODOAT_NEXTCLOUD_HOST", "")
 	t.Setenv("TODOAT_NEXTCLOUD_USERNAME", "")
 	t.Setenv("TODOAT_NEXTCLOUD_PASSWORD", "")
 
-	// When default_backend is nextcloud but no credentials, we should get an error
-	// about Nextcloud credentials, NOT silently fall back to SQLite
+	// When default_backend is nextcloud but no credentials, the CLI should:
+	// 1. Warn the user about nextcloud being unavailable
+	// 2. Fall back to SQLite gracefully (exit code 0)
 	stdout, stderr, exitCode := cli.Execute("-y", "list")
 
-	// With the bug (issue #2), this would succeed using SQLite silently
-	// After the fix, this should fail with a Nextcloud credentials error
 	combined := stdout + stderr
+	lowerCombined := strings.ToLower(combined)
 
-	if exitCode == 0 {
-		// If it succeeds, check if it's using SQLite (bug) or Nextcloud
-		// The test should fail if we see SQLite being used
-		if !strings.Contains(combined, "nextcloud") && !strings.Contains(combined, "Nextcloud") {
-			t.Errorf("default_backend is set to nextcloud but CLI silently used SQLite. Output: %s", combined)
-		}
-	} else {
-		// If it fails, verify it's because of Nextcloud credentials (correct behavior)
-		lowerCombined := strings.ToLower(combined)
-		if !strings.Contains(lowerCombined, "nextcloud") && !strings.Contains(lowerCombined, "host") && !strings.Contains(lowerCombined, "credential") {
-			t.Errorf("expected error about Nextcloud credentials, got: %s", combined)
-		}
+	// Should succeed using fallback
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 (graceful fallback), got %d. Output: %s", exitCode, combined)
+	}
+
+	// Should show warning about nextcloud being unavailable
+	if !strings.Contains(lowerCombined, "warning") || !strings.Contains(lowerCombined, "nextcloud") {
+		t.Errorf("expected warning about nextcloud being unavailable, got: %s", combined)
+	}
+
+	// Should mention sqlite as the fallback
+	if !strings.Contains(lowerCombined, "sqlite") {
+		t.Errorf("expected mention of sqlite fallback, got: %s", combined)
 	}
 }
 

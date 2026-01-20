@@ -282,6 +282,8 @@ func (c *CLITest) Execute(args ...string) (stdout, stderr string, exitCode int) 
 	c.t.Helper()
 
 	var stdoutBuf, stderrBuf bytes.Buffer
+	// Set Stderr on cfg to capture warnings from getBackend
+	c.cfg.Stderr = &stderrBuf
 	exitCode = cmd.Execute(args, &stdoutBuf, &stderrBuf, c.cfg)
 	return stdoutBuf.String(), stderrBuf.String(), exitCode
 }

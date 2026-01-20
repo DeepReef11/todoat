@@ -1287,3 +1287,143 @@ func TestCommaSeparatedStatusFilterCLI(t *testing.T) {
 		t.Errorf("Task 3 (DONE) should NOT be in output with abbrev, got: %s", output)
 	}
 }
+
+// =============================================================================
+// Backend Fallback Warning Tests (Issue 001)
+// Tests that users are warned when falling back from a configured default backend
+// =============================================================================
+
+// TestBackendFallbackWarning verifies that when the configured default backend
+// is unavailable, the user is warned before falling back to sqlite.
+func TestBackendFallbackWarning(t *testing.T) {
+	t.Run("warns when nextcloud backend is unavailable", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "test.db")
+		configPath := filepath.Join(tmpDir, "config.yaml")
+
+		// Create config with default_backend: nextcloud but no credentials
+		configContent := `
+backends:
+  sqlite:
+    enabled: true
+  nextcloud:
+    enabled: true
+default_backend: nextcloud
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+			t.Fatalf("failed to create config: %v", err)
+		}
+
+		// Clear any TODOAT_NEXTCLOUD_* env vars to ensure backend is unavailable
+		_ = os.Unsetenv("TODOAT_NEXTCLOUD_HOST")
+		_ = os.Unsetenv("TODOAT_NEXTCLOUD_USERNAME")
+		_ = os.Unsetenv("TODOAT_NEXTCLOUD_PASSWORD")
+
+		var stdout, stderr bytes.Buffer
+		cfg := &Config{
+			DBPath:     dbPath,
+			ConfigPath: configPath,
+			Stderr:     &stderr, // Capture warnings
+		}
+
+		// Run list command - should fall back to sqlite but warn user
+		exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
+
+		// Should succeed (using fallback sqlite)
+		if exitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+		}
+
+		// Should warn about nextcloud being unavailable
+		combinedOutput := stdout.String() + stderr.String()
+		if !strings.Contains(strings.ToLower(combinedOutput), "warning") ||
+			!strings.Contains(strings.ToLower(combinedOutput), "nextcloud") {
+			t.Errorf("expected warning about nextcloud being unavailable, got stdout=%s stderr=%s", stdout.String(), stderr.String())
+		}
+
+		// Should indicate using sqlite as fallback
+		if !strings.Contains(strings.ToLower(combinedOutput), "sqlite") {
+			t.Errorf("expected mention of sqlite fallback, got stdout=%s stderr=%s", stdout.String(), stderr.String())
+		}
+	})
+
+	t.Run("warns when todoist backend is unavailable", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "test.db")
+		configPath := filepath.Join(tmpDir, "config.yaml")
+
+		// Create config with default_backend: todoist but no credentials
+		configContent := `
+backends:
+  sqlite:
+    enabled: true
+  todoist:
+    enabled: true
+default_backend: todoist
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+			t.Fatalf("failed to create config: %v", err)
+		}
+
+		// Clear TODOAT_TODOIST_TOKEN to ensure backend is unavailable
+		_ = os.Unsetenv("TODOAT_TODOIST_TOKEN")
+
+		var stdout, stderr bytes.Buffer
+		cfg := &Config{
+			DBPath:     dbPath,
+			ConfigPath: configPath,
+			Stderr:     &stderr, // Capture warnings
+		}
+
+		// Run list command - should fall back to sqlite but warn user
+		exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
+
+		// Should succeed (using fallback sqlite)
+		if exitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+		}
+
+		// Should warn about todoist being unavailable
+		combinedOutput := stdout.String() + stderr.String()
+		if !strings.Contains(strings.ToLower(combinedOutput), "warning") ||
+			!strings.Contains(strings.ToLower(combinedOutput), "todoist") {
+			t.Errorf("expected warning about todoist being unavailable, got stdout=%s stderr=%s", stdout.String(), stderr.String())
+		}
+	})
+
+	t.Run("no warning when using sqlite default", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "test.db")
+		configPath := filepath.Join(tmpDir, "config.yaml")
+
+		// Create config with default_backend: sqlite (no fallback needed)
+		configContent := `
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+			t.Fatalf("failed to create config: %v", err)
+		}
+
+		var stdout, stderr bytes.Buffer
+		cfg := &Config{
+			DBPath:     dbPath,
+			ConfigPath: configPath,
+		}
+
+		exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
+
+		if exitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+		}
+
+		// Should NOT show any fallback warning
+		combinedOutput := stdout.String() + stderr.String()
+		if strings.Contains(strings.ToLower(combinedOutput), "warning") &&
+			strings.Contains(strings.ToLower(combinedOutput), "fallback") {
+			t.Errorf("should not show fallback warning when using sqlite default, got stdout=%s stderr=%s", stdout.String(), stderr.String())
+		}
+	})
+}

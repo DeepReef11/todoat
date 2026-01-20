@@ -1,13 +1,3 @@
-# todoat Configuration File
-# This file is automatically created on first run.
-# Edit values as needed for your setup.
-
-# =============================================================================
-# Backend Configurations
-# =============================================================================
-# Configure backends you want to use for task storage.
-# Multiple backends can be enabled; use default_backend to select active one.
-
 backends:
   # SQLite backend - local database storage (recommended default)
   sqlite:
@@ -21,8 +11,6 @@ backends:
   #   enabled: false
   #   host: "nextcloud.example.com"
   #   username: "your-username"
-  #   # Password: stored in system keyring or TODOAT_NEXTCLOUD_PASSWORD env var
-  #   # To set password in keyring: todoat backend nextcloud set-password
   #   # TLS options (for self-signed certificates):
   #   # insecure_skip_verify: true
   #   # suppress_ssl_warning: true
