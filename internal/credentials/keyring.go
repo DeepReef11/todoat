@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/zalando/go-keyring"
 )
 
 // ErrKeyringNotAvailable is returned when the system keyring is not available
@@ -66,19 +68,71 @@ type systemKeyring struct{}
 
 // Set stores a password in the system keyring
 func (s *systemKeyring) Set(service, account, password string) error {
-	// TODO: Use zalando/go-keyring or similar for production
-	// For now, return an error indicating keyring is not available
-	return ErrKeyringNotAvailable
+	err := keyring.Set(service, account, password)
+	if err != nil {
+		// Check if it's a "not available" error
+		if isKeyringNotAvailable(err) {
+			return ErrKeyringNotAvailable
+		}
+		return err
+	}
+	return nil
 }
 
 // Get retrieves a password from the system keyring
 func (s *systemKeyring) Get(service, account string) (string, error) {
-	// TODO: Use zalando/go-keyring or similar for production
-	return "", ErrKeyringNotAvailable
+	password, err := keyring.Get(service, account)
+	if err != nil {
+		if isKeyringNotAvailable(err) {
+			return "", ErrKeyringNotAvailable
+		}
+		return "", err
+	}
+	return password, nil
 }
 
 // Delete removes a password from the system keyring
 func (s *systemKeyring) Delete(service, account string) error {
-	// TODO: Use zalando/go-keyring or similar for production
-	return ErrKeyringNotAvailable
+	err := keyring.Delete(service, account)
+	if err != nil {
+		if isKeyringNotAvailable(err) {
+			return ErrKeyringNotAvailable
+		}
+		return err
+	}
+	return nil
+}
+
+// isKeyringNotAvailable checks if the error indicates keyring is not available
+func isKeyringNotAvailable(err error) bool {
+	// go-keyring returns specific error types when keyring is not available
+	// On Linux without D-Bus/Secret Service, it returns an error
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// Common patterns for "keyring not available":
+	// - "exec: \"dbus-launch\": executable file not found" (no D-Bus)
+	// - "The name org.freedesktop.secrets was not provided" (no Secret Service)
+	// - "Cannot autolaunch D-Bus without X11" (headless)
+	return !errors.Is(err, keyring.ErrNotFound) &&
+		(contains(errStr, "dbus") ||
+			contains(errStr, "secrets") ||
+			contains(errStr, "X11") ||
+			contains(errStr, "not found") && contains(errStr, "executable"))
+}
+
+// contains is a simple helper for string containment check
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
