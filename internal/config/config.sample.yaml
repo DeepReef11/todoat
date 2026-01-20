@@ -48,7 +48,7 @@ default_backend: sqlite
 # Auto-detect backend based on current directory (e.g., use git backend in git repos)
 auto_detect_backend: false
 
-# Backend priority for selection when auto-detect is enabled
+# Backend priority for selection (planned feature - not yet implemented)
 # backend_priority:
 #   - git
 #   - sqlite

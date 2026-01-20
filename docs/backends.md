@@ -193,22 +193,12 @@ When `auto_detect: true`, todoat automatically uses Git backend when:
 1. Sync local backend (when sync enabled)
 2. Auto-detected backend (when enabled)
 3. `default_backend` from config
-4. First backend in `backend_priority`
-5. First enabled backend
+4. First enabled backend
 
 ### Default Backend
 
 ```yaml
 default_backend: nextcloud
-```
-
-### Backend Priority
-
-```yaml
-backend_priority:
-  - git        # Try Git first
-  - nextcloud  # Then Nextcloud
-  - sqlite     # Finally SQLite
 ```
 
 ### Auto-Detection
@@ -334,11 +324,6 @@ backends:
     enabled: true
 
 default_backend: work
-
-backend_priority:
-  - work
-  - home
-  - local
 ```
 
 ### Developer Workflow
@@ -359,10 +344,6 @@ backends:
     username: "dev"
 
 auto_detect_backend: true
-
-backend_priority:
-  - git
-  - nextcloud
 ```
 
 ### Offline-First Setup
