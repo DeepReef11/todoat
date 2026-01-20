@@ -51,6 +51,51 @@ todoat sync queue
 
 Shows operations waiting to be synced.
 
+### View Conflicts
+
+```bash
+todoat sync conflicts
+```
+
+Lists unresolved sync conflicts requiring manual attention.
+
+### Resolve a Conflict
+
+```bash
+todoat sync conflicts resolve <conflict-id> --use local
+todoat sync conflicts resolve <conflict-id> --use remote
+```
+
+Manually resolve a specific conflict.
+
+## Background Sync Daemon
+
+Run sync automatically in the background:
+
+### Start Daemon
+
+```bash
+todoat sync daemon start
+```
+
+Starts background sync with configured interval.
+
+### Check Daemon Status
+
+```bash
+todoat sync daemon status
+```
+
+Shows if daemon is running and last sync time.
+
+### Stop Daemon
+
+```bash
+todoat sync daemon stop
+```
+
+Stops the background sync daemon.
+
 ## Sync Configuration Options
 
 ### enabled

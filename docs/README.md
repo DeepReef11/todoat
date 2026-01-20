@@ -29,6 +29,7 @@ todoat
 | [Configuration](configuration.md) | Managing settings with the config command |
 | [Views](views.md) | Customizing how tasks are displayed |
 | [Synchronization](sync.md) | Offline mode and sync configuration |
+| [Reminders](reminders.md) | Task due date reminders |
 | [Shell Completion](shell-completion.md) | Tab completion for Bash, Zsh, Fish, and PowerShell |
 | [Tags](tags.md) | Managing task categories and tags |
 
@@ -77,6 +78,10 @@ todoat
 | `todoat view` | Manage custom views |
 | `todoat config` | View and modify configuration |
 | `todoat credentials` | Manage backend credentials |
+| `todoat migrate` | Migrate tasks between backends |
+| `todoat notification` | Manage notification system |
+| `todoat reminder` | Manage task reminders |
+| `todoat tui` | Launch terminal user interface |
 | `todoat version` | Show version information |
 
 ## Configuration

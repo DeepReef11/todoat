@@ -204,6 +204,66 @@ todoat list delete "Project Alpha"
 todoat list trash restore "Project Alpha"
 ```
 
+## Export and Import
+
+### Export a List
+
+Export tasks to various formats for backup or sharing:
+
+```bash
+# Export to JSON (default)
+todoat list export "Work Tasks"
+
+# Export to specific format
+todoat list export "Work Tasks" --format json
+todoat list export "Work Tasks" --format csv
+todoat list export "Work Tasks" --format ical
+todoat list export "Work Tasks" --format sqlite
+
+# Specify output file
+todoat list export "Work Tasks" --output ~/backup/work.json
+```
+
+| Format | Extension | Description |
+|--------|-----------|-------------|
+| `json` | .json | JSON format (default) |
+| `csv` | .csv | Comma-separated values |
+| `ical` | .ics | iCalendar format |
+| `sqlite` | .db | SQLite database |
+
+### Import a List
+
+Import tasks from a file:
+
+```bash
+# Auto-detect format from file extension
+todoat list import ~/backup/work.json
+
+# Specify format explicitly
+todoat list import ~/backup/tasks.txt --format csv
+```
+
+## Database Maintenance
+
+### View Statistics
+
+```bash
+todoat list stats
+```
+
+Shows database statistics including:
+- Total tasks and lists
+- Tasks by status
+- Storage usage
+
+### Compact Database
+
+```bash
+todoat list vacuum
+```
+
+Reclaims unused space in the SQLite database. Run this periodically if you frequently delete tasks.
+
 ## Notes
 
 - List names must be unique within a backend

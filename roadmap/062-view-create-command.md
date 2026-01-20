@@ -1,14 +1,14 @@
-# [062] Implement view create command with interactive builder
+# [062] Implement view create command
 
 ## Summary
-The `view create` command is documented with an interactive terminal interface for creating custom views, but only `view list` is implemented. Users must manually create YAML files.
+Add a `view create` command to allow creating custom views from the command line instead of manually editing YAML files. The documentation correctly describes manual YAML creation, but a CLI command would improve user experience.
 
 ## Documentation Reference
 - Primary: `docs/views.md`
-- Section: Creating a Custom View - Method 1: Interactive Builder
+- Note: Docs correctly describe manual YAML creation. This is a feature request, not a doc gap.
 
 ## Gap Type
-missing
+feature-request (enhancement)
 
 ## Current Behavior
 ```bash

@@ -1,14 +1,14 @@
 # [063] Add --backend and --list-backends flags
 
 ## Summary
-The documentation describes `--backend` flag for selecting a specific backend and `--list-backends` to show configured backends, but neither flag exists. Currently only `--detect-backend` is available.
+Add `--backend` flag for selecting a specific backend per-command and `--list-backends` to show configured backends. Currently only `--detect-backend` is available. The documentation correctly shows using `config get backends` and `config set default_backend` for backend management - these flags would provide additional convenience.
 
 ## Documentation Reference
 - Primary: `docs/backends.md`
-- Section: Backend Selection, Listing Backends
+- Note: Docs use `config get backends` which works. This is a feature enhancement, not a doc gap.
 
 ## Gap Type
-missing
+feature-request (enhancement)
 
 ## Current Behavior
 ```bash

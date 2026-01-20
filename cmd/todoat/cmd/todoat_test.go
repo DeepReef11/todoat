@@ -421,19 +421,62 @@ func TestConfigPassthroughCoreCLI(t *testing.T) {
 
 // --- Default Behavior Tests ---
 
-// TestRootCommandShowsHelp verifies that running without args shows help
-func TestRootCommandShowsHelpCoreCLI(t *testing.T) {
-	var stdout, stderr bytes.Buffer
+// TestRootCommandShowsListsCoreCLI verifies that running without args shows available lists
+// Issue #0: todoat should show available list when run without args
+func TestRootCommandShowsListsCoreCLI(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+	configPath := tmpDir + "/config.yaml"
 
-	exitCode := Execute([]string{}, &stdout, &stderr, nil)
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte("# test config\ndefault_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	cfg := &Config{
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		CachePath:  cachePath,
+		ConfigPath: configPath,
+	}
+
+	// First create a list so we have something to show
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"-y", "list", "create", "Work"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	// Add a task to the list
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "Work", "add", "Test task"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to add task: %s", stderr.String())
+	}
+
+	// Now test running without args - should show lists
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y"}, &stdout, &stderr, cfg)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0 for no args, got %d: %s", exitCode, stderr.String())
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, "Usage:") {
-		t.Errorf("no-args should show help with Usage:, got: %s", output)
+	// Should show "Available lists" header (not "Usage:")
+	if !strings.Contains(output, "Available lists") {
+		t.Errorf("no-args should show 'Available lists', got: %s", output)
+	}
+	// Should show NAME/TASKS headers
+	if !strings.Contains(output, "NAME") {
+		t.Errorf("no-args should show 'NAME' header, got: %s", output)
+	}
+	// Should show the list we created
+	if !strings.Contains(output, "Work") {
+		t.Errorf("no-args should show 'Work' list, got: %s", output)
 	}
 }
 

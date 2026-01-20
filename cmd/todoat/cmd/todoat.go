@@ -181,9 +181,16 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 				return runDetectBackend(stdout, cfg)
 			}
 
-			// If no args, show help
+			// If no args, show available lists (same as `todoat list`)
 			if len(args) == 0 {
-				return cmd.Help()
+				be, err := getBackend(cfg)
+				if err != nil {
+					return err
+				}
+				defer func() { _ = be.Close() }()
+
+				jsonOutput, _ := cmd.Flags().GetBool("json")
+				return doListView(context.Background(), be, cfg, stdout, jsonOutput)
 			}
 
 			// Get or create backend

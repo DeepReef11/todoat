@@ -657,6 +657,42 @@ func TestListViewSQLiteCLI(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
+// TestNoArgsShowsListsSQLiteCLI verifies that running todoat without arguments shows available lists
+// Issue #0: todoat should show available list when run without args
+func TestNoArgsShowsListsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with a task
+	cli.MustExecute("-y", "list", "create", "l")
+	cli.MustExecute("-y", "l", "add", "Test task")
+
+	// Run todoat without any arguments (should show lists, not help)
+	stdout := cli.MustExecute("-y")
+
+	// Should show "Available lists" header
+	testutil.AssertContains(t, stdout, "Available lists")
+	// Should show NAME/TASKS headers
+	testutil.AssertContains(t, stdout, "NAME")
+	testutil.AssertContains(t, stdout, "TASKS")
+	// Should show the list name
+	testutil.AssertContains(t, stdout, "l")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestNoArgsShowsListsEmptySQLiteCLI verifies that running todoat without arguments shows empty list message
+func TestNoArgsShowsListsEmptySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Run todoat without any arguments when no lists exist
+	stdout := cli.MustExecute("-y")
+
+	// Should contain a helpful message about no lists
+	if !strings.Contains(strings.ToLower(stdout), "no") || !strings.Contains(strings.ToLower(stdout), "list") {
+		t.Errorf("expected message about no lists, got: %s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
 // TestListViewEmpty verifies that viewing lists with no lists shows INFO_ONLY message
 func TestListViewEmptySQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
