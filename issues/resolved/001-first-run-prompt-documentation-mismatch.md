@@ -78,3 +78,24 @@ Available lists (0):
 (no lists yet)
 \`\`\`
 ```
+
+## Resolution
+
+**Fixed in**: Already resolved (prior to this session)
+**Fix description**: The documentation at `docs/getting-started.md` lines 24-31 was updated to correctly describe the actual behavior - automatic config creation without prompts.
+
+### Verification Log
+```bash
+$ rm -rf ~/.config/todoat && ./todoat
+Available lists (8):
+
+NAME                 TASKS
+Tasks                1
+...
+```
+The config file was silently created at `~/.config/todoat/config.yaml` without any prompt.
+
+The documentation now correctly states (lines 24-25):
+> When you first run todoat, if no configuration file exists, it automatically creates one at `~/.config/todoat/config.yaml` with a sample configuration including documentation and examples.
+
+**Matches expected behavior**: YES - Documentation now matches actual behavior.
