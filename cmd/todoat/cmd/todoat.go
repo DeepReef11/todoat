@@ -2223,21 +2223,21 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 				return todoist.New(todoistCfg)
 			}
 		case "nextcloud":
-			// Create Nextcloud backend using environment variable credentials
-			nextcloudCfg := nextcloud.ConfigFromEnv()
+			// Create Nextcloud backend using config file + keyring + environment variables
+			nextcloudCfg := buildNextcloudConfigWithKeyring("nextcloud", rawConfig)
 			var missingCreds []string
 			if nextcloudCfg.Host == "" {
-				missingCreds = append(missingCreds, "TODOAT_NEXTCLOUD_HOST")
+				missingCreds = append(missingCreds, "host (config file or TODOAT_NEXTCLOUD_HOST)")
 			}
 			if nextcloudCfg.Username == "" {
-				missingCreds = append(missingCreds, "TODOAT_NEXTCLOUD_USERNAME")
+				missingCreds = append(missingCreds, "username (config file or TODOAT_NEXTCLOUD_USERNAME)")
 			}
 			if nextcloudCfg.Password == "" {
-				missingCreds = append(missingCreds, "TODOAT_NEXTCLOUD_PASSWORD")
+				missingCreds = append(missingCreds, "password (keyring, config file, or TODOAT_NEXTCLOUD_PASSWORD)")
 			}
 			if len(missingCreds) > 0 {
 				// Warn user and fall back to sqlite
-				warnBackendFallback(cfg, "nextcloud", strings.Join(missingCreds, ", ")+" environment variable(s) not set")
+				warnBackendFallback(cfg, "nextcloud", strings.Join(missingCreds, ", ")+" not configured")
 			} else {
 				utils.Debugf("Using default backend: nextcloud")
 				return nextcloud.New(nextcloudCfg)
@@ -2323,16 +2323,16 @@ func createCustomBackend(name string, dbPath string, rawConfig map[string]interf
 		return todoist.New(todoistCfg)
 
 	case "nextcloud":
-		// Build nextcloud config from custom backend settings
-		nextcloudCfg := buildNextcloudConfigFromBackend(name, backendCfg)
+		// Build nextcloud config from config file + keyring + environment
+		nextcloudCfg := buildNextcloudConfigWithKeyring(name, rawConfig)
 		if nextcloudCfg.Host == "" {
-			return nil, fmt.Errorf("nextcloud backend '%s' requires host configuration", name)
+			return nil, fmt.Errorf("nextcloud backend '%s' requires host (config file or TODOAT_NEXTCLOUD_HOST)", name)
 		}
 		if nextcloudCfg.Username == "" {
-			return nil, fmt.Errorf("nextcloud backend '%s' requires username configuration", name)
+			return nil, fmt.Errorf("nextcloud backend '%s' requires username (config file or TODOAT_NEXTCLOUD_USERNAME)", name)
 		}
 		if nextcloudCfg.Password == "" {
-			return nil, fmt.Errorf("nextcloud backend '%s' requires password (set TODOAT_NEXTCLOUD_PASSWORD or configure credentials)", name)
+			return nil, fmt.Errorf("nextcloud backend '%s' requires password (keyring, config file, or TODOAT_NEXTCLOUD_PASSWORD)", name)
 		}
 		return nextcloud.New(nextcloudCfg)
 
@@ -2341,24 +2341,38 @@ func createCustomBackend(name string, dbPath string, rawConfig map[string]interf
 	}
 }
 
-// buildNextcloudConfigFromBackend builds a nextcloud.Config from custom backend configuration.
-// It prioritizes config file settings over environment variables.
-func buildNextcloudConfigFromBackend(name string, backendCfg map[string]interface{}) nextcloud.Config {
+// buildNextcloudConfigWithKeyring builds a nextcloud.Config from config file, keyring, and environment.
+// Priority: 1. Config file values, 2. Environment variables, 3. Keyring (for password only)
+// This addresses issue #007 - keyring credentials should be used for backend validation.
+func buildNextcloudConfigWithKeyring(name string, rawConfig map[string]interface{}) nextcloud.Config {
 	// Start with environment variables as defaults
 	cfg := nextcloud.ConfigFromEnv()
 
-	// Override with config file settings
-	if host, ok := backendCfg["host"].(string); ok && host != "" {
-		cfg.Host = host
+	// Override with config file settings if available
+	if rawConfig != nil {
+		if backendCfg, _, err := config.GetBackendConfig(rawConfig, name); err == nil {
+			if host, ok := backendCfg["host"].(string); ok && host != "" {
+				cfg.Host = host
+			}
+			if username, ok := backendCfg["username"].(string); ok && username != "" {
+				cfg.Username = username
+			}
+			if password, ok := backendCfg["password"].(string); ok && password != "" {
+				cfg.Password = password
+			}
+			if insecure, ok := backendCfg["insecure_skip_verify"].(bool); ok {
+				cfg.InsecureSkipVerify = insecure
+			}
+		}
 	}
-	if username, ok := backendCfg["username"].(string); ok && username != "" {
-		cfg.Username = username
-	}
-	if password, ok := backendCfg["password"].(string); ok && password != "" {
-		cfg.Password = password
-	}
-	if insecure, ok := backendCfg["insecure_skip_verify"].(bool); ok {
-		cfg.InsecureSkipVerify = insecure
+
+	// If password is still missing and we have a username, try the keyring
+	if cfg.Password == "" && cfg.Username != "" {
+		credMgr := credentials.NewManager()
+		if credInfo, err := credMgr.Get(context.Background(), name, cfg.Username); err == nil && credInfo.Found {
+			cfg.Password = credInfo.Password
+			utils.Debugf("Using password from keyring for %s/%s", name, cfg.Username)
+		}
 	}
 
 	return cfg
