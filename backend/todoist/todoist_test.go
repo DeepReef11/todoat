@@ -558,6 +558,46 @@ func TestTodoistAddTask(t *testing.T) {
 	}
 }
 
+// TestTodoistAddTaskWithoutPriority - Creating task without specifying priority should NOT default to P1 (issue #011)
+func TestTodoistAddTaskWithoutPriority(t *testing.T) {
+	server := newMockTodoistServer("test-api-token")
+	defer server.Close()
+
+	server.AddProject("proj-1", "MyProject")
+
+	be, err := New(Config{
+		APIToken: "test-api-token",
+		BaseURL:  server.URL(),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create backend: %v", err)
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+	task := &backend.Task{
+		Summary:  "Task Without Priority",
+		Priority: 0, // No priority specified (default)
+	}
+
+	created, err := be.CreateTask(ctx, "proj-1", task)
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	// Task created without priority should show as low/default priority (P7), not P1
+	// P1 = internal priority 1 (highest)
+	// P7 = internal priority 7 (low/default)
+	if created.Priority == 1 {
+		t.Errorf("Task created without priority should NOT have P1 (highest), got priority=%d", created.Priority)
+	}
+
+	// Priority should be 7 (low/default) when not specified
+	if created.Priority != 7 {
+		t.Errorf("Task created without priority should have P7 (low/default), got priority=%d", created.Priority)
+	}
+}
+
 // TestTodoistUpdateTask - todoat --backend=todoist MyProject update "Task" -s DONE updates task
 func TestTodoistUpdateTask(t *testing.T) {
 	server := newMockTodoistServer("test-api-token")
@@ -644,6 +684,7 @@ func TestTodoistPriorityMapping(t *testing.T) {
 		internalPriority int
 		todoistPriority  int
 	}{
+		{0, 1}, // Unset priority (0) should map to lowest Todoist priority (1) - issue #011
 		{1, 4}, // Highest internal = highest Todoist (4)
 		{2, 4}, // Still highest
 		{3, 3},

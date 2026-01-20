@@ -646,10 +646,13 @@ func (b *Backend) DeleteTask(ctx context.Context, listID, taskID string) error {
 // =============================================================================
 
 // internalToTodoistPriority converts internal priority (1-9, 1=highest) to Todoist (1-4, 4=highest)
+// Priority 0 (unset) maps to Todoist priority 1 (lowest/no priority) - fixes issue #011
 func internalToTodoistPriority(internal int) int {
-	// Internal: 1-9 where 1 is highest
-	// Todoist: 1-4 where 4 is highest
+	// Internal: 1-9 where 1 is highest, 0 = unset/default
+	// Todoist: 1-4 where 4 is highest, 1 = no priority
 	switch {
+	case internal <= 0:
+		return 1 // Unset (0) = no priority (Todoist 1)
 	case internal <= 2:
 		return 4 // Highest
 	case internal <= 4:
