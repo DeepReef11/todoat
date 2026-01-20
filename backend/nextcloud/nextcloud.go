@@ -61,16 +61,26 @@ func New(cfg Config) (*Backend, error) {
 		return nil, fmt.Errorf("nextcloud password is required")
 	}
 
-	// Determine protocol
-	// If AllowHTTP is false, we use HTTPS (the default secure option)
-	// If AllowHTTP is true, we use HTTP
-	// The difference is important because HTTP sends credentials in plaintext
-	scheme := "https"
-	if cfg.AllowHTTP {
+	// Parse host to extract scheme and hostname
+	// User may specify "http://localhost:8080" or just "localhost:8080"
+	host := cfg.Host
+	scheme := "https" // default to secure
+
+	if strings.HasPrefix(host, "http://") {
+		scheme = "http"
+		host = strings.TrimPrefix(host, "http://")
+	} else if strings.HasPrefix(host, "https://") {
+		scheme = "https"
+		host = strings.TrimPrefix(host, "https://")
+	} else if cfg.AllowHTTP {
+		// No protocol prefix but AllowHTTP is set
 		scheme = "http"
 	}
 
-	baseURL := fmt.Sprintf("%s://%s/remote.php/dav/calendars/%s/", scheme, cfg.Host, cfg.Username)
+	// Remove trailing slash from host if present
+	host = strings.TrimSuffix(host, "/")
+
+	baseURL := fmt.Sprintf("%s://%s/remote.php/dav/calendars/%s/", scheme, host, cfg.Username)
 
 	return &Backend{
 		config:   cfg,

@@ -1161,3 +1161,131 @@ func TestTrashOperationsNotSupported(t *testing.T) {
 	_ = be.PurgeList(ctx, "anything")
 	// This is acceptable to error
 }
+
+// TestIssue010HostURLWithProtocolPrefix reproduces issue #010:
+// When user specifies http:// in host config, app prepends https:// resulting
+// in malformed URLs like "https://http//localhost:8080".
+func TestIssue010HostURLWithProtocolPrefix(t *testing.T) {
+	server := newMockCalDAVServer("testuser", "testpass")
+	defer server.Close()
+	server.AddCalendar("tasks")
+
+	// Get the server URL (includes http://)
+	serverURL := server.URL()
+
+	// Test case 1: Host with http:// prefix should use http
+	t.Run("host_with_http_prefix", func(t *testing.T) {
+		// User provides host as "http://localhost:8080" (full URL)
+		cfg := Config{
+			Host:     serverURL, // e.g. "http://127.0.0.1:12345"
+			Username: "testuser",
+			Password: "testpass",
+			// Note: AllowHTTP is not set, but host has explicit http://
+		}
+
+		be, err := New(cfg)
+		if err != nil {
+			t.Fatalf("Failed to create backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		// Verify the baseURL is correct and doesn't have "https://http//"
+		if strings.Contains(be.baseURL, "https://http") {
+			t.Errorf("BUG: baseURL contains 'https://http': %s", be.baseURL)
+		}
+		if strings.Contains(be.baseURL, "http//") {
+			t.Errorf("BUG: baseURL contains 'http//' (missing colon): %s", be.baseURL)
+		}
+
+		// The baseURL should start with http:// since that's what the host specified
+		if !strings.HasPrefix(be.baseURL, "http://") {
+			t.Errorf("Expected baseURL to start with http://, got: %s", be.baseURL)
+		}
+
+		// Verify it actually works by making a request
+		ctx := context.Background()
+		lists, err := be.GetLists(ctx)
+		if err != nil {
+			t.Errorf("GetLists failed: %v (baseURL was: %s)", err, be.baseURL)
+		}
+		if len(lists) == 0 {
+			t.Error("Expected at least one calendar/list")
+		}
+	})
+
+	// Test case 2: Host with https:// prefix should use https
+	t.Run("host_with_https_prefix", func(t *testing.T) {
+		// Create a TLS server for this test
+		tlsServer := newMockCalDAVServerTLS("testuser", "testpass")
+		defer tlsServer.Close()
+		tlsServer.AddCalendar("tasks")
+
+		// User provides host as "https://localhost:8443" (full URL)
+		cfg := Config{
+			Host:               tlsServer.URL(), // e.g. "https://127.0.0.1:12346"
+			Username:           "testuser",
+			Password:           "testpass",
+			InsecureSkipVerify: true, // TLS test server uses self-signed cert
+		}
+
+		be, err := New(cfg)
+		if err != nil {
+			t.Fatalf("Failed to create backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		// Verify the baseURL doesn't double up the protocol
+		if strings.Contains(be.baseURL, "https://https") {
+			t.Errorf("BUG: baseURL contains 'https://https': %s", be.baseURL)
+		}
+
+		// The baseURL should start with https://
+		if !strings.HasPrefix(be.baseURL, "https://") {
+			t.Errorf("Expected baseURL to start with https://, got: %s", be.baseURL)
+		}
+
+		// Verify it actually works
+		ctx := context.Background()
+		lists, err := be.GetLists(ctx)
+		if err != nil {
+			t.Errorf("GetLists failed: %v (baseURL was: %s)", err, be.baseURL)
+		}
+		if len(lists) == 0 {
+			t.Error("Expected at least one calendar/list")
+		}
+	})
+
+	// Test case 3: Host without protocol should still work (use AllowHTTP flag)
+	t.Run("host_without_protocol", func(t *testing.T) {
+		// Strip the protocol from server URL
+		hostOnly := strings.TrimPrefix(serverURL, "http://")
+
+		cfg := Config{
+			Host:      hostOnly, // e.g. "127.0.0.1:12345" (no protocol)
+			Username:  "testuser",
+			Password:  "testpass",
+			AllowHTTP: true, // Explicitly allow HTTP since no protocol in host
+		}
+
+		be, err := New(cfg)
+		if err != nil {
+			t.Fatalf("Failed to create backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		// Should use http:// because AllowHTTP is true
+		if !strings.HasPrefix(be.baseURL, "http://") {
+			t.Errorf("Expected baseURL to start with http://, got: %s", be.baseURL)
+		}
+
+		// Verify it actually works
+		ctx := context.Background()
+		lists, err := be.GetLists(ctx)
+		if err != nil {
+			t.Errorf("GetLists failed: %v (baseURL was: %s)", err, be.baseURL)
+		}
+		if len(lists) == 0 {
+			t.Error("Expected at least one calendar/list")
+		}
+	})
+}
