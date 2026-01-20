@@ -381,3 +381,112 @@ func TestListCachePerformance(t *testing.T) {
 		t.Errorf("cache lookup too slow: average %v per call (target <10ms)", avgPerCall)
 	}
 }
+
+// ==================== Issue #008 Cache Isolation Tests ====================
+
+// TestCacheBackendIsolation verifies that cache is isolated per backend (Issue #008).
+// Bug: Cache was shared across backends causing stale/wrong data to appear.
+// Fix: Cache now validates backend name before using cached data.
+func TestCacheBackendIsolation(t *testing.T) {
+	cli := testutil.NewCLITestWithCache(t)
+
+	// Create a list with SQLite backend (default)
+	cli.MustExecute("-y", "list", "create", "SQLiteList")
+
+	// Run list command to populate cache
+	stdout := cli.MustExecute("-y", "list")
+	testutil.AssertContains(t, stdout, "SQLiteList")
+
+	// Verify cache file was created
+	cachePath := cli.CachePath()
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache file: %v", err)
+	}
+
+	// Verify cache contains correct backend name
+	var cacheData cache.ListCache
+	if err := json.Unmarshal(data, &cacheData); err != nil {
+		t.Fatalf("failed to unmarshal cache: %v", err)
+	}
+
+	if cacheData.Backend != "sqlite" {
+		t.Errorf("expected cache backend to be 'sqlite', got '%s'", cacheData.Backend)
+	}
+
+	// Verify cache contains our list
+	found := false
+	for _, list := range cacheData.Lists {
+		if list.Name == "SQLiteList" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected cache to contain 'SQLiteList'")
+	}
+}
+
+// TestCacheBackendMismatchInvalidates verifies that cache from one backend is not used for another.
+// This is the fix for Issue #008 where "credential" list appeared in both nextcloud and todoist.
+func TestCacheBackendMismatchInvalidates(t *testing.T) {
+	cli := testutil.NewCLITestWithCache(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "TestIsolation")
+
+	// Populate cache
+	cli.MustExecute("-y", "list")
+
+	// Read cache file and modify the backend name to simulate a different backend
+	cachePath := cli.CachePath()
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache file: %v", err)
+	}
+
+	var cacheData cache.ListCache
+	if err := json.Unmarshal(data, &cacheData); err != nil {
+		t.Fatalf("failed to unmarshal cache: %v", err)
+	}
+
+	// Change backend name to simulate cache from a different backend
+	cacheData.Backend = "different-backend"
+
+	// Write modified cache
+	modifiedData, _ := json.Marshal(cacheData)
+	if err := os.WriteFile(cachePath, modifiedData, 0644); err != nil {
+		t.Fatalf("failed to write modified cache: %v", err)
+	}
+
+	// Get mod time before list command
+	info1, _ := os.Stat(cachePath)
+	modTime1 := info1.ModTime()
+
+	// Wait for filesystem timestamp granularity
+	time.Sleep(10 * time.Millisecond)
+
+	// Run list command - should NOT use cache because backend name doesn't match
+	// Instead, it should re-fetch from backend and write new cache
+	stdout := cli.MustExecute("-y", "list")
+
+	// Verify output still shows our list (fetched fresh, not from cache)
+	testutil.AssertContains(t, stdout, "TestIsolation")
+
+	// Verify cache was rewritten (mod time should change)
+	info2, _ := os.Stat(cachePath)
+	modTime2 := info2.ModTime()
+
+	if modTime1.Equal(modTime2) {
+		t.Error("cache should have been rewritten when backend mismatch detected")
+	}
+
+	// Verify cache now has correct backend name
+	newData, _ := os.ReadFile(cachePath)
+	var newCacheData cache.ListCache
+	_ = json.Unmarshal(newData, &newCacheData)
+
+	if newCacheData.Backend != "sqlite" {
+		t.Errorf("expected cache backend to be 'sqlite' after refresh, got '%s'", newCacheData.Backend)
+	}
+}

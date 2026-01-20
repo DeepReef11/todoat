@@ -399,9 +399,10 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 	// Try to use cache if available
 	cachePath := getListCachePath(cfg)
 	cacheTTL := getListCacheTTL(cfg)
+	backendName := getBackendName(be)
 
-	// Check if we have a valid cache
-	cachedData, cacheValid := tryReadListCache(cachePath, cacheTTL)
+	// Check if we have a valid cache for this backend (Issue #008 fix)
+	cachedData, cacheValid := tryReadListCache(cachePath, cacheTTL, backendName)
 
 	var lists []backend.List
 	var err error
@@ -520,8 +521,9 @@ func getListCacheTTL(cfg *Config) time.Duration {
 	return 5 * time.Minute // Default 5 minute TTL
 }
 
-// tryReadListCache attempts to read and validate the cache file
-func tryReadListCache(cachePath string, ttl time.Duration) (*cache.ListCache, bool) {
+// tryReadListCache attempts to read and validate the cache file for the given backend.
+// Returns nil, false if cache is invalid, expired, or for a different backend.
+func tryReadListCache(cachePath string, ttl time.Duration, currentBackend string) (*cache.ListCache, bool) {
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		return nil, false
@@ -536,6 +538,12 @@ func tryReadListCache(cachePath string, ttl time.Duration) (*cache.ListCache, bo
 
 	// Check TTL
 	if time.Since(cacheData.CreatedAt) > ttl {
+		return nil, false
+	}
+
+	// Check backend name - cache is only valid for the same backend (Issue #008)
+	// This prevents showing cached data from one backend when using a different backend
+	if cacheData.Backend != currentBackend {
 		return nil, false
 	}
 
@@ -571,14 +579,23 @@ func invalidateListCache(cfg *Config) {
 	_ = os.Remove(cachePath)
 }
 
-// getBackendName returns a name for the backend for cache isolation
+// getBackendName returns a name for the backend for cache isolation.
+// Different backends must return different names to prevent cache cross-contamination (Issue #008).
 func getBackendName(be backend.TaskManager) string {
 	// Use type name as backend identifier
-	switch be.(type) {
+	switch v := be.(type) {
 	case *sqlite.Backend:
 		return "sqlite"
+	case *todoist.Backend:
+		return "todoist"
+	case *nextcloud.Backend:
+		return "nextcloud"
+	case *syncAwareBackend:
+		// Recurse to get the underlying backend name
+		return "sync-" + getBackendName(v.TaskManager)
 	default:
-		return "unknown"
+		// For unknown backends, use the type name to ensure cache isolation
+		return fmt.Sprintf("unknown-%T", be)
 	}
 }
 
