@@ -87,7 +87,7 @@ todoat --json tags
 
 ```bash
 # Tasks with "urgent" tag
-todoat MyList --filter "tags:urgent"
+todoat MyList --tag urgent
 ```
 
 ### Using Views
@@ -183,7 +183,7 @@ todoat Work add "Build API" --tags "project-x,backend"
 todoat Work add "Write tests" --tags "project-x,testing"
 
 # View all project-x tasks
-todoat Work -v all --filter "tags:project-x"
+todoat Work -v all --tag project-x
 ```
 
 ### Priority System

@@ -80,10 +80,10 @@ backends:
 default_backend: work-nc
 ```
 
-Use specific backend:
+To switch between backends, update `default_backend` in your config:
 
 ```bash
-todoat --backend personal-nc MyList
+todoat config set default_backend personal-nc
 ```
 
 ## Todoist
@@ -190,12 +190,11 @@ When `auto_detect: true`, todoat automatically uses Git backend when:
 
 ### Selection Priority
 
-1. `--backend` flag (highest priority)
-2. Sync local backend (when sync enabled)
-3. Auto-detected backend (when enabled)
-4. `default_backend` from config
-5. First backend in `backend_priority`
-6. First enabled backend
+1. Sync local backend (when sync enabled)
+2. Auto-detected backend (when enabled)
+3. `default_backend` from config
+4. First backend in `backend_priority`
+5. First enabled backend
 
 ### Default Backend
 
@@ -224,7 +223,7 @@ When enabled, Git backend is auto-detected when in a repository with a marked ta
 
 ```bash
 # Show all configured backends
-todoat --list-backends
+todoat config get backends
 
 # Check auto-detection
 todoat --detect-backend
@@ -235,10 +234,10 @@ todoat --detect-backend
 ### Switching Backends
 
 ```bash
-# Use specific backend for one command
-todoat --backend sqlite MyList
+# Change default backend
+todoat config set default_backend sqlite
 
-# Use default backend
+# View tasks using current default backend
 todoat MyList
 ```
 

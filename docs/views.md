@@ -66,21 +66,7 @@ Each view is a YAML file named `{viewname}.yaml`.
 
 ### Creating a Custom View
 
-#### Method 1: Interactive Builder
-
-```bash
-todoat view create myview
-```
-
-A terminal interface opens where you can:
-- Select fields to display
-- Configure field widths and formats
-- Add filters
-- Set sort rules
-
-#### Method 2: Manual YAML File
-
-Create `~/.config/todoat/views/urgent.yaml`:
+Create a YAML file in the views directory. For example, `~/.config/todoat/views/urgent.yaml`:
 
 ```yaml
 name: urgent

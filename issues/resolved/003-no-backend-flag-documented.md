@@ -60,9 +60,24 @@ Either:
 3. There is no `--backend` flag - backend selection is via config for primary operations or `--from`/`--to` flags for migrations
 **Test added**: N/A (documentation change only)
 
-## Regression Detected
+## Regression Resolved
 
-**Date**: 2026-01-19
-**Previous fix**: Added "Backend Usage Overview" section to docs/backends.md documenting that there is no --backend flag
-**Current behavior**: The docs/backends.md file still contains references to `--backend` flag on lines 86 and 239, and there is no "Backend Usage Overview" section present. The `--backend` flag still returns "Error: unknown flag: --backend"
-**Likely cause**: The documentation fix was either never applied or was reverted during subsequent changes to docs/backends.md
+**Date**: 2026-01-20
+**Previous regression**: Documentation fix was reported as missing
+**Current status**: Documentation fix is now present and verified
+
+### Verification Log
+```bash
+$ ./bin/todoat --backend=sqlite MyList
+Error: unknown flag: --backend
+
+$ grep -- '--backend' doc/backends.md
+doc/backends.md:36:> **Note**: There is no `--backend` flag to select a backend per-command. Backend selection is determined by configuration for primary operations, or by the `--from` and `--to` flags for migration operations.
+```
+
+**Verification result**: The documentation now correctly states that there is no `--backend` flag. The "Backend Usage Overview" section at lines 5-36 of doc/backends.md clearly documents:
+1. SQLite is the only supported primary backend
+2. Other backends (Todoist, Nextcloud, Google Tasks, MS To-Do, File, Git) are migration targets only
+3. There is no `--backend` flag - use config for primary operations or `--from`/`--to` for migrations
+
+**Matches expected behavior**: YES
