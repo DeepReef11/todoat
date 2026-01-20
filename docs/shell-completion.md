@@ -6,41 +6,61 @@ todoat supports tab completion for Bash, Zsh, Fish, and PowerShell shells.
 
 ### Zsh
 
-Add to `~/.zshrc`:
+First, ensure shell completion is enabled in your environment:
 
 ```bash
-eval "$(todoat completion zsh)"
+echo "autoload -U compinit; compinit" >> ~/.zshrc
 ```
 
-Or save to file:
+Load completions in your current session:
 
+```bash
+source <(todoat completion zsh)
+```
+
+Or save to file for permanent setup:
+
+**Linux:**
 ```bash
 todoat completion zsh > "${fpath[1]}/_todoat"
 ```
 
-### Bash
-
-Add to `~/.bashrc`:
-
+**macOS:**
 ```bash
-eval "$(todoat completion bash)"
+todoat completion zsh > $(brew --prefix)/share/zsh/site-functions/_todoat
 ```
 
-Or save to file:
+### Bash
 
+This requires the `bash-completion` package. Install via your package manager if needed.
+
+Load completions in your current session:
+
+```bash
+source <(todoat completion bash)
+```
+
+Or save to file for permanent setup:
+
+**Linux:**
 ```bash
 todoat completion bash > /etc/bash_completion.d/todoat
 ```
 
+**macOS:**
+```bash
+todoat completion bash > $(brew --prefix)/etc/bash_completion.d/todoat
+```
+
 ### Fish
 
-Add to `~/.config/fish/config.fish`:
+Load completions in your current session:
 
 ```fish
 todoat completion fish | source
 ```
 
-Or save to file:
+Or save to file for permanent setup:
 
 ```bash
 todoat completion fish > ~/.config/fish/completions/todoat.fish
@@ -48,11 +68,13 @@ todoat completion fish > ~/.config/fish/completions/todoat.fish
 
 ### PowerShell
 
-Add to your PowerShell profile:
+Load completions in your current session:
 
 ```powershell
 todoat completion powershell | Out-String | Invoke-Expression
 ```
+
+For permanent setup, add the above command to your PowerShell profile.
 
 ## What Gets Completed
 
@@ -60,7 +82,8 @@ todoat completion powershell | Out-String | Invoke-Expression
 
 ```bash
 todoat <TAB>
-# Shows: add, update, complete, delete, list, sync, view, version, etc.
+# Shows: completion, config, credentials, help, list, migrate, notification,
+#        reminder, sync, tags, tui, version, view
 ```
 
 ### List Names
@@ -74,7 +97,7 @@ todoat <TAB>
 
 ```bash
 todoat list <TAB>
-# Shows: create, delete, show, trash, etc.
+# Shows: create, delete, export, import, info, stats, trash, update, vacuum
 ```
 
 ### Flags

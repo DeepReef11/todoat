@@ -21,7 +21,7 @@ backends:
   #   enabled: false
   #   username: "token"  # Fixed value for Todoist authentication
   #   # API token: stored in keyring as TODOAT_TODOIST_TOKEN or set via env var
-  #   # To set token in keyring: todoat backend todoist set-token
+  #   # To set token in keyring: todoat credentials set todoist token --prompt
 
   # Git backend - store tasks in markdown files in a git repository
   # git:

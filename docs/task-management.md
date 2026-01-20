@@ -37,6 +37,68 @@ todoat MyList -v all
 todoat MyList -v myview
 ```
 
+### Filtering by Date
+
+Filter tasks by due date or creation date:
+
+```bash
+# Tasks due today or later
+todoat MyList --due-after today
+
+# Tasks due before next week
+todoat MyList --due-before +7d
+
+# Tasks due within a date range
+todoat MyList --due-after 2026-01-15 --due-before 2026-01-31
+
+# Tasks created in the last week
+todoat MyList --created-after -7d
+
+# Tasks created before a specific date
+todoat MyList --created-before 2026-01-01
+```
+
+| Flag | Description |
+|------|-------------|
+| `--due-after` | Tasks due on or after this date (inclusive) |
+| `--due-before` | Tasks due before this date (inclusive) |
+| `--created-after` | Tasks created on or after this date |
+| `--created-before` | Tasks created before this date |
+
+Combine with other filters:
+
+```bash
+# High priority tasks due this week
+todoat MyList -s TODO --due-after today --due-before +7d -p 1,2,3
+
+# Completed tasks from the past month
+todoat MyList -s DONE --created-after -30d
+```
+
+### Filtering by Priority
+
+Filter tasks by priority level:
+
+```bash
+# High priority tasks (1-3)
+todoat MyList -p 1,2,3
+
+# Using named levels
+todoat MyList -p high    # Same as 1,2,3
+todoat MyList -p medium  # Priority 4-6
+todoat MyList -p low     # Priority 7-9
+```
+
+### Filtering by Tag
+
+```bash
+# Tasks with a specific tag
+todoat MyList --tag urgent
+
+# Tasks with multiple tags (comma-separated)
+todoat MyList --tag "work,important"
+```
+
 ## Adding Tasks
 
 ### Basic Task Creation
@@ -275,6 +337,16 @@ todoat MyList update "task" --tags "new,tags"
 
 # Clear all tags
 todoat MyList update "task" --tags ""
+```
+
+### Update Parent Relationship
+
+```bash
+# Move task under a parent
+todoat MyList update "subtask" -P "New Parent"
+
+# Make task a root-level task (remove parent)
+todoat MyList update "subtask" --no-parent
 ```
 
 ## Completing Tasks

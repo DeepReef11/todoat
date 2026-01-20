@@ -203,8 +203,8 @@ todoat -y --json MyList update "review" -s DONE
 1. **Filter/Set Status (`-s, --status`):**
    - For `get`: Filters tasks by one or more statuses (array)
    - For `update`: Sets task status (single value)
-   - Accepts full names or abbreviations: TODO/T, DONE/D, PROCESSING/P, CANCELLED/C
-   - Example: `-s TODO,PROCESSING` or `-s T,P`
+   - Accepts full names or abbreviations: TODO/T, DONE/D, IN-PROGRESS/I, CANCELLED/C
+   - Example: `-s TODO,IN-PROGRESS` or `-s T,I`
 
 **Task Property Flags:**
 2. **Description (`-d, --description`):**
@@ -275,7 +275,7 @@ todoat -y --json MyList update "review" -s DONE
 
 ```bash
 # Filter tasks by status
-todoat MyList -s TODO,PROCESSING
+todoat MyList -s TODO,IN-PROGRESS
 todoat MyList -s T,D  # Using abbreviations
 
 # Add task with multiple properties
@@ -447,7 +447,7 @@ Select a list (1-3, or 'q' to quit): 1
    - Returns `NoFileComp` directive to prevent file path completion
 
 4. **Status Flag Completion (`--status`, `--add-status`):**
-   - Suggests: `TODO`, `DONE`, `PROCESSING`, `CANCELLED`
+   - Suggests: `TODO`, `DONE`, `IN-PROGRESS`, `CANCELLED`
    - Example: `todoat MyList -s T<TAB>` → `todoat MyList -s TODO`
 
 5. **View Flag Completion (`--view`):**
@@ -625,7 +625,7 @@ $ todoat | less
    - Type checking: integers for priority, strings for dates
    - Date format validation: must match YYYY-MM-DD
    - Priority range checking: 0-9
-   - Status validation: must be TODO/T, DONE/D, PROCESSING/P, CANCELLED/C
+   - Status validation: must be TODO/T, DONE/D, IN-PROGRESS/I, CANCELLED/C
    - Empty strings allowed for clearing date values
 
 5. **Task Summary Handling:**
@@ -647,7 +647,7 @@ Error: unknown action "show". Valid actions: get, add, update, complete, delete
 
 # Invalid status
 $ todoat MyList add "Task" -s RUNNING
-Error: invalid status "RUNNING". Valid: TODO/T, DONE/D, PROCESSING/P, CANCELLED/C
+Error: invalid status "RUNNING". Valid: TODO/T, DONE/D, IN-PROGRESS/I, CANCELLED/C
 
 # Invalid date format
 $ todoat MyList add "Task" --due-date 01/31/2025
@@ -1364,7 +1364,7 @@ $ todoat --json MyList
       "local_id": 43,
       "uid": "660e8400-e29b-41d4-a716-446655440001",
       "summary": "Write documentation",
-      "status": "PROCESSING",
+      "status": "IN-PROGRESS",
       "priority": 5,
       "parents": [],
       "synced": true
@@ -1469,7 +1469,7 @@ $ todoat -y --json MyList complete "review"
       "local_id": 44,
       "uid": null,
       "summary": "Review meeting notes",
-      "status": "PROCESSING",
+      "status": "IN-PROGRESS",
       "priority": 5,
       "parents": ["Documentation", "Meetings"],
       "synced": false

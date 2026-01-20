@@ -9,9 +9,9 @@ import (
 // This is a regression test for issue #004 - keyring not available in standard build.
 //
 // The test verifies that:
-// 1. In environments WITH keyring support: credentials can be stored and retrieved
-// 2. In environments WITHOUT keyring support: ErrKeyringNotAvailable is returned
-//    (this is correct behavior - the implementation detects the environment)
+//  1. In environments WITH keyring support: credentials can be stored and retrieved
+//  2. In environments WITHOUT keyring support: ErrKeyringNotAvailable is returned
+//     (this is correct behavior - the implementation detects the environment)
 //
 // To verify the implementation is real (not a stub), we check that:
 // - The code imports and uses github.com/zalando/go-keyring

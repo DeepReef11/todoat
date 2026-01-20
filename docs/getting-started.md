@@ -209,14 +209,16 @@ Enable tab completion for faster command entry:
 
 ```bash
 # Zsh (add to .zshrc)
-eval "$(todoat completion zsh)"
+source <(todoat completion zsh)
 
 # Bash (add to .bashrc)
-eval "$(todoat completion bash)"
+source <(todoat completion bash)
 
 # Fish (add to config.fish)
 todoat completion fish | source
 ```
+
+See [Shell Completion](shell-completion.md) for permanent setup and troubleshooting.
 
 ## Getting Help
 
@@ -224,9 +226,9 @@ todoat completion fish | source
 # General help
 todoat --help
 
-# Command-specific help
-todoat add --help
+# Command-specific help (for subcommands like list, config, etc.)
 todoat list --help
+todoat config --help
 
 # Version information
 todoat version
