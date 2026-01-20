@@ -2168,13 +2168,14 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 	}
 
 	// Load config (creates default if not exists) and check sync/auto-detect settings
-	appConfig, _ := config.Load(cfg.ConfigPath)
+	// Use LoadWithRaw to get both structured config and raw map for custom backend support
+	appConfig, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
 	loadSyncConfig(cfg)
 	loadAutoDetectConfig(cfg, appConfig)
 
 	// If --backend flag is specified, use it (highest priority)
 	if cfg.Backend != "" {
-		return createBackendByName(cfg.Backend, dbPath)
+		return createBackendByName(cfg.Backend, dbPath, rawConfig)
 	}
 
 	// If sync is enabled, return a sync-aware backend wrapper
@@ -2256,8 +2257,11 @@ func warnBackendFallback(cfg *Config, backendName string, reason string) {
 	_, _ = fmt.Fprintf(stderr, "Warning: Default backend '%s' unavailable (%s). Using 'sqlite' instead.\n", backendName, reason)
 }
 
-// createBackendByName creates a backend based on the given name
-func createBackendByName(name string, dbPath string) (backend.TaskManager, error) {
+// createBackendByName creates a backend based on the given name.
+// It first checks for built-in backend names (sqlite, todoist, nextcloud),
+// then checks if the name is a custom backend defined in the config file.
+func createBackendByName(name string, dbPath string, rawConfig map[string]interface{}) (backend.TaskManager, error) {
+	// First, check for exact match with built-in backend names
 	switch name {
 	case "sqlite":
 		utils.Debugf("Using backend: sqlite")
@@ -2282,9 +2286,82 @@ func createBackendByName(name string, dbPath string) (backend.TaskManager, error
 		}
 		utils.Debugf("Using backend: nextcloud")
 		return nextcloud.New(nextcloudCfg)
-	default:
-		return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud)", name)
 	}
+
+	// Check for custom backend name in config
+	if rawConfig != nil && config.IsBackendConfigured(rawConfig, name) {
+		return createCustomBackend(name, dbPath, rawConfig)
+	}
+
+	return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud)", name)
+}
+
+// createCustomBackend creates a backend from custom configuration.
+// Custom backends are defined in the config file with a "type" field specifying
+// the underlying backend type (e.g., type: nextcloud for "nextcloud-test").
+func createCustomBackend(name string, dbPath string, rawConfig map[string]interface{}) (backend.TaskManager, error) {
+	backendCfg, backendType, err := config.GetBackendConfig(rawConfig, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get custom backend config: %w", err)
+	}
+
+	utils.Debugf("Using custom backend '%s' of type '%s'", name, backendType)
+
+	switch backendType {
+	case "sqlite":
+		// Check for custom path in config
+		if customPath, ok := backendCfg["path"].(string); ok && customPath != "" {
+			dbPath = config.ExpandPath(customPath)
+		}
+		return sqlite.New(dbPath)
+
+	case "todoist":
+		todoistCfg := todoist.ConfigFromEnv()
+		if todoistCfg.APIToken == "" {
+			return nil, fmt.Errorf("todoist backend '%s' requires TODOAT_TODOIST_TOKEN environment variable", name)
+		}
+		return todoist.New(todoistCfg)
+
+	case "nextcloud":
+		// Build nextcloud config from custom backend settings
+		nextcloudCfg := buildNextcloudConfigFromBackend(name, backendCfg)
+		if nextcloudCfg.Host == "" {
+			return nil, fmt.Errorf("nextcloud backend '%s' requires host configuration", name)
+		}
+		if nextcloudCfg.Username == "" {
+			return nil, fmt.Errorf("nextcloud backend '%s' requires username configuration", name)
+		}
+		if nextcloudCfg.Password == "" {
+			return nil, fmt.Errorf("nextcloud backend '%s' requires password (set TODOAT_NEXTCLOUD_PASSWORD or configure credentials)", name)
+		}
+		return nextcloud.New(nextcloudCfg)
+
+	default:
+		return nil, fmt.Errorf("unknown backend type '%s' for custom backend '%s'", backendType, name)
+	}
+}
+
+// buildNextcloudConfigFromBackend builds a nextcloud.Config from custom backend configuration.
+// It prioritizes config file settings over environment variables.
+func buildNextcloudConfigFromBackend(name string, backendCfg map[string]interface{}) nextcloud.Config {
+	// Start with environment variables as defaults
+	cfg := nextcloud.ConfigFromEnv()
+
+	// Override with config file settings
+	if host, ok := backendCfg["host"].(string); ok && host != "" {
+		cfg.Host = host
+	}
+	if username, ok := backendCfg["username"].(string); ok && username != "" {
+		cfg.Username = username
+	}
+	if password, ok := backendCfg["password"].(string); ok && password != "" {
+		cfg.Password = password
+	}
+	if insecure, ok := backendCfg["insecure_skip_verify"].(bool); ok {
+		cfg.InsecureSkipVerify = insecure
+	}
+
+	return cfg
 }
 
 // loadAutoDetectConfig loads the auto-detect configuration from the config file

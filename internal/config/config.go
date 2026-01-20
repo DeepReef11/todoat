@@ -305,3 +305,92 @@ func ExpandPath(path string) string {
 
 	return path
 }
+
+// LoadRaw loads configuration from YAML bytes and returns both the structured config
+// and the raw map for accessing custom backend configurations.
+func LoadRaw(data []byte) (*Config, map[string]interface{}, error) {
+	// Parse structured config
+	cfg := &Config{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, nil, fmt.Errorf("invalid YAML in config: %w", err)
+	}
+
+	// Parse raw map for custom backend access
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, nil, fmt.Errorf("invalid YAML in config: %w", err)
+	}
+
+	// Apply defaults for unset fields
+	if cfg.DefaultBackend == "" {
+		cfg.DefaultBackend = "sqlite"
+	}
+	if cfg.OutputFormat == "" {
+		cfg.OutputFormat = "text"
+	}
+
+	return cfg, raw, nil
+}
+
+// GetBackendConfig retrieves the configuration for a backend by name.
+// It returns the backend configuration map, the backend type, and any error.
+// If the backend has no explicit "type" field, the name is used as the type
+// for backward compatibility (e.g., "sqlite" backend defaults to type "sqlite").
+func GetBackendConfig(raw map[string]interface{}, name string) (map[string]interface{}, string, error) {
+	backends, ok := raw["backends"].(map[string]interface{})
+	if !ok {
+		return nil, "", fmt.Errorf("backends configuration not found")
+	}
+
+	backendCfg, ok := backends[name].(map[string]interface{})
+	if !ok {
+		return nil, "", fmt.Errorf("backend '%s' not found in configuration", name)
+	}
+
+	// Determine the backend type
+	backendType, _ := backendCfg["type"].(string)
+	if backendType == "" {
+		// For backward compatibility, use the backend name as the type
+		// if no explicit type is specified
+		backendType = name
+	}
+
+	return backendCfg, backendType, nil
+}
+
+// IsBackendConfigured checks if a backend with the given name exists in the configuration.
+func IsBackendConfigured(raw map[string]interface{}, name string) bool {
+	backends, ok := raw["backends"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	_, ok = backends[name].(map[string]interface{})
+	return ok
+}
+
+// LoadWithRaw loads configuration from the specified path and returns both the structured config
+// and the raw map. If the config file doesn't exist, it returns nil for the raw map.
+func LoadWithRaw(configPath string) (*Config, map[string]interface{}, error) {
+	if configPath == "" {
+		configPath = filepath.Join(GetConfigDir(), "config.yaml")
+	}
+
+	// Check if config file exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		// Create config with defaults
+		cfg := DefaultConfig()
+		if err := cfg.save(configPath); err != nil {
+			return nil, nil, fmt.Errorf("failed to create default config: %w", err)
+		}
+		// Return default config with nil raw (no custom backends in default config)
+		return cfg, nil, nil
+	}
+
+	// Read existing config
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	return LoadRaw(data)
+}
