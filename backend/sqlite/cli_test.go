@@ -700,6 +700,66 @@ func TestListCreateJSONSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "JSONCreate")
 }
 
+// TestListCreateWithDescription verifies that `list create --description` sets the description
+func TestListCreateWithDescriptionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list with description
+	stdout := cli.MustExecute("-y", "list", "create", "MyList", "--description", "This is my list")
+
+	testutil.AssertContains(t, stdout, "MyList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify description is set via JSON output on list view
+	jsonOut := cli.MustExecute("-y", "--json", "list")
+	testutil.AssertContains(t, jsonOut, "This is my list")
+}
+
+// TestListCreateWithColor verifies that `list create --color` sets the color
+func TestListCreateWithColorSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list with color
+	stdout := cli.MustExecute("-y", "list", "create", "ColorList", "--color", "#FF5733")
+
+	testutil.AssertContains(t, stdout, "ColorList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify color is set via JSON output on list view
+	jsonOut := cli.MustExecute("-y", "--json", "list")
+	testutil.AssertContains(t, jsonOut, "FF5733")
+}
+
+// TestListCreateWithBothFlags verifies that `list create` with both --description and --color works
+func TestListCreateWithBothFlagsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create list with both flags
+	stdout := cli.MustExecute("-y", "list", "create", "FullList", "--description", "A full list", "--color", "#00CC66")
+
+	testutil.AssertContains(t, stdout, "FullList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify both are set via JSON output
+	jsonOut := cli.MustExecute("-y", "--json", "list")
+	testutil.AssertContains(t, jsonOut, "A full list")
+	testutil.AssertContains(t, jsonOut, "00CC66")
+}
+
+// TestListCreateColorValidation verifies that invalid color formats are rejected
+func TestListCreateColorValidationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Try to create list with invalid color
+	stdout, stderr, exitCode := cli.Execute("-y", "list", "create", "BadColorList", "--color", "notacolor")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	errOutput := stdout + stderr
+	if !strings.Contains(strings.ToLower(errOutput), "invalid") && !strings.Contains(strings.ToLower(errOutput), "color") {
+		t.Errorf("error should mention invalid color, got stderr: %s, stdout: %s", stderr, stdout)
+	}
+}
+
 // =============================================================================
 // JSON Output Tests for Task Commands (008-json-output)
 // =============================================================================

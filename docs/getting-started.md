@@ -199,8 +199,8 @@ todoat MyList -s DONE
 # Create a new list
 todoat list create "Personal"
 
-# Add description and color after creation
-todoat list update "Personal" --description "Personal tasks" --color "#0066cc"
+# Create with description and color
+todoat list create "Work" --description "Work tasks" --color "#0066cc"
 ```
 
 ## Shell Completion

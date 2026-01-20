@@ -343,7 +343,7 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 // newListCreateCmd creates the 'list create' subcommand
 func newListCreateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "create [name]",
 		Short: "Create a new list",
 		Long:  "Create a new task list with the given name.",
@@ -361,12 +361,17 @@ func newListCreateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			}
 			defer func() { _ = be.Close() }()
 
+			description, _ := cmd.Flags().GetString("description")
+			color, _ := cmd.Flags().GetString("color")
 			jsonOutput, _ := cmd.Flags().GetBool("json")
-			return doListCreate(context.Background(), be, args[0], cfg, stdout, jsonOutput)
+			return doListCreate(context.Background(), be, args[0], description, color, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	cmd.Flags().String("description", "", "Description for the list")
+	cmd.Flags().String("color", "", "Hex color for the list (e.g., #FF5733, ABC)")
+	return cmd
 }
 
 // doListView displays all task lists with their task counts
@@ -386,10 +391,11 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 		// Use cached data
 		for _, cl := range cachedData.Lists {
 			lists = append(lists, backend.List{
-				ID:       cl.ID,
-				Name:     cl.Name,
-				Color:    cl.Color,
-				Modified: cl.Modified,
+				ID:          cl.ID,
+				Name:        cl.Name,
+				Description: cl.Description,
+				Color:       cl.Color,
+				Modified:    cl.Modified,
 			})
 		}
 		cachedLists = cachedData.Lists
@@ -405,11 +411,12 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 		for _, l := range lists {
 			tasks, _ := be.GetTasks(ctx, l.ID)
 			cachedLists = append(cachedLists, cache.CachedList{
-				ID:        l.ID,
-				Name:      l.Name,
-				Color:     l.Color,
-				TaskCount: len(tasks),
-				Modified:  l.Modified,
+				ID:          l.ID,
+				Name:        l.Name,
+				Description: l.Description,
+				Color:       l.Color,
+				TaskCount:   len(tasks),
+				Modified:    l.Modified,
 			})
 		}
 
@@ -420,20 +427,22 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 	if jsonOutput {
 		// Build JSON output with task counts
 		type listJSON struct {
-			ID       string `json:"id"`
-			Name     string `json:"name"`
-			Color    string `json:"color,omitempty"`
-			Tasks    int    `json:"tasks"`
-			Modified string `json:"modified"`
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description,omitempty"`
+			Color       string `json:"color,omitempty"`
+			Tasks       int    `json:"tasks"`
+			Modified    string `json:"modified"`
 		}
 		var output []listJSON
 		for _, cl := range cachedLists {
 			output = append(output, listJSON{
-				ID:       cl.ID,
-				Name:     cl.Name,
-				Color:    cl.Color,
-				Tasks:    cl.TaskCount,
-				Modified: cl.Modified.Format("2006-01-02T15:04:05Z"),
+				ID:          cl.ID,
+				Name:        cl.Name,
+				Description: cl.Description,
+				Color:       cl.Color,
+				Tasks:       cl.TaskCount,
+				Modified:    cl.Modified.Format("2006-01-02T15:04:05Z"),
 			})
 		}
 		if output == nil {
@@ -554,11 +563,24 @@ func getBackendName(be backend.TaskManager) string {
 }
 
 // doListCreate creates a new task list
-func doListCreate(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doListCreate(ctx context.Context, be backend.TaskManager, name, description, color string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Validate list name
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("list name cannot be empty")
+	}
+
+	// Validate and normalize color if provided
+	var normalizedColor string
+	if color != "" {
+		var err error
+		normalizedColor, err = validateAndNormalizeColor(color)
+		if err != nil {
+			if cfg != nil && cfg.NoPrompt {
+				_, _ = fmt.Fprintln(stdout, ResultError)
+			}
+			return err
+		}
 	}
 
 	// Check for duplicate list name
@@ -577,6 +599,18 @@ func doListCreate(ctx context.Context, be backend.TaskManager, name string, cfg 
 	list, err := be.CreateList(ctx, name)
 	if err != nil {
 		return err
+	}
+
+	// If description or color provided, update the list
+	if description != "" || normalizedColor != "" {
+		list.Description = description
+		if normalizedColor != "" {
+			list.Color = normalizedColor
+		}
+		list, err = be.UpdateList(ctx, list)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Invalidate cache after creating a list

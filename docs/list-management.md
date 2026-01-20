@@ -36,7 +36,17 @@ Enter number:
 todoat list create "My New List"
 ```
 
-After creation, use `list update` to add description and color:
+### With Description and Color
+
+Set description and color during creation:
+
+```bash
+todoat list create "Personal Goals" \
+  --description "Goals for 2026" \
+  --color "#00CC66"
+```
+
+You can also update these properties later:
 
 ```bash
 todoat list update "My New List" --description "Task list description" --color "#FF5733"
@@ -168,31 +178,20 @@ todoat --json list
 ### Organize by Area
 
 ```bash
-# Create lists for different areas
-todoat list create "Work"
-todoat list create "Personal"
-todoat list create "Shopping"
-todoat list create "Home"
-
-# Add colors to lists
-todoat list update "Work" --color "#0066CC"
-todoat list update "Personal" --color "#00CC66"
-todoat list update "Shopping" --color "#FF9900"
-todoat list update "Home" --color "#FF5733"
+# Create lists with colors for different areas
+todoat list create "Work" --color "#0066CC"
+todoat list create "Personal" --color "#00CC66"
+todoat list create "Shopping" --color "#FF9900"
+todoat list create "Home" --color "#FF5733"
 ```
 
 ### Project-Based Organization
 
 ```bash
 # Create project-specific lists with descriptions
-todoat list create "Project Alpha"
-todoat list update "Project Alpha" --description "Q1 2026 launch project"
-
-todoat list create "Project Beta"
-todoat list update "Project Beta" --description "Mobile app development"
-
-todoat list create "Maintenance"
-todoat list update "Maintenance" --description "Bug fixes and updates"
+todoat list create "Project Alpha" --description "Q1 2026 launch project"
+todoat list create "Project Beta" --description "Mobile app development"
+todoat list create "Maintenance" --description "Bug fixes and updates"
 ```
 
 ### Archive Old Projects
