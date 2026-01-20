@@ -108,5 +108,5 @@ output_format: text  # Options: text | json
 #   TODOAT_TODOIST_TOKEN       - Todoist API token
 #
 # To store credentials in keyring (more secure):
-#   todoat backend nextcloud set-password
-#   todoat backend todoist set-token
+#   todoat credentials set nextcloud <username> --prompt
+#   todoat credentials set todoist token --prompt
