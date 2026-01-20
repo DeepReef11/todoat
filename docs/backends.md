@@ -402,7 +402,7 @@ todoat migrate --from sqlite --to nextcloud --dry-run
 Check existing tasks in the target before migrating:
 
 ```bash
-todoat migrate --to nextcloud --target-info
+todoat migrate --target-info nextcloud --list Work
 ```
 
 ### What Gets Migrated
