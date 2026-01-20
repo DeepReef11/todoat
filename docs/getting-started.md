@@ -7,7 +7,7 @@ This guide walks you through installing, configuring, and using todoat for the f
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/todoat
+git clone https://github.com/DeepReef11/todoat
 cd todoat
 go build -o todoat ./cmd/todoat
 ```
@@ -21,15 +21,15 @@ export PATH="$PATH:/path/to/todoat"
 
 ## First Run
 
-When you first run todoat, it will offer to create a configuration file:
+When you first run todoat, if no configuration file exists, it automatically creates one at `~/.config/todoat/config.yaml` with a sample configuration including documentation and examples.
 
 ```bash
 $ todoat
-No configuration file found.
-Do you want to copy config sample to ~/.config/todoat/config.yaml? (y/n)
+# Config file auto-created with SQLite backend enabled
+# Shows available lists or prompts for list selection
 ```
 
-Select "yes" to create a starter configuration with examples and documentation.
+The default configuration uses SQLite as the local backend, which requires no additional setup.
 
 ## Configuration
 

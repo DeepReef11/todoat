@@ -85,11 +85,10 @@ You'll be prompted to confirm. Lists are moved to trash, not permanently deleted
 ### Force Delete (Skip Confirmation)
 
 ```bash
-todoat list delete "List Name" --force
-
-# Or use no-prompt mode
 todoat -y list delete "List Name"
 ```
+
+Use the global `-y` (or `--no-prompt`) flag to skip the confirmation prompt.
 
 ## Trash Management
 

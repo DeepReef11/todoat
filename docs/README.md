@@ -107,4 +107,4 @@ todoat list --help
 
 ## Feedback
 
-Report issues at: https://github.com/anthropics/claude-code/issues
+Report issues at: https://github.com/DeepReef11/todoat/issues

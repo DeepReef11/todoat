@@ -62,11 +62,12 @@ Lists unresolved sync conflicts requiring manual attention.
 ### Resolve a Conflict
 
 ```bash
-todoat sync conflicts resolve <conflict-id> --use local
-todoat sync conflicts resolve <conflict-id> --use remote
+todoat sync conflicts resolve [task-uid] --strategy local_wins
+todoat sync conflicts resolve [task-uid] --strategy server_wins
+# Also available: --strategy merge, --strategy keep_both
 ```
 
-Manually resolve a specific conflict.
+Manually resolve a specific conflict using the specified strategy.
 
 ## Background Sync Daemon
 
