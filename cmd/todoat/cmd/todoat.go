@@ -80,6 +80,8 @@ type Config struct {
 	// Auto-detection config fields
 	WorkDir           string // Working directory for auto-detection (for testing)
 	AutoDetectBackend bool   // Enable auto-detection of backend
+	// Backend selection
+	Backend string // Backend name to use (from --backend flag)
 }
 
 // LocalIDBackend is an interface for backends that support local_id lookup (e.g., SQLite)
@@ -166,6 +168,13 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 				utils.SetVerboseMode(true)
 				utils.Debugf("Verbose mode enabled")
 			}
+
+			// Set backend from flag
+			backendFlag, _ := cmd.Flags().GetString("backend")
+			if backendFlag != "" {
+				cfg.Backend = backendFlag
+				utils.Debugf("Backend flag set to: %s", backendFlag)
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -246,6 +255,7 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.PersistentFlags().BoolP("verbose", "V", false, "Enable verbose/debug output")
 	cmd.PersistentFlags().Bool("json", false, "Output in JSON format")
 	cmd.PersistentFlags().Bool("detect-backend", false, "Show auto-detected backends and exit")
+	cmd.PersistentFlags().StringP("backend", "b", "", "Backend to use (sqlite, todoist)")
 
 	// Add action-specific flags
 	cmd.Flags().StringP("priority", "p", "", "Task priority (0-9) for add/update, or filter (1,2,3 or high/medium/low) for get")
@@ -2159,6 +2169,11 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 	loadSyncConfig(cfg)
 	loadAutoDetectConfig(cfg, appConfig)
 
+	// If --backend flag is specified, use it (highest priority)
+	if cfg.Backend != "" {
+		return createBackendByName(cfg.Backend, dbPath)
+	}
+
 	// If sync is enabled, return a sync-aware backend wrapper
 	if cfg.SyncEnabled {
 		be, err := sqlite.New(dbPath)
@@ -2205,6 +2220,24 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 	}
 
 	return sqlite.New(dbPath)
+}
+
+// createBackendByName creates a backend based on the given name
+func createBackendByName(name string, dbPath string) (backend.TaskManager, error) {
+	switch name {
+	case "sqlite":
+		utils.Debugf("Using backend: sqlite")
+		return sqlite.New(dbPath)
+	case "todoist":
+		todoistCfg := todoist.ConfigFromEnv()
+		if todoistCfg.APIToken == "" {
+			return nil, fmt.Errorf("todoist backend requires TODOAT_TODOIST_TOKEN environment variable")
+		}
+		utils.Debugf("Using backend: todoist")
+		return todoist.New(todoistCfg)
+	default:
+		return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist)", name)
+	}
 }
 
 // loadAutoDetectConfig loads the auto-detect configuration from the config file

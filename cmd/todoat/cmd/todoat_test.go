@@ -1106,3 +1106,87 @@ func TestValidStatusesAcceptedCLI(t *testing.T) {
 		})
 	}
 }
+
+// --- Backend Flag Tests ---
+// CLI Test for issue 1: --backend flag not working
+
+// TestBackendFlagRecognized verifies that --backend flag is recognized
+func TestBackendFlagRecognized(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	// The --backend flag should be recognized (not return "unknown flag: --backend")
+	// Even if the backend doesn't exist, we should get a different error
+	exitCode := Execute([]string{"--backend", "sqlite", "--help"}, &stdout, &stderr, nil)
+
+	// With --help, should succeed
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Help output should mention --backend flag
+	output := stdout.String()
+	if !strings.Contains(output, "--backend") {
+		t.Errorf("help output should contain '--backend' flag, got: %s", output)
+	}
+}
+
+// TestBackendFlagSelectsBackend verifies that --backend flag selects the specified backend
+func TestBackendFlagSelectsBackend(t *testing.T) {
+	// Create temp directory for test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write a config with default_backend: sqlite
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Use --backend sqlite explicitly (should work same as default)
+	exitCode := Execute([]string{"--backend", "sqlite", "list"}, &stdout, &stderr, cfg)
+
+	// Should succeed
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+}
+
+// TestBackendFlagUnknownBackendError verifies error for unknown backend
+func TestBackendFlagUnknownBackendError(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write a config
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Use --backend with unknown backend name
+	exitCode := Execute([]string{"--backend", "nonexistent", "list"}, &stdout, &stderr, cfg)
+
+	// Should fail with unknown backend error (not "unknown flag")
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit code for unknown backend")
+	}
+
+	errOutput := stderr.String()
+	if strings.Contains(errOutput, "unknown flag") {
+		t.Errorf("error should not be 'unknown flag', got: %s", errOutput)
+	}
+	if !strings.Contains(errOutput, "unknown backend") && !strings.Contains(errOutput, "nonexistent") {
+		t.Errorf("error should mention unknown backend 'nonexistent', got: %s", errOutput)
+	}
+}
