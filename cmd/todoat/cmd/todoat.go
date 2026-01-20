@@ -2380,6 +2380,9 @@ func buildNextcloudConfigWithKeyring(name string, rawConfig map[string]interface
 			if insecure, ok := backendCfg["insecure_skip_verify"].(bool); ok {
 				cfg.InsecureSkipVerify = insecure
 			}
+			if allowHTTP, ok := backendCfg["allow_http"].(bool); ok {
+				cfg.AllowHTTP = allowHTTP
+			}
 		}
 	}
 
