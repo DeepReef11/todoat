@@ -1133,6 +1133,50 @@ func TestPriorityFilterCombinedWithStatusSQLiteCLI(t *testing.T) {
 }
 
 // =============================================================================
+// Status Filtering Tests (001-status-filter-comma-separated)
+// =============================================================================
+
+// TestStatusFilterCommaSeparatedSQLiteCLI tests issue #001: status filter should accept comma-separated values
+func TestStatusFilterCommaSeparatedSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different statuses
+	cli.MustExecute("-y", "Work", "add", "Task TODO")
+	cli.MustExecute("-y", "Work", "add", "Task IN-PROGRESS")
+	cli.MustExecute("-y", "Work", "update", "Task IN-PROGRESS", "-s", "IN-PROGRESS")
+	cli.MustExecute("-y", "Work", "add", "Task DONE")
+	cli.MustExecute("-y", "Work", "complete", "Task DONE")
+
+	// Filter by multiple statuses using comma-separated values
+	stdout := cli.MustExecute("-y", "Work", "-s", "TODO,IN-PROGRESS")
+
+	testutil.AssertContains(t, stdout, "Task TODO")
+	testutil.AssertContains(t, stdout, "Task IN-PROGRESS")
+	testutil.AssertNotContains(t, stdout, "Task DONE")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestStatusFilterAbbreviationCommaSeparatedSQLiteCLI tests issue #001: status filter should accept comma-separated abbreviations
+func TestStatusFilterAbbreviationCommaSeparatedSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different statuses
+	cli.MustExecute("-y", "Work", "add", "Task TODO")
+	cli.MustExecute("-y", "Work", "add", "Task IN-PROGRESS")
+	cli.MustExecute("-y", "Work", "update", "Task IN-PROGRESS", "-s", "IN-PROGRESS")
+	cli.MustExecute("-y", "Work", "add", "Task DONE")
+	cli.MustExecute("-y", "Work", "complete", "Task DONE")
+
+	// Filter by multiple statuses using abbreviations (T=TODO, I=IN-PROGRESS)
+	stdout := cli.MustExecute("-y", "Work", "-s", "T,I")
+
+	testutil.AssertContains(t, stdout, "Task TODO")
+	testutil.AssertContains(t, stdout, "Task IN-PROGRESS")
+	testutil.AssertNotContains(t, stdout, "Task DONE")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// =============================================================================
 // Task Dates Tests (011-task-dates)
 // =============================================================================
 

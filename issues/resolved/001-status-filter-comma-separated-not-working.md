@@ -71,3 +71,27 @@ Note: The priority filter (`-p`) correctly handles comma-separated values (e.g.,
 
 ## Recommended Fix
 FIX CODE - The status flag handler should be updated to split comma-separated values and accept multiple statuses, similar to how the priority filter works.
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Added `parseStatusFilter` and `matchesStatusFilter` functions to handle comma-separated status values. Also added single-letter abbreviations "I" for IN-PROGRESS and "C" for CANCELLED to `parseStatusWithValidation`.
+**Test added**: TestStatusFilterCommaSeparatedSQLiteCLI and TestStatusFilterAbbreviationCommaSeparatedSQLiteCLI in backend/sqlite/cli_test.go
+
+### Verification Log
+```bash
+$ todoat -y list create "Test" && todoat -y Test add "Task 1" && todoat -y Test add "Task 2" && todoat -y Test update "Task 2" -s IN-PROGRESS && todoat -y Test -s TODO,IN-PROGRESS
+Created list: Test
+ACTION_COMPLETED
+Created task: Task 1 (ID: f90f76c0-66fd-4336-bad0-7593d575e0b8)
+ACTION_COMPLETED
+Created task: Task 2 (ID: 8edc512a-84b8-46da-909b-896b4fe217ea)
+ACTION_COMPLETED
+Updated task: Task 2
+ACTION_COMPLETED
+Tasks in 'Test':
+  [TODO] Task 1
+  [IN-PROGRESS] Task 2
+INFO_ONLY
+```
+**Matches expected behavior**: YES

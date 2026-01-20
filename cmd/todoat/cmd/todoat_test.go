@@ -1190,3 +1190,100 @@ func TestBackendFlagUnknownBackendError(t *testing.T) {
 		t.Errorf("error should mention unknown backend 'nonexistent', got: %s", errOutput)
 	}
 }
+
+// TestCommaSeparatedStatusFilterCLI verifies that comma-separated status values work for filtering.
+// This tests issue #001 - status filter with comma-separated values.
+func TestCommaSeparatedStatusFilterCLI(t *testing.T) {
+	// Create temp directory for test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write a default config to ensure test isolation
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create test list and tasks
+	exitCode := Execute([]string{"TestList", "add", "Task 1"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create task 1: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"TestList", "add", "Task 2"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create task 2: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"TestList", "add", "Task 3"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create task 3: %s", stderr.String())
+	}
+
+	// Update Task 2 to IN-PROGRESS
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"TestList", "update", "Task 2", "-s", "IN-PROGRESS"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to update task 2: %s", stderr.String())
+	}
+
+	// Update Task 3 to DONE
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"TestList", "update", "Task 3", "-s", "DONE"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to update task 3: %s", stderr.String())
+	}
+
+	// Test comma-separated status filter
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"TestList", "-s", "TODO,IN-PROGRESS"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("comma-separated status filter failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should show Task 1 (TODO) and Task 2 (IN-PROGRESS), but not Task 3 (DONE)
+	if !strings.Contains(output, "Task 1") {
+		t.Errorf("expected Task 1 (TODO) in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Task 2") {
+		t.Errorf("expected Task 2 (IN-PROGRESS) in output, got: %s", output)
+	}
+	if strings.Contains(output, "Task 3") {
+		t.Errorf("Task 3 (DONE) should NOT be in output, got: %s", output)
+	}
+
+	// Test with abbreviations
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"TestList", "-s", "T,I"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("abbreviated comma-separated status filter failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output = stdout.String()
+	// Same result - should show Task 1 (TODO) and Task 2 (IN-PROGRESS)
+	if !strings.Contains(output, "Task 1") {
+		t.Errorf("expected Task 1 (TODO) in output with abbrev, got: %s", output)
+	}
+	if !strings.Contains(output, "Task 2") {
+		t.Errorf("expected Task 2 (IN-PROGRESS) in output with abbrev, got: %s", output)
+	}
+	if strings.Contains(output, "Task 3") {
+		t.Errorf("Task 3 (DONE) should NOT be in output with abbrev, got: %s", output)
+	}
+}

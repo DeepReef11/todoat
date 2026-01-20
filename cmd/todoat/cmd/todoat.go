@@ -2616,15 +2616,15 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		return doGetWithView(ctx, be, tasks, list, viewName, cfg, stdout, jsonOutput)
 	}
 
-	// Filter by status if specified
+	// Filter by status if specified (supports comma-separated values)
 	if statusFilter != "" {
-		filterStatus, err := parseStatusWithValidation(statusFilter)
+		filterStatuses, err := parseStatusFilter(statusFilter)
 		if err != nil {
 			return err
 		}
 		var filteredTasks []backend.Task
 		for _, t := range tasks {
-			if t.Status == filterStatus {
+			if matchesStatusFilter(t.Status, filterStatuses) {
 				filteredTasks = append(filteredTasks, t)
 			}
 		}
@@ -3872,15 +3872,47 @@ func parseStatusWithValidation(s string) (backend.TaskStatus, error) {
 	switch strings.ToUpper(s) {
 	case "DONE", "COMPLETED", "D":
 		return backend.StatusCompleted, nil
-	case "IN-PROGRESS", "INPROGRESS", "PROGRESS":
+	case "IN-PROGRESS", "INPROGRESS", "PROGRESS", "I":
 		return backend.StatusInProgress, nil
-	case "CANCELLED", "CANCELED":
+	case "CANCELLED", "CANCELED", "C":
 		return backend.StatusCancelled, nil
 	case "TODO", "NEEDS-ACTION", "T":
 		return backend.StatusNeedsAction, nil
 	default:
 		return backend.StatusNeedsAction, fmt.Errorf("invalid status %q: valid values are TODO, IN-PROGRESS, DONE, CANCELLED", s)
 	}
+}
+
+// parseStatusFilter parses a status filter string into a slice of status values
+// Supports: single value (TODO), comma-separated (TODO,IN-PROGRESS), and abbreviations (T,I)
+func parseStatusFilter(s string) ([]backend.TaskStatus, error) {
+	if s == "" {
+		return nil, nil
+	}
+
+	// Handle comma-separated values
+	parts := strings.Split(s, ",")
+	var statuses []backend.TaskStatus
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		status, err := parseStatusWithValidation(part)
+		if err != nil {
+			return nil, err
+		}
+		statuses = append(statuses, status)
+	}
+
+	return statuses, nil
+}
+
+// matchesStatusFilter checks if a task's status matches any of the filter statuses
+func matchesStatusFilter(taskStatus backend.TaskStatus, statuses []backend.TaskStatus) bool {
+	for _, s := range statuses {
+		if taskStatus == s {
+			return true
+		}
+	}
+	return false
 }
 
 // doComplete marks a task as completed
