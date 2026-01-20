@@ -1427,3 +1427,50 @@ default_backend: sqlite
 		}
 	})
 }
+
+// TestIssue012CredentialsListReadsConfiguredBackends verifies that 'credentials list'
+// reads backends from the actual configuration file instead of using a hardcoded list.
+// This is a regression test for issue 012.
+func TestIssue012CredentialsListReadsConfiguredBackends(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Create config with a custom backend name (work-nextcloud) that should appear in list
+	configContent := `
+backends:
+  sqlite:
+    enabled: true
+  nextcloud:
+    enabled: true
+  work-nextcloud:
+    enabled: true
+    type: nextcloud
+default_backend: sqlite
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to create config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		ConfigPath: configPath,
+	}
+
+	exitCode := Execute([]string{"credentials", "list"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Should show the custom backend "work-nextcloud" from config
+	if !strings.Contains(output, "work-nextcloud") {
+		t.Errorf("credentials list should show custom backend 'work-nextcloud' from config, got: %s", output)
+	}
+
+	// Should also show standard backends that are enabled
+	if !strings.Contains(output, "nextcloud") {
+		t.Errorf("credentials list should show 'nextcloud' backend, got: %s", output)
+	}
+}

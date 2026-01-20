@@ -4963,12 +4963,36 @@ func newCredentialsListCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			// TODO: Get backend configs from actual configuration
-			// For now, return a placeholder list
-			backends := []credentials.BackendConfig{
-				{Name: "nextcloud", Username: ""},
-				{Name: "todoist", Username: ""},
+			// Load configuration to get actual backend list
+			_, raw, err := config.LoadWithRaw(cfg.ConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
 			}
+
+			// Build backends list from actual configuration
+			var backends []credentials.BackendConfig
+			if raw != nil {
+				if backendsMap, ok := raw["backends"].(map[string]interface{}); ok {
+					for name, backendCfg := range backendsMap {
+						// Get username from backend config if available
+						var username string
+						if cfgMap, ok := backendCfg.(map[string]interface{}); ok {
+							if u, ok := cfgMap["username"].(string); ok {
+								username = u
+							}
+						}
+						backends = append(backends, credentials.BackendConfig{
+							Name:     name,
+							Username: username,
+						})
+					}
+				}
+			}
+
+			// Sort backends by name for consistent output
+			sort.Slice(backends, func(i, j int) bool {
+				return backends[i].Name < backends[j].Name
+			})
 
 			manager := credentials.NewManager()
 			handler := credentials.NewCLIHandler(manager, nil, stdout, stderr)
