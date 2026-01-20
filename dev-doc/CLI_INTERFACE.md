@@ -89,42 +89,30 @@ todoat MyList add "Complete the report"
 
 **How It Works:**
 
-1. **Config Path Flag (`--config`):**
-   - Overrides default XDG config location
-   - Accepts file path or directory path
-   - Special value `.` uses current directory: `./todoat/config.yaml`
-   - Set before application initialization via `config.SetCustomConfigPath()`
-
-2. **Backend Override (`--backend`, `-b`):**
+1. **Backend Override (`--backend`, `-b`):**
    - Forces use of specific backend config
    - Overrides auto-detection and config defaults
    - Value passed to `app.NewApp(backendName)`
    - See [Backend Selection](./BACKEND_SYSTEM.md#backend-selection)
 
-3. **List Backends (`--list-backends`):**
-   - Displays all configured backends with status
-   - Shows enabled/disabled state
-   - Exits immediately after display
-   - See [Backend System](./BACKEND_SYSTEM.md)
-
-4. **Detect Backend (`--detect-backend`):**
+2. **Detect Backend (`--detect-backend`):**
    - Shows auto-detected backends in current directory
    - Useful for Git backend auto-detection
    - Exits immediately after display
    - See [Backend Auto-Detection](./BACKEND_SYSTEM.md#auto-detection)
 
-5. **Verbose Mode (`--verbose` or `-V`):**
+3. **Verbose Mode (`--verbose` or `-V`):**
    - Enables debug logging throughout application
    - See [Verbose Mode](#verbose-mode) below
 
-6. **No-Prompt Mode (`--no-prompt` or `-y`):**
+4. **No-Prompt Mode (`--no-prompt` or `-y`):**
    - Disables all interactive prompts for scripting and automation
    - Skips confirmation dialogs (delete, etc.) - acts as force mode
    - Auto-confirms single task matches
    - Outputs structured data for ambiguous cases instead of prompting
    - See [No-Prompt Mode](#no-prompt-mode) below
 
-7. **JSON Output (`--json`):**
+5. **JSON Output (`--json`):**
    - Outputs results in machine-parseable JSON format
    - Pairs well with `--no-prompt` for scripting
    - See [JSON Output Mode](#json-output-mode) below
@@ -132,20 +120,14 @@ todoat MyList add "Complete the report"
 **User Journey:**
 
 ```bash
-# Use custom config file
-todoat --config /path/to/config.yaml MyList
-
-# Use config in current directory
-todoat --config . MyList
-
 # Force specific backend
 todoat --backend nextcloud-prod WorkTasks
 
-# List all backends
-todoat --list-backends
-
 # Check auto-detection
 todoat --detect-backend
+
+# List configured backends
+todoat config get backends
 
 # Enable debug logging
 todoat --verbose MyList add "Debug this"
@@ -164,23 +146,19 @@ todoat -y --json MyList update "review" -s DONE
 ```
 
 **Prerequisites:**
-- For `--config`: Valid config file at specified path
 - For `--backend`: Backend name must exist in configuration
-- For `--list-backends` and `--detect-backend`: Valid configuration loaded
+- For `--detect-backend`: Valid configuration loaded
 
 **Outputs/Results:**
-- `--config`: Application uses specified configuration
 - `--backend`: All operations use specified backend
-- `--list-backends`: Table of backends with status
 - `--detect-backend`: List of auto-detected backends
 - `--verbose`: Debug messages printed to stderr
 - `--no-prompt`: All outputs include result codes (see [Result Codes](#result-codes))
 - `--json`: All outputs in JSON format with structured data
 
 **Technical Details:**
-- Flags registered in `cmd/todoat/main.go:118-122`
+- Flags registered in `cmd/todoat/main.go`
 - Processed in `PersistentPreRunE` hook before command execution
-- `--config` sets global state via `config.SetCustomConfigPath()`
 - `--verbose` sets global state via `utils.SetVerboseMode(true)`
 - Flags available to all commands and subcommands
 
@@ -976,7 +954,7 @@ The key is making your default output clean and useful, with verbosity flags tha
 
 **How It Works:**
 
-**Three Backend-Related Flags:**
+**Two Backend-Related Flags:**
 
 1. **`--backend <name>` or `-b <name>`:**
    - Forces use of specified backend for the command
@@ -985,37 +963,27 @@ The key is making your default output clean and useful, with verbosity flags tha
    - Passed to `app.NewApp(backendName)`
    - Affects entire command execution
 
-2. **`--list-backends`:**
-   - Displays all backends defined in configuration
-   - Shows status: enabled/disabled
-   - Shows type: nextcloud, sqlite, git, todoist, file
-   - Shows connection details (host, file, path)
-   - Exits immediately after display (no other action taken)
-
-3. **`--detect-backend`:**
+2. **`--detect-backend`:**
    - Runs auto-detection algorithm
    - Shows which backends would be auto-selected
    - Shows detection result and priority order
    - Exits immediately after display
 
+**Listing Backends:**
+- Use `todoat config get backends` to list all configured backends
+- Shows enabled/disabled state for each backend
+
 **Selection Priority:**
 1. Explicit `--backend` flag (highest priority)
-3. Auto-detected backend (if `auto_detect_backend = true`)
-4. Config `default_backend`
-5. First enabled backend in config
+2. Auto-detected backend (if `auto_detect_backend = true`)
+3. Config `default_backend`
+4. First enabled backend in config
 
 **User Journey:**
 
 ```bash
 # List all configured backends
-$ todoat --list-backends
-
-Available Backends:
-  nextcloud-prod (enabled)  - Nextcloud CalDAV @ nextcloud.example.com
-  nextcloud-test (enabled)  - Nextcloud CalDAV @ localhost:8080
-  sqlite (enabled)          - SQLite @ ~/.local/share/todoat/tasks.db
-  git (disabled)            - Git Markdown @ TODO.md
-  todoist (enabled)         - Todoist API
+$ todoat config get backends
 
 # Detect backends in current directory
 $ todoat --detect-backend
@@ -1032,13 +1000,12 @@ $ todoat --backend git --verbose ProjectTasks add "Fix bug"
 
 **Prerequisites:**
 - `--backend`: Backend name must exist in config
-- `--list-backends`: Valid configuration file loaded
 - `--detect-backend`: Auto-detection enabled in config
 
 **Outputs/Results:**
 - `--backend`: Command uses specified backend
-- `--list-backends`: Table of backends with status/details
 - `--detect-backend`: Detection results with matched backends
+- `config get backends`: List of configured backends with status
 - Invalid backend name: Error message with available backends
 
 **Related Features:**
