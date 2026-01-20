@@ -44,12 +44,12 @@ todoat is a command-line task management tool that allows you to:
 |-----------------|------------------|------------------|
 | **Task Operations** | Add, update, delete, complete tasks | `add`, `update`, `complete`, `delete`, `get` |
 | **Task Filtering** | Filter by status, priority, dates, tags | `-s`, `-p`, `--due-date`, `--start-date` |
-| **Lists** | Create, rename, delete, restore lists | `list create`, `list rename`, `list delete`, `list trash` |
+| **Lists** | Create, update, delete, restore lists | `list create`, `list update`, `list delete`, `list trash` |
 | **Subtasks** | Hierarchical task organization | `-P "Parent"`, path notation `parent/child` |
-| **Backends** | Multi-backend support with auto-detection | `--backend`, `--list-backends`, `--detect-backend` |
+| **Backends** | Multi-backend support with auto-detection | `--backend`, `--detect-backend` |
 | **Sync** | Offline sync with conflict resolution | `sync`, `sync status`, `sync queue` |
 | **Credentials** | Secure keyring storage | `credentials set`, `credentials get`, `credentials delete` |
-| **Views** | Customizable display formats | `view list`, `view create`, `view show`, `-v <view-name>` |
+| **Views** | Customizable display formats | `view list`, `view create`, `-v <view-name>` |
 | **Shell Integration** | Tab completion for all shells | `completion bash/zsh/fish/powershell` |
 
 ## Feature Maturity

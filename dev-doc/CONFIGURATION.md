@@ -259,7 +259,7 @@ const (
 
 **Outputs/Results**:
 - Multiple backends available for selection
-- Each backend appears in `--list-backends` output
+- Each backend appears in `--detect-backend` output
 - Backend-specific validation errors if configuration invalid
 
 **Technical Details**:
@@ -930,8 +930,8 @@ todoat MyList
 # Override with explicit backend
 todoat --backend sqlite MyList
 
-# List all backends to see default
-todoat --list-backends
+# Detect backend to see default
+todoat --detect-backend
 ```
 
 **Common Patterns**:
