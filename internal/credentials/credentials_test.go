@@ -219,6 +219,70 @@ func TestCredentialsHiddenInput(t *testing.T) {
 	}
 }
 
+// TestPromptPasswordWithTTY tests that PromptPasswordWithTTY uses the terminal reader
+// when provided. This is a regression test for issue #003 - password displayed in plain text.
+func TestPromptPasswordWithTTY(t *testing.T) {
+	output := &bytes.Buffer{}
+
+	// Create a mock terminal reader that returns password without echo
+	mockTermReader := &mockTerminalReader{
+		password: "hiddenpassword",
+	}
+
+	// Use the TTY-aware prompt function
+	password, err := PromptPasswordWithTTY(nil, output, "nextcloud", "myuser", mockTermReader)
+	if err != nil {
+		t.Fatalf("PromptPasswordWithTTY failed: %v", err)
+	}
+
+	if password != "hiddenpassword" {
+		t.Errorf("Expected password 'hiddenpassword', got '%s'", password)
+	}
+
+	// Verify the prompt was written
+	promptOutput := output.String()
+	if !strings.Contains(promptOutput, "nextcloud") {
+		t.Errorf("Expected prompt to mention backend 'nextcloud', got '%s'", promptOutput)
+	}
+
+	// Verify mock was called (simulating masked input)
+	if !mockTermReader.readCalled {
+		t.Error("Expected terminal reader to be called for masked input")
+	}
+}
+
+// TestPromptPasswordWithTTYFallback tests that when no TTY is available,
+// the function falls back to reading from stdin (for piped input).
+func TestPromptPasswordWithTTYFallback(t *testing.T) {
+	input := bytes.NewBufferString("pipedpassword\n")
+	output := &bytes.Buffer{}
+
+	// No terminal reader provided (nil), should fall back to stdin
+	password, err := PromptPasswordWithTTY(input, output, "nextcloud", "myuser", nil)
+	if err != nil {
+		t.Fatalf("PromptPasswordWithTTY fallback failed: %v", err)
+	}
+
+	if password != "pipedpassword" {
+		t.Errorf("Expected password 'pipedpassword', got '%s'", password)
+	}
+}
+
+// mockTerminalReader is a mock implementation of TerminalReader for testing
+type mockTerminalReader struct {
+	password   string
+	readCalled bool
+	err        error
+}
+
+func (m *mockTerminalReader) ReadPassword() (string, error) {
+	m.readCalled = true
+	if m.err != nil {
+		return "", m.err
+	}
+	return m.password, nil
+}
+
 // TestCredentialsJSON tests JSON output format for credentials get
 // CLI: todoat --json credentials get nextcloud myuser
 func TestCredentialsJSON(t *testing.T) {

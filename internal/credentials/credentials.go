@@ -11,6 +11,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 // Source indicates where credentials were retrieved from
@@ -213,13 +215,72 @@ func (m *Manager) ListBackends(ctx context.Context, backends []BackendConfig) ([
 	return statuses, nil
 }
 
-// PromptPassword prompts the user for a password with hidden input
-// In production, this uses terminal.ReadPassword for actual hidden input
-// For testing, it reads from the provided reader
+// TerminalReader is an interface for reading passwords with hidden input
+// This allows mocking terminal input in tests
+type TerminalReader interface {
+	ReadPassword() (string, error)
+}
+
+// StdinTerminalReader reads passwords from stdin with hidden input
+// using golang.org/x/term for actual TTY masking
+type StdinTerminalReader struct {
+	fd int
+}
+
+// NewStdinTerminalReader creates a new terminal reader for stdin
+// Returns nil if stdin is not a terminal (e.g., piped input)
+func NewStdinTerminalReader() *StdinTerminalReader {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return nil
+	}
+	return &StdinTerminalReader{fd: fd}
+}
+
+// ReadPassword reads a password from the terminal with hidden input
+func (r *StdinTerminalReader) ReadPassword() (string, error) {
+	password, err := term.ReadPassword(r.fd)
+	if err != nil {
+		return "", err
+	}
+	return string(password), nil
+}
+
+// PromptPassword prompts the user for a password
+// This is the simple version that reads from the provided reader (for piped input/testing)
+// For actual hidden input on a TTY, use PromptPasswordWithTTY
 func PromptPassword(reader io.Reader, writer io.Writer, backend, username string) (string, error) {
 	_, _ = fmt.Fprintf(writer, "Enter password for %s (user: %s): ", backend, username)
 
-	// For non-TTY input (testing), just read a line
+	// For non-TTY input (testing, piped), just read a line
+	scanner := bufio.NewScanner(reader)
+	if scanner.Scan() {
+		return strings.TrimSpace(scanner.Text()), nil
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	return "", fmt.Errorf("no input received")
+}
+
+// PromptPasswordWithTTY prompts the user for a password with hidden input on TTY
+// If termReader is provided and valid, it uses that for masked input
+// Otherwise, falls back to reading from the provided reader
+func PromptPasswordWithTTY(reader io.Reader, writer io.Writer, backend, username string, termReader TerminalReader) (string, error) {
+	_, _ = fmt.Fprintf(writer, "Enter password for %s (user: %s): ", backend, username)
+
+	// If we have a terminal reader, use it for masked input
+	if termReader != nil {
+		password, err := termReader.ReadPassword()
+		// Print newline after hidden input (terminal doesn't echo newline)
+		_, _ = fmt.Fprintln(writer)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(password), nil
+	}
+
+	// Fallback to plain reading (for piped input or when no TTY)
 	scanner := bufio.NewScanner(reader)
 	if scanner.Scan() {
 		return strings.TrimSpace(scanner.Text()), nil

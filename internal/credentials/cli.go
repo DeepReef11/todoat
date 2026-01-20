@@ -11,30 +11,48 @@ import (
 
 // CLIHandler handles CLI commands for credential management
 type CLIHandler struct {
-	manager *Manager
-	stdin   io.Reader
-	stdout  io.Writer
-	stderr  io.Writer
+	manager    *Manager
+	stdin      io.Reader
+	stdout     io.Writer
+	stderr     io.Writer
+	termReader TerminalReader
 }
 
 // NewCLIHandler creates a new CLI handler for credential commands
 func NewCLIHandler(manager *Manager, stdin io.Reader, stdout, stderr io.Writer) *CLIHandler {
-	return &CLIHandler{
+	h := &CLIHandler{
 		manager: manager,
 		stdin:   stdin,
 		stdout:  stdout,
 		stderr:  stderr,
 	}
+	// Only set termReader if we have a real TTY
+	// (direct assignment of nil pointer to interface would create non-nil interface)
+	if tr := NewStdinTerminalReader(); tr != nil {
+		h.termReader = tr
+	}
+	return h
+}
+
+// NewCLIHandlerWithTermReader creates a CLI handler with a custom terminal reader (for testing)
+func NewCLIHandlerWithTermReader(manager *Manager, stdin io.Reader, stdout, stderr io.Writer, termReader TerminalReader) *CLIHandler {
+	return &CLIHandler{
+		manager:    manager,
+		stdin:      stdin,
+		stdout:     stdout,
+		stderr:     stderr,
+		termReader: termReader,
+	}
 }
 
 // Set stores credentials in the keyring
-// When prompt is true, it prompts for password input
+// When prompt is true, it prompts for password input with hidden input on TTY
 func (h *CLIHandler) Set(backend, username string, prompt bool) error {
 	var password string
 	var err error
 
 	if prompt {
-		password, err = PromptPassword(h.stdin, h.stdout, backend, username)
+		password, err = PromptPasswordWithTTY(h.stdin, h.stdout, backend, username, h.termReader)
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
 		}
@@ -216,8 +234,8 @@ func (h *CLIHandler) Update(backend, username string, prompt bool, verify bool) 
 		return fmt.Errorf("no credential found for %s/%s, use 'credentials set' to create", backend, username)
 	}
 
-	// Prompt for new password
-	password, err := PromptPassword(h.stdin, h.stdout, backend, username)
+	// Prompt for new password with hidden input on TTY
+	password, err := PromptPasswordWithTTY(h.stdin, h.stdout, backend, username, h.termReader)
 	if err != nil {
 		return fmt.Errorf("failed to read password: %w", err)
 	}
