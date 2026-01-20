@@ -387,6 +387,60 @@ sync:
   offline_mode: auto
 ```
 
+## Migrating Between Backends
+
+Use the `migrate` command to move tasks from one backend to another while preserving metadata.
+
+### Basic Migration
+
+```bash
+# Migrate from SQLite to Nextcloud
+todoat migrate --from sqlite --to nextcloud
+
+# Migrate from Nextcloud to Todoist
+todoat migrate --from nextcloud --to todoist
+```
+
+### Migrate Specific List
+
+```bash
+# Migrate only one list
+todoat migrate --from sqlite --to nextcloud --list "Work Tasks"
+```
+
+### Dry Run
+
+Preview what would be migrated without making changes:
+
+```bash
+todoat migrate --from sqlite --to nextcloud --dry-run
+```
+
+### View Target Backend
+
+Check existing tasks in the target before migrating:
+
+```bash
+todoat migrate --to nextcloud --target-info
+```
+
+### What Gets Migrated
+
+Migration preserves:
+- Task summary and description
+- Priority and status
+- Due dates and start dates
+- Tags/categories
+- Parent-child relationships (task hierarchy)
+- Recurrence rules
+
+### Migration Notes
+
+- UIDs are preserved where possible
+- Status values are mapped between backends (e.g., IN-PROGRESS may become different values)
+- Large lists are migrated in batches with progress indicators
+- Use `--dry-run` first to verify the migration plan
+
 ## See Also
 
 - [Getting Started](getting-started.md) - Initial setup

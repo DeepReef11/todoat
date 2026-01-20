@@ -2777,6 +2777,7 @@ func newViewCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	}
 
 	viewCmd.AddCommand(newViewListCmd(stdout, cfg))
+	viewCmd.AddCommand(newViewCreateCmd(stdout, cfg))
 
 	return viewCmd
 }
@@ -2822,6 +2823,132 @@ func doViewList(cfg *Config, stdout io.Writer) error {
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
+	return nil
+}
+
+// newViewCreateCmd creates the 'view create' subcommand
+func newViewCreateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	var fieldsFlag string
+	var sortFlag string
+
+	cmd := &cobra.Command{
+		Use:   "create <name>",
+		Short: "Create a new view",
+		Long: `Create a new view interactively or from command-line flags.
+
+Without -y flag, opens an interactive builder where you can:
+- Select which fields to display
+- Configure field widths and formats
+- Add filter conditions
+- Set sort rules
+
+With -y flag (non-interactive mode), creates a default view or uses provided flags:
+  todoat view create myview -y --fields "status,summary,priority" --sort "priority:asc"`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			viewName := args[0]
+			return doViewCreate(viewName, fieldsFlag, sortFlag, cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().StringVar(&fieldsFlag, "fields", "", "Comma-separated list of fields (e.g., \"status,summary,priority\")")
+	cmd.Flags().StringVar(&sortFlag, "sort", "", "Sort rule in format \"field:direction\" (e.g., \"priority:asc\")")
+
+	return cmd
+}
+
+// doViewCreate creates a new view either interactively or from flags
+func doViewCreate(viewName, fieldsFlag, sortFlag string, cfg *Config, stdout io.Writer) error {
+	viewsDir := getViewsDir(cfg)
+
+	// Check if view already exists
+	loader := views.NewLoader(viewsDir)
+	if loader.ViewExists(viewName) {
+		return fmt.Errorf("view '%s' already exists. Use a different name or delete the existing view", viewName)
+	}
+
+	// Non-interactive mode
+	if cfg != nil && cfg.NoPrompt {
+		return doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, viewsDir, stdout)
+	}
+
+	// Interactive mode - launch the builder TUI
+	builder := views.NewBuilder(viewName, viewsDir)
+	p := tea.NewProgram(builder, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("error running view builder: %w", err)
+	}
+
+	// Check if view was saved
+	if loader.ViewExists(viewName) {
+		_, _ = fmt.Fprintf(stdout, "View '%s' created successfully.\n", viewName)
+	}
+
+	return nil
+}
+
+// doViewCreateNonInteractive creates a view from command-line flags
+func doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, viewsDir string, stdout io.Writer) error {
+	// Ensure views directory exists
+	if err := os.MkdirAll(viewsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create views directory: %w", err)
+	}
+
+	view := views.View{
+		Name: viewName,
+	}
+
+	// Parse fields
+	if fieldsFlag != "" {
+		fieldNames := strings.Split(fieldsFlag, ",")
+		for _, name := range fieldNames {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				view.Fields = append(view.Fields, views.Field{Name: name})
+			}
+		}
+	} else {
+		// Default fields if none specified
+		view.Fields = []views.Field{
+			{Name: "status"},
+			{Name: "summary"},
+			{Name: "priority"},
+		}
+	}
+
+	// Parse sort rules
+	if sortFlag != "" {
+		parts := strings.Split(sortFlag, ":")
+		if len(parts) >= 1 {
+			field := strings.TrimSpace(parts[0])
+			direction := "asc"
+			if len(parts) >= 2 {
+				direction = strings.TrimSpace(parts[1])
+			}
+			view.Sort = []views.SortRule{{Field: field, Direction: direction}}
+		}
+	}
+
+	// Write YAML file
+	viewPath := filepath.Join(viewsDir, viewName+".yaml")
+	data, err := yaml.Marshal(view)
+	if err != nil {
+		return fmt.Errorf("failed to marshal view: %w", err)
+	}
+
+	if err := os.WriteFile(viewPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write view file: %w", err)
+	}
+
+	_, _ = fmt.Fprintf(stdout, "View '%s' created at %s\n", viewName, viewPath)
+	_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	return nil
 }
 

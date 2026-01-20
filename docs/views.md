@@ -283,6 +283,32 @@ Available views:
   - work (custom)
 ```
 
+### Create a View
+
+Create views with the `view create` command:
+
+```bash
+# Interactive mode - opens a builder interface
+todoat view create myview
+
+# Non-interactive mode with flags
+todoat view create myview -y --fields "status,summary,priority" --sort "priority:asc"
+```
+
+Interactive mode lets you:
+- Select which fields to display
+- Configure field widths and formats
+- Add filter conditions
+- Set sort rules
+
+Available flags for non-interactive mode:
+
+| Flag | Description |
+|------|-------------|
+| `--fields` | Comma-separated list of fields (e.g., "status,summary,due_date") |
+| `--sort` | Sort rule in format "field:direction" (e.g., "priority:asc") |
+| `-y` | Non-interactive mode (required for flag-based creation) |
+
 ### Delete a View
 
 ```bash
