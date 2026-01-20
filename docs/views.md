@@ -30,7 +30,7 @@ todoat MyList
 Output:
 ```
 TODO         Buy groceries                              1 (High)
-IN-PROCESS   Write documentation                        5 (Medium)
+IN-PROGRESS  Write documentation                        5 (Medium)
 DONE         Review pull request                        9 (Low)
 ```
 
@@ -235,7 +235,7 @@ json=$(cat)
 status=$(echo "$json" | jq -r '.status')
 case $status in
   "TODO") echo "[ ]";;
-  "IN-PROCESS") echo "[~]";;
+  "IN-PROGRESS") echo "[~]";;
   "DONE") echo "[x]";;
   "CANCELLED") echo "[-]";;
   *) echo "[ ]";;

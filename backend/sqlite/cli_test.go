@@ -2401,6 +2401,27 @@ func TestListStatsSQLiteCLI(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
+// TestListStatsInProgressStatusSQLiteCLI verifies that IN-PROGRESS tasks show "IN-PROGRESS" in stats output
+// Issue 001: stats was showing "PROCESSING" instead of "IN-PROGRESS"
+func TestListStatsInProgressStatusSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a task and set status to IN-PROGRESS
+	cli.MustExecute("-y", "Tasks", "add", "Test task")
+	cli.MustExecute("-y", "Tasks", "update", "Test task", "-s", "IN-PROGRESS")
+
+	// Run list stats
+	stdout := cli.MustExecute("-y", "list", "stats")
+
+	// Should show "IN-PROGRESS" to match user-facing CLI terminology, not "PROCESSING"
+	testutil.AssertContains(t, stdout, "IN-PROGRESS")
+	if strings.Contains(stdout, "PROCESSING") {
+		t.Errorf("expected IN-PROGRESS in stats output, but found PROCESSING: %s", stdout)
+	}
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
 // TestListStatsJSONSQLiteCLI verifies `todoat -y --json list stats` returns JSON statistics
 func TestListStatsJSONSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)

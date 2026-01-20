@@ -67,3 +67,36 @@ The stats command is likely using the internal iCalendar status representation (
 ## Related Files
 - cmd/list.go (likely contains the stats command)
 - internal/backend/ (status mapping functions)
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Changed the status mapping in `Stats()` function from "PROCESSING" to "IN-PROGRESS" for StatusInProgress tasks
+**Test added**: TestListStatsInProgressStatusSQLiteCLI in backend/sqlite/cli_test.go
+
+### Verification Log
+```bash
+$ TODOAT_DB=/tmp/todoat-test-001.db ./todoat Tasks add "Test task" -y
+Created task: Test task (ID: f1c27758-988e-467f-a860-41828baf4e6d)
+ACTION_COMPLETED
+
+$ TODOAT_DB=/tmp/todoat-test-001.db ./todoat Tasks update "Test task" -s IN-PROGRESS -y
+Updated task: Test task
+ACTION_COMPLETED
+
+$ TODOAT_DB=/tmp/todoat-test-001.db ./todoat list stats
+Database Statistics
+==================
+Total tasks: 7
+
+Tasks per list:
+  @work                6
+  Tasks                1
+
+Tasks by status:
+  TODO                 6
+  IN-PROGRESS          1
+
+Database size: 32.00 KB (32768 bytes)
+```
+**Matches expected behavior**: YES

@@ -90,7 +90,7 @@ Some flags have value completion:
 
 ```bash
 todoat -s <TAB>
-# Shows: TODO, DONE, PROCESSING, CANCELLED
+# Shows: TODO, IN-PROGRESS, DONE, CANCELLED
 ```
 
 ## Reload After Changes

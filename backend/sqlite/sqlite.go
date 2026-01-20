@@ -662,7 +662,7 @@ func (b *Backend) Stats(ctx context.Context, listName string) (*DatabaseStats, e
 			case backend.StatusCompleted:
 				statusKey = "DONE"
 			case backend.StatusInProgress:
-				statusKey = "PROCESSING"
+				statusKey = "IN-PROGRESS"
 			case backend.StatusCancelled:
 				statusKey = "CANCELLED"
 			}

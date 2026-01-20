@@ -58,7 +58,7 @@ todoat
 
 | Flag | Description |
 |------|-------------|
-| `-s, --status` | Filter or set task status (TODO, DONE, PROCESSING, CANCELLED) |
+| `-s, --status` | Filter or set task status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 | `-p, --priority` | Set task priority (0-9, 1=highest) |
 | `-d, --description` | Set task description |
 | `--due-date` | Set due date (YYYY-MM-DD or with time: YYYY-MM-DDTHH:MM) |

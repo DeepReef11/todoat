@@ -179,7 +179,7 @@ Tasks have four possible statuses:
 | Status | Abbreviation | Meaning |
 |--------|--------------|---------|
 | TODO | T | Not started |
-| PROCESSING | P | In progress |
+| IN-PROGRESS | I | In progress |
 | DONE | D | Completed |
 | CANCELLED | C | Abandoned |
 
@@ -187,7 +187,7 @@ Filter by status:
 
 ```bash
 # Show only incomplete tasks
-todoat MyList -s TODO,PROCESSING
+todoat MyList -s TODO,IN-PROGRESS
 
 # Show only completed tasks
 todoat MyList -s DONE

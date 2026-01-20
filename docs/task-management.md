@@ -20,11 +20,11 @@ todoat MyList get
 # Show only TODO tasks
 todoat MyList -s TODO
 
-# Show TODO and PROCESSING tasks
-todoat MyList -s TODO,PROCESSING
+# Show TODO and IN-PROGRESS tasks
+todoat MyList -s TODO,IN-PROGRESS
 
-# Using abbreviations (T=TODO, D=DONE, P=PROCESSING, C=CANCELLED)
-todoat MyList -s T,P
+# Using abbreviations (T=TODO, D=DONE, I=IN-PROGRESS, C=CANCELLED)
+todoat MyList -s T,I
 ```
 
 ### Using Custom Views
@@ -230,7 +230,7 @@ todoat MyList add "Critical deadline" \
 
 ```bash
 todoat MyList update "task name" -s DONE
-todoat MyList update "task" -s PROCESSING
+todoat MyList update "task" -s IN-PROGRESS
 ```
 
 ### Change Priority
@@ -334,7 +334,7 @@ When multiple tasks match, you choose from a menu:
 Multiple tasks found matching "review":
 1. Review PR #456 (TODO, Priority: 2)
 2. Code review guidelines (DONE)
-3. Review meeting notes (PROCESSING)
+3. Review meeting notes (IN-PROGRESS)
 Select task (1-3, or 'c' to cancel):
 ```
 
@@ -355,7 +355,7 @@ todoat MyList complete --local-id 42
 | Status | Meaning |
 |--------|---------|
 | TODO | Task not started |
-| PROCESSING | Task in progress |
+| IN-PROGRESS | Task in progress |
 | DONE | Task completed |
 | CANCELLED | Task abandoned |
 
@@ -366,7 +366,7 @@ Use single letters in commands:
 | Abbreviation | Status |
 |--------------|--------|
 | T | TODO |
-| P | PROCESSING |
+| I | IN-PROGRESS |
 | D | DONE |
 | C | CANCELLED |
 
@@ -433,7 +433,7 @@ fi
 
 ```bash
 # Morning: Check today's tasks
-todoat Work -s TODO,PROCESSING
+todoat Work -s TODO,IN-PROGRESS
 
 # Add new tasks
 todoat Work add "Morning standup" -p 2
