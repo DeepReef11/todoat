@@ -48,12 +48,18 @@ type SyncConfig struct {
 
 // BackendsConfig holds configuration for all backends
 type BackendsConfig struct {
-	SQLite  SQLiteConfig  `yaml:"sqlite"`
-	Todoist TodoistConfig `yaml:"todoist"`
+	SQLite    SQLiteConfig    `yaml:"sqlite"`
+	Todoist   TodoistConfig   `yaml:"todoist"`
+	Nextcloud NextcloudConfig `yaml:"nextcloud"`
 }
 
 // TodoistConfig holds Todoist backend configuration
 type TodoistConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// NextcloudConfig holds Nextcloud backend configuration
+type NextcloudConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
@@ -149,7 +155,7 @@ func (c *Config) Validate() error {
 	}
 
 	// Check default backend
-	validBackends := map[string]bool{"sqlite": true, "todoist": true}
+	validBackends := map[string]bool{"sqlite": true, "todoist": true, "nextcloud": true}
 	if !validBackends[c.DefaultBackend] {
 		return fmt.Errorf("unknown default_backend: %q", c.DefaultBackend)
 	}
@@ -163,6 +169,10 @@ func (c *Config) Validate() error {
 	case "todoist":
 		if !c.Backends.Todoist.Enabled {
 			return errors.New("default backend 'todoist' is not enabled in backends configuration")
+		}
+	case "nextcloud":
+		if !c.Backends.Nextcloud.Enabled {
+			return errors.New("default backend 'nextcloud' is not enabled in backends configuration")
 		}
 	}
 

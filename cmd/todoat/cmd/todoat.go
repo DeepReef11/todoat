@@ -24,6 +24,7 @@ import (
 	_ "modernc.org/sqlite"
 	"todoat/backend"
 	_ "todoat/backend/git" // Register git as detectable backend
+	"todoat/backend/nextcloud"
 	"todoat/backend/sqlite"
 	"todoat/backend/todoist"
 	"todoat/internal/cache"
@@ -2216,6 +2217,20 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 			}
 			utils.Debugf("Using default backend: todoist")
 			return todoist.New(todoistCfg)
+		case "nextcloud":
+			// Create Nextcloud backend using environment variable credentials
+			nextcloudCfg := nextcloud.ConfigFromEnv()
+			if nextcloudCfg.Host == "" {
+				return nil, fmt.Errorf("nextcloud backend is configured as default but TODOAT_NEXTCLOUD_HOST environment variable is not set")
+			}
+			if nextcloudCfg.Username == "" {
+				return nil, fmt.Errorf("nextcloud backend is configured as default but TODOAT_NEXTCLOUD_USERNAME environment variable is not set")
+			}
+			if nextcloudCfg.Password == "" {
+				return nil, fmt.Errorf("nextcloud backend is configured as default but TODOAT_NEXTCLOUD_PASSWORD environment variable is not set")
+			}
+			utils.Debugf("Using default backend: nextcloud")
+			return nextcloud.New(nextcloudCfg)
 		}
 	}
 
@@ -2235,8 +2250,21 @@ func createBackendByName(name string, dbPath string) (backend.TaskManager, error
 		}
 		utils.Debugf("Using backend: todoist")
 		return todoist.New(todoistCfg)
+	case "nextcloud":
+		nextcloudCfg := nextcloud.ConfigFromEnv()
+		if nextcloudCfg.Host == "" {
+			return nil, fmt.Errorf("nextcloud backend requires TODOAT_NEXTCLOUD_HOST environment variable")
+		}
+		if nextcloudCfg.Username == "" {
+			return nil, fmt.Errorf("nextcloud backend requires TODOAT_NEXTCLOUD_USERNAME environment variable")
+		}
+		if nextcloudCfg.Password == "" {
+			return nil, fmt.Errorf("nextcloud backend requires TODOAT_NEXTCLOUD_PASSWORD environment variable")
+		}
+		utils.Debugf("Using backend: nextcloud")
+		return nextcloud.New(nextcloudCfg)
 	default:
-		return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist)", name)
+		return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud)", name)
 	}
 }
 
@@ -7883,7 +7911,7 @@ func setConfigValue(c *config.Config, key, value string) error {
 
 	switch parts[0] {
 	case "default_backend":
-		validBackends := []string{"sqlite", "todoist"}
+		validBackends := []string{"sqlite", "todoist", "nextcloud"}
 		if !contains(validBackends, value) {
 			return fmt.Errorf("invalid value for default_backend: %s (valid: %s)", value, strings.Join(validBackends, ", "))
 		}

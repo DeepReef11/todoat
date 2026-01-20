@@ -231,7 +231,26 @@ todoat --detect-backend
 
 ## Using Multiple Backends
 
-### Switching Backends
+### Per-Command Backend Selection
+
+Use the `--backend` flag (or `-b`) to select a specific backend for any command:
+
+```bash
+# View tasks from Todoist backend
+todoat -b todoist MyList
+
+# Add a task to SQLite backend
+todoat -b sqlite Work add "Local task"
+
+# List all lists from Nextcloud
+todoat -b nextcloud list
+```
+
+This overrides the default backend for that command only, without changing your configuration.
+
+### Switching Default Backend
+
+To permanently change your default backend:
 
 ```bash
 # Change default backend

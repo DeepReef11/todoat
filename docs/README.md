@@ -65,6 +65,7 @@ todoat
 | `--due-date` | Set due date (YYYY-MM-DD or with time: YYYY-MM-DDTHH:MM) |
 | `--recur` | Set recurrence (daily, weekly, monthly, or "every N days") |
 | `-v, --view` | Use a custom view |
+| `-b, --backend` | Select backend for this command |
 | `--json` | Output in JSON format |
 | `-y, --no-prompt` | Non-interactive mode for scripting |
 
