@@ -48,3 +48,20 @@ FIX CODE - Handle the case where no remote backend is configured by either:
 1. Creating the caches directory if it doesn't exist
 2. Displaying a helpful message like "No sync queue available - no remote backends configured"
 3. Fixing the error message to accurately describe the issue
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Added directory creation in `initDB()` function before opening SQLite database. The fix creates the parent directory of the database file if it doesn't exist, preventing the misleading "out of memory" error.
+**Test added**: TestSyncQueueMissingDBDirectory in backend/sync/sync_test.go
+
+### Verification Log
+```bash
+$ todoat list create "Test"
+Created list: Test
+$ todoat Test add "Sample task"
+Created task: Sample task (ID: 3fad6c23-58ea-49d8-ab16-2b0c4b2a9a4f)
+$ todoat sync queue
+Pending Operations: 0
+```
+**Matches expected behavior**: YES

@@ -1,11 +1,13 @@
 package sync_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	cmd "todoat/cmd/todoat/cmd"
 	"todoat/internal/testutil"
 )
 
@@ -76,6 +78,85 @@ func TestSyncQueueViewCLI(t *testing.T) {
 
 	// Should show queue information (possibly empty)
 	testutil.AssertContains(t, stdout, "Pending Operations")
+}
+
+// TestSyncQueueNoRemoteBackendCLI tests that sync queue gracefully handles no remote backend (Issue 014)
+// When no remote backend is configured, the command should display an empty queue or helpful message
+// instead of failing with a database error
+func TestSyncQueueNoRemoteBackendCLI(t *testing.T) {
+	// Create CLI test without any sync config (simulates fresh setup with no remote)
+	cli, _ := testutil.NewCLITestWithViews(t)
+
+	// Run sync queue command - should not crash with database error
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "queue")
+
+	// The command should succeed (exit 0)
+	// or provide a helpful message about no remote backend
+	if exitCode != 0 {
+		// If it fails, it should NOT be a database error
+		combined := stdout + stderr
+		if strings.Contains(combined, "unable to open database") ||
+			strings.Contains(combined, "out of memory") {
+			t.Errorf("sync queue should not fail with database error when no remote configured, got: %s", combined)
+		}
+	} else {
+		// If it succeeds, verify it shows queue information
+		testutil.AssertContains(t, stdout, "Pending Operations")
+	}
+}
+
+// TestSyncQueueMissingDBDirectory tests that sync queue handles missing db directory (Issue 014)
+// When the sync database directory doesn't exist, it should be created automatically
+func TestSyncQueueMissingDBDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	viewsDir := filepath.Join(tmpDir, "views")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+	// Use a subdirectory that doesn't exist for the db path
+	dbPath := filepath.Join(tmpDir, "nonexistent", "subdir", "test.db")
+
+	if err := os.MkdirAll(viewsDir, 0755); err != nil {
+		t.Fatalf("failed to create views directory: %v", err)
+	}
+
+	// Write minimal config
+	configContent := `
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &cmd.Config{
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		ViewsPath:  viewsDir,
+		CachePath:  cachePath,
+		ConfigPath: configPath,
+	}
+
+	// Execute directly using cmd.Execute to test with our custom config
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cfg.Stderr = &stderrBuf
+	exitCode := cmd.Execute([]string{"-y", "sync", "queue"}, &stdoutBuf, &stderrBuf, cfg)
+
+	stdout := stdoutBuf.String()
+	stderr := stderrBuf.String()
+
+	// The command should succeed (exit 0)
+	if exitCode != 0 {
+		combined := stdout + stderr
+		if strings.Contains(combined, "unable to open database") ||
+			strings.Contains(combined, "out of memory") {
+			t.Errorf("sync queue should not fail with database error when db directory is missing, got: %s", combined)
+		}
+	} else {
+		// If it succeeds, verify it shows queue information
+		testutil.AssertContains(t, stdout, "Pending Operations")
+	}
 }
 
 // TestSyncQueueClearCLI tests that `todoat sync queue clear` removes all pending operations

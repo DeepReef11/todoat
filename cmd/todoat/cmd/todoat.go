@@ -5520,6 +5520,12 @@ func NewSyncManager(dbPath string) *SyncManager {
 
 // initDB initializes the sync database tables
 func (sm *SyncManager) initDB() error {
+	// Ensure the directory for the database file exists
+	dir := filepath.Dir(sm.dbPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create database directory: %w", err)
+	}
+
 	db, err := sql.Open("sqlite", sm.dbPath)
 	if err != nil {
 		return err
