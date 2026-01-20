@@ -32,6 +32,7 @@ todoat
 | [Reminders](reminders.md) | Task due date reminders |
 | [Shell Completion](shell-completion.md) | Tab completion for Bash, Zsh, Fish, and PowerShell |
 | [Tags](tags.md) | Managing task categories and tags |
+| [TUI](tui.md) | Interactive terminal user interface |
 
 ## Command Overview
 
