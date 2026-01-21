@@ -218,7 +218,7 @@ source <(todoat completion bash)
 todoat completion fish | source
 ```
 
-See [Shell Completion](shell-completion.md) for permanent setup and troubleshooting.
+See [Shell Completion](../how-to/shell-completion.md) for permanent setup and troubleshooting.
 
 ## Getting Help
 
@@ -236,8 +236,8 @@ todoat version
 
 ## Next Steps
 
-- [Task Management](task-management.md) - Learn about all task operations
-- [List Management](list-management.md) - Organize tasks into lists
-- [Backends](backends.md) - Configure Nextcloud, Todoist, and other backends
-- [Views](views.md) - Customize how tasks are displayed
-- [Synchronization](sync.md) - Work offline and sync across devices
+- [Task Management](../how-to/task-management.md) - Learn about all task operations
+- [List Management](../how-to/list-management.md) - Organize tasks into lists
+- [Backends](../explanation/backends.md) - Configure Nextcloud, Todoist, and other backends
+- [Views](../how-to/views.md) - Customize how tasks are displayed
+- [Synchronization](../how-to/sync.md) - Work offline and sync across devices

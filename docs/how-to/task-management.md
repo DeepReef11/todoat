@@ -540,3 +540,4 @@ todoat Work -v all
 - [List Management](list-management.md) - Creating and managing lists
 - [Tags](tags.md) - Organizing tasks with categories
 - [Views](views.md) - Customizing task display
+- [CLI Reference](../reference/cli.md) - Complete command reference

@@ -424,6 +424,6 @@ Migration preserves:
 
 ## See Also
 
-- [Getting Started](getting-started.md) - Initial setup
-- [Synchronization](sync.md) - Syncing between backends
-- [Configuration Reference](../dev-doc/CONFIGURATION.md) - Full configuration details
+- [Getting Started](../tutorials/getting-started.md) - Initial setup
+- [Synchronization](../how-to/sync.md) - Syncing between backends
+- [Configuration](../reference/configuration.md) - Configuration reference

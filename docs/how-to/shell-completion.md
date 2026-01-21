@@ -188,5 +188,5 @@ todoat sync
 
 ## See Also
 
-- [Getting Started](getting-started.md) - Initial setup
+- [Getting Started](../tutorials/getting-started.md) - Initial setup
 - [Task Management](task-management.md) - Commands to complete

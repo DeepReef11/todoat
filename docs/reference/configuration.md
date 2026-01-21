@@ -202,6 +202,6 @@ todoat config get backends
 
 ## See Also
 
-- [Getting Started](getting-started.md) - Initial setup
-- [Backends](backends.md) - Configure backends
-- [Synchronization](sync.md) - Sync settings
+- [Getting Started](../tutorials/getting-started.md) - Initial setup
+- [Backends](../explanation/backends.md) - Configure backends
+- [Synchronization](../how-to/sync.md) - Sync settings

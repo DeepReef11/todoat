@@ -1,6 +1,6 @@
 # todoat Documentation
 
-todoat is a powerful command-line task manager that works with multiple backends including Nextcloud, Todoist, SQLite, and Git-based storage.
+todoat is a command-line task manager supporting multiple backends including Nextcloud, Todoist, SQLite, and Git-based storage.
 
 ## Quick Start
 
@@ -36,19 +36,45 @@ Available sections: `version`, `config`, `lists`, `tasks`, `subtasks`, `dates`, 
 
 ## Documentation
 
+### Tutorials
+
+Step-by-step guides for getting started:
+
 | Guide | Description |
 |-------|-------------|
-| [Getting Started](getting-started.md) | Installation, configuration, and first steps |
-| [Task Management](task-management.md) | Adding, updating, completing, and deleting tasks |
-| [List Management](list-management.md) | Creating and managing task lists |
-| [Backends](backends.md) | Configuring Nextcloud, Todoist, SQLite, and other backends |
-| [Configuration](configuration.md) | Managing settings with the config command |
-| [Views](views.md) | Customizing how tasks are displayed |
-| [Synchronization](sync.md) | Offline mode and sync configuration |
-| [Reminders](reminders.md) | Task due date reminders |
-| [Shell Completion](shell-completion.md) | Tab completion for Bash, Zsh, Fish, and PowerShell |
-| [Tags](tags.md) | Managing task categories and tags |
-| [TUI](tui.md) | Interactive terminal user interface |
+| [Getting Started](tutorials/getting-started.md) | Installation, configuration, and first steps |
+
+### How-To Guides
+
+Task-oriented guides for accomplishing specific goals:
+
+| Guide | Description |
+|-------|-------------|
+| [Task Management](how-to/task-management.md) | Adding, updating, completing, and deleting tasks |
+| [List Management](how-to/list-management.md) | Creating and managing task lists |
+| [Views](how-to/views.md) | Customizing how tasks are displayed |
+| [Synchronization](how-to/sync.md) | Offline mode and sync configuration |
+| [Reminders](how-to/reminders.md) | Task due date reminders |
+| [Shell Completion](how-to/shell-completion.md) | Tab completion for Bash, Zsh, Fish, and PowerShell |
+| [Tags](how-to/tags.md) | Managing task categories and tags |
+| [TUI](how-to/tui.md) | Interactive terminal user interface |
+
+### Reference
+
+Technical reference documentation:
+
+| Guide | Description |
+|-------|-------------|
+| [CLI Reference](reference/cli.md) | Complete command and flag reference |
+| [Configuration](reference/configuration.md) | Managing settings with the config command |
+
+### Explanation
+
+Background and conceptual information:
+
+| Guide | Description |
+|-------|-------------|
+| [Backends](explanation/backends.md) | Configuring Nextcloud, Todoist, SQLite, and other backends |
 
 ## Command Overview
 
@@ -137,7 +163,7 @@ todoat follows XDG Base Directory specification. Configuration is stored in:
 - **Linux/macOS**: `~/.config/todoat/config.yaml`
 - **Windows**: `%APPDATA%\todoat\config.yaml`
 
-See [Getting Started](getting-started.md) for configuration details.
+See [Getting Started](tutorials/getting-started.md) for configuration details.
 
 ## Getting Help
 

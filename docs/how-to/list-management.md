@@ -273,5 +273,5 @@ Reclaims unused space in the SQLite database. Run this periodically if you frequ
 ## See Also
 
 - [Task Management](task-management.md) - Working with tasks in lists
-- [Backends](backends.md) - Backend-specific list features
+- [Backends](../explanation/backends.md) - Backend-specific list features
 - [Synchronization](sync.md) - Syncing lists across devices

@@ -409,6 +409,6 @@ Subsequent syncs are faster:
 
 ## See Also
 
-- [Backends](backends.md) - Configuring remote backends
-- [Getting Started](getting-started.md) - Initial setup
+- [Backends](../explanation/backends.md) - Configuring remote backends
+- [Getting Started](../tutorials/getting-started.md) - Initial setup
 - [Task Management](task-management.md) - Working with tasks
