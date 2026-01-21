@@ -44,3 +44,23 @@ defer func() {
 }()
 _ = os.Unsetenv("TODOAT_TODOIST_TOKEN")
 ```
+
+## Resolution
+
+**Fixed in**: 712e1db
+**Fix description**: Added TODOAT_TODOIST_TOKEN to the save/unset/restore pattern in cli_test.go and credentials_test.go
+**Tests added**: Existing tests now properly isolated
+
+### Verification Log
+```bash
+$ export TODOAT_TODOIST_TOKEN=sometoken && go test todoat/internal/credentials -v -run "TestCredentialsListJSONCLI|TestCredentialsListBackends|TestCredentialsEnvVarPriority"
+=== RUN   TestCredentialsListJSONCLI
+--- PASS: TestCredentialsListJSONCLI (0.00s)
+=== RUN   TestCredentialsListBackends
+--- PASS: TestCredentialsListBackends (0.00s)
+=== RUN   TestCredentialsEnvVarPriority
+--- PASS: TestCredentialsEnvVarPriority (0.00s)
+PASS
+ok      todoat/internal/credentials     0.003s
+```
+**Matches expected behavior**: YES
