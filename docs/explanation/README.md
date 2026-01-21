@@ -33,6 +33,8 @@ todoat is a command-line task management tool that allows you to:
 - [Subtasks & Hierarchy](subtasks-hierarchy.md)
 - [Views Customization](views-customization.md)
 - [Notification Manager](notification-manager.md)
+- [Analytics](analytics.md)
+- [Logging](logging.md)
 
 ### Development
 - [Test-Driven Development](test-driven-dev.md)

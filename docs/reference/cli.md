@@ -133,6 +133,71 @@ todoat list [command]
 | `stats` | Show database statistics |
 | `vacuum` | Compact the database |
 
+### list create
+
+Create a new task list.
+
+```bash
+todoat list create [name] [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--description` | string | Description for the list |
+| `--color` | string | Hex color (e.g., #FF5733, ABC) |
+
+### list update
+
+Update a list's name, color, or description.
+
+```bash
+todoat list update [name] [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--name` | string | New name for the list |
+| `--description` | string | Description for the list |
+| `--color` | string | Hex color (e.g., #FF5733, ABC) |
+
+### list export
+
+Export a list to a file.
+
+```bash
+todoat list export [name] [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--format` | string | `json` | Export format: sqlite, json, csv, ical |
+| `--output` | string | `./<list-name>.<ext>` | Output file path |
+
+### list import
+
+Import a list from a file.
+
+```bash
+todoat list import [file] [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--format` | string | Import format (auto-detect from extension if not specified) |
+
+### list trash
+
+View and manage deleted lists.
+
+```bash
+todoat list trash [command]
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| `restore` | Restore a list from trash |
+| `purge` | Permanently delete a list from trash |
+
 ### Examples
 
 ```bash
@@ -145,11 +210,23 @@ todoat list create "Personal"
 # Create with description and color
 todoat list create "Work" --description "Work tasks" --color "#0066cc"
 
-# Delete a list
+# Update list name and color
+todoat list update "Work" --name "Work Tasks" --color "#00cc66"
+
+# Delete a list (moves to trash)
 todoat list delete "Old List"
 
-# Export list to file
+# View trash
+todoat list trash
+
+# Restore from trash
+todoat list trash restore "Old List"
+
+# Export list to JSON
 todoat list export MyList --output tasks.json
+
+# Export to iCal format
+todoat list export MyList --format ical --output tasks.ics
 
 # Import from file
 todoat list import tasks.json
@@ -215,6 +292,42 @@ todoat sync [command]
 | `conflicts` | View and manage sync conflicts |
 | `daemon` | Manage the sync daemon |
 
+### sync conflicts
+
+View and manage sync conflicts.
+
+```bash
+todoat sync conflicts [command]
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| `resolve` | Resolve a specific conflict |
+
+#### sync conflicts resolve
+
+```bash
+todoat sync conflicts resolve [task-uid] [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--strategy` | string | `server_wins` | Resolution strategy: server_wins, local_wins, merge, keep_both |
+
+### sync daemon
+
+Manage the background sync daemon.
+
+```bash
+todoat sync daemon [command]
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| `start` | Start the sync daemon |
+| `status` | Show daemon status |
+| `stop` | Stop the sync daemon |
+
 ### Examples
 
 ```bash
@@ -229,6 +342,18 @@ todoat sync queue
 
 # View conflicts
 todoat sync conflicts
+
+# Resolve a conflict with local changes
+todoat sync conflicts resolve abc123 --strategy local_wins
+
+# Start background sync
+todoat sync daemon start
+
+# Check daemon status
+todoat sync daemon status
+
+# Stop background sync
+todoat sync daemon stop
 ```
 
 ## view
@@ -248,13 +373,31 @@ todoat view [command]
 | `list` | List available views |
 | `create` | Create a new view |
 
+### view create
+
+Create a new view interactively or from flags.
+
+```bash
+todoat view create <name> [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--fields` | string | Comma-separated list of fields (e.g., "status,summary,priority") |
+| `--sort` | string | Sort rule in format "field:direction" (e.g., "priority:asc") |
+
+Without `-y` flag, opens an interactive builder. With `-y`, uses provided flags or defaults.
+
 ### Examples
 
 ```bash
 # List views
 todoat view list
 
-# Create a view with fields and sort
+# Create a view interactively
+todoat view create urgent
+
+# Create a view with fields and sort (non-interactive)
 todoat view create urgent -y --fields "status,summary,priority" --sort "priority:asc"
 ```
 
@@ -275,8 +418,33 @@ todoat credentials [command]
 | `list` | List all backends with credential status |
 | `get <backend>` | Retrieve credentials and show source |
 | `set <backend> <username>` | Store credentials in system keyring |
-| `update <backend>` | Update existing credentials |
+| `update <backend> <username>` | Update existing credentials |
 | `delete <backend>` | Remove credentials from keyring |
+
+### credentials set
+
+Store credentials securely in the system keyring.
+
+```bash
+todoat credentials set [backend] [username] [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--prompt` | bool | Prompt for password input (required for security) |
+
+### credentials update
+
+Update the password for existing credentials in the system keyring.
+
+```bash
+todoat credentials update [backend] [username] [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--prompt` | bool | Prompt for password input (required for security) |
+| `--verify` | bool | Verify the updated credential against the backend |
 
 ### Examples
 
@@ -289,6 +457,12 @@ todoat credentials set nextcloud myuser --prompt
 
 # Set Todoist API token
 todoat credentials set todoist token --prompt
+
+# Update existing credentials
+todoat credentials update nextcloud myuser --prompt
+
+# Update and verify against backend
+todoat credentials update nextcloud myuser --prompt --verify
 
 # Delete credentials
 todoat credentials delete nextcloud
@@ -380,6 +554,18 @@ todoat notification [command]
 | `test` | Send a test notification |
 | `log` | View notification log |
 
+### notification log
+
+View notification history.
+
+```bash
+todoat notification log [command]
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| `clear` | Clear notification log |
+
 ### Examples
 
 ```bash
@@ -388,6 +574,9 @@ todoat notification test
 
 # View notification log
 todoat notification log
+
+# Clear notification log
+todoat notification log clear
 ```
 
 ## tags
