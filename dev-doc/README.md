@@ -62,11 +62,7 @@ todoat is a command-line task management tool that allows you to:
 
 ## Getting Started
 
-For installation and basic usage, see the main [README.md](../README.md) in the project root.
-
-For detailed sync documentation, see [SYNC_GUIDE.md](../SYNC_GUIDE.md).
-
-For development guidance, see [CLAUDE.md](../CLAUDE.md).
+For detailed sync documentation, see [Synchronization](./SYNCHRONIZATION.md).
 
 ## Status Mappings
 
@@ -129,9 +125,7 @@ Default locations (if XDG variables not set):
 
 ## Contributing
 
-For contribution guidelines, see [CONTRIBUTING.md](../.github/CONTRIBUTING.md) in the project root.
-
-For testing procedures, see [TESTING.md](../TESTING.md).
+For testing procedures, see [Test-Driven Development](./TEST_DRIVEN_DEV.md).
 
 ---
 
