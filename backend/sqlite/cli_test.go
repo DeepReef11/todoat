@@ -1531,14 +1531,35 @@ func TestListDeleteSQLiteCLI(t *testing.T) {
 }
 
 // TestListDeleteNotFound verifies that deleting a non-existent list returns ERROR
+// This is a regression test for issue 001: list delete succeeds for nonexistent list
 func TestListDeleteNotFoundSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
 
-	// Try to delete non-existent list
-	stdout, _, exitCode := cli.Execute("-y", "list", "delete", "NonExistent")
+	// Step 1 from issue: Verify the list does not exist
+	listOutput := cli.MustExecute("-y", "list")
+	testutil.AssertNotContains(t, listOutput, "NonExistentList")
 
+	// Step 2 from issue: Attempt to delete a non-existent list
+	stdout, _, exitCode := cli.Execute("-y", "list", "delete", "NonExistentList")
+
+	// Expected: exit code should be non-zero (error)
 	testutil.AssertExitCode(t, exitCode, 1)
+
+	// Expected: should show error message indicating list not found
+	testutil.AssertContains(t, stdout, "Error: list 'NonExistentList' not found")
+
+	// Expected: result code should be ERROR, not ACTION_COMPLETED
 	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+
+	// Bug symptoms that should NOT appear:
+	// - Should NOT say "Deleted list: NonExistentList"
+	testutil.AssertNotContains(t, stdout, "Deleted list: NonExistentList")
+	// - Should NOT say ACTION_COMPLETED
+	testutil.AssertNotContains(t, stdout, "ACTION_COMPLETED")
+
+	// Verify list is not in trash (bug symptom: deleted list was added to trash)
+	trashOutput := cli.MustExecute("-y", "list", "trash")
+	testutil.AssertNotContains(t, trashOutput, "NonExistentList")
 }
 
 // TestListTrash verifies that `todoat -y list trash` displays deleted lists

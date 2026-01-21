@@ -55,3 +55,26 @@ FIX CODE - Add existence check before deletion:
 1. Query for the list by name before attempting deletion
 2. Return an error if the list is not found
 3. Only proceed with soft-delete if list exists
+
+## Resolution
+
+**Fixed in**: Already implemented in doListDelete function (cmd/todoat/cmd/todoat.go:884-912)
+**Fix description**: The doListDelete function already checks if the list exists by calling GetListByName before attempting deletion. If the list is not found, it returns an error message "Error: list '%s' not found" with exit code 1 and ERROR result code.
+**Test added**: Enhanced `TestListDeleteNotFoundSQLiteCLI` in backend/sqlite/cli_test.go to be a comprehensive regression test for this issue
+
+### Verification Log
+```bash
+$ export XDG_DATA_HOME=/tmp/todoat_test_001/data
+$ export XDG_CONFIG_HOME=/tmp/todoat_test_001/config
+$ ./todoat list
+No lists found. Create one with: todoat list create "MyList"
+
+$ ./todoat list delete "NonExistentList" -y
+Error: list 'NonExistentList' not found
+ERROR
+Exit code: 1
+
+$ ./todoat list trash
+Trash is empty.
+```
+**Matches expected behavior**: YES - The command correctly returns an error indicating the list does not exist, instead of falsely reporting "Deleted list: NonExistentList" with ACTION_COMPLETED.
