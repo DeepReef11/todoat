@@ -304,3 +304,53 @@ func TestMigrateJSONOutput(t *testing.T) {
 	testutil.AssertContains(t, stdout, "migrated")
 	testutil.AssertContains(t, stdout, "2")
 }
+
+// =============================================================================
+// Issue 003 - Target Info Status Display
+// =============================================================================
+
+// TestIssue003TargetInfoStatusDisplayText tests that target-info text output uses
+// user-facing status names (TODO, DONE) instead of internal iCalendar names
+// (NEEDS-ACTION, COMPLETED) for consistency with the rest of the application.
+func TestIssue003TargetInfoStatusDisplayText(t *testing.T) {
+	cli := testutil.NewCLITestWithMigrate(t)
+
+	// Create tasks with various statuses
+	cli.MustExecute("-y", "Work", "add", "Todo task")
+	cli.MustExecute("-y", "Work", "add", "Done task")
+	cli.MustExecute("-y", "Work", "complete", "Done task")
+
+	// Migrate to file backend
+	cli.MustExecute("-y", "migrate", "--from", "sqlite", "--to", "file-mock", "--list", "Work")
+
+	// Get target-info text output (NOT JSON)
+	targetOutput := cli.MustExecute("-y", "migrate", "--target-info", "file-mock", "--list", "Work")
+
+	// Text output should use user-facing names, not internal iCalendar names
+	testutil.AssertContains(t, targetOutput, "TODO")
+	testutil.AssertContains(t, targetOutput, "DONE")
+	testutil.AssertNotContains(t, targetOutput, "NEEDS-ACTION")
+	testutil.AssertNotContains(t, targetOutput, "COMPLETED")
+}
+
+// TestIssue003TargetInfoStatusDisplayJSON tests that target-info JSON output uses
+// user-facing status names for consistency.
+func TestIssue003TargetInfoStatusDisplayJSON(t *testing.T) {
+	cli := testutil.NewCLITestWithMigrate(t)
+
+	// Create tasks with various statuses
+	cli.MustExecute("-y", "Work", "add", "In progress task")
+	cli.MustExecute("-y", "Work", "update", "In progress task", "-s", "IN-PROGRESS")
+	cli.MustExecute("-y", "Work", "add", "Cancelled task")
+	cli.MustExecute("-y", "Work", "update", "Cancelled task", "-s", "CANCELLED")
+
+	// Migrate to file backend
+	cli.MustExecute("-y", "migrate", "--from", "sqlite", "--to", "file-mock", "--list", "Work")
+
+	// Get target-info JSON output
+	targetOutput := cli.MustExecute("-y", "migrate", "--target-info", "file-mock", "--list", "Work", "--json")
+
+	// JSON output should also use user-facing names
+	testutil.AssertContains(t, targetOutput, "IN-PROGRESS")
+	testutil.AssertContains(t, targetOutput, "CANCELLED")
+}

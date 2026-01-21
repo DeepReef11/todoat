@@ -275,7 +275,7 @@ func taskToPluginData(t *backend.Task) pluginTaskData {
 		UID:         t.ID,
 		Summary:     t.Summary,
 		Description: t.Description,
-		Status:      statusToString(t.Status),
+		Status:      StatusToString(t.Status),
 		Priority:    t.Priority,
 		Created:     t.Created.Format(time.RFC3339),
 		Modified:    t.Modified.Format(time.RFC3339),
@@ -299,8 +299,13 @@ func taskToPluginData(t *backend.Task) pluginTaskData {
 	return data
 }
 
-// statusToString converts TaskStatus to a string for JSON
-func statusToString(status backend.TaskStatus) string {
+// StatusToString converts TaskStatus to a user-facing string
+// Maps internal iCalendar status names to user-friendly names:
+// StatusCompleted (COMPLETED) → "DONE"
+// StatusInProgress (IN-PROCESS) → "IN-PROGRESS"
+// StatusCancelled (CANCELLED) → "CANCELLED"
+// StatusNeedsAction (NEEDS-ACTION) or default → "TODO"
+func StatusToString(status backend.TaskStatus) string {
 	switch status {
 	case backend.StatusCompleted:
 		return "DONE"

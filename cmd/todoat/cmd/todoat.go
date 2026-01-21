@@ -7266,7 +7266,7 @@ func doMigrateTargetInfo(cfg *Config, stdout io.Writer, targetBackend, listName 
 				for _, t := range tasks {
 					taskMap := map[string]interface{}{
 						"summary":  t.Summary,
-						"status":   string(t.Status),
+						"status":   views.StatusToString(t.Status),
 						"priority": t.Priority,
 					}
 					if t.DueDate != nil {
@@ -7306,7 +7306,7 @@ func doMigrateTargetInfo(cfg *Config, stdout io.Writer, targetBackend, listName 
 		for _, t := range tasks {
 			taskMap := map[string]interface{}{
 				"summary":  t.Summary,
-				"status":   string(t.Status),
+				"status":   views.StatusToString(t.Status),
 				"priority": t.Priority,
 			}
 			if t.DueDate != nil {
@@ -7331,7 +7331,7 @@ func doMigrateTargetInfo(cfg *Config, stdout io.Writer, targetBackend, listName 
 
 	_, _ = fmt.Fprintf(stdout, "List: %s (%d tasks)\n", list.Name, len(tasks))
 	for _, t := range tasks {
-		_, _ = fmt.Fprintf(stdout, "  - %s (%s)\n", t.Summary, t.Status)
+		_, _ = fmt.Fprintf(stdout, "  - %s (%s)\n", t.Summary, views.StatusToString(t.Status))
 	}
 
 	if cfg != nil && cfg.NoPrompt {

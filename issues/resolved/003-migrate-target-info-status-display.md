@@ -52,3 +52,23 @@ N/A
 
 ## Recommended Fix
 FIX CODE - Map internal iCalendar status names (NEEDS-ACTION, COMPLETED) to user-facing names (TODO, DONE) in migrate target-info output for consistency
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Exported the existing `statusToString` function in `internal/views/renderer.go` as `StatusToString` and used it in `doMigrateTargetInfo` to convert internal iCalendar status names to user-facing names in both text and JSON output.
+**Test added**: `TestIssue003TargetInfoStatusDisplayText` and `TestIssue003TargetInfoStatusDisplayJSON` in `internal/migrate/migrate_test.go`
+
+### Verification Log
+```bash
+$ go test -v -run "TestIssue003" ./internal/migrate/...
+=== RUN   TestIssue003TargetInfoStatusDisplayText
+--- PASS: TestIssue003TargetInfoStatusDisplayText (0.04s)
+=== RUN   TestIssue003TargetInfoStatusDisplayJSON
+--- PASS: TestIssue003TargetInfoStatusDisplayJSON (0.04s)
+PASS
+ok  	todoat/internal/migrate	0.085s
+```
+**Matches expected behavior**: YES
+
+Output now shows `TODO` and `DONE` instead of `NEEDS-ACTION` and `COMPLETED`.
