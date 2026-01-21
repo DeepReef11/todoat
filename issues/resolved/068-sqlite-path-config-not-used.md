@@ -58,3 +58,19 @@ The config path is loaded into `Config.Backends.SQLite.Path` and can be retrieve
 
 ## Recommended Fix
 FIX CODE - Ensure the SQLite backend initialization passes the configured path from `Config.GetDatabasePath()` to `sqlite.New()`. If the path is empty, use the default location.
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Modified `getBackend()` in `cmd/todoat/cmd/todoat.go` to check `appConfig.GetDatabasePath()` when determining the database path. The priority order is now: CLI flag > config file > default.
+**Test added**: `TestIssue068SQLitePathConfigUsed` in `backend/sqlite/cli_test.go`
+
+### Verification Log
+```bash
+$ go test -v ./backend/sqlite/... -run "TestIssue068"
+=== RUN   TestIssue068SQLitePathConfigUsed
+--- PASS: TestIssue068SQLitePathConfigUsed (0.02s)
+PASS
+ok  	todoat/backend/sqlite	0.026s
+```
+**Matches expected behavior**: YES

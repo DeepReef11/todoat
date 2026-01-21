@@ -2173,22 +2173,28 @@ func getDefaultDBPath() string {
 
 // getBackend creates or returns the backend connection
 func getBackend(cfg *Config) (backend.TaskManager, error) {
+	// Load config (creates default if not exists) and check sync/auto-detect settings
+	// Use LoadWithRaw to get both structured config and raw map for custom backend support
+	appConfig, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
+	loadSyncConfig(cfg)
+	loadAutoDetectConfig(cfg, appConfig)
+
+	// Determine database path: CLI flag > config file > default
 	dbPath := cfg.DBPath
 	if dbPath == "" {
-		// Use default XDG-compliant path
-		dbPath = getDefaultDBPath()
+		// Check config file for backends.sqlite.path
+		if appConfig != nil && appConfig.GetDatabasePath() != "" {
+			dbPath = appConfig.GetDatabasePath()
+		} else {
+			// Use default XDG-compliant path
+			dbPath = getDefaultDBPath()
+		}
 	}
 
 	// Ensure directory exists (for both default and explicit paths)
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("could not create data directory: %w", err)
 	}
-
-	// Load config (creates default if not exists) and check sync/auto-detect settings
-	// Use LoadWithRaw to get both structured config and raw map for custom backend support
-	appConfig, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
-	loadSyncConfig(cfg)
-	loadAutoDetectConfig(cfg, appConfig)
 
 	// If --backend flag is specified, use it (highest priority)
 	if cfg.Backend != "" {

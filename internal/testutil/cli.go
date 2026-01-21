@@ -22,10 +22,12 @@ const defaultTestConfig = "# test config\ndefault_backend: sqlite\n"
 
 // CLITest provides a test helper for running CLI commands in isolation.
 type CLITest struct {
-	t          *testing.T
-	cfg        *cmd.Config
-	tmpDir     string
-	configPath string // Optional path to config file for SetConfigValue
+	t             *testing.T
+	cfg           *cmd.Config
+	tmpDir        string
+	configPath    string // Optional path to config file for SetConfigValue
+	customDBPath  string // Custom DB path for testing config-based path
+	defaultDBPath string // Default DB path (XDG-based) for testing config-based path
 }
 
 // NewCLITest creates a new CLI test helper with an isolated in-memory database.
@@ -155,6 +157,112 @@ func NewCLITestWithConfig(t *testing.T) *CLITest {
 		tmpDir:     tmpDir,
 		configPath: configPath,
 	}
+}
+
+// NewCLITestWithCustomDBPath creates a new CLI test helper that tests custom database path from config.
+// Unlike other helpers, this does NOT set cfg.DBPath, so the path from config file is used.
+// This is used for testing issue #068 (config path should be used when DBPath flag is not set).
+func NewCLITestWithCustomDBPath(t *testing.T) *CLITest {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+
+	// Custom DB path from config - different from default
+	customDBPath := filepath.Join(tmpDir, "custom", "my-tasks.db")
+
+	// What would be the default DB path (in the temp XDG data dir)
+	xdgDataDir := filepath.Join(tmpDir, "xdg-data", "todoat")
+	defaultDBPath := filepath.Join(xdgDataDir, "tasks.db")
+
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+
+	// Write config with custom database path
+	configContent := `backends:
+  sqlite:
+    enabled: true
+    path: "` + customDBPath + `"
+default_backend: sqlite
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	// Create directories for the XDG paths (to isolate from real user data)
+	xdgConfigDir := filepath.Join(tmpDir, "xdg-config", "todoat")
+	if err := os.MkdirAll(xdgConfigDir, 0755); err != nil {
+		t.Fatalf("failed to create XDG config dir: %v", err)
+	}
+	if err := os.MkdirAll(xdgDataDir, 0755); err != nil {
+		t.Fatalf("failed to create XDG data dir: %v", err)
+	}
+
+	// Set XDG environment variables to isolate from user's real data
+	// Save old values and restore them at test cleanup
+	oldDataHome := os.Getenv("XDG_DATA_HOME")
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	oldCacheHome := os.Getenv("XDG_CACHE_HOME")
+
+	xdgCacheDir := filepath.Join(tmpDir, "xdg-cache")
+	if err := os.MkdirAll(xdgCacheDir, 0755); err != nil {
+		t.Fatalf("failed to create XDG cache dir: %v", err)
+	}
+
+	if err := os.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, "xdg-data")); err != nil {
+		t.Fatalf("failed to set XDG_DATA_HOME: %v", err)
+	}
+	if err := os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg-config")); err != nil {
+		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
+	}
+	if err := os.Setenv("XDG_CACHE_HOME", xdgCacheDir); err != nil {
+		t.Fatalf("failed to set XDG_CACHE_HOME: %v", err)
+	}
+
+	t.Cleanup(func() {
+		if oldDataHome == "" {
+			_ = os.Unsetenv("XDG_DATA_HOME")
+		} else {
+			_ = os.Setenv("XDG_DATA_HOME", oldDataHome)
+		}
+		if oldConfigHome == "" {
+			_ = os.Unsetenv("XDG_CONFIG_HOME")
+		} else {
+			_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		}
+		if oldCacheHome == "" {
+			_ = os.Unsetenv("XDG_CACHE_HOME")
+		} else {
+			_ = os.Setenv("XDG_CACHE_HOME", oldCacheHome)
+		}
+	})
+
+	cfg := &cmd.Config{
+		NoPrompt:   true,
+		DBPath:     "", // Intentionally empty - should use config file path
+		CachePath:  cachePath,
+		ConfigPath: configPath,
+	}
+
+	return &CLITest{
+		t:             t,
+		cfg:           cfg,
+		tmpDir:        tmpDir,
+		configPath:    configPath,
+		customDBPath:  customDBPath,
+		defaultDBPath: defaultDBPath,
+	}
+}
+
+// CustomDBPath returns the custom database path configured in the config file.
+// This is used for testing issue #068.
+func (c *CLITest) CustomDBPath() string {
+	return c.customDBPath
+}
+
+// DefaultDBPath returns what would be the default database path.
+// This is used for testing issue #068.
+func (c *CLITest) DefaultDBPath() string {
+	return c.defaultDBPath
 }
 
 // NewCLITestWithViewsAndConfig creates a new CLI test helper with views directory and config file support.

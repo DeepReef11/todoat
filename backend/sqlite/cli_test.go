@@ -4707,3 +4707,32 @@ func TestRecurringTaskDisplaySQLiteCLI(t *testing.T) {
 		t.Errorf("expected recurring indicator (🔄 or [R]) in output, got: %s", stdout)
 	}
 }
+
+// =============================================================================
+// Issue 068: SQLite custom path configuration tests
+// =============================================================================
+
+// TestIssue068SQLitePathConfigUsed verifies that backends.sqlite.path from config
+// is used when creating the database (issue #068).
+func TestIssue068SQLitePathConfigUsed(t *testing.T) {
+	cli := testutil.NewCLITestWithCustomDBPath(t)
+
+	// Create a list - this should create the database at the custom path
+	stdout := cli.MustExecute("-y", "list", "create", "TestList")
+	testutil.AssertContains(t, stdout, "TestList")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Get the custom path from the config
+	customPath := cli.CustomDBPath()
+
+	// Verify database was created at custom path
+	if _, err := os.Stat(customPath); os.IsNotExist(err) {
+		t.Errorf("database should be created at custom path %q but file does not exist", customPath)
+	}
+
+	// Verify database was NOT created at default location
+	defaultPath := cli.DefaultDBPath()
+	if _, err := os.Stat(defaultPath); err == nil {
+		t.Errorf("database should NOT be created at default path %q but file exists", defaultPath)
+	}
+}
