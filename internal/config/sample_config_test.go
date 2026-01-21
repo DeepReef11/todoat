@@ -199,3 +199,58 @@ func TestSampleConfigCredentialsPatterns(t *testing.T) {
 		t.Error("expected sample config to mention environment variable patterns (TODOAT_*)")
 	}
 }
+
+// =============================================================================
+// Sample Config Options Tests (065-sample-config-missing-options)
+// =============================================================================
+
+// TestSampleConfigContainsAllOptions verifies sample config includes all documented options
+func TestSampleConfigContainsAllOptions(t *testing.T) {
+	content := GetSampleConfig()
+
+	// Test for allow_http option (065 requirement)
+	// Must be present with explanation for HTTP connections
+	t.Run("allow_http option", func(t *testing.T) {
+		if !strings.Contains(content, "allow_http") {
+			t.Error("expected sample config to include allow_http option")
+		}
+		// Check it has an explanation comment
+		if !strings.Contains(strings.ToLower(content), "http") {
+			t.Error("expected sample config to explain allow_http option")
+		}
+	})
+
+	// Test for auto_detect_backend option (065 requirement)
+	// Must be present with enabled: false default
+	t.Run("auto_detect_backend option", func(t *testing.T) {
+		if !strings.Contains(content, "auto_detect_backend") {
+			t.Error("expected sample config to include auto_detect_backend option")
+		}
+		// Verify default is false (simple mode)
+		if !strings.Contains(content, "auto_detect_backend: false") {
+			t.Error("expected sample config to have auto_detect_backend: false as default")
+		}
+	})
+
+	// Test for backend_priority configuration (065 requirement)
+	t.Run("backend_priority configuration", func(t *testing.T) {
+		if !strings.Contains(content, "backend_priority") {
+			t.Error("expected sample config to include backend_priority configuration")
+		}
+	})
+
+	// Test for suppress_http_warning option (related to allow_http)
+	t.Run("suppress_http_warning option", func(t *testing.T) {
+		if !strings.Contains(content, "suppress_http_warning") {
+			t.Error("expected sample config to include suppress_http_warning option")
+		}
+	})
+
+	// Verify extended auto_detect_backend mode is documented
+	t.Run("extended auto_detect_backend mode", func(t *testing.T) {
+		// Should show the object format with enabled: true
+		if !strings.Contains(content, "enabled: true") {
+			t.Error("expected sample config to show extended auto_detect_backend mode with enabled: true")
+		}
+	})
+}
