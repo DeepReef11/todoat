@@ -3646,6 +3646,9 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 		return err
 	}
 
+	// Invalidate list cache after adding task (Issue #001)
+	invalidateListCache(cfg)
+
 	if jsonOutput {
 		return outputActionJSON("add", created, stdout)
 	}
@@ -3748,6 +3751,9 @@ func doAddHierarchy(ctx context.Context, be backend.TaskManager, list *backend.L
 	if lastCreated == nil {
 		return fmt.Errorf("no task created")
 	}
+
+	// Invalidate list cache after adding task hierarchy (Issue #001)
+	invalidateListCache(cfg)
 
 	if jsonOutput {
 		return outputActionJSON("add", lastCreated, stdout)
@@ -4180,6 +4186,9 @@ func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, t
 		return err
 	}
 
+	// Invalidate list cache after deleting task (Issue #001)
+	invalidateListCache(cfg)
+
 	if jsonOutput {
 		return outputActionJSON("delete", &deletedTask, stdout)
 	}
@@ -4286,6 +4295,9 @@ func doBulkDelete(ctx context.Context, be backend.TaskManager, list *backend.Lis
 			}
 		}
 	}
+
+	// Invalidate list cache after bulk deleting tasks (Issue #001)
+	invalidateListCache(cfg)
 
 	if jsonOutput {
 		resp := bulkActionResponse{
@@ -4724,6 +4736,9 @@ func doDeleteWithTask(ctx context.Context, be backend.TaskManager, list *backend
 	if err := be.DeleteTask(ctx, list.ID, task.ID); err != nil {
 		return err
 	}
+
+	// Invalidate list cache after deleting task (Issue #001)
+	invalidateListCache(cfg)
 
 	if jsonOutput {
 		return outputActionJSON("delete", &deletedTask, stdout)

@@ -490,3 +490,147 @@ func TestCacheBackendMismatchInvalidates(t *testing.T) {
 		t.Errorf("expected cache backend to be 'sqlite' after refresh, got '%s'", newCacheData.Backend)
 	}
 }
+
+// ==================== Issue #001 Stale Task Count Tests ====================
+
+// TestCacheInvalidationOnTaskAdd verifies that adding a task invalidates the list cache.
+// Bug (Issue #001): List command shows stale task count after adding a task.
+// The list command uses cached task counts that are not updated when tasks are created.
+func TestCacheInvalidationOnTaskAdd(t *testing.T) {
+	cli := testutil.NewCLITestWithCache(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "Work")
+
+	// Add an initial task and populate cache
+	cli.MustExecute("-y", "Work", "add", "Initial task")
+
+	// Run list command to populate cache with task count = 1
+	stdout := cli.MustExecute("-y", "list")
+	testutil.AssertContains(t, stdout, "Work")
+
+	// Read cache to verify initial task count
+	cachePath := cli.CachePath()
+	data1, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache: %v", err)
+	}
+
+	var cache1 cache.ListCache
+	if err := json.Unmarshal(data1, &cache1); err != nil {
+		t.Fatalf("failed to parse cache: %v", err)
+	}
+
+	// Find Work list and get its task count
+	var initialCount int
+	for _, l := range cache1.Lists {
+		if l.Name == "Work" {
+			initialCount = l.TaskCount
+			break
+		}
+	}
+
+	if initialCount != 1 {
+		t.Errorf("expected initial task count to be 1, got %d", initialCount)
+	}
+
+	// Add another task - this should invalidate the cache
+	cli.MustExecute("-y", "Work", "add", "Second task")
+
+	// Run list command again
+	_ = cli.MustExecute("-y", "list")
+
+	// Read cache again
+	data2, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache after adding task: %v", err)
+	}
+
+	var cache2 cache.ListCache
+	if err := json.Unmarshal(data2, &cache2); err != nil {
+		t.Fatalf("failed to parse cache after adding task: %v", err)
+	}
+
+	// Find Work list and verify task count is updated to 2
+	var newCount int
+	for _, l := range cache2.Lists {
+		if l.Name == "Work" {
+			newCount = l.TaskCount
+			break
+		}
+	}
+
+	if newCount != 2 {
+		t.Errorf("expected task count to be 2 after adding task, got %d (cache was not invalidated)", newCount)
+	}
+}
+
+// TestCacheInvalidationOnTaskDelete verifies that deleting a task invalidates the list cache.
+func TestCacheInvalidationOnTaskDelete(t *testing.T) {
+	cli := testutil.NewCLITestWithCache(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "Work")
+
+	// Add two tasks
+	cli.MustExecute("-y", "Work", "add", "Task 1")
+	cli.MustExecute("-y", "Work", "add", "Task 2")
+
+	// Run list command to populate cache with task count = 2
+	cli.MustExecute("-y", "list")
+
+	// Read cache to verify initial task count
+	cachePath := cli.CachePath()
+	data1, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache: %v", err)
+	}
+
+	var cache1 cache.ListCache
+	if err := json.Unmarshal(data1, &cache1); err != nil {
+		t.Fatalf("failed to parse cache: %v", err)
+	}
+
+	// Find Work list and get its task count
+	var initialCount int
+	for _, l := range cache1.Lists {
+		if l.Name == "Work" {
+			initialCount = l.TaskCount
+			break
+		}
+	}
+
+	if initialCount != 2 {
+		t.Errorf("expected initial task count to be 2, got %d", initialCount)
+	}
+
+	// Delete a task - this should invalidate the cache
+	cli.MustExecute("-y", "Work", "delete", "Task 1")
+
+	// Run list command again
+	cli.MustExecute("-y", "list")
+
+	// Read cache again
+	data2, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache after deleting task: %v", err)
+	}
+
+	var cache2 cache.ListCache
+	if err := json.Unmarshal(data2, &cache2); err != nil {
+		t.Fatalf("failed to parse cache after deleting task: %v", err)
+	}
+
+	// Find Work list and verify task count is updated to 1
+	var newCount int
+	for _, l := range cache2.Lists {
+		if l.Name == "Work" {
+			newCount = l.TaskCount
+			break
+		}
+	}
+
+	if newCount != 1 {
+		t.Errorf("expected task count to be 1 after deleting task, got %d (cache was not invalidated)", newCount)
+	}
+}
