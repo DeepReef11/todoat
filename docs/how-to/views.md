@@ -307,7 +307,22 @@ Available flags for non-interactive mode:
 |------|-------------|
 | `--fields` | Comma-separated list of fields (e.g., "status,summary,due_date") |
 | `--sort` | Sort rule in format "field:direction" (e.g., "priority:asc") |
+| `--filter-status` | Filter by status (comma-separated, e.g., "TODO,IN-PROGRESS") |
+| `--filter-priority` | Filter by priority (e.g., "high", "1-3", "low") |
 | `-y` | Non-interactive mode (required for flag-based creation) |
+
+Examples with filters:
+
+```bash
+# Create a view that shows only active tasks
+todoat view create active -y --filter-status "TODO,IN-PROGRESS" --fields "status,summary,priority"
+
+# Create a view for high-priority items
+todoat view create urgent -y --filter-priority "high" --sort "priority:asc"
+
+# Combine status and priority filters
+todoat view create hotlist -y --filter-status "TODO" --filter-priority "1-3" --fields "status,summary,due_date"
+```
 
 ### Delete a View
 

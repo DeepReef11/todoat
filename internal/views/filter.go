@@ -215,12 +215,23 @@ func inList(fieldValue, filterValue any) bool {
 	switch list := filterValue.(type) {
 	case []any:
 		for _, v := range list {
-			if strings.EqualFold(fvStr, toString(v)) {
+			filterStr := toString(v)
+			// Normalize status values for comparison
+			if normalizeStatus(fvStr) == normalizeStatus(filterStr) {
+				return true
+			}
+			// Also do case-insensitive comparison for non-status fields
+			if strings.EqualFold(fvStr, filterStr) {
 				return true
 			}
 		}
 	case []string:
 		for _, v := range list {
+			// Normalize status values for comparison
+			if normalizeStatus(fvStr) == normalizeStatus(v) {
+				return true
+			}
+			// Also do case-insensitive comparison for non-status fields
 			if strings.EqualFold(fvStr, v) {
 				return true
 			}

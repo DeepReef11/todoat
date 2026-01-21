@@ -385,6 +385,8 @@ todoat view create <name> [flags]
 |------|------|-------------|
 | `--fields` | string | Comma-separated list of fields (e.g., "status,summary,priority") |
 | `--sort` | string | Sort rule in format "field:direction" (e.g., "priority:asc") |
+| `--filter-status` | string | Filter by status (comma-separated, e.g., "TODO,IN-PROGRESS") |
+| `--filter-priority` | string | Filter by priority (e.g., "high", "1-3", "low") |
 
 Without `-y` flag, opens an interactive builder. With `-y`, uses provided flags or defaults.
 
@@ -399,6 +401,15 @@ todoat view create urgent
 
 # Create a view with fields and sort (non-interactive)
 todoat view create urgent -y --fields "status,summary,priority" --sort "priority:asc"
+
+# Create a view with status filter
+todoat view create active -y --filter-status "TODO,IN-PROGRESS"
+
+# Create a view with priority filter
+todoat view create high-priority -y --filter-priority "high"
+
+# Create a view with combined filters
+todoat view create urgent-tasks -y --filter-status "TODO" --filter-priority "1-3" --sort "priority:asc"
 ```
 
 ## credentials

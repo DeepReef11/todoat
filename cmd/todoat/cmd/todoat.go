@@ -2973,6 +2973,8 @@ func doViewList(cfg *Config, stdout io.Writer) error {
 func newViewCreateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	var fieldsFlag string
 	var sortFlag string
+	var filterStatusFlag string
+	var filterPriorityFlag string
 
 	cmd := &cobra.Command{
 		Use:   "create <name>",
@@ -2986,7 +2988,8 @@ Without -y flag, opens an interactive builder where you can:
 - Set sort rules
 
 With -y flag (non-interactive mode), creates a default view or uses provided flags:
-  todoat view create myview -y --fields "status,summary,priority" --sort "priority:asc"`,
+  todoat view create myview -y --fields "status,summary,priority" --sort "priority:asc"
+  todoat view create myview -y --filter-status "TODO,IN-PROGRESS" --filter-priority "high"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
@@ -2995,7 +2998,7 @@ With -y flag (non-interactive mode), creates a default view or uses provided fla
 			}
 
 			viewName := args[0]
-			return doViewCreate(viewName, fieldsFlag, sortFlag, cfg, stdout)
+			return doViewCreate(viewName, fieldsFlag, sortFlag, filterStatusFlag, filterPriorityFlag, cfg, stdout)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -3003,12 +3006,14 @@ With -y flag (non-interactive mode), creates a default view or uses provided fla
 
 	cmd.Flags().StringVar(&fieldsFlag, "fields", "", "Comma-separated list of fields (e.g., \"status,summary,priority\")")
 	cmd.Flags().StringVar(&sortFlag, "sort", "", "Sort rule in format \"field:direction\" (e.g., \"priority:asc\")")
+	cmd.Flags().StringVar(&filterStatusFlag, "filter-status", "", "Filter by status (comma-separated, e.g., \"TODO,IN-PROGRESS\")")
+	cmd.Flags().StringVar(&filterPriorityFlag, "filter-priority", "", "Filter by priority (e.g., \"high\", \"1-3\", \"low\")")
 
 	return cmd
 }
 
 // doViewCreate creates a new view either interactively or from flags
-func doViewCreate(viewName, fieldsFlag, sortFlag string, cfg *Config, stdout io.Writer) error {
+func doViewCreate(viewName, fieldsFlag, sortFlag, filterStatusFlag, filterPriorityFlag string, cfg *Config, stdout io.Writer) error {
 	viewsDir := getViewsDir(cfg)
 
 	// Check if view already exists
@@ -3019,7 +3024,7 @@ func doViewCreate(viewName, fieldsFlag, sortFlag string, cfg *Config, stdout io.
 
 	// Non-interactive mode
 	if cfg != nil && cfg.NoPrompt {
-		return doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, viewsDir, stdout)
+		return doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, filterStatusFlag, filterPriorityFlag, viewsDir, stdout)
 	}
 
 	// Interactive mode - launch the builder TUI
@@ -3038,7 +3043,7 @@ func doViewCreate(viewName, fieldsFlag, sortFlag string, cfg *Config, stdout io.
 }
 
 // doViewCreateNonInteractive creates a view from command-line flags
-func doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, viewsDir string, stdout io.Writer) error {
+func doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, filterStatusFlag, filterPriorityFlag, viewsDir string, stdout io.Writer) error {
 	// Ensure views directory exists
 	if err := os.MkdirAll(viewsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create views directory: %w", err)
@@ -3079,6 +3084,31 @@ func doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, viewsDir string,
 		}
 	}
 
+	// Parse filter-status flag
+	if filterStatusFlag != "" {
+		statuses := strings.Split(filterStatusFlag, ",")
+		var statusValues []string
+		for _, s := range statuses {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				statusValues = append(statusValues, s)
+			}
+		}
+		if len(statusValues) > 0 {
+			view.Filters = append(view.Filters, views.Filter{
+				Field:    "status",
+				Operator: "in",
+				Value:    statusValues,
+			})
+		}
+	}
+
+	// Parse filter-priority flag
+	if filterPriorityFlag != "" {
+		filters := parsePriorityFilterForView(filterPriorityFlag)
+		view.Filters = append(view.Filters, filters...)
+	}
+
 	// Write YAML file
 	viewPath := filepath.Join(viewsDir, viewName+".yaml")
 	data, err := yaml.Marshal(view)
@@ -3092,6 +3122,55 @@ func doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, viewsDir string,
 
 	_, _ = fmt.Fprintf(stdout, "View '%s' created at %s\n", viewName, viewPath)
 	_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+	return nil
+}
+
+// parsePriorityFilterForView converts a priority filter string into views.Filter structs
+// Accepts: "high", "medium", "low", or numeric ranges like "1-3"
+func parsePriorityFilterForView(priority string) []views.Filter {
+	priority = strings.TrimSpace(strings.ToLower(priority))
+
+	switch priority {
+	case "high":
+		// High priority: 1-3
+		return []views.Filter{
+			{Field: "priority", Operator: "gte", Value: 1},
+			{Field: "priority", Operator: "lte", Value: 3},
+		}
+	case "medium":
+		// Medium priority: 4-6
+		return []views.Filter{
+			{Field: "priority", Operator: "gte", Value: 4},
+			{Field: "priority", Operator: "lte", Value: 6},
+		}
+	case "low":
+		// Low priority: 7-9
+		return []views.Filter{
+			{Field: "priority", Operator: "gte", Value: 7},
+			{Field: "priority", Operator: "lte", Value: 9},
+		}
+	default:
+		// Check for numeric range like "1-3"
+		if strings.Contains(priority, "-") {
+			parts := strings.Split(priority, "-")
+			if len(parts) == 2 {
+				minPrio, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+				maxPrio, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+				if err1 == nil && err2 == nil {
+					return []views.Filter{
+						{Field: "priority", Operator: "gte", Value: minPrio},
+						{Field: "priority", Operator: "lte", Value: maxPrio},
+					}
+				}
+			}
+		}
+		// Try single number
+		if prio, err := strconv.Atoi(priority); err == nil {
+			return []views.Filter{
+				{Field: "priority", Operator: "eq", Value: prio},
+			}
+		}
+	}
 	return nil
 }
 

@@ -36,6 +36,17 @@ func getIntegrationConfig(t *testing.T) Config {
 	}
 }
 
+// isConnectionRefused checks if an error indicates the server is unavailable.
+func isConnectionRefused(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "dial tcp")
+}
+
 // TestIntegrationNextcloudConnection connects to a real Nextcloud instance and lists calendars.
 func TestIntegrationNextcloudConnection(t *testing.T) {
 	cfg := getIntegrationConfig(t)
@@ -51,6 +62,9 @@ func TestIntegrationNextcloudConnection(t *testing.T) {
 
 	lists, err := be.GetLists(ctx)
 	if err != nil {
+		if isConnectionRefused(err) {
+			t.Skipf("Skipping: Nextcloud server not available at %s: %v", cfg.Host, err)
+		}
 		t.Fatalf("Failed to list calendars: %v", err)
 	}
 
@@ -81,6 +95,9 @@ func TestIntegrationNextcloudCRUD(t *testing.T) {
 	// Get available calendars
 	lists, err := be.GetLists(ctx)
 	if err != nil {
+		if isConnectionRefused(err) {
+			t.Skipf("Skipping: Nextcloud server not available at %s: %v", cfg.Host, err)
+		}
 		t.Fatalf("Failed to list calendars: %v", err)
 	}
 

@@ -357,3 +357,148 @@ func TestInvalidViewErrorViewsCLI(t *testing.T) {
 		t.Errorf("expected error message about invalid view 'nonexistent', got:\n%s", combinedOutput)
 	}
 }
+
+// =============================================================================
+// View Create Filter Flags Tests (068-view-create-filter-flags)
+// =============================================================================
+
+// TestViewCreate_FilterStatus verifies --filter-status flag creates view with status filter
+func TestViewCreate_FilterStatus(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a view with --filter-status flag
+	stdout, stderr, exitCode := cli.Execute("-y", "view", "create", "statusview", "--filter-status", "TODO,IN-PROGRESS")
+
+	testutil.AssertExitCode(t, exitCode, 0)
+	if strings.Contains(stderr, "unknown flag") {
+		t.Fatalf("--filter-status flag not recognized: %s", stderr)
+	}
+
+	// Verify the view YAML file was created with status filter
+	viewPath := viewsDir + "/statusview.yaml"
+	data, err := os.ReadFile(viewPath)
+	if err != nil {
+		t.Fatalf("expected view file to be created at %s: %v", viewPath, err)
+	}
+
+	viewContent := string(data)
+	// Should have filters section with status filter
+	if !strings.Contains(viewContent, "filters:") {
+		t.Errorf("expected view to have filters section, got:\n%s", viewContent)
+	}
+	if !strings.Contains(viewContent, "status") {
+		t.Errorf("expected view to have status filter, got:\n%s", viewContent)
+	}
+	// Should include the filter values
+	if !strings.Contains(viewContent, "TODO") && !strings.Contains(viewContent, "IN-PROGRESS") {
+		t.Errorf("expected view to have TODO or IN-PROGRESS status values, got:\n%s", viewContent)
+	}
+
+	// Verify the view output message
+	testutil.AssertContains(t, stdout, "statusview")
+}
+
+// TestViewCreate_FilterPriority verifies --filter-priority flag creates view with priority filter
+func TestViewCreate_FilterPriority(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a view with --filter-priority flag using keyword
+	stdout, stderr, exitCode := cli.Execute("-y", "view", "create", "highprioview", "--filter-priority", "high")
+
+	testutil.AssertExitCode(t, exitCode, 0)
+	if strings.Contains(stderr, "unknown flag") {
+		t.Fatalf("--filter-priority flag not recognized: %s", stderr)
+	}
+
+	// Verify the view YAML file was created with priority filter
+	viewPath := viewsDir + "/highprioview.yaml"
+	data, err := os.ReadFile(viewPath)
+	if err != nil {
+		t.Fatalf("expected view file to be created at %s: %v", viewPath, err)
+	}
+
+	viewContent := string(data)
+	// Should have filters section with priority filter
+	if !strings.Contains(viewContent, "filters:") {
+		t.Errorf("expected view to have filters section, got:\n%s", viewContent)
+	}
+	if !strings.Contains(viewContent, "priority") {
+		t.Errorf("expected view to have priority filter, got:\n%s", viewContent)
+	}
+
+	// Verify the view output message
+	testutil.AssertContains(t, stdout, "highprioview")
+
+	// Test with numeric range (e.g., "1-3")
+	stdout2, stderr2, exitCode2 := cli.Execute("-y", "view", "create", "numprioview", "--filter-priority", "1-3")
+
+	testutil.AssertExitCode(t, exitCode2, 0)
+	if strings.Contains(stderr2, "unknown flag") {
+		t.Fatalf("--filter-priority flag not recognized with numeric range: %s", stderr2)
+	}
+
+	viewPath2 := viewsDir + "/numprioview.yaml"
+	data2, err := os.ReadFile(viewPath2)
+	if err != nil {
+		t.Fatalf("expected view file to be created at %s: %v", viewPath2, err)
+	}
+
+	viewContent2 := string(data2)
+	if !strings.Contains(viewContent2, "priority") {
+		t.Errorf("expected view to have priority filter, got:\n%s", viewContent2)
+	}
+
+	testutil.AssertContains(t, stdout2, "numprioview")
+}
+
+// TestViewCreate_CombinedFilters verifies multiple filter flags can be combined
+func TestViewCreate_CombinedFilters(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create a view with both --filter-status and --filter-priority flags
+	stdout, stderr, exitCode := cli.Execute("-y", "view", "create", "combinedview",
+		"--filter-status", "TODO",
+		"--filter-priority", "high",
+		"--fields", "status,summary,priority")
+
+	testutil.AssertExitCode(t, exitCode, 0)
+	if strings.Contains(stderr, "unknown flag") {
+		t.Fatalf("filter flags not recognized: %s", stderr)
+	}
+
+	// Verify the view YAML file was created with both filters
+	viewPath := viewsDir + "/combinedview.yaml"
+	data, err := os.ReadFile(viewPath)
+	if err != nil {
+		t.Fatalf("expected view file to be created at %s: %v", viewPath, err)
+	}
+
+	viewContent := string(data)
+	// Should have filters section with both filters
+	if !strings.Contains(viewContent, "filters:") {
+		t.Errorf("expected view to have filters section, got:\n%s", viewContent)
+	}
+	if !strings.Contains(viewContent, "status") {
+		t.Errorf("expected view to have status filter, got:\n%s", viewContent)
+	}
+	if !strings.Contains(viewContent, "priority") {
+		t.Errorf("expected view to have priority filter, got:\n%s", viewContent)
+	}
+
+	// Verify the view output message
+	testutil.AssertContains(t, stdout, "combinedview")
+
+	// Now test that the created view actually works for filtering tasks
+	cli.MustExecute("-y", "list", "create", "CombinedFilterTest")
+	cli.MustExecute("-y", "CombinedFilterTest", "add", "High priority TODO", "-p", "1")
+	cli.MustExecute("-y", "CombinedFilterTest", "add", "Low priority TODO", "-p", "9")
+	cli.MustExecute("-y", "CombinedFilterTest", "add", "High priority DONE", "-p", "1")
+	cli.MustExecute("-y", "CombinedFilterTest", "complete", "High priority DONE")
+
+	// List tasks with the combined view - should only show high priority TODO tasks
+	listStdout, _, listExitCode := cli.Execute("-y", "CombinedFilterTest", "-v", "combinedview")
+	testutil.AssertExitCode(t, listExitCode, 0)
+	testutil.AssertContains(t, listStdout, "High priority TODO")
+	testutil.AssertNotContains(t, listStdout, "Low priority TODO")
+	testutil.AssertNotContains(t, listStdout, "High priority DONE")
+}
