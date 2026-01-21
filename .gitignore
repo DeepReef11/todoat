@@ -7,3 +7,4 @@ bin/
 todoat
 .env
 *.json
+TestList.csv
