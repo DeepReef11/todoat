@@ -141,7 +141,7 @@ todoat Work add "Ship feature" -p 1 --due-date 2026-01-20
 todoat Work complete "Review PR"
 
 # Update task status
-todoat Work update "Ship feature" -s PROCESSING
+todoat Work update "Ship feature" -s IN-PROGRESS
 
 # Delete task
 todoat Work delete "Old task"
@@ -163,8 +163,8 @@ todoat Work add "Project/Phase 1/Task A"
 # Show only TODO tasks
 todoat Work -s TODO
 
-# Show TODO and PROCESSING
-todoat Work -s TODO,PROCESSING
+# Show TODO and IN-PROGRESS
+todoat Work -s TODO,IN-PROGRESS
 
 # Filter by priority (1 = highest)
 todoat Work -p 1
@@ -243,7 +243,7 @@ todoat list trash restore "Old List"
 | Status | Abbreviation | Meaning |
 |--------|--------------|---------|
 | TODO | T | Not started |
-| PROCESSING | P | In progress |
+| IN-PROGRESS | I | In progress |
 | DONE | D | Completed |
 | CANCELLED | C | Abandoned |
 ```

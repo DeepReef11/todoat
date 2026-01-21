@@ -1095,7 +1095,7 @@ CREATE TABLE tasks (
     list_id INTEGER NOT NULL,
     summary TEXT NOT NULL,
     description TEXT,
-    status TEXT DEFAULT 'TODO',  -- Internal status (TODO/DONE/PROCESSING/CANCELLED)
+    status TEXT DEFAULT 'TODO',  -- Internal status (TODO/DONE/IN-PROGRESS/CANCELLED)
     priority INTEGER DEFAULT 0,
     due_date TIMESTAMP,
     start_date TIMESTAMP,

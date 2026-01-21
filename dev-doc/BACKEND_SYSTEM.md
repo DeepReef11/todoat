@@ -81,7 +81,7 @@ The Backend System in todoat provides a pluggable architecture that allows the a
    - **Status Translation (Internal ↔ CalDAV Backend):**
      - Internal `TODO` ↔ CalDAV `NEEDS-ACTION`
      - Internal `DONE` ↔ CalDAV `COMPLETED`
-     - Internal `PROCESSING` ↔ CalDAV `IN-PROCESS`
+     - Internal `IN-PROGRESS` ↔ CalDAV `IN-PROCESS`
      - Internal `CANCELLED` ↔ CalDAV `CANCELLED`
      - Translation occurs at storage/retrieval boundaries; all application logic uses internal status
    - Priority: 0-9 (0=undefined, 1=highest, 9=lowest)
@@ -180,7 +180,7 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 **Technical Details:**
 - Implementation: `backend/sqlite/backend.go`, `backend/sqlite/database.go`
 - Schema: `backend/sqlite/schema.go`
-- **Status Storage:** Stores internal application statuses (`TODO`, `DONE`, `PROCESSING`, `CANCELLED`) directly
+- **Status Storage:** Stores internal application statuses (`TODO`, `DONE`, `IN-PROGRESS`, `CANCELLED`) directly
   - No translation needed for SQLite backend (unlike CalDAV which uses NEEDS-ACTION, COMPLETED, IN-PROCESS)
   - Sync Manager translates between internal status and backend-specific status when syncing with remote backends
 - Hierarchical task support via `parent_uid` foreign key with `ON DELETE CASCADE`
@@ -249,7 +249,7 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 **Technical Details:**
 - Implementation: `backend/git/backend.go`
 - Registered as detectable: `backend.RegisterDetectable("git", newGitBackendWrapper)`
-- Status values: Uses canonical app statuses (`TODO`, `DONE`, `PROCESSING`, `CANCELLED`)
+- Status values: Uses canonical app statuses (`TODO`, `DONE`, `IN-PROGRESS`, `CANCELLED`)
 - File caching: Tracks modification time to avoid unnecessary re-parsing
 
 **Related Features:**
@@ -515,7 +515,7 @@ connector:
 **Example Usage:**
 ```go
 filter := &backend.TaskFilter{
-    Statuses: &[]string{"TODO", "PROCESSING"},
+    Statuses: &[]string{"TODO", "IN-PROGRESS"},
     DueBefore: &tomorrow,
 }
 tasks, err := taskManager.GetTasks(listID, filter)
@@ -612,7 +612,7 @@ tasks, err := taskManager.GetTasks(listID, filter)
    }
 
    func (mb *MyBackend) StatusToDisplayName(backendStatus string) string {
-       // Map backend status to canonical names: TODO, DONE, PROCESSING, CANCELLED
+       // Map backend status to canonical names: TODO, DONE, IN-PROGRESS, CANCELLED
    }
    ```
 
@@ -711,13 +711,13 @@ backend.RegisterDetectable("git", newGitBackendWrapper)
 1. **User Input (Abbreviations):**
    - `T` → TODO
    - `D` → DONE
-   - `P` → PROCESSING
+   - `I` → IN-PROGRESS
    - `C` → CANCELLED
 
 2. **App Canonical Names:**
    - `TODO` - Task not started
    - `DONE` - Task completed
-   - `PROCESSING` - Task in progress
+   - `IN-PROGRESS` - Task in progress
    - `CANCELLED` - Task abandoned
 
 3. **Backend-Specific:**
@@ -745,8 +745,8 @@ var statusToCalDAV = map[string]string{
     "TODO":         "NEEDS-ACTION",
     "D":            "COMPLETED",
     "DONE":         "COMPLETED",
-    "P":            "IN-PROCESS",
-    "PROCESSING":   "IN-PROCESS",
+    "I":            "IN-PROCESS",
+    "IN-PROGRESS":  "IN-PROCESS",
     "C":            "CANCELLED",
     "CANCELLED":    "CANCELLED",
     // CalDAV names also accepted

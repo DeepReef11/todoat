@@ -76,7 +76,7 @@ todoat uses different status representations for different backends:
 |----------------|---------------|------------------|---------|
 | TODO | NEEDS-ACTION | T | ⬜ TODO |
 | DONE | COMPLETED | D | ✅ DONE |
-| PROCESSING | IN-PROCESS | P | ▶️ PROCESSING |
+| IN-PROGRESS | IN-PROCESS | I | ▶️ IN-PROGRESS |
 | CANCELLED | CANCELLED | C | ❌ CANCELLED |
 
 ## Data Model
@@ -86,7 +86,7 @@ Tasks follow the iCalendar VTODO standard with these fields:
 - **UID**: Unique identifier (auto-generated)
 - **Summary**: Task title/name
 - **Description**: Detailed task description
-- **Status**: TODO, DONE, PROCESSING, CANCELLED
+- **Status**: TODO, DONE, IN-PROGRESS, CANCELLED
 - **Priority**: 0-9 (0=undefined, 1=highest, 9=lowest)
 - **Due Date**: When task should be completed
 - **Start Date**: When task should begin

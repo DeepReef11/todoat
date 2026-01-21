@@ -20,7 +20,7 @@ This document provides a high-level summary of all features in todoat, organized
 
 **Purpose**: Core task operations for creating, modifying, and managing individual tasks.
 
-**Status System**: todoat uses internal status values (TODO, DONE, PROCESSING, CANCELLED) for all operations. These are automatically translated to/from backend-specific status formats (e.g., CalDAV uses NEEDS-ACTION, COMPLETED, IN-PROCESS).
+**Status System**: todoat uses internal status values (TODO, DONE, IN-PROGRESS, CANCELLED) for all operations. These are automatically translated to/from backend-specific status formats (e.g., CalDAV uses NEEDS-ACTION, COMPLETED, IN-PROCESS).
 
 | Feature | Description | Status | Documentation |
 |---------|-------------|--------|---------------|
@@ -29,7 +29,7 @@ This document provides a high-level summary of all features in todoat, organized
 | **Update Tasks** | Modify task properties (summary, status, priority, dates, etc.) | ✅ Stable | [Task Management](./TASK_MANAGEMENT.md#update-tasks) |
 | **Complete Tasks** | Mark tasks as done with automatic completion timestamp | ✅ Stable | [Task Management](./TASK_MANAGEMENT.md#complete-tasks) |
 | **Delete Tasks** | Remove tasks from a list (immediate deletion) | ✅ Stable | [Task Management](./TASK_MANAGEMENT.md#delete-tasks) |
-| **Filter by Status** | Show only tasks with specific statuses (TODO, DONE, PROCESSING, CANCELLED) | ✅ Stable | [Task Management](./TASK_MANAGEMENT.md#filter-by-status) |
+| **Filter by Status** | Show only tasks with specific statuses (TODO, DONE, IN-PROGRESS, CANCELLED) | ✅ Stable | [Task Management](./TASK_MANAGEMENT.md#filter-by-status) |
 | **Filter by Priority** | Display tasks matching priority levels (0-9) | ✅ Stable | [Task Management](./TASK_MANAGEMENT.md#filter-by-priority) |
 | **Filter by Dates** | Filter tasks by due date, start date, or date ranges | ✅ Stable | [Task Management](./TASK_MANAGEMENT.md#filter-by-dates) |
 | **Filter by Tags** | Show tasks with specific categories/tags | ✅ Stable | [Task Management](./TASK_MANAGEMENT.md#filter-by-tags) |

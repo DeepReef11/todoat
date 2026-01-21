@@ -337,7 +337,7 @@ fields:
 # Project Alpha                          [TODO]
 # ├─ Backend                            [TODO]
 # │  └─ Database Schema                 [DONE]
-# └─ Frontend                           [PROCESSING]
+# └─ Frontend                           [IN-PROGRESS]
 ```
 
 #### User Journey
@@ -349,7 +349,7 @@ fields:
    ├─ Review code changes [TODO]
    ├─ Update documentation [TODO]
    │  ├─ API docs [TODO]
-   │  └─ User guide [PROCESSING]
+   │  └─ User guide [IN-PROGRESS]
    └─ Run final tests [TODO]
    ```
 3. User understands structure at glance
@@ -379,7 +379,7 @@ Shopping Preparation
 ```
 Shopping Preparation [Pri:1, Due:2026-01-20]
 ├─ Plan Menu [DONE, Completed:2026-01-14]
-├─ Create Shopping List [PROCESSING, Due:2026-01-15]
+├─ Create Shopping List [IN-PROGRESS, Due:2026-01-15]
 │  ├─ Vegetables [TODO, Pri:3]
 │  ├─ Proteins [TODO, Pri:2]
 │  └─ Grains [TODO, Pri:4]
@@ -497,7 +497,7 @@ Provide comprehensive operations for managing hierarchical task structures, incl
    ```
    Warning: Task "Release v2.0" has 3 incomplete subtasks:
    - Review code changes [TODO]
-   - Update documentation [PROCESSING]
+   - Update documentation [IN-PROGRESS]
    - Run final tests [TODO]
 
    Complete parent anyway? [y/N]:
@@ -579,7 +579,7 @@ Wildcard patterns:
 
 3. Update in-progress tasks:
    ```bash
-   todoat Projects update "Frontend UI" -s PROCESSING
+   todoat Projects update "Frontend UI" -s IN-PROGRESS
    ```
 
 4. Realize task is in wrong branch, move it:

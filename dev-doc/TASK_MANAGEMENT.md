@@ -96,7 +96,7 @@ View Formatter → Terminal Display
 Tasks in "Work" (5 tasks):
 
 ├─ [TODO] Project Alpha (Priority: 1)
-│  ├─ [PROCESSING] Design architecture
+│  ├─ [IN-PROGRESS] Design architecture
 │  └─ [TODO] Write documentation
 ├─ [TODO] Review PR #123 (Priority: 2)
 └─ [DONE] Deploy staging environment
@@ -122,7 +122,7 @@ Tasks in "Work" (5 tasks):
   }
   ```
 - **Status Translation**:
-  - **Internal Status**: todoat uses standardized internal statuses (TODO, DONE, PROCESSING, CANCELLED) for all application logic
+  - **Internal Status**: todoat uses standardized internal statuses (TODO, DONE, IN-PROGRESS, CANCELLED) for all application logic
   - **Backend Status**: Each backend's native status format (e.g., NEEDS-ACTION, COMPLETED, IN-PROCESS for CalDAV) is automatically translated to/from internal status at storage boundaries
   - This dual-status system ensures consistent behavior across all backends while respecting each backend's protocol
 - **Caching**: When sync is enabled, tasks are served from local SQLite cache for instant display
@@ -160,7 +160,7 @@ Enables users to add new tasks to a task list with optional metadata (descriptio
    - If summary is empty and not provided interactively, prompt user
    - Validate date formats (YYYY-MM-DD)
    - Validate priority range (0-9)
-   - Validate status values (TODO/T, DONE/D, PROCESSING/P, CANCELLED/C)
+   - Validate status values (TODO/T, DONE/D, IN-PROGRESS/I, CANCELLED/C)
 
 2. **UID Generation**:
    - System generates unique identifier for task
@@ -316,7 +316,7 @@ Allows users to change task attributes including summary (rename), description, 
      - No matches → error with suggestion
 
 2. **Update Validation**:
-   - Validate new status value (TODO/T, DONE/D, PROCESSING/P, CANCELLED/C)
+   - Validate new status value (TODO/T, DONE/D, IN-PROGRESS/I, CANCELLED/C)
    - Validate priority range (0-9)
    - Validate date formats (YYYY-MM-DD) or empty string to clear
    - Validate at least one update flag is provided
@@ -392,7 +392,7 @@ Modified: 2026-01-14 10:30:00 UTC
 ```
 Multiple tasks found matching "groceries":
 1. Buy groceries (TODO, Priority: 3)
-2. Review grocery list (PROCESSING)
+2. Review grocery list (IN-PROGRESS)
 Select task to update (1-2, or 'c' to cancel): 1
 
 Task 'Buy groceries' updated successfully
@@ -599,13 +599,13 @@ Allows users to narrow down displayed tasks based on status, reducing visual clu
 **User Actions:**
 1. Execute get command with filter flag:
    - `todoat MyList -s TODO` - Show only TODO tasks
-   - `todoat MyList -s TODO,PROCESSING` - Multiple statuses
-   - `todoat MyList -s T,D,P` - Using abbreviations
+   - `todoat MyList -s TODO,IN-PROGRESS` - Multiple statuses
+   - `todoat MyList -s T,D,I` - Using abbreviations
    - `todoat MyList -s D` - Show only completed tasks
 
 **System Processes:**
 1. **Flag Parsing**: System parses `-s` / `--status` flag value(s)
-2. **Status Translation**: Abbreviations (T/D/P/C) expanded to full status names
+2. **Status Translation**: Abbreviations (T/D/I/C) expanded to full status names
 3. **Backend Query**: Some backends support server-side filtering, others filter client-side
 4. **Task Retrieval**: Same as normal get operation
 5. **Client-Side Filtering**: Tasks filtered before rendering
@@ -629,9 +629,9 @@ Client Filtering → View Rendering → Terminal Display
 
 ### User Journey
 1. User has large task list, wants to focus on incomplete work
-2. Types: `todoat Work -s TODO,PROCESSING`
+2. Types: `todoat Work -s TODO,IN-PROGRESS`
 3. System retrieves tasks and filters by status
-4. Only TODO and PROCESSING tasks displayed
+4. Only TODO and IN-PROGRESS tasks displayed
 5. User reviews focused task list
 
 ### Prerequisites
@@ -641,10 +641,10 @@ Client Filtering → View Rendering → Terminal Display
 ### Outputs/Results
 **Filtered Output:**
 ```
-Tasks in "Work" (3 tasks, filtered by status: TODO, PROCESSING):
+Tasks in "Work" (3 tasks, filtered by status: TODO, IN-PROGRESS):
 
 ├─ [TODO] Project Alpha (Priority: 1)
-├─ [PROCESSING] Design architecture
+├─ [IN-PROGRESS] Design architecture
 └─ [TODO] Write documentation
 ```
 
@@ -811,7 +811,7 @@ Search String → Exact Match → Found? → Return Task
    Multiple tasks found matching "review":
    1. Review PR #456 (TODO, Priority: 2)
    2. Code review guidelines (DONE)
-   3. Review meeting notes (PROCESSING)
+   3. Review meeting notes (IN-PROGRESS)
    Select task (1-3, or 'c' to cancel):
    ```
 3. User types: `1`
@@ -825,7 +825,7 @@ Search String → Exact Match → Found? → Return Task
      "matches": [
        {"local_id": 42, "uid": "550e8400...", "summary": "Review PR #456", "status": "TODO", "parents": ["Project Alpha"], "synced": true},
        {"local_id": 43, "uid": "660e8400...", "summary": "Code review guidelines", "status": "DONE", "parents": [], "synced": true},
-       {"local_id": 44, "uid": null, "summary": "Review meeting notes", "status": "PROCESSING", "parents": [], "synced": false}
+       {"local_id": 44, "uid": null, "summary": "Review meeting notes", "status": "IN-PROGRESS", "parents": [], "synced": false}
      ],
      "result": "ACTION_INCOMPLETE",
      "message": "Multiple tasks match 'review'. Use --uid or --local-id to specify exact task."
@@ -918,7 +918,7 @@ Provides standardized status values to track task progress through its lifecycle
 
 todoat uses a **dual status system** to maintain consistency across different backends while respecting each backend's native format:
 
-- **Internal Status** (Application Level): The canonical status used throughout todoat for all operations, filtering, and logic (TODO, DONE, PROCESSING, CANCELLED)
+- **Internal Status** (Application Level): The canonical status used throughout todoat for all operations, filtering, and logic (TODO, DONE, IN-PROGRESS, CANCELLED)
 - **Backend-Specific Status** (Storage Level): The native status format used by each backend's protocol or API
 
 This separation allows todoat to provide a consistent user experience while working with multiple backend systems that have different status vocabularies.
@@ -931,24 +931,24 @@ This separation allows todoat to provide a consistent user experience while work
 |----------------------|------------------------|------------------|---------|
 | TODO | NEEDS-ACTION | T | Task not started, pending work |
 | DONE | COMPLETED | D | Task finished successfully |
-| PROCESSING | IN-PROCESS | P | Task in progress, actively being worked on |
+| IN-PROGRESS | IN-PROCESS | I | Task in progress, actively being worked on |
 | CANCELLED | CANCELLED | C | Task abandoned, no longer relevant |
 
 **Note:** Different backends use different status names:
 - **CalDAV/Nextcloud**: NEEDS-ACTION, COMPLETED, IN-PROCESS, CANCELLED
-- **SQLite**: Stores internal status directly (TODO, DONE, PROCESSING, CANCELLED)
+- **SQLite**: Stores internal status directly (TODO, DONE, IN-PROGRESS, CANCELLED)
 - **Git**: Maps to markdown checkbox syntax (`[ ]`, `[x]`, `[>]`, `[-]`)
 - **Todoist**: Maps to API-native status (open/closed)
 
 **User Actions:**
 - Set status when adding: `-S TODO` or `-S T`
 - Update status: `update "task" -s DONE`
-- Filter by status: `-s TODO,PROCESSING`
+- Filter by status: `-s TODO,IN-PROGRESS`
 
 **System Processes:**
 1. **Status Translation Chain**:
    - **User Input** → **Internal Status** → **Backend Status**
-   - CLI abbreviations (T/D/P/C) → Internal status (TODO/DONE/PROCESSING/CANCELLED)
+   - CLI abbreviations (T/D/I/C) → Internal status (TODO/DONE/IN-PROGRESS/CANCELLED)
    - Internal status → Backend-specific status (e.g., NEEDS-ACTION/COMPLETED/IN-PROCESS for CalDAV)
    - Functions: `StatusStringTranslateToStandardStatus()` (CLI→Internal) and `StatusStringTranslateToAppStatus()` (Internal→Backend)
    - All application logic operates on internal status only
@@ -986,7 +986,7 @@ Storage Format (NEEDS-ACTION for CalDAV, TODO for SQLite, etc.)
 
 ### User Journey
 1. User creates task: defaults to TODO
-2. User starts work: `update "task" -s PROCESSING`
+2. User starts work: `update "task" -s IN-PROGRESS`
 3. Task in progress state
 4. User finishes: `complete "task"` (sets to DONE)
 5. Task marked complete with timestamp
@@ -999,7 +999,7 @@ Storage Format (NEEDS-ACTION for CalDAV, TODO for SQLite, etc.)
 Status is visible in all task displays:
 ```
 [TODO] Review PR #456
-[PROCESSING] Write documentation
+[IN-PROGRESS] Write documentation
 [DONE] Deploy staging
 [CANCELLED] Old feature request
 ```
@@ -1010,10 +1010,10 @@ Status is visible in all task displays:
   ```
   [ ] → TODO (NEEDS-ACTION)
   [x] → DONE (COMPLETED)
-  [>] → PROCESSING (IN-PROCESS)
+  [>] → IN-PROGRESS (IN-PROCESS)
   [-] → CANCELLED
   ```
-- **Todoist Mapping**: Only supports open/closed, PROCESSING mapped to open
+- **Todoist Mapping**: Only supports open/closed, IN-PROGRESS mapped to open
 - **Status Completion**: Shell completion provides status values when typing flags
 
 ### Related Features
@@ -1268,7 +1268,7 @@ type Task struct {
     Description string    // Detailed notes (optional)
 
     // Status & Priority
-    Status      string    // TODO/DONE/PROCESSING/CANCELLED
+    Status      string    // TODO/DONE/IN-PROGRESS/CANCELLED
     Priority    int       // 0-9 (0=undefined, 1=highest, 9=lowest)
 
     // Dates
@@ -1327,7 +1327,7 @@ Tasks in "Work" (all fields):
 
 Task: Fix production bug
   UID: 550e8400-e29b-41d4-a716-446655440000
-  Status: PROCESSING
+  Status: IN-PROGRESS
   Priority: 1
   Description: Critical bug affecting user login flow
   Due Date: 2026-01-15
@@ -1369,7 +1369,7 @@ Task Management in todoat provides comprehensive CRUD operations with intelligen
 
 - **CRUD Operations**: Create, read, update, delete tasks with validation and error handling
 - **Intelligent Search**: Partial matching with confirmation, multi-select menus
-- **Status Management**: Four-state lifecycle (TODO/DONE/PROCESSING/CANCELLED)
+- **Status Management**: Four-state lifecycle (TODO/DONE/IN-PROGRESS/CANCELLED)
 - **Priority System**: 0-9 scale with visual indicators
 - **Date Support**: Due dates, start dates, automatic timestamps
 - **Filtering**: By status, priority, dates (in custom views)
