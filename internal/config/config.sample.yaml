@@ -14,6 +14,9 @@ backends:
   #   # TLS options (for self-signed certificates):
   #   # insecure_skip_verify: true
   #   # suppress_ssl_warning: true
+  #   # HTTP options (for development/local servers without HTTPS):
+  #   # allow_http: true
+  #   # suppress_http_warning: true
 
   # Todoist backend - sync with Todoist
   # todoist:
@@ -46,12 +49,15 @@ backends:
 default_backend: sqlite
 
 # Auto-detect backend based on current directory (e.g., use git backend in git repos)
+# Simple mode (boolean):
 auto_detect_backend: false
-
-# Backend priority for selection (planned feature - not yet implemented)
-# backend_priority:
-#   - git
-#   - sqlite
+# Extended mode (with priority list):
+# auto_detect_backend:
+#   enabled: true
+#   backend_priority:
+#     - git
+#     - nextcloud
+#     - sqlite
 
 # =============================================================================
 # Synchronization Settings
