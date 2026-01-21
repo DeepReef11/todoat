@@ -254,8 +254,8 @@ todoat view [command]
 # List views
 todoat view list
 
-# Create a view
-todoat view create urgent --filter-status "TODO,IN-PROGRESS" --filter-priority "high"
+# Create a view with fields and sort
+todoat view create urgent -y --fields "status,summary,priority" --sort "priority:asc"
 ```
 
 ## credentials
