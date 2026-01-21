@@ -77,3 +77,23 @@ The sample config (`internal/config/config.sample.yaml:6`) correctly uses `path`
 
 ## Recommended Fix
 FIX DOCS - Update documentation files to use `path` instead of `db_path` to match the actual configuration field name.
+
+## Resolution
+
+**Fixed in**: commit 196d9be
+**Fix description**: Updated all documentation files to use `path` instead of `db_path` for SQLite configuration
+
+### Verification Log
+```bash
+$ grep -n "db_path" docs/getting-started.md docs/backends.md docs/configuration.md
+No db_path references found
+
+$ grep -n "path:" docs/getting-started.md docs/backends.md docs/configuration.md
+docs/getting-started.md:47:    path: ""  # Uses default location
+docs/backends.md:120:    path: ""  # Empty = default location
+docs/backends.md:132:    path: "~/my-tasks/tasks.db"
+
+$ grep -n "backends.sqlite" docs/configuration.md
+87:todoat config set backends.sqlite.path "~/my-tasks/tasks.db"
+```
+**Matches expected behavior**: YES - All documentation now uses `path` instead of `db_path`
