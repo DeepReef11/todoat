@@ -61,3 +61,25 @@ Users following the task-management.md documentation will have incorrect expecta
 
 ## Dependencies
 None
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Updated docs/task-management.md lines 83-89 to correctly document priority alias ranges matching the actual implementation.
+
+### Verification Log
+```bash
+$ cat docs/task-management.md | sed -n '83,89p'
+# High priority tasks (1-4)
+todoat MyList -p 1,2,3,4
+
+# Using named levels
+todoat MyList -p high    # priorities 1-4
+todoat MyList -p medium  # priority 5
+todoat MyList -p low     # priorities 6-9
+```
+**Matches expected behavior**: YES
+
+Documentation now matches:
+- Test expectations in backend/sqlite/cli_test.go:991-1047
+- Correct documentation in doc/examples.md:125-127
