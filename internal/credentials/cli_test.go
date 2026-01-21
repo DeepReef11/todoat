@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -194,6 +195,19 @@ func TestCredentialsListCLI(t *testing.T) {
 
 // TestCredentialsListJSONCLI tests the CLI command: todoat --json credentials list
 func TestCredentialsListJSONCLI(t *testing.T) {
+	// Save and restore todoist env vars that could interfere
+	origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
+	origUser := os.Getenv("TODOAT_TODOIST_USERNAME")
+	origPass := os.Getenv("TODOAT_TODOIST_PASSWORD")
+	defer func() {
+		_ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
+		_ = os.Setenv("TODOAT_TODOIST_USERNAME", origUser)
+		_ = os.Setenv("TODOAT_TODOIST_PASSWORD", origPass)
+	}()
+	_ = os.Unsetenv("TODOAT_TODOIST_TOKEN")
+	_ = os.Unsetenv("TODOAT_TODOIST_USERNAME")
+	_ = os.Unsetenv("TODOAT_TODOIST_PASSWORD")
+
 	mockKeyring := NewMockKeyring()
 	_ = mockKeyring.Set("todoat-nextcloud", "ncuser", "pass1")
 	manager := NewManager(WithKeyring(mockKeyring))

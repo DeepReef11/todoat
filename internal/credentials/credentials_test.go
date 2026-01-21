@@ -335,6 +335,19 @@ func TestCredentialsJSON(t *testing.T) {
 // TestCredentialsListBackends tests listing all backends with credential status
 // CLI: todoat credentials list
 func TestCredentialsListBackends(t *testing.T) {
+	// Save and restore todoist env vars that could interfere
+	origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
+	origUser := os.Getenv("TODOAT_TODOIST_USERNAME")
+	origPass := os.Getenv("TODOAT_TODOIST_PASSWORD")
+	defer func() {
+		_ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
+		_ = os.Setenv("TODOAT_TODOIST_USERNAME", origUser)
+		_ = os.Setenv("TODOAT_TODOIST_PASSWORD", origPass)
+	}()
+	_ = os.Unsetenv("TODOAT_TODOIST_TOKEN")
+	_ = os.Unsetenv("TODOAT_TODOIST_USERNAME")
+	_ = os.Unsetenv("TODOAT_TODOIST_PASSWORD")
+
 	mockKeyring := NewMockKeyring()
 	// Store credentials for one backend
 	_ = mockKeyring.Set("todoat-nextcloud", "myuser", "pass1")
@@ -446,13 +459,18 @@ func TestCredentialsBackendNameNormalization(t *testing.T) {
 
 // TestCredentialsEnvVarPriority tests that env vars work when keyring is empty
 func TestCredentialsEnvVarPriority(t *testing.T) {
-	// Save and restore env vars
+	// Save and restore env vars (including token which takes priority)
 	origUser := os.Getenv("TODOAT_TODOIST_USERNAME")
 	origPass := os.Getenv("TODOAT_TODOIST_PASSWORD")
+	origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
 	defer func() {
 		_ = os.Setenv("TODOAT_TODOIST_USERNAME", origUser)
 		_ = os.Setenv("TODOAT_TODOIST_PASSWORD", origPass)
+		_ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
 	}()
+
+	// Clear token so password env var is used instead
+	_ = os.Unsetenv("TODOAT_TODOIST_TOKEN")
 
 	// Set environment variables for a different backend
 	_ = os.Setenv("TODOAT_TODOIST_USERNAME", "todoistuser")
