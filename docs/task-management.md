@@ -212,11 +212,11 @@ By default, the next occurrence is calculated from the original due date. To bas
 todoat MyList add "Water plants" --recur "every 3 days" --recur-from-completion
 ```
 
-Recurring tasks display with an indicator in the task list:
+Recurring tasks display with an `[R]` indicator in the task list:
 
 ```
-🔄 TODO   Daily standup                    Jan 20
-   TODO   One-time task                    Jan 21
+[TODO] Daily standup [R]                   Jan 20
+[TODO] One-time task                       Jan 21
 ```
 
 When you complete a recurring task, a new task is automatically created with the next due date:

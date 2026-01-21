@@ -51,3 +51,18 @@ N/A
 
 ## Recommended Fix
 FIX DOCS - Update documentation to show `[R]` indicator instead of emoji, or FIX CODE if emoji was intended
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Updated docs/task-management.md lines 215-220 to show the correct `[R]` indicator format that the app actually uses, replacing the incorrect emoji format.
+
+### Verification Log
+```bash
+$ ./todoat TestList add "Daily standup" --recur daily
+Created task: Daily standup (ID: 312d2f40-fcde-4de8-8498-7ca27b961f05)
+
+$ ./todoat TestList | grep "Daily standup"
+  [TODO] Daily standup [R]
+```
+**Matches expected behavior**: YES (documentation now matches actual app output)
