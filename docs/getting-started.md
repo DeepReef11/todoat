@@ -44,7 +44,7 @@ backends:
   sqlite:
     type: sqlite
     enabled: true
-    db_path: ""  # Uses default location
+    path: ""  # Uses default location
 
 default_backend: sqlite
 ui: cli

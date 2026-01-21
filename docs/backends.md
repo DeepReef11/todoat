@@ -117,7 +117,7 @@ backends:
   sqlite:
     type: sqlite
     enabled: true
-    db_path: ""  # Empty = default location
+    path: ""  # Empty = default location
 ```
 
 Default database location: `~/.local/share/todoat/tasks.db`
@@ -129,7 +129,7 @@ backends:
   sqlite:
     type: sqlite
     enabled: true
-    db_path: "~/my-tasks/tasks.db"
+    path: "~/my-tasks/tasks.db"
 ```
 
 ### Path Expansion

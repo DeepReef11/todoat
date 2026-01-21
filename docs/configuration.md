@@ -84,7 +84,7 @@ Boolean fields accept: `true`/`false`, `yes`/`no`, `1`/`0`
 Paths support expansion:
 
 ```bash
-todoat config set backends.sqlite.db_path "~/my-tasks/tasks.db"
+todoat config set backends.sqlite.path "~/my-tasks/tasks.db"
 ```
 
 ## Editing Configuration
@@ -110,11 +110,57 @@ Restores the default configuration. Requires confirmation.
 | Key | Type | Description |
 |-----|------|-------------|
 | `default_backend` | string | Default backend name |
+| `auto_detect_backend` | bool | Auto-detect backend based on current directory |
+| `default_view` | string | Default view for task display |
 | `no_prompt` | bool | Non-interactive mode |
-| `json_output` | bool | JSON output by default |
+| `output_format` | string | Default output format (`text` or `json`) |
 | `sync.enabled` | bool | Enable synchronization |
+| `sync.local_backend` | string | Cache backend for remote syncing |
 | `sync.offline_mode` | string | `auto`, `always`, `never` |
 | `sync.conflict_resolution` | string | `server_wins`, `local_wins`, `merge`, `keep_both` |
+| `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
+
+## Notification Configuration
+
+Configure desktop and log notifications for sync events:
+
+```yaml
+notification:
+  enabled: true
+  os_notification:
+    enabled: true
+    on_sync_error: true     # Notify on sync failures
+    on_conflict: true       # Notify on sync conflicts
+  log_notification:
+    enabled: true
+    path: "~/.local/share/todoat/notifications.log"
+```
+
+### Test Notifications
+
+```bash
+# Send a test notification
+todoat notification test
+```
+
+### View Notification Log
+
+```bash
+# View notification history
+todoat notification log
+
+# Clear notification log
+todoat notification log clear
+```
+
+## Trash Configuration
+
+Configure automatic cleanup of deleted items:
+
+```yaml
+trash:
+  retention_days: 30    # Keep deleted items for 30 days (0 = forever)
+```
 
 ## Examples
 
@@ -141,7 +187,7 @@ todoat config set sync.local_backend sqlite
 ```bash
 # Enable for CI/CD pipelines
 todoat config set no_prompt true
-todoat config set json_output true
+todoat config set output_format json
 ```
 
 ### Check Current Settings
