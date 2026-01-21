@@ -18,6 +18,22 @@ todoat MyList complete "report"
 todoat
 ```
 
+## Try It Out
+
+Run the feature demo script to see all todoat features in action:
+
+```bash
+# Run all demos
+./docs/feature-demo.sh
+
+# Run a specific section
+./docs/feature-demo.sh tasks      # Task management demo
+./docs/feature-demo.sh recurring  # Recurring tasks demo
+./docs/feature-demo.sh views      # Views and filtering demo
+```
+
+Available sections: `version`, `config`, `lists`, `tasks`, `subtasks`, `dates`, `recurring`, `tags`, `priority`, `views`, `filters`, `json`, `sync`, `reminders`, `credentials`, `migration`, `export`, `scripting`, `tui`, `cleanup`
+
 ## Documentation
 
 | Guide | Description |
