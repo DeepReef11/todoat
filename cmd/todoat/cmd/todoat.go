@@ -2291,6 +2291,13 @@ func createBackendByName(name string, dbPath string, rawConfig map[string]interf
 		utils.Debugf("Using backend: todoist")
 		return todoist.New(todoistCfg)
 	case "nextcloud":
+		// Check if "nextcloud" is configured in config file - if so, use createCustomBackend
+		// to properly read all config file settings (host, username, password, allow_http, etc.)
+		// This ensures built-in name "nextcloud" behaves the same as custom backends like "nextcloud-test"
+		if rawConfig != nil && config.IsBackendConfigured(rawConfig, name) {
+			return createCustomBackend(name, dbPath, rawConfig)
+		}
+		// No config file entry - fall back to environment variables only
 		nextcloudCfg := nextcloud.ConfigFromEnv()
 		if nextcloudCfg.Host == "" {
 			return nil, fmt.Errorf("nextcloud backend requires TODOAT_NEXTCLOUD_HOST environment variable")
