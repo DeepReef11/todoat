@@ -4,8 +4,8 @@
 Implement task reminder notifications that alert users when tasks are approaching or past their due dates, with configurable reminder intervals.
 
 ## Documentation Reference
-- Primary: `dev-doc/NOTIFICATION_MANAGER.md` (future feature: Task reminders)
-- Secondary: `dev-doc/TASK_MANAGEMENT.md` (due dates)
+- Primary: `docs/explanation/notification-manager.md` (future feature: Task reminders)
+- Secondary: `docs/explanation/task-management.md` (due dates)
 
 ## Dependencies
 - Requires: [022] Notification System

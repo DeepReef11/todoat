@@ -66,8 +66,8 @@ Establish the CLI test framework following TEST_DRIVEN_DEV.md patterns, includin
 
 ## Implementation Notes
 
-- Reference: `dev-doc/TEST_DRIVEN_DEV.md` for test patterns
-- Reference: `dev-doc/CLI_INTERFACE.md#result-codes` for result code specs
+- Reference: `docs/explanation/test-driven-dev.md` for test patterns
+- Reference: `docs/explanation/cli-interface.md#result-codes` for result code specs
 - CLI tests should be the primary test suite (per TEST_DRIVEN_DEV.md)
 - Use in-memory SQLite (`:memory:`) for fast, isolated tests
 - Tests should use `-y` flag to ensure deterministic behavior

@@ -5,9 +5,9 @@
 todoat provides comprehensive hierarchical task support, allowing users to organize complex projects into parent-child relationships with unlimited nesting depth. This feature enables breaking down large tasks into manageable subtasks while maintaining clear organizational structure and dependencies.
 
 **Related Features:**
-- [Task Management](./TASK_MANAGEMENT.md) - Core task operations
-- [List Management](./LIST_MANAGEMENT.md) - Organizing tasks into lists
-- [Views and Customization](./VIEWS_CUSTOMIZATION.md) - Hierarchical display options
+- [Task Management](task-management.md) - Core task operations
+- [List Management](list-management.md) - Organizing tasks into lists
+- [Views and Customization](views-customization.md) - Hierarchical display options
 
 ---
 
@@ -71,7 +71,7 @@ Establish dependency and organizational relationships between tasks, enabling st
 6. Completes parent task when all subtasks finished
 
 #### Prerequisites
-- Task list must exist (see [List Management](./LIST_MANAGEMENT.md#creating-lists))
+- Task list must exist (see [List Management](list-management.md#creating-lists))
 - Parent task must exist before creating subtasks
 - User must have write access to the backend
 
@@ -123,7 +123,7 @@ parent1
 **Sync Considerations:**
 - Hierarchical sorting ensures parents synced before children
 - Prevents foreign key violations during sync operations
-- See [Synchronization](./SYNCHRONIZATION.md#hierarchical-task-ordering)
+- See [Synchronization](synchronization.md#hierarchical-task-ordering)
 
 ---
 
@@ -319,11 +319,11 @@ Present task hierarchies in visually clear tree structures using ASCII/Unicode b
 **Depth Indentation:**
 - Each level adds 3 character width
 - Maximum practical depth: ~20 levels (60 chars of indent)
-- Terminal width detection prevents overflow (see [CLI Interface](./CLI_INTERFACE.md#terminal-width-detection))
+- Terminal width detection prevents overflow (see [CLI Interface](cli-interface.md#terminal-width-detection))
 
 **Hierarchical View Integration:**
 
-Custom views preserve hierarchy (see [Views and Customization](./VIEWS_CUSTOMIZATION.md#hierarchical-display)):
+Custom views preserve hierarchy (see [Views and Customization](views-customization.md#hierarchical-display)):
 
 ```yaml
 # View configuration preserving hierarchy
@@ -360,7 +360,7 @@ fields:
 #### Prerequisites
 - Tasks must have established parent-child relationships
 - Terminal must support Unicode box-drawing characters (most modern terminals do)
-- See [Configuration](./CONFIGURATION.md) for Unicode display settings
+- See [Configuration](configuration.md) for Unicode display settings
 
 #### Outputs/Results
 
@@ -648,7 +648,7 @@ Parent task "Release v2.0" deleted.
 
 **Sync Queue Handling:**
 
-When subtasks modified offline (see [Synchronization](./SYNCHRONIZATION.md#offline-operations)):
+When subtasks modified offline (see [Synchronization](synchronization.md#offline-operations)):
 
 1. Operations queued with hierarchy metadata
 2. Sync processes operations in dependency order:
@@ -671,11 +671,11 @@ When subtasks modified offline (see [Synchronization](./SYNCHRONIZATION.md#offli
 
 **Best Practices:**
 - Complete children before completing parent
-- See [Views and Customization](./VIEWS_CUSTOMIZATION.md#filtering-hierarchies)
+- See [Views and Customization](views-customization.md#filtering-hierarchies)
 
 ### Synchronization with Remote Backends
 
-**Sync Order (see [Synchronization](./SYNCHRONIZATION.md#hierarchical-ordering)):**
+**Sync Order (see [Synchronization](synchronization.md#hierarchical-ordering)):**
 
 1. **Pull from remote:**
    - Fetches all tasks (flat)
@@ -692,11 +692,11 @@ When subtasks modified offline (see [Synchronization](./SYNCHRONIZATION.md#offli
 **Conflict Resolution:**
 - Parent-child relationships preserved when possible
 - If parent deleted remotely, notify from notification manager (futur feature)
-- If parent modified remotely, children unaffected (see [Synchronization](./SYNCHRONIZATION.md#conflict-resolution))
+- If parent modified remotely, children unaffected (see [Synchronization](synchronization.md#conflict-resolution))
 
 ### Custom Views with Hierarchy
 
-**Hierarchical Filtering (see [Views and Customization](./VIEWS_CUSTOMIZATION.md#filtering)):**
+**Hierarchical Filtering (see [Views and Customization](views-customization.md#filtering)):**
 
 ```yaml
 # Show only incomplete subtasks of specific parent
@@ -767,11 +767,11 @@ fields:
 
 ## Related Documentation
 
-- [Task Management](./TASK_MANAGEMENT.md) - Core task CRUD operations
-- [List Management](./LIST_MANAGEMENT.md) - Organizing tasks into lists
-- [Views and Customization](./VIEWS_CUSTOMIZATION.md) - Hierarchical display and filtering
-- [Synchronization](./SYNCHRONIZATION.md) - Hierarchical sync ordering
-- [Backend System](./BACKEND_SYSTEM.md) - Storage of hierarchical data
+- [Task Management](task-management.md) - Core task CRUD operations
+- [List Management](list-management.md) - Organizing tasks into lists
+- [Views and Customization](views-customization.md) - Hierarchical display and filtering
+- [Synchronization](synchronization.md) - Hierarchical sync ordering
+- [Backend System](backend-system.md) - Storage of hierarchical data
 
 ---
 

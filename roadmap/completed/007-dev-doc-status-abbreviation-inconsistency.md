@@ -1,10 +1,10 @@
 # [007] Fix: dev-doc CLI_INTERFACE.md - Status Abbreviation Inconsistency
 
 ## Summary
-The internal dev-doc/CLI_INTERFACE.md incorrectly documents `PROCESSING/P` as a valid status abbreviation, but the actual implementation uses `IN-PROGRESS/I`.
+The internal docs/explanation/cli-interface.md incorrectly documents `PROCESSING/P` as a valid status abbreviation, but the actual implementation uses `IN-PROGRESS/I`.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/cli-interface.md`
 - Section: "Action Flags" (line ~206) and throughout the document
 
 ## Gap Type
@@ -12,7 +12,7 @@ wrong-syntax
 
 ## Documented Command/Syntax
 ```bash
-# From dev-doc/CLI_INTERFACE.md:
+# From docs/explanation/cli-interface.md:
 todoat MyList -s T,P  # Using abbreviations (T=TODO, P=PROCESSING)
 todoat MyList -s PROCESSING
 ```
@@ -47,10 +47,10 @@ S
 - [ ] No tests required - documentation fix only
 
 ### Functional Requirements
-- [ ] Update all occurrences of `PROCESSING/P` to `IN-PROGRESS/I` in dev-doc/CLI_INTERFACE.md
+- [ ] Update all occurrences of `PROCESSING/P` to `IN-PROGRESS/I` in docs/explanation/cli-interface.md
 
 ## Implementation Notes
-Locations in dev-doc/CLI_INTERFACE.md that need updating:
+Locations in docs/explanation/cli-interface.md that need updating:
 - Line ~206: Status abbreviation table
 - Line ~279: Example commands with `-s T,P`
 - Line ~628: Argument validation example

@@ -4,7 +4,7 @@
 Implement the Git backend to store tasks in human-readable markdown files within Git repositories, with auto-detection and optional auto-commit functionality.
 
 ## Documentation Reference
-- Primary: `dev-doc/BACKEND_SYSTEM.md` (Git Backend section)
+- Primary: `docs/explanation/backend-system.md` (Git Backend section)
 
 ## Dependencies
 - Requires: [002] Core CLI

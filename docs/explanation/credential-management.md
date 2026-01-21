@@ -47,9 +47,9 @@ $ todoat sync
 - URL parsing: `net/url` for legacy format extraction
 
 **Related Features**:
-- [Backend System](./BACKEND_SYSTEM.md#credential-integration) - How backends request credentials
-- [Configuration](./CONFIGURATION.md#credential-fields) - Config file credential fields
-- [Synchronization](./SYNCHRONIZATION.md#authentication) - Sync authentication requirements
+- [Backend System](backend-system.md#credential-integration) - How backends request credentials
+- [Configuration](configuration.md#credential-fields) - Config file credential fields
+- [Synchronization](synchronization.md#authentication) - Sync authentication requirements
 
 ---
 
@@ -112,9 +112,9 @@ $ todoat sync
 - Error handling: Fallback to other sources if keyring unavailable
 
 **Related Features**:
-- [CLI Interface](./CLI_INTERFACE.md#credentials-command) - Command syntax
-- [Configuration](./CONFIGURATION.md#keyring-based-config) - Config file format
-- [Backend System](./BACKEND_SYSTEM.md#authentication) - How backends use credentials
+- [CLI Interface](cli-interface.md#credentials-command) - Command syntax
+- [Configuration](configuration.md#keyring-based-config) - Config file format
+- [Backend System](backend-system.md#authentication) - How backends use credentials
 
 ---
 
@@ -172,9 +172,9 @@ $ docker run -e TODOAT_NEXTCLOUD_USERNAME=apiuser \
 - Validation: Username/host required, password optional (falls back to other sources)
 
 **Related Features**:
-- [Configuration](./CONFIGURATION.md#environment-variables) - Full environment variable reference
-- [Backend System](./BACKEND_SYSTEM.md#credential-sources) - How backends resolve credentials
-- [Synchronization](./SYNCHRONIZATION.md#automated-sync) - Using environment credentials for automated sync
+- [Configuration](configuration.md#environment-variables) - Full environment variable reference
+- [Backend System](backend-system.md#credential-sources) - How backends resolve credentials
+- [Synchronization](synchronization.md#automated-sync) - Using environment credentials for automated sync
 
 ---
 
@@ -229,8 +229,8 @@ $ todoat sync
 - Lowest priority in credential resolution
 
 **Related Features**:
-- [Configuration](./CONFIGURATION.md#url-format) - Legacy URL format specification
-- [Backend System](./BACKEND_SYSTEM.md#connection-urls) - URL scheme parsing
+- [Configuration](configuration.md#url-format) - Legacy URL format specification
+- [Backend System](backend-system.md#connection-urls) - URL scheme parsing
 
 ---
 
@@ -281,8 +281,8 @@ Suggestion: Run 'todoat credentials set todoist apiuser --prompt'
 - Useful for troubleshooting authentication issues
 
 **Related Features**:
-- [CLI Interface](./CLI_INTERFACE.md#credentials-get) - Command reference
-- [Backend System](./BACKEND_SYSTEM.md#authentication-debugging) - Troubleshooting authentication
+- [CLI Interface](cli-interface.md#credentials-get) - Command reference
+- [Backend System](backend-system.md#authentication-debugging) - Troubleshooting authentication
 
 ---
 
@@ -334,8 +334,8 @@ Run: todoat credentials set nextcloud myuser --prompt
 - Keyring unavailable: Returns error with guidance
 
 **Related Features**:
-- [CLI Interface](./CLI_INTERFACE.md#credentials-delete) - Command syntax
-- [Configuration](./CONFIGURATION.md#manual-credential-removal) - Removing config credentials
+- [CLI Interface](cli-interface.md#credentials-delete) - Command syntax
+- [Configuration](configuration.md#manual-credential-removal) - Removing config credentials
 
 ---
 
@@ -379,7 +379,7 @@ Enter password for nextcloud (user: myuser): [no characters displayed]
 - Security: Password stored only in keyring, never in memory longer than necessary
 
 **Related Features**:
-- [CLI Interface](./CLI_INTERFACE.md#interactive-prompts) - Interactive input handling
+- [CLI Interface](cli-interface.md#interactive-prompts) - Interactive input handling
 
 ---
 
@@ -640,10 +640,10 @@ credentials.PromptPassword(backend, username) (string, error)
 
 ## Related Features
 
-- **[Backend System](./BACKEND_SYSTEM.md)** - How backends authenticate using credentials
-- **[Configuration](./CONFIGURATION.md)** - Credential configuration options
-- **[Synchronization](./SYNCHRONIZATION.md)** - Using credentials for sync operations
-- **[CLI Interface](./CLI_INTERFACE.md#credentials-command)** - Credential management commands
+- **[Backend System](backend-system.md)** - How backends authenticate using credentials
+- **[Configuration](configuration.md)** - Credential configuration options
+- **[Synchronization](synchronization.md)** - Using credentials for sync operations
+- **[CLI Interface](cli-interface.md#credentials-command)** - Credential management commands
 
 ---
 

@@ -4,9 +4,9 @@
 Implement relative date parsing for CLI date flags, supporting human-friendly input like "today", "tomorrow", "+7d", "+1w", "+1m".
 
 ## Documentation Reference
-- Primary: `dev-doc/VIEWS_CUSTOMIZATION.md`
+- Primary: `docs/explanation/views-customization.md`
 - Section: Date Filter Special Values
-- Related: `dev-doc/TASK_MANAGEMENT.md`
+- Related: `docs/explanation/task-management.md`
 
 ## Dependencies
 - Requires: [011] Task Dates

@@ -4,8 +4,8 @@
 Implement conflict detection and resolution strategies for synchronization, including server-wins, local-wins, merge, and keep-both strategies with configurable defaults.
 
 ## Documentation Reference
-- Primary: `dev-doc/SYNCHRONIZATION.md#conflict-resolution`
-- Related: `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/synchronization.md#conflict-resolution`
+- Related: `docs/explanation/configuration.md`
 
 ## Dependencies
 - Requires: [018] Synchronization Core System

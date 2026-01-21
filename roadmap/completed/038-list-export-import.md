@@ -4,8 +4,8 @@
 Implement list export and import functionality for SQLite backend, enabling backup, restore, and data portability across todoat instances.
 
 ## Documentation Reference
-- Primary: `dev-doc/LIST_MANAGEMENT.md` (Export/Import section)
-- Related: `dev-doc/BACKEND_SYSTEM.md`
+- Primary: `docs/explanation/list-management.md` (Export/Import section)
+- Related: `docs/explanation/backend-system.md`
 
 ## Dependencies
 - Requires: [003] SQLite Backend

@@ -4,8 +4,8 @@
 Implement the core synchronization infrastructure with local SQLite caching, sync queue management, and the Sync Manager component that coordinates bidirectional sync between local cache and remote backends.
 
 ## Documentation Reference
-- Primary: `dev-doc/SYNCHRONIZATION.md`
-- Related: `dev-doc/BACKEND_SYSTEM.md`, `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/synchronization.md`
+- Related: `docs/explanation/backend-system.md`, `docs/explanation/configuration.md`
 
 ## Dependencies
 - Requires: [016] Nextcloud Backend (remote backend to sync with)

@@ -4,7 +4,7 @@
 Implement list management commands to create, view, and manage task lists. This enables users to organize tasks into separate lists.
 
 ## Documentation Reference
-- Primary: `dev-doc/LIST_MANAGEMENT.md`
+- Primary: `docs/explanation/list-management.md`
 - Sections: Create List, View All Lists
 
 ## Dependencies

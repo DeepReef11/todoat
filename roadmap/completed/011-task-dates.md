@@ -4,7 +4,7 @@
 Implement due date and start date support for tasks, including CLI flags for setting dates and display formatting.
 
 ## Documentation Reference
-- Primary: `dev-doc/TASK_MANAGEMENT.md`
+- Primary: `docs/explanation/task-management.md`
 - Sections: Task Dates, Add Tasks, Update Tasks
 
 ## Dependencies

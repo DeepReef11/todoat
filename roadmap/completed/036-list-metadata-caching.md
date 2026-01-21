@@ -4,8 +4,8 @@
 Implement local caching for task list metadata to improve performance when listing available task lists, reducing network calls to remote backends.
 
 ## Documentation Reference
-- Primary: `dev-doc/LIST_MANAGEMENT.md` (List Caching section)
-- Related: `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/list-management.md` (List Caching section)
+- Related: `docs/explanation/configuration.md`
 
 ## Dependencies
 - Requires: [007] List Commands (list operations must exist)

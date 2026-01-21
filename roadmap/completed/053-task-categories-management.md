@@ -4,9 +4,9 @@
 Implement CLI commands for managing task categories (tags), including adding, removing, and listing tags on tasks.
 
 ## Documentation Reference
-- Primary: `dev-doc/TASK_MANAGEMENT.md`
+- Primary: `docs/explanation/task-management.md`
 - Section: Task Metadata (Categories field)
-- Related: `dev-doc/CLI_INTERFACE.md`
+- Related: `docs/explanation/cli-interface.md`
 
 ## Dependencies
 - Requires: [004] Task Commands

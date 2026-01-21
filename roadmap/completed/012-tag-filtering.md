@@ -4,7 +4,7 @@
 Implement tag/category support for tasks, including CLI flags for adding tags and filtering tasks by tags.
 
 ## Documentation Reference
-- Primary: `dev-doc/TASK_MANAGEMENT.md`
+- Primary: `docs/explanation/task-management.md`
 - Sections: Filter by Tags, Add Tasks (Categories field)
 
 ## Dependencies

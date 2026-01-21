@@ -4,8 +4,8 @@
 Implement shell completion scripts for Bash, Zsh, Fish, and PowerShell, enabling tab completion for commands, subcommands, list names, and task summaries.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md#shell-completion`
-- Related: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/cli-interface.md#shell-completion`
+- Related: `docs/explanation/cli-interface.md`
 
 ## Dependencies
 - Requires: [002] Core CLI (Cobra framework provides completion infrastructure)

@@ -4,7 +4,7 @@
 Implement CLI commands to update list properties including color and description, supporting visual customization of task lists.
 
 ## Documentation Reference
-- Primary: `dev-doc/LIST_MANAGEMENT.md`
+- Primary: `docs/explanation/list-management.md`
 - Section: List Properties
 
 ## Dependencies

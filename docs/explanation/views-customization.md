@@ -1,7 +1,7 @@
 # Views Customization
 
 **Category:** Display & Output Formatting
-**Related Features:** [Task Management](./TASK_MANAGEMENT.md), [CLI Interface](./CLI_INTERFACE.md)
+**Related Features:** [Task Management](task-management.md), [CLI Interface](cli-interface.md)
 
 ## Overview
 
@@ -1132,10 +1132,10 @@ team-views/
 
 ### Integration Points
 
-- **[Task Management](./TASK_MANAGEMENT.md)**: Views display tasks fetched via backend TaskManager interface
-- **[Backend System](./BACKEND_SYSTEM.md)**: Views work with tasks from any backend (Nextcloud, SQLite, File)
-- **[Subtasks Hierarchy](./SUBTASKS_HIERARCHY.md)**: Views render hierarchical relationships with tree display
-- **[CLI Interface](./CLI_INTERFACE.md)**: Views invoked via `-v` or `--view` flag on task display commands
+- **[Task Management](task-management.md)**: Views display tasks fetched via backend TaskManager interface
+- **[Backend System](backend-system.md)**: Views work with tasks from any backend (Nextcloud, SQLite, File)
+- **[Subtasks Hierarchy](subtasks-hierarchy.md)**: Views render hierarchical relationships with tree display
+- **[CLI Interface](cli-interface.md)**: Views invoked via `-v` or `--view` flag on task display commands
 
 ### Performance Characteristics
 
@@ -1168,11 +1168,11 @@ team-views/
 
 ## Related Features
 
-- **[Task Management](./TASK_MANAGEMENT.md)**: Views display task data fetched via CRUD operations
-- **[Subtasks Hierarchy](./SUBTASKS_HIERARCHY.md)**: Views maintain parent-child relationships in display
-- **[CLI Interface](./CLI_INTERFACE.md)**: Views invoked via command-line flags and arguments
-- **[Backend System](./BACKEND_SYSTEM.md)**: Views work seamlessly with any task backend
-- **[List Management](./LIST_MANAGEMENT.md)**: Views can be scoped to specific task lists
+- **[Task Management](task-management.md)**: Views display task data fetched via CRUD operations
+- **[Subtasks Hierarchy](subtasks-hierarchy.md)**: Views maintain parent-child relationships in display
+- **[CLI Interface](cli-interface.md)**: Views invoked via command-line flags and arguments
+- **[Backend System](backend-system.md)**: Views work seamlessly with any task backend
+- **[List Management](list-management.md)**: Views can be scoped to specific task lists
 
 ---
 

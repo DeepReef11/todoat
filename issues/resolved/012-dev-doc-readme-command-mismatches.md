@@ -10,10 +10,10 @@ user-journey
 medium
 
 ## Location
-- File: `dev-doc/README.md`
+- File: `docs/explanation/README.md`
   - Lines: 47, 49, 52
   - Context: Quick Feature Reference table
-- File: `dev-doc/CONFIGURATION.md`
+- File: `docs/explanation/configuration.md`
   - Lines: 262, 934
   - Context: Backend configuration examples
 
@@ -78,7 +78,7 @@ todoat view list
 
 ---
 
-## dev-doc/CONFIGURATION.md References (lines 262, 934)
+## docs/explanation/configuration.md References (lines 262, 934)
 
 Lines 262 and 934 reference `--list-backends` which doesn't exist:
 ```
@@ -97,12 +97,12 @@ todoat --detect-backend
 ## Recommended Fix
 FIX DOCS - Update the internal documentation to match actual CLI:
 
-**dev-doc/README.md:**
+**docs/explanation/README.md:**
 - Line 47: Change `list rename` to `list update --name`
 - Line 49: Remove `--list-backends` (non-existent flag)
 - Line 52: Remove `view show` (non-existent command)
 
-**dev-doc/CONFIGURATION.md:**
+**docs/explanation/configuration.md:**
 - Line 262: Change `--list-backends` to `--detect-backend` or `config get backends`
 - Line 934: Change `todoat --list-backends` to `todoat --detect-backend` or `todoat config get backends`
 
@@ -115,11 +115,11 @@ Developers reading the internal documentation will try commands that don't exist
 **Fix description**: Updated documentation to match actual CLI commands
 
 ### Changes Made
-- `dev-doc/README.md` line 47: Changed `list rename` to `list update`
-- `dev-doc/README.md` line 49: Removed `--list-backends` (non-existent flag)
-- `dev-doc/README.md` line 52: Removed `view show` (non-existent command)
-- `dev-doc/CONFIGURATION.md` line 262: Changed `--list-backends` to `--detect-backend`
-- `dev-doc/CONFIGURATION.md` line 934: Changed `todoat --list-backends` to `todoat --detect-backend`
+- `docs/explanation/README.md` line 47: Changed `list rename` to `list update`
+- `docs/explanation/README.md` line 49: Removed `--list-backends` (non-existent flag)
+- `docs/explanation/README.md` line 52: Removed `view show` (non-existent command)
+- `docs/explanation/configuration.md` line 262: Changed `--list-backends` to `--detect-backend`
+- `docs/explanation/configuration.md` line 934: Changed `todoat --list-backends` to `todoat --detect-backend`
 
 ### Verification Log
 ```bash

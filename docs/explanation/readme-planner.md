@@ -235,7 +235,7 @@ todoat list trash restore "Old List"
 
 - [CLI Reference](./reshape/doc/CLI_INTERFACE.md) - All commands and flags
 - [Configuration Guide](./reshape/doc/CONFIGURATION.md) - Full config options
-- [Sync Guide](./SYNC_GUIDE.md) - Offline sync setup
+- [Sync Guide](../how-to/sync.md) - Offline sync setup
 - [Backend System](./reshape/doc/BACKEND_SYSTEM.md) - Backend configuration
 
 ## Status Values

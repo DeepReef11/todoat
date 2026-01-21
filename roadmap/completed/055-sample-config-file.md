@@ -4,9 +4,9 @@
 Create a fully-documented sample configuration file (config.sample.yaml) with all backend types, options, and inline comments that gets embedded in the binary and copied to users on first run.
 
 ## Documentation Reference
-- Primary: `dev-doc/TODO.md`
-- Related: `dev-doc/CONFIGURATION.md`
-- Related: `dev-doc/BACKEND_SYSTEM.md`
+- Primary: `docs/explanation/todo.md`
+- Related: `docs/explanation/configuration.md`
+- Related: `docs/explanation/backend-system.md`
 
 ## Dependencies
 - Requires: [010] Configuration System

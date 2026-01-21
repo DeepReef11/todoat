@@ -4,7 +4,7 @@
 Implement automatic purging of lists from trash after a configurable retention period (default: 30 days), reducing manual cleanup and preventing indefinite data accumulation.
 
 ## Documentation Reference
-- Primary: `dev-doc/LIST_MANAGEMENT.md`
+- Primary: `docs/explanation/list-management.md`
 - Section: Trash and Restore Lists - Edge Cases (#484)
 
 ## Dependencies

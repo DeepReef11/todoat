@@ -4,8 +4,8 @@
 Implement plugin-based field formatting allowing external scripts (Bash, Python, Ruby, etc.) to transform task field values for custom display in views.
 
 ## Documentation Reference
-- Primary: `dev-doc/VIEWS_CUSTOMIZATION.md` (Plugin Formatters section)
-- Related: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/views-customization.md` (Plugin Formatters section)
+- Related: `docs/explanation/cli-interface.md`
 
 ## Dependencies
 - Requires: [015] Views Customization (view YAML structure must exist)

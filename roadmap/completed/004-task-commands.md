@@ -59,8 +59,8 @@ Implement the core task operation commands: add, get (list), update, complete, a
 
 ## Implementation Notes
 
-- Reference: `dev-doc/CLI_INTERFACE.md` for command syntax
-- Reference: `dev-doc/TASK_MANAGEMENT.md` for operation details
+- Reference: `docs/explanation/cli-interface.md` for command syntax
+- Reference: `docs/explanation/task-management.md` for operation details
 - Action resolution: check if arg[1] is a known action (get, add, update, complete, delete or abbreviation)
 - For MVP, assume single list or require list name - interactive list selection deferred
 - Task matching should be case-insensitive for better UX

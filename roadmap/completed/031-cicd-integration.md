@@ -4,8 +4,8 @@
 Configure GitHub Actions workflows for automated testing, including unit tests on all PRs and integration tests with Docker-based Nextcloud on merges to main.
 
 ## Documentation Reference
-- Primary: `dev-doc/INTEGRATION_TESTING.md` (CI/CD Integration section)
-- Secondary: `dev-doc/TEST_DRIVEN_DEV.md`
+- Primary: `docs/explanation/integration-testing.md` (CI/CD Integration section)
+- Secondary: `docs/explanation/test-driven-dev.md`
 
 ## Dependencies
 - Requires: [030] Integration Test Infrastructure

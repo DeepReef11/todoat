@@ -5,9 +5,9 @@
 This document describes how to run integration tests against real backend services (Nextcloud, Todoist, Google Tasks, Microsoft To Do). Integration tests validate the full communication stack with actual services rather than mock servers.
 
 **Related Documentation:**
-- [Test Driven Development](./TEST_DRIVEN_DEV.md) - General TDD approach
-- [Backend System](./BACKEND_SYSTEM.md) - Backend implementations
-- [Synchronization](./SYNCHRONIZATION.md) - Sync testing considerations
+- [Test Driven Development](test-driven-dev.md) - General TDD approach
+- [Backend System](backend-system.md) - Backend implementations
+- [Synchronization](synchronization.md) - Sync testing considerations
 
 ---
 
@@ -640,13 +640,13 @@ curl -v http://localhost:8080/remote.php/dav/calendars/admin/
 
 ## Related Documentation
 
-- [Test Driven Development](./TEST_DRIVEN_DEV.md) - TDD workflow
-- [Backend System](./BACKEND_SYSTEM.md) - Backend implementations
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md) - Credential handling
-- [Configuration](./CONFIGURATION.md) - Backend configuration
+- [Test Driven Development](test-driven-dev.md) - TDD workflow
+- [Backend System](backend-system.md) - Backend implementations
+- [Credential Management](credential-management.md) - Credential handling
+- [Configuration](configuration.md) - Backend configuration
 
 ---
 
 **Navigation:**
-- [Back to Overview](./README.md)
-- [Back to Features Overview](./FEATURES_OVERVIEW.md)
+- [Back to Overview](README.md)
+- [Back to Features Overview](features-overview.md)

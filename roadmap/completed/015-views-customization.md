@@ -4,8 +4,8 @@
 Implement custom view configurations supporting field selection, ordering, filtering, sorting, and plugin formatters. Views are defined in YAML files and selected via CLI `-v` flag.
 
 ## Documentation Reference
-- Primary: `dev-doc/VIEWS_CUSTOMIZATION.md`
-- Related: `dev-doc/CLI_INTERFACE.md`, `dev-doc/TASK_MANAGEMENT.md`
+- Primary: `docs/explanation/views-customization.md`
+- Related: `docs/explanation/cli-interface.md`, `docs/explanation/task-management.md`
 
 ## Dependencies
 - Requires: [004] Task Commands

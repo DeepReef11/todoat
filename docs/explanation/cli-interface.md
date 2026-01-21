@@ -60,8 +60,8 @@ todoat MyList add "Complete the report"
 ```
 
 **Prerequisites:**
-- Application initialized with valid configuration (see [Configuration](./CONFIGURATION.md))
-- At least one backend configured (see [Backend System](./BACKEND_SYSTEM.md))
+- Application initialized with valid configuration (see [Configuration](configuration.md))
+- At least one backend configured (see [Backend System](backend-system.md))
 
 **Outputs/Results:**
 - Command executes appropriate action (CRUD operation, list display, etc.)
@@ -76,8 +76,8 @@ todoat MyList add "Complete the report"
 
 **Related Features:**
 - [Interactive List Selection](#interactive-list-selection) - Used when no list name provided
-- [Task Management](./TASK_MANAGEMENT.md) - All CRUD operations
-- [List Management](./LIST_MANAGEMENT.md) - List-specific commands
+- [Task Management](task-management.md) - All CRUD operations
+- [List Management](list-management.md) - List-specific commands
 
 ---
 
@@ -93,13 +93,13 @@ todoat MyList add "Complete the report"
    - Forces use of specific backend config
    - Overrides auto-detection and config defaults
    - Value passed to `app.NewApp(backendName)`
-   - See [Backend Selection](./BACKEND_SYSTEM.md#backend-selection)
+   - See [Backend Selection](backend-system.md#backend-selection)
 
 2. **Detect Backend (`--detect-backend`):**
    - Shows auto-detected backends in current directory
    - Useful for Git backend auto-detection
    - Exits immediately after display
-   - See [Backend Auto-Detection](./BACKEND_SYSTEM.md#auto-detection)
+   - See [Backend Auto-Detection](backend-system.md#auto-detection)
 
 3. **Verbose Mode (`--verbose` or `-V`):**
    - Enables debug logging throughout application
@@ -163,8 +163,8 @@ todoat -y --json MyList update "review" -s DONE
 - Flags available to all commands and subcommands
 
 **Related Features:**
-- [Backend System](./BACKEND_SYSTEM.md) - Backend selection and auto-detection
-- [Configuration](./CONFIGURATION.md) - Config file structure and locations
+- [Backend System](backend-system.md) - Backend selection and auto-detection
+- [Configuration](configuration.md) - Config file structure and locations
 - [Verbose Mode](#verbose-mode) - Debug logging details
 
 ---
@@ -213,7 +213,7 @@ todoat -y --json MyList update "review" -s DONE
 8. **Parent (`-P, --parent`):**
    - Specifies parent task when adding subtasks
    - Supports full summary or path references: "Parent/Child"
-   - See [Subtask Features](./SUBTASKS_HIERARCHY.md)
+   - See [Subtask Features](subtasks-hierarchy.md)
    - Example: `-P "Feature Development"`
 
 9. **Literal (`-l, --literal`):**
@@ -227,7 +227,7 @@ todoat -y --json MyList update "review" -s DONE
     - Default: "default" view
     - Built-in: "default", "all"
     - Custom: User-defined view names
-    - See [Views Customization](./VIEWS_CUSTOMIZATION.md)
+    - See [Views Customization](views-customization.md)
     - Example: `-v all` or `-v myview`
 
 **Task Selection Flags:**
@@ -321,9 +321,9 @@ todoat -y MyList update --local-id 42         # Use local ID for any task (inclu
 - Flag values extracted and passed to operation handlers in `internal/app/app.go`
 
 **Related Features:**
-- [Task Management](./TASK_MANAGEMENT.md) - CRUD operations using these flags
-- [Subtasks Hierarchy](./SUBTASKS_HIERARCHY.md) - Parent and literal flags
-- [Views Customization](./VIEWS_CUSTOMIZATION.md) - View flag and custom views
+- [Task Management](task-management.md) - CRUD operations using these flags
+- [Subtasks Hierarchy](subtasks-hierarchy.md) - Parent and literal flags
+- [Views Customization](views-customization.md) - View flag and custom views
 - [Shell Completion](#shell-completion) - Tab completion for flag values
 
 ---
@@ -392,9 +392,9 @@ Select a list (1-3, or 'q' to quit): 1
 - Task count queries run in sequence (potential optimization opportunity)
 
 **Related Features:**
-- [List Management](./LIST_MANAGEMENT.md) - Creating and managing lists
+- [List Management](list-management.md) - Creating and managing lists
 - [Terminal Width Detection](#terminal-width-detection) - Dynamic sizing
-- [Backend System](./BACKEND_SYSTEM.md) - Source of task lists
+- [Backend System](backend-system.md) - Source of task lists
 
 ---
 
@@ -489,9 +489,9 @@ $ todoat Work -s TODO
 - Completion failures fallback gracefully
 
 **Related Features:**
-- [Task Management](./TASK_MANAGEMENT.md) - Commands being completed
-- [Views Customization](./VIEWS_CUSTOMIZATION.md) - View name completion
-- [List Management](./LIST_MANAGEMENT.md) - List name completion
+- [Task Management](task-management.md) - Commands being completed
+- [Views Customization](views-customization.md) - View name completion
+- [List Management](list-management.md) - List name completion
 
 ---
 
@@ -653,7 +653,7 @@ $ todoat MyList              # OK (default to get)
 - Help text available via `--help` flag
 
 **Related Features:**
-- [Task Management](./TASK_MANAGEMENT.md) - Actions being validated
+- [Task Management](task-management.md) - Actions being validated
 - [Action Flags](#action-flags) - Flag validation details
 - [Command Structure](#command-structure) - Argument positions
 
@@ -939,9 +939,9 @@ The key is making your default output clean and useful, with verbosity flags tha
 - Useful for diagnosing sync conflicts, credential issues, backend errors
 
 **Related Features:**
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md) - Logs credential sources
-- [Synchronization](./SYNCHRONIZATION.md) - Logs sync operations
-- [Backend System](./BACKEND_SYSTEM.md) - Logs backend selection
+- [Credential Management](credential-management.md) - Logs credential sources
+- [Synchronization](synchronization.md) - Logs sync operations
+- [Backend System](backend-system.md) - Logs backend selection
 - All operations (provides diagnostic visibility)
 
 ---
@@ -1009,9 +1009,9 @@ $ todoat --backend git --verbose ProjectTasks add "Fix bug"
 - Invalid backend name: Error message with available backends
 
 **Related Features:**
-- [Backend System](./BACKEND_SYSTEM.md) - Full backend selection details
-- [Backend Auto-Detection](./BACKEND_SYSTEM.md#auto-detection) - Git detection logic
-- [Configuration](./CONFIGURATION.md) - Backend configuration
+- [Backend System](backend-system.md) - Full backend selection details
+- [Backend Auto-Detection](backend-system.md#auto-detection) - Git detection logic
+- [Configuration](configuration.md) - Backend configuration
 
 ---
 
@@ -1063,7 +1063,7 @@ Notification log cleared successfully
 ```
 
 **Prerequisites:**
-- Notification system configured (see [Configuration](./CONFIGURATION.md))
+- Notification system configured (see [Configuration](configuration.md))
 - For `notification test`: Valid notification backend configured
 - For `notification log`: Log file exists (created automatically)
 
@@ -1079,8 +1079,8 @@ Notification log cleared successfully
 - Log viewing shows last N entries (configurable)
 
 **Related Features:**
-- [Configuration](./CONFIGURATION.md) - Notification system configuration
-- [Task Management](./TASK_MANAGEMENT.md) - Task-triggered notifications
+- [Configuration](configuration.md) - Notification system configuration
+- [Task Management](task-management.md) - Task-triggered notifications
 
 ---
 
@@ -1115,7 +1115,7 @@ Notification log cleared successfully
    - Background sync runs in detached process
    - Not affected by main process shutdown
    - Continues sync operations independently
-   - See [Synchronization](./SYNCHRONIZATION.md) for details
+   - See [Synchronization](synchronization.md) for details
 
 **User Journey:**
 
@@ -1152,8 +1152,8 @@ $ echo $?
 - Network connections terminated gracefully
 
 **Related Features:**
-- [Synchronization](./SYNCHRONIZATION.md) - Background sync detachment
-- [Backend System](./BACKEND_SYSTEM.md) - Connection cleanup
+- [Synchronization](synchronization.md) - Background sync detachment
+- [Backend System](backend-system.md) - Connection cleanup
 - Database operations - Transaction flushing
 
 ---
@@ -1279,7 +1279,7 @@ rootCmd.PersistentFlags().BoolP("no-prompt", "y", false, "Disable interactive pr
 **Related Features:**
 - [JSON Output Mode](#json-output-mode) - Machine-parseable output format
 - [Result Codes](#result-codes) - Output status indicators
-- [Task Search and Selection](./TASK_MANAGEMENT.md#task-search-and-selection) - Affected by no-prompt mode
+- [Task Search and Selection](task-management.md#task-search-and-selection) - Affected by no-prompt mode
 - [Interactive List Selection](#interactive-list-selection) - Bypassed in no-prompt mode
 
 ---
@@ -1523,7 +1523,7 @@ ui:
 **Related Features:**
 - [No-Prompt Mode](#no-prompt-mode) - Pairs well for scripting
 - [Result Codes](#result-codes) - Included in JSON output
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Custom views also support JSON output
+- [Views & Customization](views-customization.md) - Custom views also support JSON output
 
 ---
 
@@ -1774,7 +1774,7 @@ ELSE (read-only operation):
 **Related Features:**
 - [No-Prompt Mode](#no-prompt-mode) - Primary use case for result codes
 - [JSON Output Mode](#json-output-mode) - Result codes in JSON response
-- [Task Search and Selection](./TASK_MANAGEMENT.md#task-search-and-selection) - Source of `ACTION_INCOMPLETE`
+- [Task Search and Selection](task-management.md#task-search-and-selection) - Source of `ACTION_INCOMPLETE`
 
 ---
 
@@ -1802,7 +1802,7 @@ The CLI interface of todoat provides a comprehensive command-line experience wit
 All interface features are built on the Cobra framework, providing consistent behavior, automatic help generation, and cross-platform compatibility.
 
 **Next Steps:**
-- See [Configuration](./CONFIGURATION.md) for setup details
-- See [Task Management](./TASK_MANAGEMENT.md) for operation specifics
-- See [Backend System](./BACKEND_SYSTEM.md) for backend selection details
-- See [Views Customization](./VIEWS_CUSTOMIZATION.md) for output formatting
+- See [Configuration](configuration.md) for setup details
+- See [Task Management](task-management.md) for operation specifics
+- See [Backend System](backend-system.md) for backend selection details
+- See [Views Customization](views-customization.md) for output formatting

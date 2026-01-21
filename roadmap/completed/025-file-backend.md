@@ -4,7 +4,7 @@
 Implement the file backend to store tasks in plain text files, providing a lightweight file-based storage option without Git dependency.
 
 ## Documentation Reference
-- Primary: `dev-doc/BACKEND_SYSTEM.md` (File Backend section)
+- Primary: `docs/explanation/backend-system.md` (File Backend section)
 
 ## Dependencies
 - Requires: [002] Core CLI

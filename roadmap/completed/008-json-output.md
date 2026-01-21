@@ -4,7 +4,7 @@
 Implement `--json` flag for machine-parseable JSON output, enabling scripting and automation integration.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/cli-interface.md`
 - Sections: JSON Output Mode
 
 ## Dependencies

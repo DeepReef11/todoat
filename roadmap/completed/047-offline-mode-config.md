@@ -4,9 +4,9 @@
 Implement explicit offline mode configuration allowing users to control application behavior when remote backends are unavailable, with options for automatic detection, forced online, or forced offline operation.
 
 ## Documentation Reference
-- Primary: `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/configuration.md`
 - Section: Offline Mode Configuration (lines 1242-1386)
-- Related: `dev-doc/SYNCHRONIZATION.md` - Offline Mode section
+- Related: `docs/explanation/synchronization.md` - Offline Mode section
 
 ## Dependencies
 - Requires: [018] Synchronization Core (sync queue exists)

@@ -88,8 +88,8 @@ User → CLI Command → Sync Manager →  Database (SQLite)
 6. Check sync status: `todoat sync status`
 
 ### Prerequisites
-- [Backend configured](./BACKEND_SYSTEM.md#configuration) with valid credentials
-- [Credential management](./CREDENTIAL_MANAGEMENT.md) setup (keyring, env vars, or config URL)
+- [Backend configured](backend-system.md#configuration) with valid credentials
+- [Credential management](credential-management.md) setup (keyring, env vars, or config URL)
 - Network connectivity for initial sync (offline mode for subsequent work)
 
 ### Technical Details
@@ -113,9 +113,9 @@ User → CLI Command → Sync Manager →  Database (SQLite)
 - `AddToSyncQueue()` - Queue operation for later synchronization
 
 ### Related Features
-- [Backend System](./BACKEND_SYSTEM.md) - Remote backend implementations
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md) - Authentication for remotes
-- [Task Management](./TASK_MANAGEMENT.md) - CRUD operations that trigger sync
+- [Backend System](backend-system.md) - Remote backend implementations
+- [Credential Management](credential-management.md) - Authentication for remotes
+- [Task Management](task-management.md) - CRUD operations that trigger sync
 
 ---
 
@@ -276,7 +276,7 @@ Sync completed successfully
 
 ### Prerequisites
 - Network connectivity to remote backend
-- Valid credentials (see [Credential Management](./CREDENTIAL_MANAGEMENT.md))
+- Valid credentials (see [Credential Management](credential-management.md))
 - At least one backend configured with sync enabled
 
 ### Technical Details
@@ -321,9 +321,9 @@ for each operation in sortedQueue:
 - Delays: 1s, 2s, 4s, 8s, 16s
 
 ### Related Features
-- [Task Management](./TASK_MANAGEMENT.md#update-task) - Operations that trigger sync
+- [Task Management](task-management.md#update-task) - Operations that trigger sync
 - [Conflict Resolution](#conflict-resolution) - Handling simultaneous changes
-- [Backend System](./BACKEND_SYSTEM.md) - Remote backend implementations
+- [Backend System](backend-system.md) - Remote backend implementations
 
 ---
 
@@ -430,8 +430,8 @@ if remoteTask.ETag != localMeta.RemoteETag && localMeta.LocallyModified {
 
 ### Related Features
 - [Sync Operations](#sync-operations) - Context for when conflicts occur
-- [Configuration](./CONFIGURATION.md) - Setting conflict resolution strategy
-- [Task Management](./TASK_MANAGEMENT.md) - Understanding task modifications
+- [Configuration](configuration.md) - Setting conflict resolution strategy
+- [Task Management](task-management.md) - Understanding task modifications
 
 ---
 
@@ -571,7 +571,7 @@ func (b *SQLiteBackend) AddTask(task Task) error {
 
 ### Related Features
 - [Sync Queue System](#sync-queue-system) - Queue management details
-- [Task Management](./TASK_MANAGEMENT.md) - Operations that work offline
+- [Task Management](task-management.md) - Operations that work offline
 - [Sync Operations](#sync-operations) - Processing the queue when online
 
 ---
@@ -740,13 +740,13 @@ func calculateBackoff(retryCount int) time.Duration {
 ### Related Features
 - [Offline Mode](#offline-mode) - Primary use case for queue
 - [Sync Operations](#sync-operations) - Queue processing
-- [Task Management](./TASK_MANAGEMENT.md) - Operations that create queue entries
+- [Task Management](task-management.md) - Operations that create queue entries
 
 ---
 
 ### Sync Notifications
 
-When background sync is enabled, the [Notification Manager](./NOTIFICATION_MANAGER.md)
+When background sync is enabled, the [Notification Manager](notification-manager.md)
 can alert users to:
 - Sync completion (optional)
 - Sync failures and errors
@@ -929,8 +929,8 @@ func syncCommand() error {
 
 ### Related Features
 - [Sync Operations](#sync-operations) - Details of pull/push
-- [Configuration](./CONFIGURATION.md) - Sync settings
-- [Backend System](./BACKEND_SYSTEM.md) - Remote backends that sync
+- [Configuration](configuration.md) - Sync settings
+- [Backend System](backend-system.md) - Remote backends that sync
 
 ---
 
@@ -1034,7 +1034,7 @@ backends:
 
 ### Prerequisites
 - Config file exists at `~/.config/todoat/config.yaml`
-- Valid backend configuration (see [Backend System](./BACKEND_SYSTEM.md))
+- Valid backend configuration (see [Backend System](backend-system.md))
 
 ### Outputs/Results
 - Cache databases created/updated based on settings
@@ -1072,8 +1072,8 @@ func getCachePath(backendName string) string {
 ```
 
 ### Related Features
-- [Configuration](./CONFIGURATION.md) - Complete config documentation
-- [Backend System](./BACKEND_SYSTEM.md) - Backend-specific settings
+- [Configuration](configuration.md) - Complete config documentation
+- [Backend System](backend-system.md) - Backend-specific settings
 - [Conflict Resolution](#conflict-resolution) - Strategy details
 
 ---
@@ -1207,8 +1207,8 @@ func InitDatabase(db *gorm.DB) error {
 
 ### Related Features
 - [Sync Operations](#sync-operations) - Uses all tables during sync
-- [Task Management](./TASK_MANAGEMENT.md) - CRUD on tasks table
-- [Subtasks and Hierarchy](./SUBTASKS_HIERARCHY.md) - Uses parent_uid
+- [Task Management](task-management.md) - CRUD on tasks table
+- [Subtasks and Hierarchy](subtasks-hierarchy.md) - Uses parent_uid
 
 ---
 
@@ -1312,18 +1312,18 @@ tx.Commit()  // Single disk write
 ### Related Features
 - [Sync Operations](#sync-operations) - Operations being benchmarked
 - [Database Schema](#database-schema) - Indexes that enable performance
-- [Backend System](./BACKEND_SYSTEM.md) - Backend-specific performance
+- [Backend System](backend-system.md) - Backend-specific performance
 
 ---
 
 ## Related Documentation
 
-- [Backend System](./BACKEND_SYSTEM.md) - Remote backend implementations
-- [Task Management](./TASK_MANAGEMENT.md) - Operations that trigger sync
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md) - Authentication for remotes
-- [Configuration](./CONFIGURATION.md) - Sync configuration settings
-- [Subtasks and Hierarchy](./SUBTASKS_HIERARCHY.md) - Hierarchical sync considerations
-- [Features Overview](./FEATURES_OVERVIEW.md) - Complete feature catalog
+- [Backend System](backend-system.md) - Remote backend implementations
+- [Task Management](task-management.md) - Operations that trigger sync
+- [Credential Management](credential-management.md) - Authentication for remotes
+- [Configuration](configuration.md) - Sync configuration settings
+- [Subtasks and Hierarchy](subtasks-hierarchy.md) - Hierarchical sync considerations
+- [Features Overview](features-overview.md) - Complete feature catalog
 
 ---
 
@@ -1341,5 +1341,5 @@ tx.Commit()  // Single disk write
 - `backend/sync_bench_test.go` - Performance benchmarks
 
 **Documentation:**
-- [../SYNC_GUIDE.md](../SYNC_GUIDE.md) - Complete sync usage guide
-- [../CLAUDE.md](../CLAUDE.md) - Developer guidance
+- [../how-to/sync.md](../how-to/sync.md) - Complete sync usage guide
+- [../../CLAUDE.md](../../CLAUDE.md) - Developer guidance

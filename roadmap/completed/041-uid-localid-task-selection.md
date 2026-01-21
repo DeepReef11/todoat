@@ -4,8 +4,8 @@
 Implement `--uid` and `--local-id` flags for direct task selection, bypassing summary-based search for unambiguous task operations in scripts and automation workflows.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md` (Task Selection Flags, No-Prompt Mode sections)
-- Related: `dev-doc/TASK_MANAGEMENT.md` (Task Identifiers)
+- Primary: `docs/explanation/cli-interface.md` (Task Selection Flags, No-Prompt Mode sections)
+- Related: `docs/explanation/task-management.md` (Task Identifiers)
 
 ## Dependencies
 - Requires: [004] Task Commands (update, complete, delete operations)

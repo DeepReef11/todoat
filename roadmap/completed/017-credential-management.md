@@ -4,8 +4,8 @@
 Implement secure credential storage and retrieval using OS-native keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service) with fallback to environment variables and config URLs.
 
 ## Documentation Reference
-- Primary: `dev-doc/CREDENTIAL_MANAGEMENT.md`
-- Related: `dev-doc/BACKEND_SYSTEM.md`, `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/credential-management.md`
+- Related: `docs/explanation/backend-system.md`, `docs/explanation/configuration.md`
 
 ## Dependencies
 - Requires: [016] Nextcloud Backend (needs credentials for authentication)

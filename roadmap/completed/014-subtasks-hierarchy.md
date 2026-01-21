@@ -4,8 +4,8 @@
 Implement parent-child task relationships with path-based creation, tree visualization using box-drawing characters, and comprehensive subtask operations including re-parenting and cascade deletion.
 
 ## Documentation Reference
-- Primary: `dev-doc/SUBTASKS_HIERARCHY.md`
-- Related: `dev-doc/TASK_MANAGEMENT.md`, `dev-doc/VIEWS_CUSTOMIZATION.md`
+- Primary: `docs/explanation/subtasks-hierarchy.md`
+- Related: `docs/explanation/task-management.md`, `docs/explanation/views-customization.md`
 
 ## Dependencies
 - Requires: [004] Task Commands

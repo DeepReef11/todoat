@@ -42,7 +42,7 @@ None - this is the first roadmap item.
 
 ## Implementation Notes
 
-- Follow the project structure from `dev-doc/TEST_DRIVEN_DEV.md`
+- Follow the project structure from `docs/explanation/test-driven-dev.md`
 - Keep `main.go` minimal - just parse args and call Execute
 - Use standard Go project conventions
 - The Makefile should be simple and shell-portable

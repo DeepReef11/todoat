@@ -18,25 +18,25 @@ todoat is a command-line task management tool that allows you to:
 ## Documentation Files
 
 ### Core Concepts
-- [Features Overview](./FEATURES_OVERVIEW.md)
-- [CLI Interface](./CLI_INTERFACE.md)
-- [Configuration](./CONFIGURATION.md)
-- [Task Management](./TASK_MANAGEMENT.md)
-- [List Management](./LIST_MANAGEMENT.md)
+- [Features Overview](features-overview.md)
+- [CLI Interface](cli-interface.md)
+- [Configuration](configuration.md)
+- [Task Management](task-management.md)
+- [List Management](list-management.md)
 
 ### Backend & Sync
-- [Backend System](./BACKEND_SYSTEM.md)
-- [Synchronization](./SYNCHRONIZATION.md)
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md)
+- [Backend System](backend-system.md)
+- [Synchronization](synchronization.md)
+- [Credential Management](credential-management.md)
 
 ### Advanced Features
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md)
-- [Views Customization](./VIEWS_CUSTOMIZATION.md)
-- [Notification Manager](./NOTIFICATION_MANAGER.md)
+- [Subtasks & Hierarchy](subtasks-hierarchy.md)
+- [Views Customization](views-customization.md)
+- [Notification Manager](notification-manager.md)
 
 ### Development
-- [Test-Driven Development](./TEST_DRIVEN_DEV.md)
-- [README Planner](./README_PLANNER.md)
+- [Test-Driven Development](test-driven-dev.md)
+- [README Planner](readme-planner.md)
 
 ## Quick Feature Reference
 
@@ -62,7 +62,7 @@ todoat is a command-line task management tool that allows you to:
 
 ## Getting Started
 
-For detailed sync documentation, see [Synchronization](./SYNCHRONIZATION.md).
+For detailed sync documentation, see [Synchronization](synchronization.md).
 
 ## Status Mappings
 
@@ -125,7 +125,7 @@ Default locations (if XDG variables not set):
 
 ## Contributing
 
-For testing procedures, see [Test-Driven Development](./TEST_DRIVEN_DEV.md).
+For testing procedures, see [Test-Driven Development](test-driven-dev.md).
 
 ---
 

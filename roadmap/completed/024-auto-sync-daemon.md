@@ -4,8 +4,8 @@
 Implement background auto-sync daemon that periodically synchronizes tasks with remote backends, supporting configurable intervals and notification integration.
 
 ## Documentation Reference
-- Primary: `dev-doc/SYNCHRONIZATION.md` (Auto-Sync Daemon section)
-- Secondary: `dev-doc/NOTIFICATION_MANAGER.md`
+- Primary: `docs/explanation/synchronization.md` (Auto-Sync Daemon section)
+- Secondary: `docs/explanation/notification-manager.md`
 
 ## Dependencies
 - Requires: [018] Synchronization Core System

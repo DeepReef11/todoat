@@ -4,8 +4,8 @@
 Add ability to update existing credentials stored in the system keyring without deleting and re-adding, supporting password rotation and credential verification workflows.
 
 ## Documentation Reference
-- Primary: `dev-doc/CREDENTIAL_MANAGEMENT.md`
-- Related: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/credential-management.md`
+- Related: `docs/explanation/cli-interface.md`
 
 ## Dependencies
 - Requires: [017] Credential Management (keyring support must exist)

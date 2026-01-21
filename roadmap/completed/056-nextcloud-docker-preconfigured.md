@@ -4,8 +4,8 @@
 Enhance the Nextcloud Docker test environment to be fully pre-configured and ready to accept tasks, with the Tasks app installed and a test calendar created automatically.
 
 ## Documentation Reference
-- Primary: `dev-doc/TODO.md`
-- Related: `dev-doc/INTEGRATION_TESTING.md`
+- Primary: `docs/explanation/todo.md`
+- Related: `docs/explanation/integration-testing.md`
 
 ## Dependencies
 - Requires: [030] Integration Test Infrastructure
@@ -94,7 +94,7 @@ echo "Nextcloud initialization complete - Tasks app installed, test calendar cre
 1. Create `scripts/nextcloud-init.sh` with post-installation commands
 2. Modify `docker-compose.yml` to mount init script and update health check
 3. Update `.env.example` with documented environment variables
-4. Update `dev-doc/INTEGRATION_TESTING.md` to reflect pre-configured setup
+4. Update `docs/explanation/integration-testing.md` to reflect pre-configured setup
 
 ### Health Check Strategy
 - Initial health check waits for CalDAV endpoint with test calendar

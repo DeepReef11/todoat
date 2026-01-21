@@ -5,9 +5,9 @@
 The Backend System in todoat provides a pluggable architecture that allows the application to store and retrieve tasks from multiple different storage providers. This design enables users to work with tasks in Nextcloud (CalDAV), local SQLite databases, Git repositories with markdown files, or plain files - all through a unified interface.
 
 **Related Features:**
-- [Synchronization](./SYNCHRONIZATION.md) - Syncing between local and remote backends
-- [Configuration](./CONFIGURATION.md) - Backend configuration and setup
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md) - Secure credential storage for remote backends
+- [Synchronization](synchronization.md) - Syncing between local and remote backends
+- [Configuration](configuration.md) - Backend configuration and setup
+- [Credential Management](credential-management.md) - Secure credential storage for remote backends
 
 ---
 
@@ -65,7 +65,7 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 **How It Works:**
 
 1. **Connection Establishment:**
-   - User provides Nextcloud URL and credentials (via [Credential Management](./CREDENTIAL_MANAGEMENT.md))
+   - User provides Nextcloud URL and credentials (via [Credential Management](credential-management.md))
    - Backend constructs CalDAV endpoint: `https://host/remote.php/dav/calendars/username/`
    - HTTP client configured with TLS settings, connection pooling (10 max idle, 2 per host), 30s timeout
 
@@ -105,7 +105,7 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 - Nextcloud instance with Tasks app installed
 - Valid user account with calendar access
 - Network connectivity to Nextcloud server
-- See [Credential Management](./CREDENTIAL_MANAGEMENT.md) for credential setup
+- See [Credential Management](credential-management.md) for credential setup
 
 **Technical Details:**
 - Implementation: `backend/nextcloud/backend.go`
@@ -116,8 +116,8 @@ The Backend System in todoat provides a pluggable architecture that allows the a
   - Warning suppression via `suppress_ssl_warning` and `suppress_http_warning`
 
 **Related Features:**
-- [Synchronization](./SYNCHRONIZATION.md#nextcloud-sync) - Offline caching with Nextcloud
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md#nextcloud-credentials) - Secure credential storage
+- [Synchronization](synchronization.md#nextcloud-sync) - Offline caching with Nextcloud
+- [Credential Management](credential-management.md#nextcloud-credentials) - Secure credential storage
 
 ---
 
@@ -157,7 +157,7 @@ The Backend System in todoat provides a pluggable architecture that allows the a
    - **Remote ETags:** Stored for conflict detection during pull operations
    - **Operation Queue:** Maintains queued operations with retry counters for push operations
    - **Bidirectional Sync:** Sync Manager handles both pull (remote → cache) and push (queue → remote)
-   - See [Synchronization](./SYNCHRONIZATION.md) for detailed Sync Manager workflow
+   - See [Synchronization](synchronization.md) for detailed Sync Manager workflow
 
 **User Journey:**
 1. User enables sync in config: `sync.enabled: true`
@@ -186,8 +186,8 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 - Hierarchical task support via `parent_uid` foreign key with `ON DELETE CASCADE`
 
 **Related Features:**
-- [Synchronization](./SYNCHRONIZATION.md) - Bidirectional sync with remote backends
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Parent-child relationships via `parent_uid`
+- [Synchronization](synchronization.md) - Bidirectional sync with remote backends
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Parent-child relationships via `parent_uid`
 
 ---
 
@@ -253,8 +253,8 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 - File caching: Tracks modification time to avoid unnecessary re-parsing
 
 **Related Features:**
-- [CLI Interface](./CLI_INTERFACE.md#auto-detection) - Automatic backend detection
-- [Configuration](./CONFIGURATION.md#git-backend) - Git-specific settings
+- [CLI Interface](cli-interface.md#auto-detection) - Automatic backend detection
+- [Configuration](configuration.md#git-backend) - Git-specific settings
 
 ---
 
@@ -294,7 +294,7 @@ The system follows this priority order to select a backend:
    - If `sync.enabled: true` in config
    - Uses SQLite cache database for the remote backend
    - Example: With Nextcloud configured, uses `caches/nextcloud.db`
-   - See [Synchronization](./SYNCHRONIZATION.md#cache-databases)
+   - See [Synchronization](synchronization.md#cache-databases)
 
 3. **Auto-Detection (when enabled):**
    - If `auto_detect_backend: true` in config
@@ -344,8 +344,8 @@ The system follows this priority order to select a backend:
 - Detection interface: `backend.DetectableBackend` with `CanDetect()` and `DetectionInfo()` methods
 
 **Related Features:**
-- [Configuration](./CONFIGURATION.md#backend-configuration) - Backend setup
-- [CLI Interface](./CLI_INTERFACE.md#backend-flag) - `--backend` flag usage
+- [Configuration](configuration.md#backend-configuration) - Backend setup
+- [CLI Interface](cli-interface.md#backend-flag) - `--backend` flag usage
 
 ---
 
@@ -393,7 +393,7 @@ connector:
 **Format Comparison:**
 - **Modern:** Supports multiple backends of same type, keyring integration, better isolation
 - **Legacy:** Single backend, credentials in config file (insecure), limited to one connection
-- **Migration Path:** See [Configuration](./CONFIGURATION.md#migrating-from-legacy-config)
+- **Migration Path:** See [Configuration](configuration.md#migrating-from-legacy-config)
 
 **Technical Details:**
 - Modern: `BackendConfig` struct with type-specific fields
@@ -468,8 +468,8 @@ connector:
 - Hierarchical organization: `OrganizeTasksHierarchically()` (`backend/taskManager.go:549`)
 
 **Related Features:**
-- [Task Management](./TASK_MANAGEMENT.md) - CRUD operations
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Parent-child relationships
+- [Task Management](task-management.md) - CRUD operations
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Parent-child relationships
 
 ---
 
@@ -494,8 +494,8 @@ connector:
 - Bottom border: `BottomBorder()`, `BottomBorderWithWidth()`
 
 **Related Features:**
-- [List Management](./LIST_MANAGEMENT.md) - List operations
-- [Synchronization](./SYNCHRONIZATION.md#ctag-tracking) - CTag-based sync
+- [List Management](list-management.md) - List operations
+- [Synchronization](synchronization.md#ctag-tracking) - CTag-based sync
 
 ---
 
@@ -527,8 +527,8 @@ tasks, err := taskManager.GetTasks(listID, filter)
 - Used throughout CLI for `--status`, `--due-before`, etc. flags
 
 **Related Features:**
-- [Task Management](./TASK_MANAGEMENT.md#filtering) - Filtering tasks
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md#filters) - Custom view filters
+- [Task Management](task-management.md#filtering) - Filtering tasks
+- [Views & Customization](views-customization.md#filters) - Custom view filters
 
 ---
 
@@ -632,7 +632,7 @@ tasks, err := taskManager.GetTasks(listID, filter)
 - Example implementations: `backend/nextcloud/`, `backend/git/`
 
 **Related Features:**
-- [Configuration](./CONFIGURATION.md#adding-backend-config) - Config schema updates
+- [Configuration](configuration.md#adding-backend-config) - Config schema updates
 
 ---
 
@@ -822,7 +822,7 @@ var statusToCalDAV = map[string]string{
 - Sync metadata caching in SQLite for offline support
 
 **Related Features:**
-- [Synchronization](./SYNCHRONIZATION.md#performance) - Sync-specific caching
+- [Synchronization](synchronization.md#performance) - Sync-specific caching
 
 ---
 
@@ -835,7 +835,7 @@ var statusToCalDAV = map[string]string{
 **How It Works:**
 - Priority order: Keyring > Environment Variables > Config URL
 - Never log or display passwords
-- See [Credential Management](./CREDENTIAL_MANAGEMENT.md) for detailed security model
+- See [Credential Management](credential-management.md) for detailed security model
 
 **Technical Details:**
 - Credential resolution: `backend/nextcloud/backend.go:76` (`getUsername()`, `getPassword()`)
@@ -880,23 +880,23 @@ backends:
 ## Cross-References
 
 **Prerequisite Features:**
-- [Configuration](./CONFIGURATION.md) - Backend configuration setup
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md) - Secure credential storage
+- [Configuration](configuration.md) - Backend configuration setup
+- [Credential Management](credential-management.md) - Secure credential storage
 
 **Related Features:**
-- [Task Management](./TASK_MANAGEMENT.md) - Using backends for task operations
-- [List Management](./LIST_MANAGEMENT.md) - List operations across backends
-- [Synchronization](./SYNCHRONIZATION.md) - Multi-backend sync architecture
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Parent-child relationships
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Backend-aware formatting
+- [Task Management](task-management.md) - Using backends for task operations
+- [List Management](list-management.md) - List operations across backends
+- [Synchronization](synchronization.md) - Multi-backend sync architecture
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Parent-child relationships
+- [Views & Customization](views-customization.md) - Backend-aware formatting
 
 **Integration Points:**
-- [CLI Interface](./CLI_INTERFACE.md) - Backend selection flags and auto-detection
-- [Configuration](./CONFIGURATION.md) - Backend-specific settings
+- [CLI Interface](cli-interface.md) - Backend selection flags and auto-detection
+- [Configuration](configuration.md) - Backend-specific settings
 
 ---
 
 **Navigation:**
-- [← Back to Overview](./README.md)
-- [← Back to Features Overview](./FEATURES_OVERVIEW.md)
-- [Next: Synchronization →](./SYNCHRONIZATION.md)
+- [← Back to Overview](README.md)
+- [← Back to Features Overview](features-overview.md)
+- [Next: Synchronization →](synchronization.md)

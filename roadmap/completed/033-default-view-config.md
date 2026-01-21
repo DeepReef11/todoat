@@ -4,8 +4,8 @@
 Add configuration option to set a default custom view, so users don't need to specify `-v` flag repeatedly for their preferred view.
 
 ## Documentation Reference
-- Primary: `dev-doc/CONFIGURATION.md` (View Defaults section)
-- Secondary: `dev-doc/VIEWS_CUSTOMIZATION.md`
+- Primary: `docs/explanation/configuration.md` (View Defaults section)
+- Secondary: `docs/explanation/views-customization.md`
 
 ## Dependencies
 - Requires: [015] Views Customization

@@ -4,8 +4,8 @@
 Implement Nextcloud Tasks integration via CalDAV protocol, supporting full CRUD operations on VTODO components with authentication via keyring, environment variables, or config.
 
 ## Documentation Reference
-- Primary: `dev-doc/BACKEND_SYSTEM.md#nextcloud-backend`
-- Related: `dev-doc/CREDENTIAL_MANAGEMENT.md`, `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/backend-system.md#nextcloud-backend`
+- Related: `docs/explanation/credential-management.md`, `docs/explanation/configuration.md`
 
 ## Dependencies
 - Requires: [003] SQLite Backend (for TaskManager interface definition)

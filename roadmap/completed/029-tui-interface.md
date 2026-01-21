@@ -4,8 +4,8 @@
 Implement a terminal user interface (TUI) for interactive task management, providing a visual interface within the terminal for browsing, editing, and organizing tasks.
 
 ## Documentation Reference
-- Primary: `dev-doc/FEATURES_OVERVIEW.md` (Planned features - TUI/GUI interface)
-- Related: `dev-doc/CLI_INTERFACE.md`, `dev-doc/VIEWS_CUSTOMIZATION.md`
+- Primary: `docs/explanation/features-overview.md` (Planned features - TUI/GUI interface)
+- Related: `docs/explanation/cli-interface.md`, `docs/explanation/views-customization.md`
 
 ## Dependencies
 - Requires: [002] Core CLI

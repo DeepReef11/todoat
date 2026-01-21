@@ -4,8 +4,8 @@
 Extend task date handling to support time of day components (hours, minutes), enabling more precise due dates and start dates with full datetime support.
 
 ## Documentation Reference
-- Primary: `dev-doc/TASK_MANAGEMENT.md` (Task Dates section)
-- Related: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/task-management.md` (Task Dates section)
+- Related: `docs/explanation/cli-interface.md`
 
 ## Dependencies
 - Requires: [011] Task Dates (basic date support must exist)

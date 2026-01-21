@@ -4,7 +4,7 @@
 Implement proper signal handling for graceful shutdown, ensuring database transactions are completed and resources are properly cleaned up when the application receives termination signals.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/cli-interface.md`
 - Section: Graceful Shutdown
 
 ## Dependencies

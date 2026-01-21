@@ -21,7 +21,7 @@ Lists in todoat serve as organizational containers for tasks. Each backend (Next
 - **Nextcloud**: Lists are CalDAV calendars containing VTODO items
 - **SQLite**: Lists are database tables with foreign key relationships to tasks
 
-All list operations respect the current [backend selection](./BACKEND_SYSTEM.md#backend-selection-logic) and work seamlessly across different storage systems.
+All list operations respect the current [backend selection](backend-system.md#backend-selection-logic) and work seamlessly across different storage systems.
 
 ---
 
@@ -50,7 +50,7 @@ Allows users to create new task lists to organize tasks by project, category, or
 4. For SQLite:
    - Inserts new record into `task_lists` table
    - Generates unique ID
-   - Initializes sync metadata if [sync enabled](./SYNCHRONIZATION.md#configuration)
+   - Initializes sync metadata if [sync enabled](synchronization.md#configuration)
 5. Updates local [list cache](#list-caching)
 
 **Data Flow:**
@@ -78,14 +78,14 @@ User can now add tasks: todoat "Work Tasks" add "Meeting"
 ```
 
 ### Prerequisites
-- Active [backend connection](./BACKEND_SYSTEM.md#backend-selection-logic)
-- For Nextcloud: Valid [credentials](./CREDENTIAL_MANAGEMENT.md)
-- For SQLite with sync: Initialized [sync system](./SYNCHRONIZATION.md#architecture)
+- Active [backend connection](backend-system.md#backend-selection-logic)
+- For Nextcloud: Valid [credentials](credential-management.md)
+- For SQLite with sync: Initialized [sync system](synchronization.md#architecture)
 
 ### Outputs/Results
 - New list created in backend storage
 - List appears in `todoat list` output
-- List available for [task operations](./TASK_MANAGEMENT.md)
+- List available for [task operations](task-management.md)
 - If sync enabled: Create operation queued in `sync_queue` table
 
 ### Technical Details
@@ -108,8 +108,8 @@ func (s *SQLiteBackend) CreateList(name string) (*TaskList, error)
 
 ### Related Features
 - [View All Lists](#view-all-lists) - See all available lists
-- [Task Creation](./TASK_MANAGEMENT.md#add-task) - Add tasks to the new list
-- [Synchronization](./SYNCHRONIZATION.md#push-operations) - Sync new lists to remote
+- [Task Creation](task-management.md#add-task) - Add tasks to the new list
+- [Synchronization](synchronization.md#push-operations) - Sync new lists to remote
 
 ---
 
@@ -151,8 +151,8 @@ Format as table → Display to stdout
 ```
 
 **Integration Points:**
-- Uses [backend system](./BACKEND_SYSTEM.md#backend-system) to query all enabled backends
-- Respects [backend priority](./BACKEND_SYSTEM.md#backend-selection-logic) for ordering
+- Uses [backend system](backend-system.md#backend-system) to query all enabled backends
+- Respects [backend priority](backend-system.md#backend-selection-logic) for ordering
 
 **Edge Cases:**
 - **No lists found**: Displays helpful message suggesting `list create`
@@ -178,8 +178,8 @@ User selects a list to work with
 ```
 
 ### Prerequisites
-- At least one [backend enabled](./CONFIGURATION.md#backend-configuration)
-- For remote backends: Network connectivity and [valid credentials](./CREDENTIAL_MANAGEMENT.md)
+- At least one [backend enabled](configuration.md#backend-configuration)
+- For remote backends: Network connectivity and [valid credentials](credential-management.md)
 
 ### Outputs/Results
 - Formatted table of lists with metadata
@@ -341,9 +341,9 @@ width = clamp(width, 40, 100)
 ### Related Features
 - [List Caching](#list-caching) - Powers fast menu display
 - [View All Lists](#view-all-lists) - Data source for menu
-- [CLI Interface](./CLI_INTERFACE.md) - Argument parsing
-- [CLI Interface - No-Prompt Mode](./CLI_INTERFACE.md#no-prompt-mode) - Non-interactive operation
-- [CLI Interface - JSON Output](./CLI_INTERFACE.md#json-output-mode) - Machine-parseable output
+- [CLI Interface](cli-interface.md) - Argument parsing
+- [CLI Interface - No-Prompt Mode](cli-interface.md#no-prompt-mode) - Non-interactive operation
+- [CLI Interface - JSON Output](cli-interface.md#json-output-mode) - Machine-parseable output
 
 ---
 
@@ -413,7 +413,7 @@ Force sync before doing operation when sync did not happen since configured time
 ### Related Features
 - [Interactive List Selection](#interactive-list-selection) - Primary consumer
 - [View All Lists](#view-all-lists) - Cache data source
-- [Configuration](./CONFIGURATION.md#xdg-base-directory-support) - Cache location
+- [Configuration](configuration.md#xdg-base-directory-support) - Cache location
 
 ---
 
@@ -544,10 +544,10 @@ $ todoat -y --json list delete "Another List"
 **Auto-Purge**: Background job removes lists after TTL
 
 ### Related Features
-- [Task Deletion](./TASK_MANAGEMENT.md#delete-task) - Similar soft-delete pattern
-- [Synchronization](./SYNCHRONIZATION.md#delete-operations) - Propagates trash state
-- [Configuration](./CONFIGURATION.md#trash-settings) - TTL and auto-purge settings
-- [CLI Interface - No-Prompt Mode](./CLI_INTERFACE.md#no-prompt-mode) - Skips confirmation prompts
+- [Task Deletion](task-management.md#delete-task) - Similar soft-delete pattern
+- [Synchronization](synchronization.md#delete-operations) - Propagates trash state
+- [Configuration](configuration.md#trash-settings) - TTL and auto-purge settings
+- [CLI Interface - No-Prompt Mode](cli-interface.md#no-prompt-mode) - Skips confirmation prompts
 
 ---
 
@@ -582,7 +582,7 @@ Stores and manages additional information about lists beyond just names, includi
 4. **CTags** (automatic)
    - CalDAV sync token for change detection
    - Managed by backend, read-only to users
-   - Used in [synchronization](./SYNCHRONIZATION.md#sync-tokens)
+   - Used in [synchronization](synchronization.md#sync-tokens)
 
 5. **ID** (automatic)
    - Unique identifier within backend
@@ -670,8 +670,8 @@ CREATE TABLE task_lists (
 
 ### Related Features
 - [View All Lists](#view-all-lists) - Displays properties
-- [Synchronization](./SYNCHRONIZATION.md#metadata-sync) - Syncs properties
-- [Configuration](./CONFIGURATION.md#list-defaults) - Default colors
+- [Synchronization](synchronization.md#metadata-sync) - Syncs properties
+- [Configuration](configuration.md#list-defaults) - Default colors
 
 ---
 
@@ -789,9 +789,9 @@ func (s *SQLiteBackend) ExportList(listID, format string) ([]byte, error) {
 ```
 
 ### Related Features
-- [Backend System](./BACKEND_SYSTEM.md) - Backend architecture
-- [Synchronization](./SYNCHRONIZATION.md) - Cross-backend sync
-- [Task Management](./TASK_MANAGEMENT.md) - Operating on shared lists
+- [Backend System](backend-system.md) - Backend architecture
+- [Synchronization](synchronization.md) - Cross-backend sync
+- [Task Management](task-management.md) - Operating on shared lists
 
 ---
 
@@ -805,4 +805,4 @@ List management in todoat provides:
 - ✅ Rich metadata (colors, descriptions)
 - ✅ Backend-specific advanced features
 
-All list operations integrate seamlessly with the [backend system](./BACKEND_SYSTEM.md) and [synchronization](./SYNCHRONIZATION.md) to provide a unified experience across SQLite and Nextcloud backends.
+All list operations integrate seamlessly with the [backend system](backend-system.md) and [synchronization](synchronization.md) to provide a unified experience across SQLite and Nextcloud backends.

@@ -4,7 +4,7 @@
 Implement `-d, --description` flag for add and update commands to set task descriptions, supporting multi-line text input.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/cli-interface.md`
 - Section: Action Flags - Description
 
 ## Dependencies

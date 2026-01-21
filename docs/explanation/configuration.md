@@ -255,7 +255,7 @@ const (
 **Prerequisites**:
 - Valid backend type
 - Required fields for backend type (varies by type)
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md) for remote backends
+- [Credential Management](credential-management.md) for remote backends
 
 **Outputs/Results**:
 - Multiple backends available for selection
@@ -312,8 +312,8 @@ file:
 - SQLite: `db_path` is optional (empty = XDG default)
 
 **Related Features**:
-- [Backend System](./BACKEND_SYSTEM.md) - Backend architecture and selection
-- [Credential Management](./CREDENTIAL_MANAGEMENT.md) - Storing backend credentials
+- [Backend System](backend-system.md) - Backend architecture and selection
+- [Credential Management](credential-management.md) - Storing backend credentials
 - [Default Backend](#default-backend) - Setting primary backend
 
 ---
@@ -343,7 +343,7 @@ file:
 
 **Prerequisites**:
 - At least one remote backend configured and enabled
-- See [Synchronization](./SYNCHRONIZATION.md) for detailed sync requirements
+- See [Synchronization](synchronization.md) for detailed sync requirements
 
 **Outputs/Results**:
 - Shared cache database: `~/.local/share/todoat/cache.db`
@@ -395,8 +395,8 @@ func (c *Config) GetCacheDatabasePath() (string, error) {
 
 
 **Related Features**:
-- [Synchronization](./SYNCHRONIZATION.md) - Comprehensive sync documentation
-- [Backend System](./BACKEND_SYSTEM.md) - Backend architecture
+- [Synchronization](synchronization.md) - Comprehensive sync documentation
+- [Backend System](backend-system.md) - Backend architecture
 - [Conflict Resolution Configuration](#conflict-resolution-configuration) - Conflict strategies
 - [Offline Mode Configuration](#offline-mode-configuration) - Offline behavior
 
@@ -417,7 +417,7 @@ notification:
     enabled: true
 ```
 
-See [Notification Manager](./NOTIFICATION_MANAGER.md) for full configuration options.
+See [Notification Manager](notification-manager.md) for full configuration options.
 
 ---
 
@@ -613,7 +613,7 @@ func createConfigFromSample(configPath string) []byte {
 
 **Related Features**:
 - [Config Validation](#config-validation) - Validates sample config
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Built-in views installation
+- [Views & Customization](views-customization.md) - Built-in views installation
 
 ---
 
@@ -965,7 +965,7 @@ backends:
 
 **Related Features**:
 - [Backend Priority](#backend-priority) - Alternative selection mechanism
-- [Backend System](./BACKEND_SYSTEM.md) - Backend selection logic
+- [Backend System](backend-system.md) - Backend selection logic
 - [Sync Configuration](#sync-configuration) - Sync affects default selection
 
 ---
@@ -1071,7 +1071,7 @@ RETURN default_backend OR first enabled backend
 
 **Related Features**:
 - [Default Backend](#default-backend) - Alternative selection method
-- [Backend System](./BACKEND_SYSTEM.md) - Backend auto-detection
+- [Backend System](backend-system.md) - Backend auto-detection
 - [Multi-Backend Configuration](#multi-backend-configuration) - Configuring multiple backends
 
 ---
@@ -1099,7 +1099,7 @@ RETURN default_backend OR first enabled backend
 7. User sees result based on strategy chosen
 
 **Prerequisites**:
-- [Synchronization](./SYNCHRONIZATION.md) enabled
+- [Synchronization](synchronization.md) enabled
 - Conflicting changes to same task on local and remote
 
 **Outputs/Results**:
@@ -1234,7 +1234,7 @@ Use keep_both if:
 ```
 
 **Related Features**:
-- [Synchronization](./SYNCHRONIZATION.md) - Comprehensive sync documentation
+- [Synchronization](synchronization.md) - Comprehensive sync documentation
 - [Sync Configuration](#sync-configuration) - Global sync settings
 
 ---
@@ -1271,7 +1271,7 @@ Use keep_both if:
 5. User must wait for connection to return
 
 **Prerequisites**:
-- [Synchronization](./SYNCHRONIZATION.md) enabled
+- [Synchronization](synchronization.md) enabled
 
 **Outputs/Results**:
 - Continued operation during network outages (auto mode)
@@ -1380,7 +1380,7 @@ todoat sync queue
 ```
 
 **Related Features**:
-- [Synchronization](./SYNCHRONIZATION.md) - Sync system documentation
+- [Synchronization](synchronization.md) - Sync system documentation
 - [Sync Configuration](#sync-configuration) - Global sync settings
 - [Sync Interval](#sync-interval) - Auto-sync frequency
 
@@ -1406,7 +1406,7 @@ todoat sync queue
 5. User can still use `-v other-view` to override
 
 **Prerequisites**:
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Custom views
+- [Views & Customization](views-customization.md) - Custom views
 - View file exists: `~/.config/todoat/views/{view-name}.yaml`
 
 **Outputs/Results**:
@@ -1456,8 +1456,8 @@ todoat MyList -v minimal
 - Custom default view must exist in user views directory
 
 **Related Features**:
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Complete view system documentation
-- [CLI Interface](./CLI_INTERFACE.md) - View selection via `-v` flag
+- [Views & Customization](views-customization.md) - Complete view system documentation
+- [CLI Interface](cli-interface.md) - View selection via `-v` flag
 
 ---
 
@@ -1537,8 +1537,8 @@ rootCmd.PersistentFlags().BoolP("no-prompt", "y", false, "Disable interactive pr
 - Tests can verify exact output without prompt variability
 
 **Related Features**:
-- [CLI Interface - No-Prompt Mode](./CLI_INTERFACE.md#no-prompt-mode) - Full no-prompt mode documentation
-- [CLI Interface - Result Codes](./CLI_INTERFACE.md#result-codes) - Output status indicators
+- [CLI Interface - No-Prompt Mode](cli-interface.md#no-prompt-mode) - Full no-prompt mode documentation
+- [CLI Interface - Result Codes](cli-interface.md#result-codes) - Output status indicators
 - [Output Format Configuration](#output-format-configuration) - JSON output for scripting
 
 ---
@@ -1684,8 +1684,8 @@ rootCmd.PersistentFlags().Bool("json", false, "Output in JSON format")
 Tasks created locally but not yet synced to the remote backend will have `"synced": false` and a UID in `NOT-SYNCED-<sqlite-id>` format. This allows scripts to operate on unsynced tasks using `--uid "NOT-SYNCED-42"`. After sync, the UID becomes the backend-assigned UUID.
 
 **Related Features**:
-- [CLI Interface - JSON Output Mode](./CLI_INTERFACE.md#json-output-mode) - Full JSON output documentation
-- [CLI Interface - Result Codes](./CLI_INTERFACE.md#result-codes) - Output status indicators
+- [CLI Interface - JSON Output Mode](cli-interface.md#json-output-mode) - Full JSON output documentation
+- [CLI Interface - Result Codes](cli-interface.md#result-codes) - Output status indicators
 - [No-Prompt Mode Configuration](#no-prompt-mode-configuration) - Pairs well for scripting
 
 ---
@@ -2016,18 +2016,18 @@ export TODOAT_TODOIST_TOKEN="api-token-here"
 2. Environment variables
 3. Config file (lowest priority)
 
-See [Credential Management](./CREDENTIAL_MANAGEMENT.md) for detailed credential configuration.
+See [Credential Management](credential-management.md) for detailed credential configuration.
 
 ---
 
 ## Related Features
 
-- **[Backend System](./BACKEND_SYSTEM.md)** - Backend architecture and selection
-- **[Synchronization](./SYNCHRONIZATION.md)** - Sync system and conflict resolution
-- **[Credential Management](./CREDENTIAL_MANAGEMENT.md)** - Secure credential storage
-- **[Views & Customization](./VIEWS_CUSTOMIZATION.md)** - Custom view configuration
-- **[CLI Interface](./CLI_INTERFACE.md)** - Command-line options and flags
-- **[List Management](./LIST_MANAGEMENT.md)** - List caching behavior
+- **[Backend System](backend-system.md)** - Backend architecture and selection
+- **[Synchronization](synchronization.md)** - Sync system and conflict resolution
+- **[Credential Management](credential-management.md)** - Secure credential storage
+- **[Views & Customization](views-customization.md)** - Custom view configuration
+- **[CLI Interface](cli-interface.md)** - Command-line options and flags
+- **[List Management](list-management.md)** - List caching behavior
 
 ---
 

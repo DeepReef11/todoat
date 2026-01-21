@@ -4,7 +4,7 @@
 Implement the ability to rename task lists via CLI command, updating both local storage and remote backends as needed.
 
 ## Documentation Reference
-- Primary: `dev-doc/LIST_MANAGEMENT.md`
+- Primary: `docs/explanation/list-management.md`
 - Section: List Properties
 
 ## Dependencies

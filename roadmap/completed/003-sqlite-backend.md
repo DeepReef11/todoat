@@ -59,7 +59,7 @@ Implement the SQLite backend for local task storage, including the task table sc
 
 ## Implementation Notes
 
-- Reference: `dev-doc/BACKEND_SYSTEM.md` for backend architecture
+- Reference: `docs/explanation/backend-system.md` for backend architecture
 - Use `modernc.org/sqlite` for pure Go SQLite driver (no CGO)
 - Store internal status values directly (TODO, DONE) - no translation needed for SQLite
 - Keep schema simple for MVP - no sync metadata tables yet

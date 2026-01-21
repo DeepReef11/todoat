@@ -1,4 +1,4 @@
-# [070] Example Mismatch: dev-doc/README.md references non-existent files
+# [070] Example Mismatch: docs/explanation/README.md references non-existent files
 
 ## Type
 doc-mismatch
@@ -10,7 +10,7 @@ user-journey
 low
 
 ## Location
-- File: `dev-doc/README.md`
+- File: `docs/explanation/README.md`
 - Lines: 65-68, 133-134
 - Context: README
 
@@ -42,13 +42,13 @@ None - these files don't exist.
 
 ## Recommended Fix
 FIX DOCS - Either:
-1. Remove the broken links from dev-doc/README.md, or
+1. Remove the broken links from docs/explanation/README.md, or
 2. Create the referenced documentation files (SYNC_GUIDE.md, .github/CONTRIBUTING.md, TESTING.md)
 
 Note: CLAUDE.md does exist in the project root, so that link is valid.
 
 ## Impact
-Developers following links in dev-doc/README.md will get 404 errors. Low severity since dev-doc is for development purposes, not end-users.
+Developers following links in docs/explanation/README.md will get 404 errors. Low severity since dev-doc is for development purposes, not end-users.
 
 ## Resolution
 
@@ -57,10 +57,10 @@ Developers following links in dev-doc/README.md will get 404 errors. Low severit
 
 ### Verification Log
 ```bash
-$ grep -E "SYNC_GUIDE\.md|CONTRIBUTING\.md|TESTING\.md|CLAUDE\.md|README\.md" dev-doc/README.md
+$ grep -E "SYNC_GUIDE\.md|CONTRIBUTING\.md|TESTING\.md|CLAUDE\.md|README\.md" docs/explanation/README.md
 [no output - broken links removed]
 
-$ ls dev-doc/SYNCHRONIZATION.md dev-doc/TEST_DRIVEN_DEV.md
-dev-doc/SYNCHRONIZATION.md  dev-doc/TEST_DRIVEN_DEV.md
+$ ls docs/explanation/synchronization.md docs/explanation/test-driven-dev.md
+docs/explanation/synchronization.md  docs/explanation/test-driven-dev.md
 ```
 **Matches expected behavior**: YES

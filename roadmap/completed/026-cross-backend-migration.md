@@ -4,8 +4,8 @@
 Implement functionality to migrate tasks between different backends, enabling users to move tasks from one storage provider to another while preserving all metadata.
 
 ## Documentation Reference
-- Primary: `dev-doc/FEATURES_OVERVIEW.md` (Planned features)
-- Related: `dev-doc/BACKEND_SYSTEM.md`
+- Primary: `docs/explanation/features-overview.md` (Planned features)
+- Related: `docs/explanation/backend-system.md`
 
 ## Dependencies
 - Requires: [003] SQLite Backend

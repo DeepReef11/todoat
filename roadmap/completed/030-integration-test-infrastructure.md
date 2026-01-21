@@ -5,8 +5,8 @@
 Add Docker Compose configuration and Makefile targets to enable integration testing against real Nextcloud instances and prepare infrastructure for other backend integration tests.
 
 ## Documentation Reference
-- Primary: `dev-doc/INTEGRATION_TESTING.md`
-- Secondary: `dev-doc/TEST_DRIVEN_DEV.md`
+- Primary: `docs/explanation/integration-testing.md`
+- Secondary: `docs/explanation/test-driven-dev.md`
 
 ## Dependencies
 - Requires: none (infrastructure only)

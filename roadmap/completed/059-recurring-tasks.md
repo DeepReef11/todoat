@@ -4,8 +4,8 @@
 Implement recurring/repeating task functionality allowing tasks to automatically regenerate on a schedule (daily, weekly, monthly, custom intervals) when completed.
 
 ## Documentation Reference
-- Primary: `dev-doc/TASK_MANAGEMENT.md`
-- Related: `dev-doc/SYNCHRONIZATION.md`, `dev-doc/BACKEND_SYSTEM.md`
+- Primary: `docs/explanation/task-management.md`
+- Related: `docs/explanation/synchronization.md`, `docs/explanation/backend-system.md`
 
 ## Dependencies
 - Requires: [011] Task Dates

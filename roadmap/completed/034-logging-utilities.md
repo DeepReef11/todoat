@@ -4,8 +4,8 @@
 Implement the internal/utils package with logging utilities, error constructors with user-friendly suggestions, input validation, and user prompt functions as described in LOGGING.md.
 
 ## Documentation Reference
-- Primary: `dev-doc/LOGGING.md`
-- Related: `dev-doc/CLI_INTERFACE.md` (verbose mode), `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/logging.md`
+- Related: `docs/explanation/cli-interface.md` (verbose mode), `docs/explanation/configuration.md`
 
 ## Dependencies
 - Requires: [002] Core CLI (for verbose flag integration)

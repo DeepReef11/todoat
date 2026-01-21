@@ -4,8 +4,8 @@
 Implement Todoist integration via REST API v2, supporting full CRUD operations on tasks and projects with authentication via API token stored in keyring or environment variables.
 
 ## Documentation Reference
-- Primary: `dev-doc/BACKEND_SYSTEM.md#todoist-backend`
-- Related: `dev-doc/CREDENTIAL_MANAGEMENT.md`, `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/backend-system.md#todoist-backend`
+- Related: `docs/explanation/credential-management.md`, `docs/explanation/configuration.md`
 
 ## Dependencies
 - Requires: [017] Credential Management (for API token storage)

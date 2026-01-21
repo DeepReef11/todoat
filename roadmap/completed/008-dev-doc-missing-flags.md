@@ -1,10 +1,10 @@
 # [008] Fix: dev-doc CLI_INTERFACE.md - Missing Flags Documentation
 
 ## Summary
-The internal dev-doc/CLI_INTERFACE.md documents two global flags (`--config` and `--list-backends`) that don't exist in the actual implementation.
+The internal docs/explanation/cli-interface.md documents two global flags (`--config` and `--list-backends`) that don't exist in the actual implementation.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/cli-interface.md`
 - Section: "Global Flags" (lines ~93-108)
 
 ## Gap Type
@@ -12,7 +12,7 @@ wrong-syntax
 
 ## Documented Command/Syntax
 ```bash
-# From dev-doc/CLI_INTERFACE.md:
+# From docs/explanation/cli-interface.md:
 # Use custom config file
 todoat --config /path/to/config.yaml MyList
 

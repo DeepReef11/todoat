@@ -4,9 +4,9 @@
 Implement rate limit handling for REST API backends (Todoist, Google Tasks, Microsoft To Do) with automatic retry using exponential backoff and jitter to prevent thundering herd effects.
 
 ## Documentation Reference
-- Primary: `dev-doc/SYNCHRONIZATION.md`
+- Primary: `docs/explanation/synchronization.md`
 - Section: Sync Queue System - Retry Logic (lines 632-647, 732-737)
-- Related: `dev-doc/BACKEND_SYSTEM.md` - backend error handling
+- Related: `docs/explanation/backend-system.md` - backend error handling
 
 ## Dependencies
 - Requires: [021] Todoist Backend

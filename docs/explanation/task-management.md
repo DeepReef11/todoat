@@ -57,7 +57,7 @@ Allows users to view all tasks within a specific task list, providing a quick ov
    - Task data includes: UID, Summary, Description, Status, Priority, Dates, Parent relationships
 
 4. **Rendering**:
-   - Tasks are formatted according to the active view (see [Views & Customization](./VIEWS_CUSTOMIZATION.md))
+   - Tasks are formatted according to the active view (see [Views & Customization](views-customization.md))
    - Default view shows: Status, Summary, Priority
    - Hierarchical tasks are displayed with tree-drawing characters (├─, └─, │)
    - Terminal width is auto-detected for dynamic formatting (40-100 chars, default 80)
@@ -69,9 +69,9 @@ View Formatter → Terminal Display
 ```
 
 **Integration Points:**
-- [Backend System](./BACKEND_SYSTEM.md) - Determines which storage backend to query
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Controls display formatting
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Tree-based task display
+- [Backend System](backend-system.md) - Determines which storage backend to query
+- [Views & Customization](views-customization.md) - Controls display formatting
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Tree-based task display
 
 **Edge Cases:**
 - Empty list: Displays message "No tasks found in list 'MyList'"
@@ -87,7 +87,7 @@ View Formatter → Terminal Display
 
 ### Prerequisites
 - At least one task list must exist in the backend
-- Backend must be configured and accessible (see [Configuration](./CONFIGURATION.md))
+- Backend must be configured and accessible (see [Configuration](configuration.md))
 - For remote backends: Network connectivity (or cached data available)
 
 ### Outputs/Results
@@ -129,9 +129,9 @@ Tasks in "Work" (5 tasks):
 
 ### Related Features
 - [Task Filtering](#task-filtering) - Filter displayed tasks by status, priority, etc.
-- [List Management](./LIST_MANAGEMENT.md) - Create and manage task lists
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - View parent-child task relationships
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Customize task display format
+- [List Management](list-management.md) - Create and manage task lists
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - View parent-child task relationships
+- [Views & Customization](views-customization.md) - Customize task display format
 
 ---
 
@@ -151,7 +151,7 @@ Enables users to add new tasks to a task list with optional metadata (descriptio
    - `todoat MyList a "Task summary"` - Using abbreviation
    - `todoat MyList add` - Prompts for summary interactively
    - `todoat MyList add "Task" -d "Details" -p 1` - With metadata
-   - `todoat MyList add "Subtask" -P "Parent"` - Create subtask (see [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md))
+   - `todoat MyList add "Subtask" -P "Parent"` - Create subtask (see [Subtasks & Hierarchy](subtasks-hierarchy.md))
    - `todoat MyList add "parent/child/grandchild"` - Auto-create hierarchy
    - `todoat MyList add -l "literal/text"` - Disable path parsing with `-l` flag
 
@@ -171,7 +171,7 @@ Enables users to add new tasks to a task list with optional metadata (descriptio
    - Search for parent task by summary or path
    - If path format ("Parent/Child"), resolve hierarchically
    - If not found, return error
-   - See [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) for details
+   - See [Subtasks & Hierarchy](subtasks-hierarchy.md) for details
 
 4. **Path-Based Hierarchy Creation** (if summary contains "/"):
    - Unless `-l` (literal) flag is used
@@ -205,7 +205,7 @@ Enables users to add new tasks to a task list with optional metadata (descriptio
 7. **Sync Queue (if sync enabled)**:
    - Task is added to `sync_queue` table with operation type "create"
    - Background sync daemon picks up and syncs to remote backend
-   - See [Synchronization](./SYNCHRONIZATION.md)
+   - See [Synchronization](synchronization.md)
 
 **Data Flow:**
 ```
@@ -215,10 +215,10 @@ Sync Queue (if enabled) → Success Confirmation
 ```
 
 **Integration Points:**
-- [Backend System](./BACKEND_SYSTEM.md) - Determines storage mechanism
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Parent-child relationships
-- [Synchronization](./SYNCHRONIZATION.md) - Queues task for remote sync
-- [List Management](./LIST_MANAGEMENT.md) - Validates target list exists
+- [Backend System](backend-system.md) - Determines storage mechanism
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Parent-child relationships
+- [Synchronization](synchronization.md) - Queues task for remote sync
+- [List Management](list-management.md) - Validates target list exists
 
 **Edge Cases:**
 - Empty summary: Prompts user interactively or returns error
@@ -239,7 +239,7 @@ Sync Queue (if enabled) → Success Confirmation
 7. User can immediately see task with `todoat Work`
 
 ### Prerequisites
-- Target task list must exist (see [List Management](./LIST_MANAGEMENT.md))
+- Target task list must exist (see [List Management](list-management.md))
 - Backend must be configured and accessible
 - For subtasks: Parent task must exist (or use path syntax for auto-creation)
 - For network backends: Connectivity required (or sync must be enabled for offline operation)
@@ -280,10 +280,10 @@ Queued for synchronization (will sync within 5 minutes)
 
 ### Related Features
 - [Update Tasks](#update-tasks) - Modify existing tasks
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Create hierarchical task structures
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Create hierarchical task structures
 - [Task Status System](#task-status-system) - Status value meanings
 - [Task Priority System](#task-priority-system) - Priority value meanings
-- [Synchronization](./SYNCHRONIZATION.md) - Offline task creation and sync
+- [Synchronization](synchronization.md) - Offline task creation and sync
 
 ---
 
@@ -348,9 +348,9 @@ Sync Queue (if enabled) → Success Confirmation
 ```
 
 **Integration Points:**
-- [Backend System](./BACKEND_SYSTEM.md) - Storage update mechanism
+- [Backend System](backend-system.md) - Storage update mechanism
 - [Task Search and Selection](#task-search-and-selection) - Intelligent task finding
-- [Synchronization](./SYNCHRONIZATION.md) - Conflict detection and resolution
+- [Synchronization](synchronization.md) - Conflict detection and resolution
 - [Task Status System](#task-status-system) - Status value translation
 
 **Edge Cases:**
@@ -359,7 +359,7 @@ Sync Queue (if enabled) → Success Confirmation
 - User cancels selection: Operation aborted gracefully
 - No update flags provided: Error message listing available flags
 - Invalid status/priority/date: Error message with valid values
-- Concurrent modification (remote backend): Conflict resolution based on config (see [Synchronization](./SYNCHRONIZATION.md))
+- Concurrent modification (remote backend): Conflict resolution based on config (see [Synchronization](synchronization.md))
 - Empty string for dates: Clears the date field
 - Network failure: Update queued locally if sync enabled
 
@@ -427,7 +427,7 @@ Status: DONE
 ### Related Features
 - [Complete Tasks](#complete-tasks) - Shortcut for marking tasks as DONE
 - [Task Search and Selection](#task-search-and-selection) - How tasks are found
-- [Synchronization](./SYNCHRONIZATION.md) - Conflict resolution for concurrent updates
+- [Synchronization](synchronization.md) - Conflict resolution for concurrent updates
 - [Task Status System](#task-status-system) - Available status values
 
 ---
@@ -464,7 +464,7 @@ Completed Timestamp → Backend Update → Sync Queue → Success
 **Integration Points:**
 - [Update Tasks](#update-tasks) - Complete is a specialized update operation
 - [Task Search and Selection](#task-search-and-selection) - Task identification
-- [Synchronization](./SYNCHRONIZATION.md) - Offline completion support
+- [Synchronization](synchronization.md) - Offline completion support
 
 **Edge Cases:**
 - Task already DONE: Success message, no change made
@@ -540,10 +540,10 @@ Sync Queue (if enabled) → Success Confirmation
 ```
 
 **Integration Points:**
-- [Backend System](./BACKEND_SYSTEM.md) - Storage deletion mechanism
+- [Backend System](backend-system.md) - Storage deletion mechanism
 - [Task Search and Selection](#task-search-and-selection) - Task identification
-- [Synchronization](./SYNCHRONIZATION.md) - Propagate deletion to remote
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Handle child task deletion
+- [Synchronization](synchronization.md) - Propagate deletion to remote
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Handle child task deletion
 
 **Edge Cases:**
 - Task not found: Error message
@@ -580,9 +580,9 @@ Task 'outdated task' deleted successfully
 - **Foreign Key Constraints**: SQLite schema enforces referential integrity for parent-child relationships
 
 ### Related Features
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Impact of deleting parent tasks
-- [List Management](./LIST_MANAGEMENT.md#trash-management) - List trash/restore (not available for tasks)
-- [Synchronization](./SYNCHRONIZATION.md) - Offline deletion support
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Impact of deleting parent tasks
+- [List Management](list-management.md#trash-management) - List trash/restore (not available for tasks)
+- [Synchronization](synchronization.md) - Offline deletion support
 
 ---
 
@@ -620,7 +620,7 @@ Client Filtering → View Rendering → Terminal Display
 **Integration Points:**
 - [Get Tasks](#get-tasks-listread) - Base task retrieval operation
 - [Task Status System](#task-status-system) - Valid status values
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Display after filtering
+- [Views & Customization](views-customization.md) - Display after filtering
 
 **Edge Cases:**
 - Invalid status value: Error message with valid statuses
@@ -656,7 +656,7 @@ Tasks in "Work" (3 tasks, filtered by status: TODO, IN-PROGRESS):
 
 ### Related Features
 - [Task Status System](#task-status-system) - Available status values
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Advanced filtering in custom views
+- [Views & Customization](views-customization.md) - Advanced filtering in custom views
 - [Get Tasks](#get-tasks-listread) - Base retrieval operation
 
 ---
@@ -749,9 +749,9 @@ Search String → Exact Match → Found? → Return Task
 - [Update Tasks](#update-tasks) - Used for task identification
 - [Complete Tasks](#complete-tasks) - Used for task identification
 - [Delete Tasks](#delete-tasks) - Used for task identification
-- [CLI Interface](./CLI_INTERFACE.md) - Interactive prompts and menus
-- [CLI Interface - No-Prompt Mode](./CLI_INTERFACE.md#no-prompt-mode) - Non-interactive behavior
-- [CLI Interface - Result Codes](./CLI_INTERFACE.md#result-codes) - `ACTION_INCOMPLETE` for ambiguous matches
+- [CLI Interface](cli-interface.md) - Interactive prompts and menus
+- [CLI Interface - No-Prompt Mode](cli-interface.md#no-prompt-mode) - Non-interactive behavior
+- [CLI Interface - Result Codes](cli-interface.md#result-codes) - `ACTION_INCOMPLETE` for ambiguous matches
 
 **Edge Cases:**
 - User cancels confirmation: Operation aborted gracefully
@@ -898,11 +898,11 @@ func resolveTask(uid string, localID int64, syncEnabled bool, backend TaskManage
 - [Update Tasks](#update-tasks) - Primary consumer
 - [Complete Tasks](#complete-tasks) - Primary consumer
 - [Delete Tasks](#delete-tasks) - Primary consumer
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - Parent task resolution uses same logic
-- [CLI Interface - No-Prompt Mode](./CLI_INTERFACE.md#no-prompt-mode) - Non-interactive operation
-- [CLI Interface - JSON Output](./CLI_INTERFACE.md#json-output-mode) - Machine-parseable output
-- [CLI Interface - Result Codes](./CLI_INTERFACE.md#result-codes) - Operation outcome indicators
-- [Synchronization](./SYNCHRONIZATION.md) - `--local-id` requires sync to be enabled
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - Parent task resolution uses same logic
+- [CLI Interface - No-Prompt Mode](cli-interface.md#no-prompt-mode) - Non-interactive operation
+- [CLI Interface - JSON Output](cli-interface.md#json-output-mode) - Machine-parseable output
+- [CLI Interface - Result Codes](cli-interface.md#result-codes) - Operation outcome indicators
+- [Synchronization](synchronization.md) - `--local-id` requires sync to be enabled
 
 ---
 
@@ -977,7 +977,7 @@ Storage Format (NEEDS-ACTION for CalDAV, TODO for SQLite, etc.)
 - [Update Tasks](#update-tasks) - Change task status
 - [Complete Tasks](#complete-tasks) - Shortcut to DONE status
 - [Task Filtering](#task-filtering) - Filter by status
-- [Backend System](./BACKEND_SYSTEM.md) - Backend-specific status storage
+- [Backend System](backend-system.md) - Backend-specific status storage
 
 **Edge Cases:**
 - Invalid status value: Error with list of valid values
@@ -1020,7 +1020,7 @@ Status is visible in all task displays:
 - [Task Filtering](#task-filtering) - Filter tasks by status
 - [Complete Tasks](#complete-tasks) - Shortcut to DONE
 - [Update Tasks](#update-tasks) - General status changes
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Custom status display formatting
+- [Views & Customization](views-customization.md) - Custom status display formatting
 
 ---
 
@@ -1057,7 +1057,7 @@ Allows users to assign importance levels to tasks, enabling prioritization of wo
    - Low (6-9) in blue/gray
    - Undefined (0) may be hidden or shown neutrally
 
-4. **Sorting**: Tasks can be sorted by priority in custom views (see [Views & Customization](./VIEWS_CUSTOMIZATION.md))
+4. **Sorting**: Tasks can be sorted by priority in custom views (see [Views & Customization](views-customization.md))
 
 **Data Flow:**
 ```
@@ -1068,8 +1068,8 @@ Display Rendering (with color)
 **Integration Points:**
 - [Add Tasks](#add-tasks-create) - Set initial priority
 - [Update Tasks](#update-tasks) - Change priority
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Priority-based sorting and coloring
-- [Backend System](./BACKEND_SYSTEM.md) - Backend-specific color schemes
+- [Views & Customization](views-customization.md) - Priority-based sorting and coloring
+- [Backend System](backend-system.md) - Backend-specific color schemes
 
 **Edge Cases:**
 - Invalid priority (negative, > 9, non-integer): Error message
@@ -1123,7 +1123,7 @@ Tasks in "Work":
 ### Related Features
 - [Add Tasks](#add-tasks-create) - Set priority on creation
 - [Update Tasks](#update-tasks) - Modify priority
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Priority-based sorting and custom colors
+- [Views & Customization](views-customization.md) - Priority-based sorting and custom colors
 - [Get Tasks](#get-tasks-listread) - Display with priority indicators
 
 ---
@@ -1174,7 +1174,7 @@ Enables users to set due dates, start dates, and track creation/modification/com
    - **Todoist**: Uses API-native date format
 
 4. **Display**:
-   - Dates shown in custom views (see [Views & Customization](./VIEWS_CUSTOMIZATION.md))
+   - Dates shown in custom views (see [Views & Customization](views-customization.md))
    - Not shown in default view (only in "all" view or custom views)
    - Time zone conversion for display (UTC stored, local displayed)
 
@@ -1188,8 +1188,8 @@ Backend Translation → Storage Format → Display Rendering
 - [Add Tasks](#add-tasks-create) - Set initial dates
 - [Update Tasks](#update-tasks) - Modify dates
 - [Complete Tasks](#complete-tasks) - Sets Completed timestamp
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Display date fields
-- [Backend System](./BACKEND_SYSTEM.md) - Backend-specific date formats
+- [Views & Customization](views-customization.md) - Display date fields
+- [Backend System](backend-system.md) - Backend-specific date formats
 
 **Edge Cases:**
 - Invalid date format: Error message "Date must be YYYY-MM-DD format"
@@ -1241,7 +1241,7 @@ Completed: 2026-01-20T14:30:00Z
 - [Add Tasks](#add-tasks-create) - Set dates on creation
 - [Update Tasks](#update-tasks) - Modify dates
 - [Complete Tasks](#complete-tasks) - Auto-sets completion timestamp
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Display and filter by dates
+- [Views & Customization](views-customization.md) - Display and filter by dates
 - [Task Metadata](#task-metadata) - Complete metadata overview
 
 ---
@@ -1289,7 +1289,7 @@ type Task struct {
 **Viewing All Metadata:**
 - Command: `todoat MyList -v all`
 - Shows all fields for all tasks
-- Or create custom view with desired fields (see [Views & Customization](./VIEWS_CUSTOMIZATION.md))
+- Or create custom view with desired fields (see [Views & Customization](views-customization.md))
 
 **Data Flow:**
 ```
@@ -1300,9 +1300,9 @@ Retrieval → View Formatting → Display
 **Integration Points:**
 - [Add Tasks](#add-tasks-create) - Populates metadata on creation
 - [Update Tasks](#update-tasks) - Modifies metadata
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Controls which metadata is displayed
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - ParentUID field usage
-- [Backend System](./BACKEND_SYSTEM.md) - Storage of metadata
+- [Views & Customization](views-customization.md) - Controls which metadata is displayed
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - ParentUID field usage
+- [Backend System](backend-system.md) - Storage of metadata
 
 **Edge Cases:**
 - Optional fields empty: Displayed as empty or hidden depending on view
@@ -1353,13 +1353,13 @@ Task: Fix production bug
 
 ### Related Features
 - [Get Tasks](#get-tasks-listread) - Display metadata
-- [Views & Customization](./VIEWS_CUSTOMIZATION.md) - Control metadata display
+- [Views & Customization](views-customization.md) - Control metadata display
 - [Add Tasks](#add-tasks-create) - Set metadata on creation
 - [Update Tasks](#update-tasks) - Modify metadata
 - [Task Status System](#task-status-system) - Status field details
 - [Task Priority System](#task-priority-system) - Priority field details
 - [Task Dates](#task-dates) - Date field details
-- [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md) - ParentUID usage
+- [Subtasks & Hierarchy](subtasks-hierarchy.md) - ParentUID usage
 
 ---
 
@@ -1376,6 +1376,6 @@ Task Management in todoat provides comprehensive CRUD operations with intelligen
 - **Offline Support**: Queue operations when sync enabled
 - **Multi-Backend**: Consistent interface across Nextcloud, SQLite, Git, Todoist
 
-For hierarchical task organization, see [Subtasks & Hierarchy](./SUBTASKS_HIERARCHY.md).
-For backend-specific behavior, see [Backend System](./BACKEND_SYSTEM.md).
-For customizing task display, see [Views & Customization](./VIEWS_CUSTOMIZATION.md).
+For hierarchical task organization, see [Subtasks & Hierarchy](subtasks-hierarchy.md).
+For backend-specific behavior, see [Backend System](backend-system.md).
+For customizing task display, see [Views & Customization](views-customization.md).

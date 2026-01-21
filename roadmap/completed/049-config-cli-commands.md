@@ -4,9 +4,9 @@
 Implement CLI commands for viewing and modifying configuration without manually editing YAML files, providing a user-friendly interface for common config operations.
 
 ## Documentation Reference
-- Primary: `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/configuration.md`
 - Section: Feature Documentation (general)
-- Related: `dev-doc/CLI_INTERFACE.md`
+- Related: `docs/explanation/cli-interface.md`
 
 ## Dependencies
 - Requires: [010] Configuration System (config file exists)

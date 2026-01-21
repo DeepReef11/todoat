@@ -4,7 +4,7 @@
 Implement YAML-based configuration system following XDG Base Directory Specification for storing user preferences and backend settings.
 
 ## Documentation Reference
-- Primary: `dev-doc/CONFIGURATION.md`
+- Primary: `docs/explanation/configuration.md`
 - Sections: YAML Configuration, XDG Compliance, Auto-Initialization
 
 ## Dependencies

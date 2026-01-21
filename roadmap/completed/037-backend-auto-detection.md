@@ -4,8 +4,8 @@
 Implement the backend auto-detection system that automatically selects the appropriate backend based on the current directory context and configuration, with a `--detect-backend` flag to show detection results.
 
 ## Documentation Reference
-- Primary: `dev-doc/BACKEND_SYSTEM.md` (Backend Selection, Auto-Detection Interface sections)
-- Related: `dev-doc/CONFIGURATION.md` (auto_detect_backend setting)
+- Primary: `docs/explanation/backend-system.md` (Backend Selection, Auto-Detection Interface sections)
+- Related: `docs/explanation/configuration.md` (auto_detect_backend setting)
 
 ## Dependencies
 - Requires: [002] Core CLI (for --detect-backend flag)

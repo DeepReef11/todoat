@@ -4,8 +4,8 @@
 Implement TUI-based interactive view builder that allows users to create custom views without manually editing YAML files, with real-time preview and validation.
 
 ## Documentation Reference
-- Primary: `dev-doc/VIEWS_CUSTOMIZATION.md` (Interactive View Builder section)
-- Related: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/views-customization.md` (Interactive View Builder section)
+- Related: `docs/explanation/cli-interface.md`
 
 ## Dependencies
 - Requires: [015] Views Customization (view system must exist)

@@ -4,7 +4,7 @@
 Implement list management commands for creating, viewing, deleting, and managing task lists (calendars) with trash/restore functionality.
 
 ## Documentation Reference
-- Primary: `dev-doc/LIST_MANAGEMENT.md`
+- Primary: `docs/explanation/list-management.md`
 - Sections: Create List, View All Lists, Trash and Restore Lists, List Properties
 
 ## Dependencies

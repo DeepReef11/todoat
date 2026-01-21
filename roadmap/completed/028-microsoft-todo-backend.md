@@ -4,8 +4,8 @@
 Implement Microsoft To Do integration via Microsoft Graph API, supporting full CRUD operations on tasks and task lists with OAuth2 authentication.
 
 ## Documentation Reference
-- Primary: `dev-doc/FEATURES_OVERVIEW.md` (Planned features - Microsoft To Do backend)
-- Related: `dev-doc/BACKEND_SYSTEM.md`, `dev-doc/CREDENTIAL_MANAGEMENT.md`
+- Primary: `docs/explanation/features-overview.md` (Planned features - Microsoft To Do backend)
+- Related: `docs/explanation/backend-system.md`, `docs/explanation/credential-management.md`
 
 ## Dependencies
 - Requires: [017] Credential Management

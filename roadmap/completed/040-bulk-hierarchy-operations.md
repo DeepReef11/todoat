@@ -4,8 +4,8 @@
 Implement wildcard pattern support for operating on task hierarchies, enabling bulk completion, updates, and deletion of subtasks using `*` (direct children) and `**` (all descendants) patterns.
 
 ## Documentation Reference
-- Primary: `dev-doc/SUBTASKS_HIERARCHY.md` (Bulk Operations section)
-- Related: `dev-doc/TASK_MANAGEMENT.md`
+- Primary: `docs/explanation/subtasks-hierarchy.md` (Bulk Operations section)
+- Related: `docs/explanation/task-management.md`
 
 ## Dependencies
 - Requires: [014] Subtasks Hierarchy (parent-child relationships)

@@ -47,8 +47,8 @@ Implement the task status handling including status transitions, display formatt
 
 ## Implementation Notes
 
-- Reference: `dev-doc/README.md` for status mappings
-- Reference: `dev-doc/TASK_MANAGEMENT.md#task-status-system`
+- Reference: `docs/explanation/README.md` for status mappings
+- Reference: `docs/explanation/task-management.md#task-status-system`
 - For MVP, only implement TODO and DONE (skip PROCESSING, CANCELLED)
 - Status values stored in database as strings
 - Consider a StatusType enum/const for type safety

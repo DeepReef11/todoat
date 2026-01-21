@@ -4,8 +4,8 @@
 Implement database maintenance commands for SQLite backend including statistics display and vacuum/optimization, helping users monitor storage usage and reclaim disk space.
 
 ## Documentation Reference
-- Primary: `dev-doc/LIST_MANAGEMENT.md` (Database Statistics, Vacuum/Optimize sections)
-- Related: `dev-doc/BACKEND_SYSTEM.md`
+- Primary: `docs/explanation/list-management.md` (Database Statistics, Vacuum/Optimize sections)
+- Related: `docs/explanation/backend-system.md`
 
 ## Dependencies
 - Requires: [003] SQLite Backend

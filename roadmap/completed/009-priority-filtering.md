@@ -4,7 +4,7 @@
 Implement `-p, --priority` flag for filtering tasks by priority level when listing tasks.
 
 ## Documentation Reference
-- Primary: `dev-doc/TASK_MANAGEMENT.md`
+- Primary: `docs/explanation/task-management.md`
 - Sections: Task Priority System, Task Filtering
 
 ## Dependencies

@@ -5,7 +5,7 @@ Add missing configuration options (`allow_http`, `auto_detect_backend`) to the s
 
 ## Documentation Reference
 - Primary: `issues/0-allow-http-not-in-sample.md`
-- Related: `dev-doc/CONFIGURATION.md`
+- Related: `docs/explanation/configuration.md`
 
 ## Dependencies
 - Requires: none
@@ -25,7 +25,7 @@ S
 - [ ] All new options have brief inline comments explaining their purpose
 
 ## Implementation Notes
-- Check `dev-doc/CONFIGURATION.md` and `dev-doc/BACKEND_SYSTEM.md` for complete list of config options
+- Check `docs/explanation/configuration.md` and `docs/explanation/backend-system.md` for complete list of config options
 - Sample config location: typically embedded or in config/ directory
 - Use YAML comments to explain security implications of `allow_http`
 

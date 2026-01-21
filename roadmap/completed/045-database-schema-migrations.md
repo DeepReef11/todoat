@@ -4,9 +4,9 @@
 Implement automatic database schema migration system to handle version upgrades gracefully, tracking schema versions and applying migrations in order.
 
 ## Documentation Reference
-- Primary: `dev-doc/BACKEND_SYSTEM.md`
+- Primary: `docs/explanation/backend-system.md`
 - Section: SQLite Backend - Database Schema
-- Related: `dev-doc/SYNCHRONIZATION.md` (schema_version table)
+- Related: `docs/explanation/synchronization.md` (schema_version table)
 
 ## Dependencies
 - Requires: [003] SQLite Backend

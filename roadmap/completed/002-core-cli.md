@@ -37,8 +37,8 @@ Implement the Cobra CLI skeleton with root command, help system, and the `-y` (n
 
 ## Implementation Notes
 
-- Reference: `dev-doc/CLI_INTERFACE.md` for command structure
-- Reference: `dev-doc/TEST_DRIVEN_DEV.md` for testing approach
+- Reference: `docs/explanation/cli-interface.md` for command structure
+- Reference: `docs/explanation/test-driven-dev.md` for testing approach
 - Use `github.com/spf13/cobra` for CLI framework
 - Keep the root command simple - action handling comes in later roadmap items
 - The `-y` flag state should be accessible throughout the application

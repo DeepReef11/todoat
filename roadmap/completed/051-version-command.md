@@ -4,7 +4,7 @@
 Implement a version command that displays the application version, build information, and optionally checks for updates.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/cli-interface.md`
 - Section: CLI Features (Version Command mentioned)
 
 ## Dependencies

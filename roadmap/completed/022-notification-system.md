@@ -4,7 +4,7 @@
 Implement the notification manager for alerting users about background sync events through OS-native desktop notifications and a persistent log file.
 
 ## Documentation Reference
-- Primary: `dev-doc/NOTIFICATION_MANAGER.md`
+- Primary: `docs/explanation/notification-manager.md`
 
 ## Dependencies
 - Requires: [018] Synchronization Core System

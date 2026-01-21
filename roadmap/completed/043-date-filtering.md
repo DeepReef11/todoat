@@ -4,9 +4,9 @@
 Implement date filtering flags for the get command to filter tasks by due date and creation date ranges.
 
 ## Documentation Reference
-- Primary: `dev-doc/CLI_INTERFACE.md`
+- Primary: `docs/explanation/cli-interface.md`
 - Section: Filter by Dates
-- Related: `dev-doc/BACKEND_SYSTEM.md` (TaskFilter struct with DueAfter/DueBefore)
+- Related: `docs/explanation/backend-system.md` (TaskFilter struct with DueAfter/DueBefore)
 
 ## Dependencies
 - Requires: [011] Task Dates
