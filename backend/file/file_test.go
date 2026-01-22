@@ -889,6 +889,695 @@ func TestFileBackendConfigPath(t *testing.T) {
 }
 
 // =============================================================================
+// TestFileBackendGetList - GetList returns specific list by ID
+// =============================================================================
+
+func TestFileBackendGetList(t *testing.T) {
+	t.Run("get existing list by ID", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+
+## Personal
+
+- [ ] Task 2
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		lists, err := be.GetLists(ctx)
+		if err != nil {
+			t.Fatalf("GetLists error: %v", err)
+		}
+
+		// Get list by ID
+		list, err := be.GetList(ctx, lists[0].ID)
+		if err != nil {
+			t.Fatalf("GetList error: %v", err)
+		}
+		if list == nil {
+			t.Fatal("expected to find list")
+		}
+		if list.ID != lists[0].ID {
+			t.Errorf("expected list ID %s, got %s", lists[0].ID, list.ID)
+		}
+	})
+
+	t.Run("get non-existent list returns nil", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, err := be.GetList(ctx, "non-existent-id")
+		if err != nil {
+			t.Fatalf("GetList error: %v", err)
+		}
+		if list != nil {
+			t.Error("expected nil for non-existent list")
+		}
+	})
+}
+
+// =============================================================================
+// TestFileBackendGetTask - GetTask returns specific task by ID
+// =============================================================================
+
+func TestFileBackendGetTask(t *testing.T) {
+	t.Run("get existing task by ID", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Find me task
+- [ ] Another task
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "Work")
+		tasks, _ := be.GetTasks(ctx, list.ID)
+
+		// Get task by ID
+		task, err := be.GetTask(ctx, list.ID, tasks[0].ID)
+		if err != nil {
+			t.Fatalf("GetTask error: %v", err)
+		}
+		if task == nil {
+			t.Fatal("expected to find task")
+		}
+		if task.ID != tasks[0].ID {
+			t.Errorf("expected task ID %s, got %s", tasks[0].ID, task.ID)
+		}
+	})
+
+	t.Run("get non-existent task returns nil", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "Work")
+
+		task, err := be.GetTask(ctx, list.ID, "non-existent-id")
+		if err != nil {
+			t.Fatalf("GetTask error: %v", err)
+		}
+		if task != nil {
+			t.Error("expected nil for non-existent task")
+		}
+	})
+}
+
+// =============================================================================
+// TestFileBackendUpdateList - UpdateList modifies list properties
+// =============================================================================
+
+func TestFileBackendUpdateList(t *testing.T) {
+	t.Run("update list name", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## OldName
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "OldName")
+
+		// Update the list name
+		list.Name = "NewName"
+		list.Color = "blue"
+		updated, err := be.UpdateList(ctx, list)
+		if err != nil {
+			t.Fatalf("UpdateList error: %v", err)
+		}
+
+		if updated.Name != "NewName" {
+			t.Errorf("expected name 'NewName', got '%s'", updated.Name)
+		}
+		if updated.Color != "blue" {
+			t.Errorf("expected color 'blue', got '%s'", updated.Color)
+		}
+
+		// Verify change persisted to file
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+		if !strings.Contains(string(data), "## NewName") {
+			t.Error("list name not updated in file")
+		}
+	})
+
+	t.Run("update non-existent list returns error", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+
+		// Try to update a non-existent list
+		fakeList := &backend.List{
+			ID:   "non-existent-id",
+			Name: "Fake",
+		}
+		_, err = be.UpdateList(ctx, fakeList)
+		if err == nil {
+			t.Error("expected error when updating non-existent list")
+		}
+		if !strings.Contains(err.Error(), "list not found") {
+			t.Errorf("expected 'list not found' error, got: %v", err)
+		}
+	})
+}
+
+// =============================================================================
+// TestFileBackendDeletedListOperations - GetDeletedLists, RestoreList, PurgeList
+// =============================================================================
+
+func TestFileBackendDeletedListOperations(t *testing.T) {
+	t.Run("GetDeletedLists returns empty list", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		deletedLists, err := be.GetDeletedLists(ctx)
+		if err != nil {
+			t.Fatalf("GetDeletedLists error: %v", err)
+		}
+		if len(deletedLists) != 0 {
+			t.Errorf("expected empty list, got %d items", len(deletedLists))
+		}
+	})
+
+	t.Run("GetDeletedListByName returns nil", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, err := be.GetDeletedListByName(ctx, "Anything")
+		if err != nil {
+			t.Fatalf("GetDeletedListByName error: %v", err)
+		}
+		if list != nil {
+			t.Error("expected nil for deleted list by name")
+		}
+	})
+
+	t.Run("RestoreList returns error", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		err = be.RestoreList(ctx, "any-id")
+		if err == nil {
+			t.Error("expected error from RestoreList")
+		}
+		if !strings.Contains(err.Error(), "not supported") {
+			t.Errorf("expected 'not supported' error, got: %v", err)
+		}
+	})
+
+	t.Run("PurgeList returns error", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		err = be.PurgeList(ctx, "any-id")
+		if err == nil {
+			t.Error("expected error from PurgeList")
+		}
+		if !strings.Contains(err.Error(), "not supported") {
+			t.Errorf("expected 'not supported' error, got: %v", err)
+		}
+	})
+}
+
+// =============================================================================
+// TestFileBackendErrorCases - Error handling scenarios
+// =============================================================================
+
+func TestFileBackendErrorCases(t *testing.T) {
+	t.Run("create task in non-existent list returns error", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		task := &backend.Task{
+			Summary: "New task",
+			Status:  backend.StatusNeedsAction,
+		}
+		_, err = be.CreateTask(ctx, "non-existent-list-id", task)
+		if err == nil {
+			t.Error("expected error when creating task in non-existent list")
+		}
+		if !strings.Contains(err.Error(), "list not found") {
+			t.Errorf("expected 'list not found' error, got: %v", err)
+		}
+	})
+
+	t.Run("update non-existent task returns error", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "Work")
+
+		fakeTask := &backend.Task{
+			ID:      "non-existent-id",
+			Summary: "Fake",
+		}
+		_, err = be.UpdateTask(ctx, list.ID, fakeTask)
+		if err == nil {
+			t.Error("expected error when updating non-existent task")
+		}
+		if !strings.Contains(err.Error(), "task not found") {
+			t.Errorf("expected 'task not found' error, got: %v", err)
+		}
+	})
+
+	t.Run("delete non-existent task returns error", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "Work")
+
+		err = be.DeleteTask(ctx, list.ID, "non-existent-id")
+		if err == nil {
+			t.Error("expected error when deleting non-existent task")
+		}
+		if !strings.Contains(err.Error(), "task not found") {
+			t.Errorf("expected 'task not found' error, got: %v", err)
+		}
+	})
+
+	t.Run("delete non-existent list returns error", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		err = be.DeleteList(ctx, "non-existent-id")
+		if err == nil {
+			t.Error("expected error when deleting non-existent list")
+		}
+		if !strings.Contains(err.Error(), "list not found") {
+			t.Errorf("expected 'list not found' error, got: %v", err)
+		}
+	})
+
+	t.Run("GetListByName returns nil for non-existent", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, err := be.GetListByName(ctx, "NonExistent")
+		if err != nil {
+			t.Fatalf("GetListByName error: %v", err)
+		}
+		if list != nil {
+			t.Error("expected nil for non-existent list by name")
+		}
+	})
+
+	t.Run("GetTasks returns empty for unknown list", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		tasks, err := be.GetTasks(ctx, "unknown-list-id")
+		if err != nil {
+			t.Fatalf("GetTasks error: %v", err)
+		}
+		if len(tasks) != 0 {
+			t.Errorf("expected empty task list, got %d", len(tasks))
+		}
+	})
+}
+
+// =============================================================================
+// TestFileBackendMalformedFiles - Parsing edge cases
+// =============================================================================
+
+func TestFileBackendMalformedFiles(t *testing.T) {
+	t.Run("empty file initializes empty state", func(t *testing.T) {
+		filePath, cleanup := testFile(t, "")
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		lists, err := be.GetLists(ctx)
+		if err != nil {
+			t.Fatalf("GetLists error: %v", err)
+		}
+		if len(lists) != 0 {
+			t.Errorf("expected 0 lists, got %d", len(lists))
+		}
+	})
+
+	t.Run("file with only header", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+Just some random text here
+No sections or tasks
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		lists, err := be.GetLists(ctx)
+		if err != nil {
+			t.Fatalf("GetLists error: %v", err)
+		}
+		if len(lists) != 0 {
+			t.Errorf("expected 0 lists, got %d", len(lists))
+		}
+	})
+
+	t.Run("tasks before any section are ignored", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+- [ ] Orphan task without section
+
+## Work
+
+- [ ] Task in section
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		lists, _ := be.GetLists(ctx)
+		if len(lists) != 1 {
+			t.Fatalf("expected 1 list, got %d", len(lists))
+		}
+
+		tasks, _ := be.GetTasks(ctx, lists[0].ID)
+		if len(tasks) != 1 {
+			t.Errorf("expected 1 task, got %d", len(tasks))
+		}
+		if tasks[0].Summary != "Task in section" {
+			t.Errorf("expected 'Task in section', got '%s'", tasks[0].Summary)
+		}
+	})
+
+	t.Run("empty section", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Empty Section
+
+## Section With Tasks
+
+- [ ] A task
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		lists, _ := be.GetLists(ctx)
+		if len(lists) != 2 {
+			t.Fatalf("expected 2 lists, got %d", len(lists))
+		}
+
+		emptyList, _ := be.GetListByName(ctx, "Empty Section")
+		if emptyList == nil {
+			t.Fatal("expected to find 'Empty Section' list")
+		}
+
+		tasks, _ := be.GetTasks(ctx, emptyList.ID)
+		if len(tasks) != 0 {
+			t.Errorf("expected 0 tasks in empty section, got %d", len(tasks))
+		}
+	})
+
+	t.Run("CreateList returns existing if name matches", func(t *testing.T) {
+		filePath, cleanup := testFile(t, `# Tasks
+
+## Work
+
+- [ ] Task 1
+`)
+		defer cleanup()
+
+		cfg := file.Config{FilePath: filePath}
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+
+		// Try to create a list with existing name (case-insensitive)
+		existingList, _ := be.GetListByName(ctx, "Work")
+		list, err := be.CreateList(ctx, "work") // lowercase
+		if err != nil {
+			t.Fatalf("CreateList error: %v", err)
+		}
+
+		if list.ID != existingList.ID {
+			t.Error("expected CreateList to return existing list with same name")
+		}
+	})
+}
+
+// =============================================================================
+// TestFileBackendDefaultPath - Default path when none configured
+// =============================================================================
+
+func TestFileBackendDefaultPath(t *testing.T) {
+	t.Run("uses default tasks.txt when no path configured", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		originalWd, _ := os.Getwd()
+		defer func() { _ = os.Chdir(originalWd) }()
+		_ = os.Chdir(tmpDir)
+
+		cfg := file.Config{} // No FilePath set
+		be, err := file.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create file backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+
+		// Create a list to trigger file creation
+		_, err = be.CreateList(ctx, "Test")
+		if err != nil {
+			t.Fatalf("CreateList error: %v", err)
+		}
+
+		// Verify default file was created
+		expectedPath := filepath.Join(tmpDir, "tasks.txt")
+		if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+			t.Error("expected tasks.txt to be created in current directory")
+		}
+	})
+}
+
+// =============================================================================
 // Interface Compliance
 // =============================================================================
 
