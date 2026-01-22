@@ -1269,3 +1269,537 @@ func TestGitBackendInterfaceCompliance(t *testing.T) {
 	// Verify Backend implements TaskManager interface at compile time
 	var _ backend.TaskManager = (*git.Backend)(nil)
 }
+
+// =============================================================================
+// GetList Tests (TestGitBackendGetList)
+// =============================================================================
+
+func TestGitBackendGetList(t *testing.T) {
+	t.Run("get list by ID", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, false)
+		defer cleanup()
+
+		todoPath := filepath.Join(repoPath, "TODO.md")
+		content := `<!-- todoat:enabled -->
+## Work
+
+- [ ] Task 1
+
+## Personal
+
+- [ ] Task 2
+`
+		if err := os.WriteFile(todoPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to create TODO.md: %v", err)
+		}
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+
+		// First get all lists to find an ID
+		lists, err := be.GetLists(ctx)
+		if err != nil {
+			t.Fatalf("GetLists error: %v", err)
+		}
+		if len(lists) == 0 {
+			t.Fatal("expected at least one list")
+		}
+
+		// Now get that specific list by ID
+		list, err := be.GetList(ctx, lists[0].ID)
+		if err != nil {
+			t.Fatalf("GetList error: %v", err)
+		}
+		if list == nil {
+			t.Fatal("expected to find list by ID")
+		}
+		if list.ID != lists[0].ID {
+			t.Errorf("expected list ID %s, got %s", lists[0].ID, list.ID)
+		}
+	})
+
+	t.Run("get list by non-existent ID returns nil", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, err := be.GetList(ctx, "non-existent-id")
+		if err != nil {
+			t.Fatalf("GetList error: %v", err)
+		}
+		if list != nil {
+			t.Error("expected nil for non-existent list ID")
+		}
+	})
+}
+
+// =============================================================================
+// GetTask Tests (TestGitBackendGetTask)
+// =============================================================================
+
+func TestGitBackendGetTask(t *testing.T) {
+	t.Run("get task by ID", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, false)
+		defer cleanup()
+
+		todoPath := filepath.Join(repoPath, "TODO.md")
+		content := `<!-- todoat:enabled -->
+## Work
+
+- [ ] Task 1
+- [ ] Task 2
+`
+		if err := os.WriteFile(todoPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to create TODO.md: %v", err)
+		}
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "Work")
+		tasks, err := be.GetTasks(ctx, list.ID)
+		if err != nil {
+			t.Fatalf("GetTasks error: %v", err)
+		}
+		if len(tasks) == 0 {
+			t.Fatal("expected at least one task")
+		}
+
+		// Get specific task by ID
+		task, err := be.GetTask(ctx, list.ID, tasks[0].ID)
+		if err != nil {
+			t.Fatalf("GetTask error: %v", err)
+		}
+		if task == nil {
+			t.Fatal("expected to find task by ID")
+		}
+		if task.ID != tasks[0].ID {
+			t.Errorf("expected task ID %s, got %s", tasks[0].ID, task.ID)
+		}
+	})
+
+	t.Run("get task by non-existent ID returns nil", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "Work")
+		task, err := be.GetTask(ctx, list.ID, "non-existent-id")
+		if err != nil {
+			t.Fatalf("GetTask error: %v", err)
+		}
+		if task != nil {
+			t.Error("expected nil for non-existent task ID")
+		}
+	})
+}
+
+// =============================================================================
+// UpdateList Tests (TestGitBackendUpdateList)
+// =============================================================================
+
+func TestGitBackendUpdateList(t *testing.T) {
+	t.Run("update list name", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, false)
+		defer cleanup()
+
+		todoPath := filepath.Join(repoPath, "TODO.md")
+		content := `<!-- todoat:enabled -->
+## Work
+
+- [ ] Task 1
+`
+		if err := os.WriteFile(todoPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to create TODO.md: %v", err)
+		}
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, err := be.GetListByName(ctx, "Work")
+		if err != nil {
+			t.Fatalf("GetListByName error: %v", err)
+		}
+
+		// Update the list name
+		list.Name = "Updated Work"
+		updated, err := be.UpdateList(ctx, list)
+		if err != nil {
+			t.Fatalf("UpdateList error: %v", err)
+		}
+
+		if updated.Name != "Updated Work" {
+			t.Errorf("expected list name 'Updated Work', got '%s'", updated.Name)
+		}
+
+		// Verify the change persisted
+		lists, _ := be.GetLists(ctx)
+		found := false
+		for _, l := range lists {
+			if l.Name == "Updated Work" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("updated list name not persisted")
+		}
+	})
+
+	t.Run("update non-existent list returns error", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list := &backend.List{
+			ID:   "non-existent-id",
+			Name: "Test",
+		}
+		_, err = be.UpdateList(ctx, list)
+		if err == nil {
+			t.Error("expected error when updating non-existent list")
+		}
+	})
+}
+
+// =============================================================================
+// Unsupported Operations Tests (TestGitBackendUnsupportedOps)
+// =============================================================================
+
+func TestGitBackendUnsupportedOps(t *testing.T) {
+	t.Run("GetDeletedLists returns empty slice", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		lists, err := be.GetDeletedLists(ctx)
+		if err != nil {
+			t.Fatalf("GetDeletedLists error: %v", err)
+		}
+		if len(lists) != 0 {
+			t.Errorf("expected empty slice, got %d items", len(lists))
+		}
+	})
+
+	t.Run("GetDeletedListByName returns nil", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, err := be.GetDeletedListByName(ctx, "test")
+		if err != nil {
+			t.Fatalf("GetDeletedListByName error: %v", err)
+		}
+		if list != nil {
+			t.Error("expected nil for deleted list")
+		}
+	})
+
+	t.Run("RestoreList returns error", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		err = be.RestoreList(ctx, "some-id")
+		if err == nil {
+			t.Error("expected error for RestoreList")
+		}
+		if !strings.Contains(err.Error(), "not supported") {
+			t.Errorf("expected 'not supported' error, got: %v", err)
+		}
+	})
+
+	t.Run("PurgeList returns error", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		err = be.PurgeList(ctx, "some-id")
+		if err == nil {
+			t.Error("expected error for PurgeList")
+		}
+		if !strings.Contains(err.Error(), "not supported") {
+			t.Errorf("expected 'not supported' error, got: %v", err)
+		}
+	})
+}
+
+// =============================================================================
+// Error Handling Tests (TestGitBackendErrorHandling)
+// =============================================================================
+
+func TestGitBackendErrorHandling(t *testing.T) {
+	t.Run("create task in non-existent list returns error", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		task := &backend.Task{
+			Summary: "Test task",
+			Status:  backend.StatusNeedsAction,
+		}
+		_, err = be.CreateTask(ctx, "non-existent-list-id", task)
+		if err == nil {
+			t.Error("expected error when creating task in non-existent list")
+		}
+	})
+
+	t.Run("update non-existent task returns error", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "Work")
+		task := &backend.Task{
+			ID:      "non-existent-task-id",
+			Summary: "Test task",
+			Status:  backend.StatusNeedsAction,
+		}
+		_, err = be.UpdateTask(ctx, list.ID, task)
+		if err == nil {
+			t.Error("expected error when updating non-existent task")
+		}
+	})
+
+	t.Run("delete non-existent task returns error", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		list, _ := be.GetListByName(ctx, "Work")
+		err = be.DeleteTask(ctx, list.ID, "non-existent-task-id")
+		if err == nil {
+			t.Error("expected error when deleting non-existent task")
+		}
+	})
+
+	t.Run("delete non-existent list returns error", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		err = be.DeleteList(ctx, "non-existent-list-id")
+		if err == nil {
+			t.Error("expected error when deleting non-existent list")
+		}
+	})
+
+	t.Run("operations fail when not a git repo", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create TODO.md with marker but no git repo
+		todoPath := filepath.Join(tmpDir, "TODO.md")
+		content := "<!-- todoat:enabled -->\n## Work\n- [ ] Task\n"
+		if err := os.WriteFile(todoPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to create TODO.md: %v", err)
+		}
+
+		cfg := git.Config{WorkDir: tmpDir}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+
+		// GetLists should fail because no git repo
+		_, err = be.GetLists(ctx)
+		if err == nil {
+			t.Error("expected error when getting lists without git repo")
+		}
+	})
+
+	t.Run("operations fail when no todo file", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, false) // No TODO.md
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+
+		// GetLists should fail because no todo file found
+		_, err = be.GetLists(ctx)
+		if err == nil {
+			t.Error("expected error when getting lists without todo file")
+		}
+	})
+}
+
+// =============================================================================
+// GetTasks Edge Cases (TestGitBackendGetTasksEdgeCases)
+// =============================================================================
+
+func TestGitBackendGetTasksEdgeCases(t *testing.T) {
+	t.Run("get tasks from non-existent list returns empty slice", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, true)
+		defer cleanup()
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+		tasks, err := be.GetTasks(ctx, "non-existent-list-id")
+		if err != nil {
+			t.Fatalf("GetTasks error: %v", err)
+		}
+		if len(tasks) != 0 {
+			t.Errorf("expected empty slice for non-existent list, got %d tasks", len(tasks))
+		}
+	})
+}
+
+// =============================================================================
+// Create List Edge Cases (TestGitBackendCreateListEdgeCases)
+// =============================================================================
+
+func TestGitBackendCreateListEdgeCases(t *testing.T) {
+	t.Run("creating existing list returns existing list", func(t *testing.T) {
+		repoPath, cleanup := testRepo(t, false)
+		defer cleanup()
+
+		todoPath := filepath.Join(repoPath, "TODO.md")
+		content := `<!-- todoat:enabled -->
+## Work
+
+- [ ] Task 1
+`
+		if err := os.WriteFile(todoPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to create TODO.md: %v", err)
+		}
+
+		cfg := git.Config{WorkDir: repoPath}
+		be, err := git.New(cfg)
+		if err != nil {
+			t.Fatalf("failed to create git backend: %v", err)
+		}
+		defer func() { _ = be.Close() }()
+
+		ctx := context.Background()
+
+		// Try to create a list with the same name (case-insensitive)
+		list, err := be.CreateList(ctx, "work")
+		if err != nil {
+			t.Fatalf("CreateList error: %v", err)
+		}
+
+		// Should return the existing list
+		if list.Name != "Work" {
+			t.Errorf("expected existing list name 'Work', got '%s'", list.Name)
+		}
+
+		// Should not have duplicates
+		lists, _ := be.GetLists(ctx)
+		workCount := 0
+		for _, l := range lists {
+			if strings.EqualFold(l.Name, "work") {
+				workCount++
+			}
+		}
+		if workCount != 1 {
+			t.Errorf("expected 1 Work list, got %d", workCount)
+		}
+	})
+}
