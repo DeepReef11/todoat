@@ -408,3 +408,425 @@ func TestDefaultConfig(t *testing.T) {
 		t.Error("SQLite backend should be enabled by default")
 	}
 }
+
+// =============================================================================
+// Tests for Issue 007: Additional Coverage
+// =============================================================================
+
+// TestIsSyncEnabled verifies sync status detection
+func TestIsSyncEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *Config
+		expected bool
+	}{
+		{
+			name:     "sync disabled by default",
+			config:   DefaultConfig(),
+			expected: false,
+		},
+		{
+			name: "sync enabled",
+			config: &Config{
+				Sync: SyncConfig{Enabled: true},
+			},
+			expected: true,
+		},
+		{
+			name: "sync explicitly disabled",
+			config: &Config{
+				Sync: SyncConfig{Enabled: false},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.IsSyncEnabled()
+			if got != tt.expected {
+				t.Errorf("IsSyncEnabled() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsAutoDetectEnabled verifies auto-detect backend setting
+func TestIsAutoDetectEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *Config
+		expected bool
+	}{
+		{
+			name:     "auto-detect disabled by default",
+			config:   DefaultConfig(),
+			expected: false,
+		},
+		{
+			name: "auto-detect enabled",
+			config: &Config{
+				AutoDetectBackend: true,
+			},
+			expected: true,
+		},
+		{
+			name: "auto-detect explicitly disabled",
+			config: &Config{
+				AutoDetectBackend: false,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.IsAutoDetectEnabled()
+			if got != tt.expected {
+				t.Errorf("IsAutoDetectEnabled() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestGetCacheDir verifies cache directory XDG path
+func TestGetCacheDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("XDG_CACHE_HOME set", func(t *testing.T) {
+		cacheDir := filepath.Join(tmpDir, "xdg-cache")
+		t.Setenv("XDG_CACHE_HOME", cacheDir)
+
+		got := GetCacheDir()
+		want := filepath.Join(cacheDir, "todoat")
+		if got != want {
+			t.Errorf("GetCacheDir() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("XDG_CACHE_HOME unset falls back to home", func(t *testing.T) {
+		t.Setenv("XDG_CACHE_HOME", "")
+		t.Setenv("HOME", tmpDir)
+
+		got := GetCacheDir()
+		want := filepath.Join(tmpDir, ".cache", "todoat")
+		if got != want {
+			t.Errorf("GetCacheDir() = %q, want %q", got, want)
+		}
+	})
+}
+
+// TestLoadFromPath verifies loading config from specific path
+func TestLoadFromPath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("empty path returns error", func(t *testing.T) {
+		_, err := LoadFromPath("")
+		if err == nil {
+			t.Error("expected error for empty path, got nil")
+		}
+	})
+
+	t.Run("non-existent file returns nil config", func(t *testing.T) {
+		cfg, err := LoadFromPath(filepath.Join(tmpDir, "nonexistent.yaml"))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if cfg != nil {
+			t.Error("expected nil config for non-existent file")
+		}
+	})
+
+	t.Run("valid config file", func(t *testing.T) {
+		configPath := filepath.Join(tmpDir, "valid.yaml")
+		content := `
+backends:
+  sqlite:
+    enabled: true
+    path: "/tmp/test.db"
+default_backend: sqlite
+output_format: json
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadFromPath(configPath)
+		if err != nil {
+			t.Fatalf("LoadFromPath() error = %v", err)
+		}
+		if cfg == nil {
+			t.Fatal("expected non-nil config")
+		}
+		if cfg.OutputFormat != "json" {
+			t.Errorf("OutputFormat = %q, want 'json'", cfg.OutputFormat)
+		}
+	})
+
+	t.Run("invalid YAML returns error", func(t *testing.T) {
+		configPath := filepath.Join(tmpDir, "invalid.yaml")
+		content := `invalid: [yaml structure`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		_, err := LoadFromPath(configPath)
+		if err == nil {
+			t.Error("expected error for invalid YAML")
+		}
+	})
+}
+
+// TestIsBackendConfigured verifies backend configuration check
+func TestIsBackendConfigured(t *testing.T) {
+	raw := map[string]interface{}{
+		"backends": map[string]interface{}{
+			"sqlite": map[string]interface{}{
+				"enabled": true,
+				"path":    "/tmp/test.db",
+			},
+			"todoist": map[string]interface{}{
+				"enabled": false,
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		backend  string
+		expected bool
+	}{
+		{"sqlite configured", "sqlite", true},
+		{"todoist configured", "todoist", true},
+		{"nextcloud not configured", "nextcloud", false},
+		{"unknown backend", "unknown", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsBackendConfigured(raw, tt.backend)
+			if got != tt.expected {
+				t.Errorf("IsBackendConfigured(raw, %q) = %v, want %v", tt.backend, got, tt.expected)
+			}
+		})
+	}
+
+	t.Run("nil backends map", func(t *testing.T) {
+		emptyRaw := map[string]interface{}{}
+		got := IsBackendConfigured(emptyRaw, "sqlite")
+		if got != false {
+			t.Error("expected false for empty raw map")
+		}
+	})
+}
+
+// TestLoadWithRaw verifies loading config with raw map
+func TestLoadWithRaw(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("creates default config if not exists", func(t *testing.T) {
+		configDir := filepath.Join(tmpDir, "config-loadwithraw")
+		t.Setenv("XDG_CONFIG_HOME", configDir)
+		dataDir := filepath.Join(tmpDir, "data-loadwithraw")
+		t.Setenv("XDG_DATA_HOME", dataDir)
+		t.Setenv("HOME", tmpDir)
+
+		cfg, raw, err := LoadWithRaw("")
+		if err != nil {
+			t.Fatalf("LoadWithRaw() error = %v", err)
+		}
+		if cfg == nil {
+			t.Fatal("expected non-nil config")
+		}
+		// Raw is nil for newly created default config
+		if raw != nil {
+			t.Error("expected nil raw for newly created default config")
+		}
+		if cfg.DefaultBackend != "sqlite" {
+			t.Errorf("DefaultBackend = %q, want 'sqlite'", cfg.DefaultBackend)
+		}
+	})
+
+	t.Run("loads existing config with raw", func(t *testing.T) {
+		configPath := filepath.Join(tmpDir, "existing.yaml")
+		content := `
+backends:
+  sqlite:
+    enabled: true
+    path: "/tmp/test.db"
+  custom_backend:
+    type: sqlite
+    enabled: true
+    path: "/tmp/custom.db"
+default_backend: sqlite
+output_format: text
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, raw, err := LoadWithRaw(configPath)
+		if err != nil {
+			t.Fatalf("LoadWithRaw() error = %v", err)
+		}
+		if cfg == nil {
+			t.Error("expected non-nil config")
+		}
+		if raw == nil {
+			t.Error("expected non-nil raw map")
+		}
+
+		// Verify custom backend is accessible via raw
+		if backends, ok := raw["backends"].(map[string]interface{}); ok {
+			if _, ok := backends["custom_backend"]; !ok {
+				t.Error("expected custom_backend in raw map")
+			}
+		} else {
+			t.Error("expected backends in raw map")
+		}
+	})
+}
+
+// TestGetTrashRetentionDays verifies trash retention configuration
+func TestGetTrashRetentionDays(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *Config
+		expected int
+	}{
+		{
+			name:     "nil retention returns default 30",
+			config:   &Config{},
+			expected: 30,
+		},
+		{
+			name: "zero retention (disabled)",
+			config: &Config{
+				Trash: TrashConfig{RetentionDays: intPtr(0)},
+			},
+			expected: 0,
+		},
+		{
+			name: "custom retention",
+			config: &Config{
+				Trash: TrashConfig{RetentionDays: intPtr(7)},
+			},
+			expected: 7,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.GetTrashRetentionDays()
+			if got != tt.expected {
+				t.Errorf("GetTrashRetentionDays() = %d, want %d", got, tt.expected)
+			}
+		})
+	}
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
+// TestValidateBackendNotEnabled verifies validation for disabled backends
+func TestValidateBackendNotEnabled(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *Config
+		wantErr bool
+	}{
+		{
+			name: "todoist default but not enabled",
+			config: &Config{
+				DefaultBackend: "todoist",
+				OutputFormat:   "text",
+				Backends: BackendsConfig{
+					Todoist: TodoistConfig{Enabled: false},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "nextcloud default but not enabled",
+			config: &Config{
+				DefaultBackend: "nextcloud",
+				OutputFormat:   "text",
+				Backends: BackendsConfig{
+					Nextcloud: NextcloudConfig{Enabled: false},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "todoist default and enabled",
+			config: &Config{
+				DefaultBackend: "todoist",
+				OutputFormat:   "text",
+				Backends: BackendsConfig{
+					Todoist: TodoistConfig{Enabled: true},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "nextcloud default and enabled",
+			config: &Config{
+				DefaultBackend: "nextcloud",
+				OutputFormat:   "text",
+				Backends: BackendsConfig{
+					Nextcloud: NextcloudConfig{Enabled: true},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestGetConnectivityTimeout verifies connectivity timeout configuration
+func TestGetConnectivityTimeout(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *Config
+		expected string
+	}{
+		{
+			name:     "empty timeout returns default",
+			config:   &Config{},
+			expected: "5s",
+		},
+		{
+			name: "custom timeout",
+			config: &Config{
+				Sync: SyncConfig{ConnectivityTimeout: "10s"},
+			},
+			expected: "10s",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.GetConnectivityTimeout()
+			if got != tt.expected {
+				t.Errorf("GetConnectivityTimeout() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestExpandPathEmpty verifies empty path handling
+func TestExpandPathEmpty(t *testing.T) {
+	got := ExpandPath("")
+	if got != "" {
+		t.Errorf("ExpandPath(\"\") = %q, want empty string", got)
+	}
+}
