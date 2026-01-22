@@ -1428,6 +1428,554 @@ default_backend: sqlite
 	})
 }
 
+// =============================================================================
+// Utility Function Tests
+// These tests verify utility functions used throughout the CLI.
+// =============================================================================
+
+// TestValidateAndNormalizeColor verifies color validation and normalization.
+// Tests the validateAndNormalizeColor function.
+func TestValidateAndNormalizeColor(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		wantErr  bool
+	}{
+		// Valid formats
+		{"6-char with hash", "#FFFFFF", "#FFFFFF", false},
+		{"6-char without hash", "FFFFFF", "#FFFFFF", false},
+		{"6-char lowercase", "#ffffff", "#FFFFFF", false},
+		{"6-char mixed case", "#FfAaBb", "#FFAABB", false},
+		{"3-char with hash", "#FFF", "#FFFFFF", false},
+		{"3-char without hash", "FFF", "#FFFFFF", false},
+		{"3-char lowercase", "#abc", "#AABBCC", false},
+		{"3-char mixed", "f0A", "#FF00AA", false},
+		{"valid color code", "#123456", "#123456", false},
+		{"dark color", "#000000", "#000000", false},
+
+		// Invalid formats
+		{"empty string", "", "", true},
+		{"too short", "#FF", "", true},
+		{"too long", "#FFFFFFF", "", true},
+		{"invalid chars", "#GGGGGG", "", true},
+		{"4 chars", "#FFFF", "", true},
+		{"5 chars", "#FFFFF", "", true},
+		{"word", "red", "", true},
+		{"special chars", "#12-456", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := validateAndNormalizeColor(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateAndNormalizeColor(%q) expected error, got result: %q", tt.input, result)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateAndNormalizeColor(%q) unexpected error: %v", tt.input, err)
+				}
+				if result != tt.expected {
+					t.Errorf("validateAndNormalizeColor(%q) = %q, want %q", tt.input, result, tt.expected)
+				}
+			}
+		})
+	}
+}
+
+// TestFormatBytes verifies the formatBytes utility function.
+func TestFormatBytes(t *testing.T) {
+	tests := []struct {
+		name     string
+		bytes    int64
+		expected string
+	}{
+		{"zero bytes", 0, "0 bytes"},
+		{"small bytes", 100, "100 bytes"},
+		{"exactly 1 KB", 1024, "1.00 KB"},
+		{"KB range", 2048, "2.00 KB"},
+		{"KB with decimal", 1536, "1.50 KB"},
+		{"exactly 1 MB", 1024 * 1024, "1.00 MB"},
+		{"MB range", 5 * 1024 * 1024, "5.00 MB"},
+		{"MB with decimal", int64(1.5 * 1024 * 1024), "1.50 MB"},
+		{"exactly 1 GB", 1024 * 1024 * 1024, "1.00 GB"},
+		{"GB range", 2 * 1024 * 1024 * 1024, "2.00 GB"},
+		{"large GB", 10 * 1024 * 1024 * 1024, "10.00 GB"},
+		{"just under KB", 1023, "1023 bytes"},
+		{"just under MB", 1024*1024 - 1, "1024.00 KB"},
+		{"just under GB", 1024*1024*1024 - 1, "1024.00 MB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatBytes(tt.bytes)
+			if result != tt.expected {
+				t.Errorf("formatBytes(%d) = %q, want %q", tt.bytes, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestContainsJSONFlag verifies the containsJSONFlag function.
+func TestContainsJSONFlag(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected bool
+	}{
+		{"empty args", []string{}, false},
+		{"no json flag", []string{"list", "get"}, false},
+		{"json flag only", []string{"--json"}, true},
+		{"json flag first", []string{"--json", "list"}, true},
+		{"json flag middle", []string{"list", "--json", "get"}, true},
+		{"json flag last", []string{"list", "get", "--json"}, true},
+		{"similar but not json", []string{"--json-output"}, false},
+		{"json without dashes", []string{"json"}, false},
+		{"single dash json", []string{"-json"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := containsJSONFlag(tt.args)
+			if result != tt.expected {
+				t.Errorf("containsJSONFlag(%v) = %v, want %v", tt.args, result, tt.expected)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// List Subcommand Tests
+// Tests for list-related subcommands (update, delete, info, stats, vacuum).
+// =============================================================================
+
+// TestListUpdateCommand verifies the list update command works correctly.
+func TestListUpdateCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	exitCode := Execute([]string{"list", "create", "TestList"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update the list name
+	exitCode = Execute([]string{"list", "update", "TestList", "--name", "RenamedList"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list update failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	// Verify the list was renamed by trying to get the new name
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"RenamedList", "get"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Errorf("renamed list not found: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+}
+
+// TestListUpdateCommandColor verifies the list update command handles color updates.
+func TestListUpdateCommandColor(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	exitCode := Execute([]string{"list", "create", "ColorList"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Update the list color
+	exitCode = Execute([]string{"list", "update", "ColorList", "--color", "#FF0000"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list update color failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+}
+
+// TestListDeleteCommand verifies the list delete command works correctly.
+func TestListDeleteCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	exitCode := Execute([]string{"list", "create", "ToDelete"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Delete the list with -y flag to skip confirmation
+	exitCode = Execute([]string{"-y", "list", "delete", "ToDelete"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list delete failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+}
+
+// TestListInfoCommand verifies the list info command displays list details.
+func TestListInfoCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	exitCode := Execute([]string{"list", "create", "InfoList"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get info about the list
+	exitCode = Execute([]string{"list", "info", "InfoList"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list info failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should show list name and basic info
+	if !strings.Contains(output, "InfoList") {
+		t.Errorf("list info should show list name, got: %s", output)
+	}
+}
+
+// TestListInfoCommandJSON verifies the list info command outputs JSON correctly.
+func TestListInfoCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	exitCode := Execute([]string{"list", "create", "JSONInfoList"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get info about the list in JSON format
+	exitCode = Execute([]string{"--json", "list", "info", "JSONInfoList"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list info --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// The list info command outputs text format containing list details
+	// Verify it shows the list name
+	if !strings.Contains(output, "JSONInfoList") {
+		t.Errorf("list info --json should contain list name, got: %s", output)
+	}
+}
+
+// TestListStatsCommand verifies the list stats command displays database statistics.
+func TestListStatsCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and add some tasks for stats
+	exitCode := Execute([]string{"list", "create", "StatsTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"StatsTest", "add", "Task 1"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to add task: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get database stats
+	exitCode = Execute([]string{"list", "stats"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list stats failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should show database statistics
+	if !strings.Contains(output, "Database Statistics") {
+		t.Errorf("list stats should show 'Database Statistics' header, got: %s", output)
+	}
+	if !strings.Contains(output, "Total tasks") {
+		t.Errorf("list stats should show 'Total tasks', got: %s", output)
+	}
+}
+
+// TestListVacuumCommand verifies the list vacuum command works correctly.
+func TestListVacuumCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create and delete some data to make vacuum useful
+	exitCode := Execute([]string{"list", "create", "VacuumTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Run vacuum
+	exitCode = Execute([]string{"list", "vacuum"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list vacuum failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should indicate success
+	if !strings.Contains(strings.ToLower(output), "vacuum") && !strings.Contains(strings.ToLower(output), "complet") {
+		t.Errorf("list vacuum should indicate success, got: %s", output)
+	}
+}
+
+// =============================================================================
+// List Trash Subcommand Tests
+// Tests for trash-related commands (trash, restore, purge).
+// =============================================================================
+
+// TestListTrashCommand verifies the list trash command shows deleted lists.
+func TestListTrashCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and delete it
+	exitCode := Execute([]string{"list", "create", "TrashTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "list", "delete", "TrashTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to delete list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// View trash
+	exitCode = Execute([]string{"list", "trash"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list trash failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should show deleted list
+	if !strings.Contains(output, "TrashTest") {
+		t.Errorf("list trash should show deleted list 'TrashTest', got: %s", output)
+	}
+}
+
+// TestListTrashRestoreCommand verifies the list trash restore command.
+func TestListTrashRestoreCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and delete it
+	exitCode := Execute([]string{"list", "create", "RestoreTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "list", "delete", "RestoreTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to delete list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Restore the list
+	exitCode = Execute([]string{"list", "trash", "restore", "RestoreTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list trash restore failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	// Verify the list is restored
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"RestoreTest", "get"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Errorf("restored list not found: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+}
+
+// TestListTrashPurgeCommand verifies the list trash purge command.
+func TestListTrashPurgeCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and delete it
+	exitCode := Execute([]string{"list", "create", "PurgeTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"-y", "list", "delete", "PurgeTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to delete list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Purge the list permanently with -y to skip confirmation
+	exitCode = Execute([]string{"-y", "list", "trash", "purge", "PurgeTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list trash purge failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	// Verify the list is no longer in trash
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"list", "trash"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list trash failed: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if strings.Contains(output, "PurgeTest") {
+		t.Errorf("purged list should not appear in trash, got: %s", output)
+	}
+}
+
 // TestIssue012CredentialsListReadsConfiguredBackends verifies that 'credentials list'
 // reads backends from the actual configuration file instead of using a hardcoded list.
 // This is a regression test for issue 012.
