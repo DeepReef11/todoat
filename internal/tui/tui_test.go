@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 
 // mockBackend implements tui.Backend for testing
 type mockBackend struct {
+	mu    sync.Mutex
 	lists []backend.List
 	tasks map[string][]backend.Task
 }
@@ -44,29 +46,43 @@ func newMockBackend() *mockBackend {
 }
 
 func (m *mockBackend) GetLists(_ context.Context) ([]backend.List, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.lists, nil
 }
 
 func (m *mockBackend) GetTasks(_ context.Context, listID string) ([]backend.Task, error) {
-	return m.tasks[listID], nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Return a copy to avoid race conditions
+	tasks := make([]backend.Task, len(m.tasks[listID]))
+	copy(tasks, m.tasks[listID])
+	return tasks, nil
 }
 
 func (m *mockBackend) GetTask(_ context.Context, listID, taskID string) (*backend.Task, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, t := range m.tasks[listID] {
 		if t.ID == taskID {
-			return &t, nil
+			task := t // Create a copy
+			return &task, nil
 		}
 	}
 	return nil, nil
 }
 
 func (m *mockBackend) CreateTask(_ context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	task.ID = "new-task"
 	m.tasks[listID] = append(m.tasks[listID], *task)
 	return task, nil
 }
 
 func (m *mockBackend) UpdateTask(_ context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for i, t := range m.tasks[listID] {
 		if t.ID == task.ID {
 			m.tasks[listID][i] = *task
@@ -77,6 +93,8 @@ func (m *mockBackend) UpdateTask(_ context.Context, listID string, task *backend
 }
 
 func (m *mockBackend) DeleteTask(_ context.Context, listID, taskID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	tasks := m.tasks[listID]
 	for i, t := range tasks {
 		if t.ID == taskID {
