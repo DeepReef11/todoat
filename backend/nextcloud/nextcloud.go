@@ -136,6 +136,7 @@ func (b *Backend) doRequest(ctx context.Context, method, url string, body []byte
 }
 
 // GetLists returns all calendars (task lists) from Nextcloud
+// Only returns calendars that support VTODO components (task lists)
 func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
 	propfindBody := `<?xml version="1.0" encoding="UTF-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/" xmlns:cal="urn:ietf:params:xml:ns:caldav">
@@ -143,6 +144,7 @@ func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
     <d:displayname/>
     <d:resourcetype/>
     <cs:getctag/>
+    <cal:supported-calendar-component-set/>
   </d:prop>
 </d:propfind>`
 
@@ -567,6 +569,16 @@ func generateVTODO(task *backend.Task) string {
 // XML Response Parsing
 // =============================================================================
 
+// CalComp represents a supported calendar component
+type CalComp struct {
+	Name string `xml:"name,attr"`
+}
+
+// SupportedCalendarComponentSet represents the supported-calendar-component-set property
+type SupportedCalendarComponentSet struct {
+	Comps []CalComp `xml:"comp"`
+}
+
 // Prop represents a CalDAV property
 type Prop struct {
 	DisplayName  string `xml:"displayname"`
@@ -574,7 +586,8 @@ type Prop struct {
 		Collection bool `xml:"collection"`
 		Calendar   bool `xml:"calendar"`
 	} `xml:"resourcetype"`
-	CTag string `xml:"getctag"`
+	CTag                          string                        `xml:"getctag"`
+	SupportedCalendarComponentSet SupportedCalendarComponentSet `xml:"supported-calendar-component-set"`
 }
 
 // PropStat represents a property status
@@ -595,6 +608,7 @@ type MultiStatus struct {
 }
 
 // parseCalendarList parses a PROPFIND response to extract calendars
+// Only returns calendars that support VTODO components
 func parseCalendarList(xmlBody, username string) ([]backend.List, error) {
 	var lists []backend.List
 
@@ -610,6 +624,10 @@ func parseCalendarList(xmlBody, username string) ([]backend.List, error) {
 				// Extract calendar ID from href
 				calID := extractCalendarID(resp.Href, username)
 				if calID != "" {
+					// Check if this calendar supports VTODO
+					if !supportsVTODO(ps.Prop.SupportedCalendarComponentSet) {
+						continue // Skip calendars that don't support tasks
+					}
 					lists = append(lists, backend.List{
 						ID:       calID,
 						Name:     ps.Prop.DisplayName,
@@ -623,29 +641,67 @@ func parseCalendarList(xmlBody, username string) ([]backend.List, error) {
 	return lists, nil
 }
 
+// supportsVTODO checks if the supported component set includes VTODO
+func supportsVTODO(compSet SupportedCalendarComponentSet) bool {
+	// If no components are specified, assume it supports all (backward compatibility)
+	if len(compSet.Comps) == 0 {
+		return true
+	}
+	for _, comp := range compSet.Comps {
+		if comp.Name == "VTODO" {
+			return true
+		}
+	}
+	return false
+}
+
 // parseCalendarListRegex is a fallback parser using regex
+// Only returns calendars that support VTODO components
 func parseCalendarListRegex(xmlBody, username string) ([]backend.List, error) {
 	var lists []backend.List
 
-	// Extract displayname and href pairs
+	// Split by response elements to process each calendar separately
+	responsePattern := regexp.MustCompile(`(?s)<d:response>(.*?)</d:response>`)
 	hrefPattern := regexp.MustCompile(`<d:href>([^<]+)</d:href>`)
 	displayPattern := regexp.MustCompile(`<d:displayname>([^<]+)</d:displayname>`)
+	vtodoPattern := regexp.MustCompile(`<cal:comp\s+name="VTODO"\s*/?>`)
 
-	hrefs := hrefPattern.FindAllStringSubmatch(xmlBody, -1)
-	displays := displayPattern.FindAllStringSubmatch(xmlBody, -1)
+	responses := responsePattern.FindAllStringSubmatch(xmlBody, -1)
 
-	// Match them up (they appear in order in responses)
-	for i, href := range hrefs {
-		if i < len(displays) {
-			calID := extractCalendarID(href[1], username)
-			if calID != "" && displays[i][1] != "" {
-				lists = append(lists, backend.List{
-					ID:       calID,
-					Name:     displays[i][1],
-					Modified: time.Now(),
-				})
-			}
+	for _, respMatch := range responses {
+		if len(respMatch) < 2 {
+			continue
 		}
+		respBody := respMatch[1]
+
+		// Extract href
+		hrefMatch := hrefPattern.FindStringSubmatch(respBody)
+		if len(hrefMatch) < 2 {
+			continue
+		}
+		calID := extractCalendarID(hrefMatch[1], username)
+		if calID == "" {
+			continue
+		}
+
+		// Extract displayname
+		displayMatch := displayPattern.FindStringSubmatch(respBody)
+		if len(displayMatch) < 2 || displayMatch[1] == "" {
+			continue
+		}
+
+		// Check if this calendar supports VTODO
+		// If no supported-calendar-component-set is present, assume it supports all
+		hasComponentSet := strings.Contains(respBody, "supported-calendar-component-set")
+		if hasComponentSet && !vtodoPattern.MatchString(respBody) {
+			continue // Skip calendars that don't support VTODO
+		}
+
+		lists = append(lists, backend.List{
+			ID:       calID,
+			Name:     displayMatch[1],
+			Modified: time.Now(),
+		})
 	}
 
 	return lists, nil

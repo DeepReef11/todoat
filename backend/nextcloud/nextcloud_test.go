@@ -26,9 +26,10 @@ type mockCalDAVServer struct {
 }
 
 type mockCalendar struct {
-	name  string
-	tasks map[string]string // uid -> vtodo content
-	ctag  string
+	name            string
+	tasks           map[string]string // uid -> vtodo content
+	ctag            string
+	supportedComps  []string // VTODO, VEVENT, etc. Empty means all
 }
 
 func newMockCalDAVServer(username, password string) *mockCalDAVServer {
@@ -61,9 +62,20 @@ func (m *mockCalDAVServer) URL() string {
 
 func (m *mockCalDAVServer) AddCalendar(name string) {
 	m.calendars[name] = &mockCalendar{
-		name:  name,
-		tasks: make(map[string]string),
-		ctag:  fmt.Sprintf("ctag-%d", time.Now().UnixNano()),
+		name:           name,
+		tasks:          make(map[string]string),
+		ctag:           fmt.Sprintf("ctag-%d", time.Now().UnixNano()),
+		supportedComps: []string{"VTODO", "VEVENT"}, // Default: supports both
+	}
+}
+
+// AddCalendarWithComponents adds a calendar with specific supported component types
+func (m *mockCalDAVServer) AddCalendarWithComponents(name string, components []string) {
+	m.calendars[name] = &mockCalendar{
+		name:           name,
+		tasks:          make(map[string]string),
+		ctag:           fmt.Sprintf("ctag-%d", time.Now().UnixNano()),
+		supportedComps: components,
 	}
 }
 
@@ -123,6 +135,11 @@ func (m *mockCalDAVServer) handlePropfind(w http.ResponseWriter, r *http.Request
 		response := `<?xml version="1.0" encoding="UTF-8"?>
 <d:multistatus xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/" xmlns:cal="urn:ietf:params:xml:ns:caldav">`
 		for name, cal := range m.calendars {
+			// Build supported-calendar-component-set
+			compSet := ""
+			for _, comp := range cal.supportedComps {
+				compSet += fmt.Sprintf(`<cal:comp name="%s"/>`, comp)
+			}
 			response += fmt.Sprintf(`
 <d:response>
   <d:href>/remote.php/dav/calendars/%s/%s/</d:href>
@@ -131,10 +148,11 @@ func (m *mockCalDAVServer) handlePropfind(w http.ResponseWriter, r *http.Request
       <d:displayname>%s</d:displayname>
       <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
       <cs:getctag>%s</cs:getctag>
+      <cal:supported-calendar-component-set>%s</cal:supported-calendar-component-set>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
-</d:response>`, m.username, name, name, cal.ctag)
+</d:response>`, m.username, name, name, cal.ctag, compSet)
 		}
 		response += `</d:multistatus>`
 		w.WriteHeader(http.StatusMultiStatus)
@@ -1288,4 +1306,65 @@ func TestIssue010HostURLWithProtocolPrefix(t *testing.T) {
 			t.Error("Expected at least one calendar/list")
 		}
 	})
+}
+
+// TestIssue001FilterVTODOCalendars reproduces issue #001:
+// GetLists() should only return calendars that support VTODO components.
+// Calendars that only support VEVENT (like "Contact birthdays") should be filtered out.
+func TestIssue001FilterVTODOCalendars(t *testing.T) {
+	server := newMockCalDAVServer("testuser", "testpass")
+	defer server.Close()
+
+	// Add a calendar that supports tasks (VTODO)
+	server.AddCalendarWithComponents("Tasks", []string{"VTODO"})
+	// Add a calendar that supports both (should be included)
+	server.AddCalendarWithComponents("Personal", []string{"VEVENT", "VTODO"})
+	// Add a calendar that only supports events (should be filtered out)
+	server.AddCalendarWithComponents("Contact birthdays", []string{"VEVENT"})
+	// Add a calendar with no VTODO support (should be filtered out)
+	server.AddCalendarWithComponents("Events Only", []string{"VEVENT", "VJOURNAL"})
+
+	be, err := New(Config{
+		Host:      strings.TrimPrefix(server.URL(), "http://"),
+		Username:  "testuser",
+		Password:  "testpass",
+		AllowHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create backend: %v", err)
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+	lists, err := be.GetLists(ctx)
+	if err != nil {
+		t.Fatalf("GetLists failed: %v", err)
+	}
+
+	// Should only get calendars that support VTODO
+	if len(lists) != 2 {
+		t.Errorf("Expected 2 lists (Tasks and Personal), got %d", len(lists))
+		for _, l := range lists {
+			t.Logf("  - %s (ID: %s)", l.Name, l.ID)
+		}
+	}
+
+	// Verify the correct calendars are included
+	names := make(map[string]bool)
+	for _, l := range lists {
+		names[l.Name] = true
+	}
+
+	if !names["Tasks"] {
+		t.Error("Expected to find calendar 'Tasks' (supports VTODO)")
+	}
+	if !names["Personal"] {
+		t.Error("Expected to find calendar 'Personal' (supports VTODO)")
+	}
+	if names["Contact birthdays"] {
+		t.Error("Calendar 'Contact birthdays' should be filtered out (VEVENT only)")
+	}
+	if names["Events Only"] {
+		t.Error("Calendar 'Events Only' should be filtered out (no VTODO support)")
+	}
 }
