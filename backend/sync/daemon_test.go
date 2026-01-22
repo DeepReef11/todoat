@@ -88,18 +88,15 @@ func TestSyncDaemonStatusCLI(t *testing.T) {
 func TestSyncDaemonIntervalCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
-	// Configure a short interval for testing (1 second)
-	cli.SetDaemonInterval(1 * time.Second)
+	// Configure a short interval for testing (100ms)
+	cli.SetDaemonInterval(100 * time.Millisecond)
 
 	// Start daemon
 	cli.MustExecute("-y", "sync", "daemon", "start")
 	defer cli.MustExecute("-y", "sync", "daemon", "stop")
 
-	// Wait for at least 2 intervals
-	time.Sleep(2500 * time.Millisecond)
-
-	// Check that sync ran multiple times by examining logs or status
-	stdout := cli.MustExecute("-y", "sync", "daemon", "status")
+	// Wait for at least 2 sync cycles using polling instead of fixed sleep
+	stdout := cli.WaitForSyncCount(5*time.Second, 2)
 
 	// Status should show sync count > 1
 	testutil.AssertContains(t, stdout, "Sync count")
@@ -110,14 +107,14 @@ func TestSyncDaemonNotificationCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithDaemon(t)
 
 	// Configure short interval and enable notifications
-	cli.SetDaemonInterval(1 * time.Second)
+	cli.SetDaemonInterval(100 * time.Millisecond)
 
 	// Start daemon
 	cli.MustExecute("-y", "sync", "daemon", "start")
 	defer cli.MustExecute("-y", "sync", "daemon", "stop")
 
-	// Wait for a sync cycle to complete
-	time.Sleep(1500 * time.Millisecond)
+	// Wait for a sync cycle to complete using polling
+	cli.WaitForSyncCount(5*time.Second, 1)
 
 	// Check notification log for sync events
 	stdout := cli.MustExecute("-y", "notification", "log")
@@ -138,17 +135,16 @@ func TestSyncDaemonOfflineCLI(t *testing.T) {
 
 	// Configure daemon with a simulated offline remote
 	cli.SetDaemonOffline(true)
-	cli.SetDaemonInterval(1 * time.Second)
+	cli.SetDaemonInterval(100 * time.Millisecond)
 
 	// Start daemon
 	cli.MustExecute("-y", "sync", "daemon", "start")
 	defer cli.MustExecute("-y", "sync", "daemon", "stop")
 
-	// Wait for a sync attempt
-	time.Sleep(1500 * time.Millisecond)
+	// Wait for a sync attempt using polling
+	stdout := cli.WaitForSyncCount(5*time.Second, 1)
 
 	// Daemon should still be running (not crashed)
-	stdout := cli.MustExecute("-y", "sync", "daemon", "status")
 	testutil.AssertContains(t, stdout, "running")
 
 	// Should indicate offline status or retry
@@ -167,23 +163,22 @@ func TestSyncDaemonReconnectCLI(t *testing.T) {
 
 	// Start in offline mode
 	cli.SetDaemonOffline(true)
-	cli.SetDaemonInterval(1 * time.Second)
+	cli.SetDaemonInterval(100 * time.Millisecond)
 
 	// Start daemon
 	cli.MustExecute("-y", "sync", "daemon", "start")
 	defer cli.MustExecute("-y", "sync", "daemon", "stop")
 
-	// Wait for offline sync attempt
-	time.Sleep(1500 * time.Millisecond)
+	// Wait for offline sync attempt using polling
+	cli.WaitForSyncCount(5*time.Second, 1)
 
 	// Restore network
 	cli.SetDaemonOffline(false)
 
-	// Wait for reconnect and successful sync
-	time.Sleep(1500 * time.Millisecond)
+	// Wait for reconnect and successful sync (sync count should increase)
+	stdout := cli.WaitForSyncCount(5*time.Second, 2)
 
 	// Check status shows successful sync
-	stdout := cli.MustExecute("-y", "sync", "daemon", "status")
 	testutil.AssertContains(t, stdout, "running")
 }
 
@@ -284,8 +279,11 @@ func TestSyncDaemonLogFileCLI(t *testing.T) {
 	// Start daemon with logging
 	cli.MustExecute("-y", "sync", "daemon", "start")
 
-	// Wait for some activity
-	time.Sleep(500 * time.Millisecond)
+	// Wait for log file to be created and have content using polling
+	testutil.WaitFor(t, 5*time.Second, func() bool {
+		data, err := os.ReadFile(logFile)
+		return err == nil && len(data) > 0
+	}, "log file to have content")
 
 	// Stop daemon
 	cli.MustExecute("-y", "sync", "daemon", "stop")

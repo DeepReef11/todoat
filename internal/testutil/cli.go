@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -808,4 +809,59 @@ func (c *TrashCLITest) SetListDeletedAt(listName string, deletedAt time.Time) {
 // openTestDB opens the SQLite database for testing purposes.
 func openTestDB(dbPath string) (*sql.DB, error) {
 	return sql.Open("sqlite", dbPath)
+}
+
+// WaitFor polls a condition function until it returns true or timeout is reached.
+// This is used to replace flaky time.Sleep calls in tests with condition-based waiting.
+// The poll interval is 50ms by default.
+func WaitFor(t *testing.T, timeout time.Duration, condition func() bool, description string) {
+	t.Helper()
+	WaitForWithInterval(t, timeout, 50*time.Millisecond, condition, description)
+}
+
+// WaitForWithInterval polls a condition function with a custom interval.
+func WaitForWithInterval(t *testing.T, timeout, interval time.Duration, condition func() bool, description string) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(interval)
+	}
+	t.Fatalf("WaitFor timed out after %v: %s", timeout, description)
+}
+
+// WaitForOutput polls until CLI output contains the expected string.
+func (c *CLITest) WaitForOutput(timeout time.Duration, args []string, expected string) string {
+	c.t.Helper()
+	var lastOutput string
+	WaitFor(c.t, timeout, func() bool {
+		lastOutput, _, _ = c.Execute(args...)
+		return strings.Contains(lastOutput, expected)
+	}, fmt.Sprintf("output to contain %q", expected))
+	return lastOutput
+}
+
+// WaitForSyncCount polls daemon status until sync count reaches the target value.
+func (d *DaemonCLITest) WaitForSyncCount(timeout time.Duration, minCount int) string {
+	d.t.Helper()
+	var lastOutput string
+	WaitFor(d.t, timeout, func() bool {
+		lastOutput = d.MustExecute("-y", "sync", "daemon", "status")
+		// Parse sync count from output
+		if strings.Contains(lastOutput, "Sync count:") {
+			lines := strings.Split(lastOutput, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "Sync count:") {
+					var count int
+					if _, err := fmt.Sscanf(line, "  Sync count: %d", &count); err == nil {
+						return count >= minCount
+					}
+				}
+			}
+		}
+		return false
+	}, fmt.Sprintf("sync count to reach at least %d", minCount))
+	return lastOutput
 }

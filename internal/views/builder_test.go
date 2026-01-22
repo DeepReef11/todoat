@@ -28,6 +28,25 @@ func readAll(t *testing.T, r io.Reader) []byte {
 	return out
 }
 
+// waitForRender waits for the TUI to render any output using teatest.WaitFor.
+// This replaces flaky time.Sleep calls with condition-based polling.
+// Note: This reads from the output stream - subsequent reads may need fresh output.
+func waitForRender(t *testing.T, tm *teatest.TestModel) {
+	t.Helper()
+	teatest.WaitFor(t, tm.Output(), func(bts []byte) bool {
+		return len(bts) > 0
+	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
+}
+
+// sendKeyAndWait sends a key message and waits briefly for processing.
+// Uses a minimal sleep since teatest messages are processed asynchronously.
+func sendKeyAndWait(tm *teatest.TestModel, key tea.KeyMsg) {
+	tm.Send(key)
+	// Minimal wait for message processing - using small value since this is just
+	// for message queue processing, not for visual changes
+	time.Sleep(20 * time.Millisecond)
+}
+
 // --- CLI Command Tests ---
 
 // TestViewCreateCommand verifies that `todoat view create myview` launches interactive builder
@@ -37,8 +56,8 @@ func TestViewCreateCommand(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-	// Wait for initial render
-	time.Sleep(100 * time.Millisecond)
+	// Wait for initial render using polling
+	waitForRender(t, tm)
 
 	// The builder should render with field selection panel visible
 	// Cancel without saving
@@ -61,33 +80,26 @@ func TestViewBuilderSavesYAML(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-	// Wait for initial render
-	time.Sleep(100 * time.Millisecond)
+	// Wait for initial render using polling
+	waitForRender(t, tm)
 
 	// Toggle some field selections using Space
 	// Fields are: status, summary, description, priority, due_date, start_date,
 	//             created, modified, completed, tags, uid, parent
 	// First field (status) should be focused by default
-	tm.Send(tea.KeyMsg{Type: tea.KeySpace}) // Toggle status (should select it)
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace}) // Toggle status (should select it)
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown}) // Move to summary
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeySpace}) // Toggle summary
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // Move to summary
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace}) // Toggle summary
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown}) // Move to description
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // Move to description
 	// Skip description
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown}) // Move to priority
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeySpace}) // Toggle priority
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // Move to priority
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace}) // Toggle priority
 
 	// Save with Ctrl+S
-	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlS})
-	time.Sleep(100 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyCtrlS})
 
 	// The builder should exit after saving
 	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
@@ -133,15 +145,13 @@ func TestViewBuilderCancel(t *testing.T) {
 		builder := views.NewBuilder("cancelview", viewsDir)
 		tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-		time.Sleep(100 * time.Millisecond)
+		waitForRender(t, tm)
 
 		// Select a field
-		tm.Send(tea.KeyMsg{Type: tea.KeySpace})
-		time.Sleep(50 * time.Millisecond)
+		sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace})
 
 		// Cancel with Escape
-		tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
-		time.Sleep(50 * time.Millisecond)
+		sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyEsc})
 
 		tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 
@@ -157,15 +167,13 @@ func TestViewBuilderCancel(t *testing.T) {
 		builder := views.NewBuilder("cancelview2", viewsDir)
 		tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-		time.Sleep(100 * time.Millisecond)
+		waitForRender(t, tm)
 
 		// Select a field
-		tm.Send(tea.KeyMsg{Type: tea.KeySpace})
-		time.Sleep(50 * time.Millisecond)
+		sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace})
 
 		// Cancel with Ctrl+C
-		tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
-		time.Sleep(50 * time.Millisecond)
+		sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyCtrlC})
 
 		tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 
@@ -186,9 +194,9 @@ func TestViewBuilderFieldSelection(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
+	// Wait for render using a short sleep - teatest.WaitFor doesn't work well
+	// when you need the output bytes back (it consumes them)
 	time.Sleep(100 * time.Millisecond)
-
-	// Should display all available fields
 	out := readAll(t, tm.Output())
 	outStr := string(out)
 
@@ -214,15 +222,13 @@ func TestViewBuilderFieldConfiguration(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-	time.Sleep(100 * time.Millisecond)
+	waitForRender(t, tm)
 
 	// Select a field
-	tm.Send(tea.KeyMsg{Type: tea.KeySpace}) // Toggle status
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace}) // Toggle status
 
 	// Press Enter to open field configuration dialog
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-	time.Sleep(100 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyEnter})
 
 	// Should show configuration options
 	out := readAll(t, tm.Output())
@@ -243,8 +249,7 @@ func TestViewBuilderFieldConfiguration(t *testing.T) {
 	}
 
 	// Cancel and exit
-	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
@@ -258,11 +263,10 @@ func TestViewBuilderFilterBuilder(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-	time.Sleep(100 * time.Millisecond)
+	waitForRender(t, tm)
 
 	// Navigate to filter panel (Tab)
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	time.Sleep(100 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyTab})
 
 	out := readAll(t, tm.Output())
 	outStr := string(out)
@@ -295,13 +299,11 @@ func TestViewBuilderSortRules(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-	time.Sleep(100 * time.Millisecond)
+	waitForRender(t, tm)
 
 	// Navigate to sort panel (multiple Tabs)
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	time.Sleep(100 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyTab})
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyTab})
 
 	out := readAll(t, tm.Output())
 	outStr := string(out)
@@ -334,23 +336,18 @@ func TestViewBuilderKeyboardNavigation(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-	time.Sleep(100 * time.Millisecond)
+	waitForRender(t, tm)
 
 	// Test arrow key navigation
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyUp})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown})
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown})
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyUp})
 
 	// Test Tab for panel switching
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyTab})
 
 	// Test Shift+Tab for reverse panel switching
-	tm.Send(tea.KeyMsg{Type: tea.KeyShiftTab})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyShiftTab})
 
 	// Verify the builder is still responsive
 	out := readAll(t, tm.Output())
@@ -373,11 +370,10 @@ func TestViewBuilderValidation(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-	time.Sleep(100 * time.Millisecond)
+	waitForRender(t, tm)
 
 	// Try to save without selecting any fields
-	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlS})
-	time.Sleep(100 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyCtrlS})
 
 	// Should show validation error or not save
 	out := readAll(t, tm.Output())
@@ -402,8 +398,7 @@ func TestViewBuilderValidation(t *testing.T) {
 	// If error is found, test passes; if not, the builder should still be running
 	if !foundError {
 		// Builder should still be active - verify by sending more input
-		tm.Send(tea.KeyMsg{Type: tea.KeySpace}) // Select a field
-		time.Sleep(50 * time.Millisecond)
+		sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace}) // Select a field
 	}
 
 	// Cancel
@@ -420,32 +415,24 @@ func TestViewBuilderCompleteWorkflow(t *testing.T) {
 
 	tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
 
-	time.Sleep(100 * time.Millisecond)
+	waitForRender(t, tm)
 
 	// Step 1: Select fields
 	// Select status
-	tm.Send(tea.KeyMsg{Type: tea.KeySpace})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace})
 
 	// Navigate to summary and select
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeySpace})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown})
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace})
 
 	// Navigate to due_date and select
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown}) // description
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown}) // priority
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown}) // due_date
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeySpace})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // description
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // priority
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // due_date
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace})
 
 	// Step 2: Save the view
-	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlS})
-	time.Sleep(100 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyCtrlS})
 
 	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
 

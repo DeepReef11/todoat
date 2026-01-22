@@ -16,6 +16,20 @@ import (
 	"todoat/internal/tui"
 )
 
+// sendKeyAndWait sends a key message and waits briefly for processing.
+// Uses a minimal sleep since teatest messages are processed asynchronously.
+func sendKeyAndWait(tm *teatest.TestModel, key tea.KeyMsg) {
+	tm.Send(key)
+	// Minimal wait for message processing - using small value since this is just
+	// for message queue processing, not for visual changes
+	time.Sleep(20 * time.Millisecond)
+}
+
+// sendRunesAndWait sends a rune key message and waits briefly for processing.
+func sendRunesAndWait(tm *teatest.TestModel, runes []rune) {
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyRunes, Runes: runes})
+}
+
 // =============================================================================
 // TUI Interface Tests (029-tui-interface)
 // =============================================================================
@@ -128,7 +142,7 @@ func TestTUILaunch(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Quit the TUI
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	// The TUI should render without errors
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
@@ -151,11 +165,10 @@ func TestTUIListNavigation(t *testing.T) {
 
 	// Initially should be on first list (Work)
 	// Press down to navigate to next list
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown})
 
 	// Quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	if !bytes.Contains(out, []byte("Work")) {
@@ -179,15 +192,13 @@ func TestTUITaskNavigation(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Press Tab to switch focus to tasks pane
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyTab})
 
 	// Use j/k for task navigation (vim-like)
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	time.Sleep(50 * time.Millisecond)
+	sendRunesAndWait(tm, []rune{'j'})
 
 	// Quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	// Should show tasks
@@ -212,18 +223,16 @@ func TestTUIAddTask(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Press 'a' to add new task
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
-	time.Sleep(50 * time.Millisecond)
+	sendRunesAndWait(tm, []rune{'a'})
 
 	// Type task name and confirm
 	for _, r := range "New test task" {
 		tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-	time.Sleep(100 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyEnter})
 
 	// Quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	if !bytes.Contains(out, []byte("New test task")) {
@@ -244,17 +253,14 @@ func TestTUIEditTask(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Switch to task pane
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyTab})
 
 	// Press 'e' to edit task
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
-	time.Sleep(50 * time.Millisecond)
+	sendRunesAndWait(tm, []rune{'e'})
 
 	// Quit (escape from edit then quit)
-	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyEsc})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	// Should show edit dialog with current task content
@@ -276,15 +282,13 @@ func TestTUICompleteTask(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Switch to task pane
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyTab})
 
 	// Press 'c' to complete task
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
-	time.Sleep(100 * time.Millisecond)
+	sendRunesAndWait(tm, []rune{'c'})
 
 	// Quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	// Should show completion indicator (checkmark or strikethrough)
@@ -306,19 +310,16 @@ func TestTUIDeleteTask(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Switch to task pane
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyTab})
 
 	// Press 'd' to delete task
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-	time.Sleep(50 * time.Millisecond)
+	sendRunesAndWait(tm, []rune{'d'})
 
 	// Confirm deletion
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	time.Sleep(100 * time.Millisecond)
+	sendRunesAndWait(tm, []rune{'y'})
 
 	// Quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	// Check final frame - extract content after the last [15A (cursor positioning)
@@ -363,7 +364,7 @@ func TestTUITreeView(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	// Should show parent task
@@ -390,19 +391,16 @@ func TestTUIFilterTasks(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Press '/' to open filter dialog
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
-	time.Sleep(50 * time.Millisecond)
+	sendRunesAndWait(tm, []rune{'/'})
 
 	// Type search query
 	for _, r := range "Review" {
 		tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-	time.Sleep(50 * time.Millisecond)
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyEnter})
 
 	// Quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	// Should filter tasks to show only matching ones
@@ -424,13 +422,11 @@ func TestTUIKeyBindings(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Press '?' to show help
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-	time.Sleep(50 * time.Millisecond)
+	sendRunesAndWait(tm, []rune{'?'})
 
 	// Quit (escape from help then quit)
-	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
-	time.Sleep(50 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyEsc})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	out := readAll(t, tm.FinalOutput(t, teatest.WithFinalTimeout(time.Second)))
 	// Should show key bindings help
@@ -452,7 +448,7 @@ func TestTUIQuit(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Press 'q' to quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	sendRunesAndWait(tm, []rune{'q'})
 
 	// Should exit without error
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
