@@ -165,20 +165,52 @@ todoat MyList --due-after -3d
 | `+Nw` | N weeks from now |
 | `+Nm` | N months from now |
 
-### Task with Time
+### Relative Dates with Time
 
-Set specific times for due dates and start dates:
+Combine relative dates with specific times by adding a space-separated time component:
 
 ```bash
-# ISO 8601 format with time
+# Tomorrow at a specific time
+todoat MyList add "Morning standup" --due-date "tomorrow 09:00"
+todoat MyList add "Afternoon review" --due-date "tomorrow 14:30"
+
+# Days from now with time
+todoat MyList add "Team sync" --due-date "+2d 10:00"
+todoat MyList add "Weekly review" --due-date "+7d 15:00"
+
+# Today with specific time
+todoat MyList add "Lunch meeting" --due-date "today 12:30"
+
+# With seconds (optional)
+todoat MyList add "Precise event" --due-date "tomorrow 09:00:00"
+```
+
+**Syntax**: `<relative-date> HH:MM` or `<relative-date> HH:MM:SS`
+
+| Component | Format | Range |
+|-----------|--------|-------|
+| Hours | 1-2 digits | 0-23 |
+| Minutes | 2 digits | 00-59 |
+| Seconds | 2 digits (optional) | 00-59 |
+
+**Note**: Relative dates with time always use local timezone. Timezone offsets (like `-05:00`) are not supported with relative dates. For timezone-aware scheduling, use absolute ISO 8601 format instead.
+
+### Task with Time (Absolute Dates)
+
+Set specific times using ISO 8601 format:
+
+```bash
+# ISO 8601 format with time (local timezone)
 todoat MyList add "Team meeting" --due-date 2026-01-20T14:30
 
-# With timezone
+# With seconds
+todoat MyList add "Precise meeting" --due-date 2026-01-20T14:30:00
+
+# With timezone offset
 todoat MyList add "Client call" --due-date "2026-01-20T14:30-05:00"
 
-# Relative date with time
-todoat MyList add "Morning standup" --due-date "tomorrow 09:00"
-todoat MyList add "Friday meeting" --due-date "+2d 14:00"
+# UTC timezone
+todoat MyList add "Server maintenance" --due-date "2026-01-20T14:30Z"
 ```
 
 Date-only input defaults to midnight (00:00). Tasks with time show the time component in output:
