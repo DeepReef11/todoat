@@ -8,3 +8,4 @@ todoat
 .env
 *.json
 TestList.csv
+coverage*.out

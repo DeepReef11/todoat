@@ -4,14 +4,17 @@ todoat supports multiple storage backends. This guide covers configuring each ba
 
 ## Available Backends
 
-| Backend | Type | Description |
-|---------|------|-------------|
-| Nextcloud | `nextcloud` | CalDAV-based cloud storage |
-| Todoist | `todoist` | Todoist cloud service |
-| Google Tasks | `google` | Google Tasks cloud service |
-| Microsoft To Do | `mstodo` | Microsoft To Do cloud service |
-| SQLite | `sqlite` | Local database storage |
-| Git | `git` | Markdown files in Git repositories |
+| Backend | Type | CLI Support | Description |
+|---------|------|-------------|-------------|
+| SQLite | `sqlite` | ✅ Yes | Local database storage (default) |
+| Nextcloud | `nextcloud` | ✅ Yes | CalDAV-based cloud storage |
+| Todoist | `todoist` | ✅ Yes | Todoist cloud service |
+| Git | `git` | 🚧 Planned | Markdown files in Git repositories |
+
+**Note**: The following backends are documented but not yet available via CLI:
+- **Google Tasks** (`google`) - Backend code exists but not wired to CLI
+- **Microsoft To Do** (`mstodo`) - Backend code exists but not wired to CLI
+- **File** (`file`) - Placeholder backend, not yet implemented
 
 ## Nextcloud (CalDAV)
 
@@ -112,6 +115,8 @@ todoat credentials set todoist token --prompt
 
 ## Google Tasks
 
+> **Note**: The Google Tasks backend code exists but is **not yet available via CLI**. This section documents the planned functionality for future reference.
+
 ### Configuration
 
 ```yaml
@@ -184,6 +189,8 @@ todoat -b google "My Tasks" add "Submit report" --due tomorrow
 - **No recurrence**: Recurring tasks are not supported by the API
 
 ## Microsoft To Do
+
+> **Note**: The Microsoft To Do backend code exists but is **not yet available via CLI**. This section documents the planned functionality for future reference.
 
 ### Configuration
 
@@ -318,6 +325,8 @@ Paths support:
 - `$HOME` - Environment variable
 
 ## Git (Markdown)
+
+> **Note**: The Git backend code exists but is **not yet available via CLI**. This section documents the planned functionality for future reference.
 
 ### Configuration
 

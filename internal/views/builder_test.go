@@ -89,13 +89,13 @@ func TestViewBuilderSavesYAML(t *testing.T) {
 	// First field (status) should be focused by default
 	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace}) // Toggle status (should select it)
 
-	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // Move to summary
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown})  // Move to summary
 	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace}) // Toggle summary
 
 	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // Move to description
 	// Skip description
 
-	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown}) // Move to priority
+	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyDown})  // Move to priority
 	sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace}) // Toggle priority
 
 	// Save with Ctrl+S

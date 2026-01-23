@@ -25,10 +25,10 @@ type mockCalDAVServer struct {
 }
 
 type mockCalendar struct {
-	name            string
-	tasks           map[string]string // uid -> vtodo content
-	ctag            string
-	supportedComps  []string // VTODO, VEVENT, etc. Empty means all
+	name           string
+	tasks          map[string]string // uid -> vtodo content
+	ctag           string
+	supportedComps []string // VTODO, VEVENT, etc. Empty means all
 }
 
 func newMockCalDAVServer(username, password string) *mockCalDAVServer {

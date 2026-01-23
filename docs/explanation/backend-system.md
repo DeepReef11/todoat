@@ -193,6 +193,8 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 
 ### 3. Git Backend (Markdown in Repositories)
 
+> **Note:** This backend is implemented but not yet wired to the CLI. It cannot be accessed via `--backend=git`. This is a planned feature.
+
 **Purpose:** Store tasks in human-readable markdown files within Git repositories, enabling version control and collaboration workflows.
 
 **How It Works:**
@@ -259,6 +261,8 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 ---
 
 ### 4. File Backend (Placeholder)
+
+> **Note:** This backend is implemented as a placeholder but not yet wired to the CLI. It cannot be accessed via `--backend=file`.
 
 **Purpose:** Reserved for future file-based storage implementations; currently non-functional.
 

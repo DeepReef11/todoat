@@ -41,8 +41,8 @@ These flags are available for all commands:
 | Flag | Type | Description |
 |------|------|-------------|
 | `-d, --description <text>` | string | Task description/notes (use "" to clear) |
-| `--due-date <date>` | string | Due date (YYYY-MM-DD or YYYY-MM-DDTHH:MM, use "" to clear) |
-| `--start-date <date>` | string | Start date (YYYY-MM-DD, use "" to clear) |
+| `--due-date <date>` | string | Due date (see [Date Syntax](#date-syntax) below, use "" to clear) |
+| `--start-date <date>` | string | Start date (see [Date Syntax](#date-syntax) below, use "" to clear) |
 | `-p, --priority <n>` | string | Priority (0-9, 1=highest) |
 | `-s, --status <status>` | string | Status (TODO, IN-PROGRESS, DONE, CANCELLED) |
 | `--tag <tag>` | strings | Tag/category (can specify multiple times) |
@@ -64,10 +64,10 @@ These flags are available for all commands:
 | `-p, --priority <filter>` | string | Filter by priority (see below) |
 | `--tag <tag>` | strings | Filter by tag (can specify multiple) |
 | `-v, --view <name>` | string | View to use (default, all, or custom) |
-| `--due-after <date>` | string | Filter tasks due on or after date (YYYY-MM-DD) |
-| `--due-before <date>` | string | Filter tasks due before date (YYYY-MM-DD) |
-| `--created-after <date>` | string | Filter tasks created on or after date |
-| `--created-before <date>` | string | Filter tasks created before date |
+| `--due-after <date>` | string | Filter tasks due on or after date (see [Date Syntax](#date-syntax)) |
+| `--due-before <date>` | string | Filter tasks due before date (see [Date Syntax](#date-syntax)) |
+| `--created-after <date>` | string | Filter tasks created on or after date (see [Date Syntax](#date-syntax)) |
+| `--created-before <date>` | string | Filter tasks created before date (see [Date Syntax](#date-syntax)) |
 
 ##### Priority Filter Syntax
 
@@ -97,6 +97,47 @@ todoat MyList -s TODO -p high
 
 # Show medium priority in-progress tasks
 todoat MyList -s IN-PROGRESS -p 5
+```
+
+##### Date Syntax
+
+Date flags accept multiple formats:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| ISO date | `2026-01-23` | Absolute date |
+| ISO datetime | `2026-01-23T14:30` | Absolute date and time |
+| Relative keyword | `today`, `tomorrow` | Human-friendly relative dates |
+| Relative offset | `+1d`, `+2w`, `+1m` | Days, weeks, or months from today |
+
+**Relative date keywords:**
+
+| Keyword | Meaning |
+|---------|---------|
+| `today` | Current date |
+| `tomorrow` | Next day |
+| `yesterday` | Previous day |
+| `next week` | 7 days from today |
+| `next month` | 1 month from today |
+
+**Relative date offsets:**
+
+| Suffix | Meaning | Example |
+|--------|---------|---------|
+| `d` | Days | `+3d` (3 days from today) |
+| `w` | Weeks | `+2w` (2 weeks from today) |
+| `m` | Months | `+1m` (1 month from today) |
+
+**Relative dates with time:**
+
+Combine a relative date with a time by separating with a space:
+
+```bash
+# Tomorrow at 9am
+todoat MyList add "Meeting" --due-date "tomorrow 09:00"
+
+# Next week at 2:30pm
+todoat MyList add "Review" --due-date "next week 14:30"
 ```
 
 #### Direct task selection:
@@ -539,8 +580,8 @@ todoat migrate [flags]
 
 | Flag | Description |
 |------|-------------|
-| `--from <backend>` | Source backend (sqlite, nextcloud, todoist, file) |
-| `--to <backend>` | Target backend (sqlite, nextcloud, todoist, file) |
+| `--from <backend>` | Source backend (sqlite, nextcloud, todoist) |
+| `--to <backend>` | Target backend (sqlite, nextcloud, todoist) |
 | `--list <name>` | Migrate only specified list |
 | `--dry-run` | Show what would be migrated without making changes |
 | `--target-info <backend>` | Show tasks in target backend |

@@ -402,16 +402,17 @@ This diagram shows how major features interact with each other:
 - All view customization
 - All CLI interface features
 - All configuration features
+- Cross-backend task migration
+- TUI interface
 
-- Git/Markdown backend
-- File backend
+**In Development** (🔧):
 - Auto-sync daemon (redesign in progress)
 
 **Future Roadmap** (📋):
-- Cross-backend task migration
+- Git/Markdown backend (implemented but not yet wired to CLI)
+- File backend (implemented but not yet wired to CLI)
 - Google Tasks backend
 - Microsoft To Do backend
-- TUI/GUI interface
 
 ---
 
