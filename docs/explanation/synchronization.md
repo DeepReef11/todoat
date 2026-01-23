@@ -445,12 +445,12 @@ Allow users to work with tasks without network connectivity, with all changes qu
 **1. Offline Mode Detection**
 ```yaml
 sync:
-  offline_mode: auto  # Options: auto, always, never
+  offline_mode: auto  # Options: auto, offline, online
 ```
 
 - `auto`: Automatically detect network connectivity
-- `always`: Force offline mode (never attempt remote sync)
-- `never`: Require network, fail if unavailable
+- `offline`: Force offline mode (never attempt remote sync)
+- `online`: Require network, fail if unavailable
 
 **2. Offline Operation Flow**
 
@@ -531,10 +531,10 @@ CREATE TABLE sync_queue (
 ```go
 // Simplified offline detection
 func detectOfflineMode(config Config) bool {
-    if config.OfflineMode == "always" {
+    if config.OfflineMode == "offline" {
         return true
     }
-    if config.OfflineMode == "never" {
+    if config.OfflineMode == "online" {
         return false
     }
     // Auto mode: try network ping
@@ -948,7 +948,7 @@ sync:
   local_backend: sqlite                  # Cache implementation (only sqlite supported)
   conflict_resolution: server_wins       # Conflict strategy
   sync_interval: 5                       # Minutes (future auto-sync)
-  offline_mode: auto                     # auto, always, never
+  offline_mode: auto                     # auto, offline, online
 ```
 
 **Per-Backend Sync Settings:**
@@ -989,8 +989,8 @@ backends:
 
 **sync.offline_mode:**
 - `auto`: Detect network automatically
-- `always`: Force offline, never attempt remote sync
-- `never`: Require network, fail if unavailable
+- `offline`: Force offline, never attempt remote sync
+- `online`: Require network, fail if unavailable
 
 ### User Journey
 

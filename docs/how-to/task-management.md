@@ -80,7 +80,10 @@ todoat MyList -s DONE --created-after -30d
 Filter tasks by priority level:
 
 ```bash
-# High priority tasks (1-4)
+# Using range syntax
+todoat MyList -p 1-4     # priorities 1 through 4
+
+# Using comma-separated values
 todoat MyList -p 1,2,3,4
 
 # Using named levels

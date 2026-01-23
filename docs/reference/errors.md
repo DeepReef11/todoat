@@ -108,7 +108,7 @@ Suggestion: Valid options: TODO, IN-PROGRESS, DONE, CANCELLED
 
 **Cause**: The specified backend has not been set up in your configuration.
 
-**Suggestion**: Add the backend configuration to your config file or run setup.
+**Suggestion**: Add the backend configuration to your config file.
 
 **Example**:
 ```bash
@@ -165,7 +165,7 @@ Suggestion: Run 'todoat credentials set todoist token --prompt' to configure cre
 **Suggestion**: Verify your credentials are correct and have not expired.
 
 **Possible fixes**:
-1. Re-run setup: `todoat credentials set <backend> <username> --prompt`
+1. Update credentials: `todoat credentials set <backend> <username> --prompt`
 2. Check if your API token has expired (Todoist, Google Tasks)
 3. Verify your password hasn't changed (Nextcloud)
 4. Ensure your account has not been locked

@@ -44,7 +44,9 @@ func isConnectionRefused(err error) bool {
 	errStr := err.Error()
 	return strings.Contains(errStr, "connection refused") ||
 		strings.Contains(errStr, "no such host") ||
-		strings.Contains(errStr, "dial tcp")
+		strings.Contains(errStr, "dial tcp") ||
+		strings.Contains(errStr, "context deadline exceeded") ||
+		strings.Contains(errStr, "Client.Timeout")
 }
 
 // TestIntegrationNextcloudConnection connects to a real Nextcloud instance and lists calendars.

@@ -150,11 +150,33 @@ sync:
 
 | Mode | Behavior |
 |------|----------|
-| `auto` | Detect network automatically |
-| `always` | Force offline, never attempt sync |
-| `never` | Require network, fail if unavailable |
+| `auto` | Detect network automatically (default) |
+| `offline` | Force offline, never attempt sync |
+| `online` | Require network, fail if unavailable |
 
 ## How Sync Works
+
+### Automatic Fallback to Cache
+
+When sync is enabled and a remote backend becomes unavailable (connection timeout, network issues), todoat automatically falls back to the SQLite cache:
+
+```bash
+todoat -b nextcloud MyList add "New task"
+```
+
+If Nextcloud is unreachable, you'll see:
+
+```
+Warning: Backend 'nextcloud' unavailable (connection timeout). Using SQLite cache (operations will be queued for sync).
+Created task: New task (ID: abc123)
+```
+
+The task is saved locally and queued for sync. When the backend becomes available again, run `todoat sync` to push changes.
+
+This fallback behavior is controlled by `offline_mode`:
+- `auto` (default): Automatically fall back to cache if backend unavailable
+- `offline`: Always use cache, never attempt remote connection
+- `online`: Require connection, fail if backend unavailable
 
 ### Adding a Task Offline
 

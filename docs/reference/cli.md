@@ -76,6 +76,7 @@ The priority filter supports multiple formats:
 | Format | Description | Example |
 |--------|-------------|---------|
 | Single value | Filter by specific priority | `-p 1` |
+| Range | Filter by priority range | `-p 1-3` |
 | Comma-separated | Filter by multiple priorities | `-p 1,2,3` |
 | Named levels | Filter by priority category | `-p high` |
 | Undefined | Filter tasks without priority | `-p 0` |
@@ -96,6 +97,9 @@ todoat MyList -s TODO -p high
 
 # Show medium priority in-progress tasks
 todoat MyList -s IN-PROGRESS -p 5
+
+# Show tasks with priority 1, 2, or 3 using range syntax
+todoat MyList -p 1-3
 ```
 
 ##### Date Syntax
