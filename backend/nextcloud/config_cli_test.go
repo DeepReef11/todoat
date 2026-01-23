@@ -124,6 +124,58 @@ no_prompt: true
 	}
 }
 
+// TestDefaultBackendCustomNameUsedCLI verifies that when default_backend is set to a custom
+// backend name (like "nextcloud-test"), the CLI uses that backend.
+// This test reproduces issue #1 - custom backend name as default_backend is ignored.
+func TestDefaultBackendCustomNameUsedCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	// Configure a custom backend name "nextcloud-test" with fake credentials
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  nextcloud-test:
+    type: nextcloud
+    enabled: true
+    host: "fake-test-host.local"
+    username: "admin"
+    allow_http: true
+
+default_backend: nextcloud-test
+auto_detect_backend: false
+no_prompt: true
+`)
+
+	// Clear environment variables to ensure config file values are used
+	t.Setenv("TODOAT_NEXTCLOUD_HOST", "")
+	t.Setenv("TODOAT_NEXTCLOUD_USERNAME", "")
+	t.Setenv("TODOAT_NEXTCLOUD_PASSWORD", "")
+
+	// When default_backend is a custom name like "nextcloud-test", the CLI should:
+	// 1. Try to use that backend (not sqlite!)
+	// 2. Show a warning about nextcloud-test being unavailable (missing password)
+	// 3. Fall back to SQLite gracefully
+	//
+	// BUG BEHAVIOR: SQLite used silently without any warning about nextcloud-test
+	// EXPECTED BEHAVIOR: Warning shown about nextcloud-test, then SQLite fallback
+	stdout, stderr, exitCode := cli.Execute("-y", "list")
+
+	combined := stdout + stderr
+	lowerCombined := strings.ToLower(combined)
+
+	// Expected: Should show warning about nextcloud-test being unavailable
+	if !strings.Contains(lowerCombined, "warning") || !strings.Contains(lowerCombined, "nextcloud-test") {
+		t.Errorf("Expected warning about 'nextcloud-test' being unavailable, got: %s", combined)
+	}
+
+	// Should gracefully fall back to SQLite (exit code 0)
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0 (graceful fallback), got %d. Output: %s", exitCode, combined)
+	}
+}
+
 // TestBackendFlagNextcloudCLI verifies that --backend nextcloud flag works
 func TestBackendFlagNextcloudCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithConfig(t)

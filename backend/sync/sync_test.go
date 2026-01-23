@@ -63,6 +63,120 @@ default_backend: nextcloud-test
 	}
 }
 
+// TestSyncFallbackToSQLiteWhenRemoteUnavailable tests Issue #0:
+// When sync is enabled and the configured remote backend is unavailable (timeout/unreachable),
+// the app should fall back to SQLite cache instead of erroring out.
+// This allows operations to continue offline and queue changes for later sync.
+func TestSyncFallbackToSQLiteWhenRemoteUnavailable(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Create a config with sync enabled and a remote backend that is UNREACHABLE
+	// Using an IP address that will timeout (non-routable address)
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  offline_mode: auto
+  connectivity_timeout: "500ms"
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  nextcloud-test:
+    type: nextcloud
+    enabled: true
+    host: "192.0.2.1:8080"
+    username: "admin"
+    password: "test"
+    allow_http: true
+default_backend: nextcloud-test
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// When using -b nextcloud-test with sync enabled, it should:
+	// 1. Detect that nextcloud-test is unavailable (timeout)
+	// 2. Fall back to SQLite cache
+	// 3. Allow operations to succeed locally
+	// 4. Show a warning about the fallback (not an error)
+
+	// Add a task using the remote backend flag - should fall back to SQLite
+	stdout, stderr, exitCode := cli.Execute("-y", "-b", "nextcloud-test", "Work", "add", "Test task for offline")
+
+	// The operation should SUCCEED with exit code 0 (using SQLite fallback)
+	// A warning in stderr is expected and acceptable
+	if exitCode != 0 {
+		t.Errorf("Expected operation to succeed with SQLite fallback, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+	}
+
+	// Verify the warning message about fallback was shown
+	testutil.AssertContains(t, stderr, "Using SQLite cache")
+
+	// Verify task was created
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Verify task was created in SQLite
+	stdout = cli.MustExecute("-y", "Work", "get")
+	testutil.AssertContains(t, stdout, "Test task for offline")
+
+	// Verify the operation was queued for sync
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	testutil.AssertContains(t, stdout, "Pending Operations")
+	testutil.AssertContains(t, stdout, "create")
+}
+
+// TestSyncFallbackListTasksWhenRemoteUnavailable tests that listing tasks
+// falls back to SQLite cache when the remote backend is unavailable.
+func TestSyncFallbackListTasksWhenRemoteUnavailable(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// First, add some tasks to SQLite
+	cli.MustExecute("-y", "Work", "add", "Local task 1")
+	cli.MustExecute("-y", "Work", "add", "Local task 2")
+
+	// Now configure a remote backend that is unreachable
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  offline_mode: auto
+  connectivity_timeout: "500ms"
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  nextcloud-test:
+    type: nextcloud
+    enabled: true
+    host: "192.0.2.1:8080"
+    username: "admin"
+    password: "test"
+    allow_http: true
+default_backend: nextcloud-test
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Listing tasks should fall back to SQLite and show cached tasks
+	stdout, stderr, exitCode := cli.Execute("-y", "-b", "nextcloud-test", "Work", "get")
+
+	// The operation should SUCCEED with exit code 0 (using SQLite fallback)
+	if exitCode != 0 {
+		t.Errorf("Expected listing to succeed with SQLite fallback, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+	}
+
+	// Verify the warning message about fallback was shown
+	testutil.AssertContains(t, stderr, "Using SQLite cache")
+
+	// Should show the cached tasks
+	testutil.AssertContains(t, stdout, "Local task 1")
+	testutil.AssertContains(t, stdout, "Local task 2")
+}
+
 // TestSyncPullCLI tests that `todoat sync` pulls changes from remote backend to local cache
 func TestSyncPullCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)

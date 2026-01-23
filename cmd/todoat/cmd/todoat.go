@@ -2191,7 +2191,7 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 	// Load config (creates default if not exists) and check sync/auto-detect settings
 	// Use LoadWithRaw to get both structured config and raw map for custom backend support
 	appConfig, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
-	loadSyncConfig(cfg)
+	loadSyncConfigFromAppConfig(cfg, appConfig)
 	loadAutoDetectConfig(cfg, appConfig)
 
 	// Determine database path: CLI flag > config file > default
@@ -2213,6 +2213,16 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 
 	// If --backend flag is specified, use it (highest priority)
 	if cfg.Backend != "" {
+		utils.Debugf("Backend flag set to: %s", cfg.Backend)
+		// If sync is enabled and this is a remote backend, check connectivity first
+		// and fall back to SQLite cache if unavailable
+		if cfg.SyncEnabled && cfg.Backend != "sqlite" {
+			be, err := createBackendWithSyncFallback(cfg, cfg.Backend, dbPath, rawConfig, appConfig)
+			if err != nil {
+				return nil, err
+			}
+			return be, nil
+		}
 		return createBackendByName(cfg.Backend, dbPath, rawConfig)
 	}
 
@@ -2280,6 +2290,17 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 				utils.Debugf("Using default backend: nextcloud")
 				return nextcloud.New(nextcloudCfg)
 			}
+		default:
+			// Custom backend name (e.g., "nextcloud-test") - delegate to createBackendByName
+			// which handles custom backends defined in the config file
+			utils.Debugf("Using default backend (custom name): %s", appConfig.DefaultBackend)
+			be, err := createBackendByName(appConfig.DefaultBackend, dbPath, rawConfig)
+			if err != nil {
+				// Warn user and fall back to sqlite
+				warnBackendFallback(cfg, appConfig.DefaultBackend, err.Error())
+			} else {
+				return be, nil
+			}
 		}
 	}
 
@@ -2293,6 +2314,95 @@ func warnBackendFallback(cfg *Config, backendName string, reason string) {
 		stderr = os.Stderr
 	}
 	_, _ = fmt.Fprintf(stderr, "Warning: Default backend '%s' unavailable (%s). Using 'sqlite' instead.\n", backendName, reason)
+}
+
+// createBackendWithSyncFallback creates a remote backend with connectivity check.
+// If the remote backend is unavailable and offline_mode is "auto" or "offline",
+// it falls back to SQLite cache wrapped in syncAwareBackend.
+// This implements the sync fallback behavior for issue #0.
+func createBackendWithSyncFallback(cfg *Config, backendName string, dbPath string, rawConfig map[string]interface{}, appConfig *config.Config) (backend.TaskManager, error) {
+	// Get offline mode and connectivity timeout from config
+	offlineMode := "auto"
+	connectivityTimeout := 5 * time.Second
+	if appConfig != nil {
+		offlineMode = appConfig.GetOfflineMode()
+		if timeoutStr := appConfig.GetConnectivityTimeout(); timeoutStr != "" {
+			if parsed, err := time.ParseDuration(timeoutStr); err == nil {
+				connectivityTimeout = parsed
+			}
+		}
+	}
+
+	// If offline_mode is "offline", always use SQLite cache (no connectivity check)
+	if offlineMode == "offline" {
+		utils.Debugf("Offline mode: using SQLite cache (sync enabled, offline_mode=offline)")
+		warnSyncFallback(cfg, backendName, "offline mode enabled")
+		return createSyncFallbackBackend(cfg, dbPath)
+	}
+
+	// Try to create the backend and check connectivity
+	be, err := createBackendByName(backendName, dbPath, rawConfig)
+	if err != nil {
+		// Backend creation failed (config error, not connectivity)
+		// For "online" mode, propagate the error
+		if offlineMode == "online" {
+			return nil, err
+		}
+		// For "auto" mode, fall back to SQLite
+		utils.Debugf("Backend creation failed, falling back to SQLite cache: %v", err)
+		warnSyncFallback(cfg, backendName, err.Error())
+		return createSyncFallbackBackend(cfg, dbPath)
+	}
+
+	// Try a connectivity check with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), connectivityTimeout)
+	defer cancel()
+
+	// Use GetLists as a lightweight connectivity check
+	_, err = be.GetLists(ctx)
+	if err != nil {
+		// Connectivity check failed
+		_ = be.Close() // Close the failed backend
+
+		// For "online" mode, propagate the error
+		if offlineMode == "online" {
+			return nil, fmt.Errorf("backend '%s' unavailable (offline_mode=online): %w", backendName, err)
+		}
+
+		// For "auto" mode, fall back to SQLite cache
+		utils.Debugf("Backend connectivity check failed, falling back to SQLite cache: %v", err)
+		warnSyncFallback(cfg, backendName, err.Error())
+		return createSyncFallbackBackend(cfg, dbPath)
+	}
+
+	// Backend is available, wrap it in syncAwareBackend for sync support
+	utils.Debugf("Backend '%s' is available, using with sync support", backendName)
+	return &syncAwareBackend{
+		TaskManager: be,
+		syncMgr:     getSyncManager(cfg),
+	}, nil
+}
+
+// createSyncFallbackBackend creates a SQLite backend wrapped in syncAwareBackend
+// for offline operation with sync queue support.
+func createSyncFallbackBackend(cfg *Config, dbPath string) (backend.TaskManager, error) {
+	be, err := sqlite.New(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	return &syncAwareBackend{
+		TaskManager: be,
+		syncMgr:     getSyncManager(cfg),
+	}, nil
+}
+
+// warnSyncFallback writes a warning message about sync fallback to stderr
+func warnSyncFallback(cfg *Config, backendName string, reason string) {
+	stderr := cfg.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	_, _ = fmt.Fprintf(stderr, "Warning: Backend '%s' unavailable (%s). Using SQLite cache (operations will be queued for sync).\n", backendName, reason)
 }
 
 // createBackendByName creates a backend based on the given name.
@@ -2510,24 +2620,12 @@ func loadAutoDetectConfig(cfg *Config, appConfig *config.Config) {
 	}
 }
 
-// loadSyncConfig loads the sync configuration from the config file
-func loadSyncConfig(cfg *Config) {
-	configPath := cfg.ConfigPath
-	if configPath == "" {
-		// Try to find config in same directory as DB
-		if cfg.DBPath != "" {
-			configPath = filepath.Join(filepath.Dir(cfg.DBPath), "config.yaml")
-		}
-	}
-
-	if configPath != "" {
-		data, err := os.ReadFile(configPath)
-		if err == nil {
-			// Simple YAML parsing for sync.enabled
-			if strings.Contains(string(data), "enabled: true") && strings.Contains(string(data), "sync:") {
-				cfg.SyncEnabled = true
-			}
-		}
+// loadSyncConfigFromAppConfig loads the sync configuration from the parsed app config.
+// This replaces the previous loadSyncConfig which had issues finding the config file
+// when using XDG paths.
+func loadSyncConfigFromAppConfig(cfg *Config, appConfig *config.Config) {
+	if appConfig != nil && appConfig.IsSyncEnabled() {
+		cfg.SyncEnabled = true
 	}
 }
 
