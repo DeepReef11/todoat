@@ -261,7 +261,7 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.PersistentFlags().BoolP("verbose", "V", false, "Enable verbose/debug output")
 	cmd.PersistentFlags().Bool("json", false, "Output in JSON format")
 	cmd.PersistentFlags().Bool("detect-backend", false, "Show auto-detected backends and exit")
-	cmd.PersistentFlags().StringP("backend", "b", "", "Backend to use (sqlite, todoist)")
+	cmd.PersistentFlags().StringP("backend", "b", "", "Backend to use (sqlite, todoist, nextcloud, google, mstodo, git, file)")
 
 	// Add action-specific flags
 	cmd.Flags().StringP("priority", "p", "", "Task priority (0-9) for add/update, or filter (1,2,3 or high/medium/low) for get")

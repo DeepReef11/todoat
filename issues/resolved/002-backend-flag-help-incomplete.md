@@ -56,3 +56,20 @@ This inconsistency suggests the help text string needs to be updated to match th
 
 ## Recommended Fix
 FIX CODE - Update the help text string for the --backend flag to include all supported backends (sqlite, todoist, nextcloud, google, git, file).
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Updated the help text string for the --backend flag in cmd/todoat/cmd/todoat.go line 264 to include all supported backends (sqlite, todoist, nextcloud, google, mstodo, git, file).
+
+### Verification Log
+```bash
+$ ./todoat --help | grep backend
+todoat is a command-line task manager supporting multiple backends.
+  credentials  Manage backend credentials
+  migrate      Migrate tasks between backends
+  sync         Synchronize with remote backends
+  -b, --backend string          Backend to use (sqlite, todoist, nextcloud, google, mstodo, git, file)
+      --detect-backend          Show auto-detected backends and exit
+```
+**Matches expected behavior**: YES (all backends now shown in help text)
