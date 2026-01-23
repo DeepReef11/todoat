@@ -165,7 +165,7 @@ todoat -b google "My Tasks"
 todoat -b google "My Tasks" add "Buy groceries"
 
 # Add a task with due date
-todoat -b google "My Tasks" add "Submit report" --due tomorrow
+todoat -b google "My Tasks" add "Submit report" --due-date tomorrow
 ```
 
 ### Supported Features
@@ -249,7 +249,7 @@ todoat -b mstodo "My Tasks"
 todoat -b mstodo "My Tasks" add "Buy groceries"
 
 # Add a task with due date
-todoat -b mstodo "My Tasks" add "Submit report" --due tomorrow
+todoat -b mstodo "My Tasks" add "Submit report" --due-date tomorrow
 
 # Add a high-priority task
 todoat -b mstodo "My Tasks" add "Urgent meeting prep" --priority 1
