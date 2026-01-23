@@ -402,7 +402,10 @@ func TestInjectableIOCoreCLI(t *testing.T) {
 	}
 }
 
-// TestConfigPassthrough verifies that config is accessible
+// TestConfigPassthroughCoreCLI verifies that Execute() accepts a pre-initialized Config struct.
+// This enables programmatic configuration for testing and embedding scenarios where callers
+// can set config values directly rather than relying on command-line flags or config files.
+// The config is "passed through" from the caller to the command execution.
 func TestConfigPassthroughCoreCLI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
