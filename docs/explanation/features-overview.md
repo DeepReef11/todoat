@@ -108,9 +108,10 @@ This document provides a high-level summary of all features in todoat, organized
 |---------|-------------|--------|---------------|
 | **Nextcloud CalDAV Backend** | Sync with Nextcloud Tasks using CalDAV protocol | ✅ Stable | [Backend System](backend-system.md#1-nextcloud-backend-remote-caldav) |
 | **Todoist Backend** | Integrate with Todoist using REST API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
+| **Google Tasks Backend** | Integrate with Google Tasks using REST API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
 | **SQLite Backend** | Local database storage with full CRUD operations | ✅ Stable | [Backend System](backend-system.md#2-sqlite-backend-local-database) |
-| **Git/Markdown Backend** | Store tasks as markdown files in Git repositories | 🚧 In Development | [Backend System](backend-system.md#3-git-backend-markdown-in-repositories) |
-| **File Backend** | Plain text file storage (placeholder) | 🚧 In Development | [Backend System](backend-system.md#4-file-backend-placeholder) |
+| **Git/Markdown Backend** | Store tasks as markdown files in Git repositories | ✅ Stable | [Backend System](backend-system.md#3-git-backend-markdown-in-repositories) |
+| **File Backend** | Plain text file storage | ✅ Stable | [Backend System](backend-system.md#4-file-backend-plain-text-storage) |
 | **Backend Auto-Detection** | Automatically detect and configure backends | ✅ Stable | [Backend System](backend-system.md#auto-detection-interface) |
 | **Backend Selection Priority** | Configurable priority order for backend selection | ✅ Stable | [Backend System](backend-system.md#selection-priority) |
 | **Pluggable Architecture** | TaskManager interface for adding new backends | ✅ Stable | [Backend System](backend-system.md#1-taskmanager-interface) |
@@ -121,7 +122,8 @@ This document provides a high-level summary of all features in todoat, organized
 **Key Use Cases**:
 - Syncing tasks with Nextcloud tasks
 - Integrating with Todoist projects
-- Offline-first task management with SQLite 
+- Syncing with Google Tasks
+- Offline-first task management with SQLite
 - Version-controlled task files with Git
 - Switching between backends based on context
 
@@ -363,13 +365,13 @@ This diagram shows how major features interact with each other:
 | Task Management | 12 | 12 | 0 | 0 |
 | List Management | 11 | 11 | 0 | 0 |
 | Subtasks & Hierarchy | 8 | 8 | 0 | 0 |
-| Backend System | 11 | 9 | 2 | 0 |
+| Backend System | 11 | 11 | 0 | 0 |
 | Synchronization | 18 | 17 | 1 | 0 |
 | Credential Management | 13 | 13 | 0 | 0 |
 | Views & Customization | 17 | 17 | 0 | 0 |
 | CLI Interface | 19 | 19 | 0 | 0 |
 | Configuration | 18 | 18 | 0 | 0 |
-| **TOTAL** | **127** | **124** | **3** | **0** |
+| **TOTAL** | **128** | **126** | **2** | **0** |
 
 ---
 
@@ -396,7 +398,8 @@ This diagram shows how major features interact with each other:
 - All task CRUD operations
 - All list management operations
 - All subtask/hierarchy features
-- Nextcloud and Todoist backends
+- Nextcloud, Todoist, and Google Tasks backends
+- Git/Markdown and File backends
 - SQLite backend and sync
 - All credential management
 - All view customization
@@ -409,10 +412,7 @@ This diagram shows how major features interact with each other:
 - Auto-sync daemon (redesign in progress)
 
 **Future Roadmap** (📋):
-- Git/Markdown backend (implemented but not yet wired to CLI)
-- File backend (implemented but not yet wired to CLI)
-- Google Tasks backend
-- Microsoft To Do backend
+- Microsoft To Do backend (backend code exists, not yet wired to CLI)
 
 ---
 

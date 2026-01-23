@@ -9,11 +9,11 @@ todoat supports multiple storage backends. This guide covers configuring each ba
 | SQLite | `sqlite` | ✅ Yes | Local database storage (default) |
 | Nextcloud | `nextcloud` | ✅ Yes | CalDAV-based cloud storage |
 | Todoist | `todoist` | ✅ Yes | Todoist cloud service |
+| Google Tasks | `google` | ✅ Yes | Google Tasks cloud service |
 | Git | `git` | ✅ Yes | Markdown files in Git repositories |
 | File | `file` | ✅ Yes | Plain file-based storage |
 
 **Note**: The following backends are documented but not yet available via CLI:
-- **Google Tasks** (`google`) - Backend code exists but not wired to CLI
 - **Microsoft To Do** (`mstodo`) - Backend code exists but not wired to CLI
 
 ## Nextcloud (CalDAV)
@@ -114,8 +114,6 @@ todoat credentials set todoist token --prompt
 ```
 
 ## Google Tasks
-
-> **Note**: The Google Tasks backend code exists but is **not yet available via CLI**. This section documents the planned functionality for future reference.
 
 ### Configuration
 

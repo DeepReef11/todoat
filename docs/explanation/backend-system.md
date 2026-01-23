@@ -193,8 +193,6 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 
 ### 3. Git Backend (Markdown in Repositories)
 
-> **Note:** This backend is implemented but not yet wired to the CLI. It cannot be accessed via `--backend=git`. This is a planned feature.
-
 **Purpose:** Store tasks in human-readable markdown files within Git repositories, enabling version control and collaboration workflows.
 
 **How It Works:**
@@ -260,22 +258,35 @@ The Backend System in todoat provides a pluggable architecture that allows the a
 
 ---
 
-### 4. File Backend (Placeholder)
+### 4. File Backend (Plain Text Storage)
 
-> **Note:** This backend is implemented as a placeholder but not yet wired to the CLI. It cannot be accessed via `--backend=file`.
-
-**Purpose:** Reserved for future file-based storage implementations; currently non-functional.
+**Purpose:** Store tasks in plain text files, providing a lightweight file-based storage option without Git dependency.
 
 **How It Works:**
-- Implements `TaskManager` interface with stub methods
-- All methods return `nil` or "not implemented" errors
-- Registered for `file://` URL scheme and `"file"` type
-- No actual file I/O operations
+- Implements `TaskManager` interface for full task operations
+- Tasks stored in a text file with sections as lists
+- Supports all task metadata: priority, dates, status, tags
+- Indented tasks parsed as subtasks
+
+**Task File Format:**
+```markdown
+# Tasks
+
+## Work
+
+- [ ] Pending task
+- [x] Completed task
+- [>] In progress task
+
+## Personal
+
+- [ ] Another task
+```
 
 **Technical Details:**
 - Implementation: `backend/file/backend.go`
-- Status: Placeholder only, not production-ready
-- Use Git backend instead for file-based storage
+- Registered for `"file"` type
+- Use `-b file` to access via CLI
 
 ---
 

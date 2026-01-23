@@ -25,6 +25,7 @@ import (
 	"todoat/backend"
 	"todoat/backend/file"
 	"todoat/backend/git"
+	"todoat/backend/google"
 	"todoat/backend/nextcloud"
 	"todoat/backend/sqlite"
 	"todoat/backend/todoist"
@@ -591,6 +592,8 @@ func getBackendName(be backend.TaskManager) string {
 		return "todoist"
 	case *nextcloud.Backend:
 		return "nextcloud"
+	case *google.Backend:
+		return "google"
 	case *syncAwareBackend:
 		// Recurse to get the underlying backend name
 		return "sync-" + getBackendName(v.TaskManager)
@@ -2290,6 +2293,16 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 				utils.Debugf("Using default backend: nextcloud")
 				return nextcloud.New(nextcloudCfg)
 			}
+		case "google":
+			// Create Google Tasks backend using config file + keyring + environment variables
+			googleCfg := buildGoogleConfigWithKeyring("google", rawConfig)
+			if googleCfg.AccessToken == "" {
+				// Warn user and fall back to sqlite
+				warnBackendFallback(cfg, "google", "access token not found (use 'credentials set google token' or set TODOAT_GOOGLE_ACCESS_TOKEN)")
+			} else {
+				utils.Debugf("Using default backend: google")
+				return google.New(googleCfg)
+			}
 		default:
 			// Custom backend name (e.g., "nextcloud-test") - delegate to createBackendByName
 			// which handles custom backends defined in the config file
@@ -2462,6 +2475,18 @@ func createBackendByName(name string, dbPath string, rawConfig map[string]interf
 		// No config file entry - use defaults (tasks.txt in current directory)
 		utils.Debugf("Using backend: file")
 		return file.New(file.Config{})
+	case "google":
+		// Check if "google" is configured in config file - if so, use createCustomBackend
+		if rawConfig != nil && config.IsBackendConfigured(rawConfig, name) {
+			return createCustomBackend(name, dbPath, rawConfig)
+		}
+		// No config file entry - use keyring + environment variables
+		googleCfg := buildGoogleConfigWithKeyring("google", rawConfig)
+		if googleCfg.AccessToken == "" {
+			return nil, fmt.Errorf("google backend requires access token (use 'credentials set google token' or set TODOAT_GOOGLE_ACCESS_TOKEN)")
+		}
+		utils.Debugf("Using backend: google")
+		return google.New(googleCfg)
 	}
 
 	// Check for custom backend name in config
@@ -2469,7 +2494,7 @@ func createBackendByName(name string, dbPath string, rawConfig map[string]interf
 		return createCustomBackend(name, dbPath, rawConfig)
 	}
 
-	return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud, git, file)", name)
+	return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud, google, git, file)", name)
 }
 
 // createCustomBackend creates a backend from custom configuration.
@@ -2534,6 +2559,14 @@ func createCustomBackend(name string, dbPath string, rawConfig map[string]interf
 			fileCfg.FilePath = config.ExpandPath(filePath)
 		}
 		return file.New(fileCfg)
+
+	case "google":
+		// Build google config from config file + keyring + environment
+		googleCfg := buildGoogleConfigWithKeyring(name, rawConfig)
+		if googleCfg.AccessToken == "" {
+			return nil, fmt.Errorf("google backend '%s' requires access token (use 'credentials set %s token' or set TODOAT_GOOGLE_ACCESS_TOKEN)", name, name)
+		}
+		return google.New(googleCfg)
 
 	default:
 		return nil, fmt.Errorf("unknown backend type '%s' for custom backend '%s'", backendType, name)
@@ -2607,6 +2640,44 @@ func buildTodoistConfigWithKeyring(name string, rawConfig map[string]interface{}
 		if credInfo, err := credMgr.Get(context.Background(), name, "token"); err == nil && credInfo.Found {
 			cfg.APIToken = credInfo.Password
 			utils.Debugf("Using API token from keyring for %s", name)
+		}
+	}
+
+	return cfg
+}
+
+// buildGoogleConfigWithKeyring builds a google.Config from config file, keyring, and environment.
+// Priority: 1. Config file values, 2. Environment variables, 3. Keyring
+func buildGoogleConfigWithKeyring(name string, rawConfig map[string]interface{}) google.Config {
+	// Start with environment variables as defaults
+	cfg := google.ConfigFromEnv()
+
+	// Override with config file settings if available
+	if rawConfig != nil {
+		if backendCfg, _, err := config.GetBackendConfig(rawConfig, name); err == nil {
+			if token, ok := backendCfg["access_token"].(string); ok && token != "" {
+				cfg.AccessToken = token
+			}
+			if token, ok := backendCfg["refresh_token"].(string); ok && token != "" {
+				cfg.RefreshToken = token
+			}
+			if clientID, ok := backendCfg["client_id"].(string); ok && clientID != "" {
+				cfg.ClientID = clientID
+			}
+			if clientSecret, ok := backendCfg["client_secret"].(string); ok && clientSecret != "" {
+				cfg.ClientSecret = clientSecret
+			}
+		}
+	}
+
+	// If access token is still missing, try the keyring
+	// For Google, we use "token" as the username since there's no actual username
+	if cfg.AccessToken == "" {
+		credMgr := credentials.NewManager()
+		// Try with "token" as username (standard for API tokens)
+		if credInfo, err := credMgr.Get(context.Background(), name, "token"); err == nil && credInfo.Found {
+			cfg.AccessToken = credInfo.Password
+			utils.Debugf("Using access token from keyring for %s", name)
 		}
 	}
 

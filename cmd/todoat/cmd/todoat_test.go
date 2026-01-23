@@ -2222,3 +2222,72 @@ func TestIssue033FileBackendAccessibleViaCLI(t *testing.T) {
 		t.Errorf("file backend should be recognized, but got 'unknown backend' error: %s", output)
 	}
 }
+
+// --- Issue 069: Google Tasks CLI Integration ---
+
+// TestGoogleTasksCLIBackendRecognized verifies that google backend is recognized via -b flag
+// CLI Test for 069-google-tasks-cli-integration
+func TestGoogleTasksCLIBackendRecognized(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	cfg := &Config{
+		ConfigPath: configPath,
+	}
+
+	// Try to use google backend explicitly - should NOT produce "unknown backend" error
+	// It WILL fail due to missing credentials, but that's expected
+	exitCode := Execute([]string{"-b", "google", "list"}, &stdout, &stderr, cfg)
+
+	// The command may fail due to missing credentials, but NOT due to unknown backend
+	errOutput := stderr.String()
+	if strings.Contains(errOutput, "unknown backend type 'google'") {
+		t.Errorf("google backend should be recognized, but got 'unknown backend type' error: %s", errOutput)
+	}
+	if strings.Contains(errOutput, "unknown backend: google") {
+		t.Errorf("google backend should be recognized, but got 'unknown backend' error: %s", errOutput)
+	}
+
+	// Should get a credentials error if it fails (which is expected without valid tokens)
+	if exitCode != 0 {
+		// This is expected - we just want to verify the backend type is recognized
+		if !strings.Contains(errOutput, "access token") && !strings.Contains(errOutput, "TODOAT_GOOGLE_ACCESS_TOKEN") {
+			t.Logf("Google backend recognized but command failed with unexpected error: %s", errOutput)
+		}
+	}
+}
+
+// TestGoogleTasksCLIBackendInErrorMessage verifies google is listed in the error message for unknown backends
+func TestGoogleTasksCLIBackendInErrorMessage(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	cfg := &Config{
+		ConfigPath: configPath,
+	}
+
+	// Use a completely unknown backend to see the list of supported backends
+	exitCode := Execute([]string{"-b", "nonexistent-backend-xyz", "list"}, &stdout, &stderr, cfg)
+
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit code for unknown backend")
+	}
+
+	errOutput := stderr.String()
+	// The error message should list "google" as a supported backend
+	if !strings.Contains(errOutput, "google") {
+		t.Errorf("error message should list 'google' as a supported backend, got: %s", errOutput)
+	}
+}

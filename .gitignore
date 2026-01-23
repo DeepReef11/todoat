@@ -9,3 +9,4 @@ todoat
 *.json
 TestList.csv
 coverage*.out
+tasks.txt
