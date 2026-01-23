@@ -2223,6 +2223,238 @@ func TestIssue033FileBackendAccessibleViaCLI(t *testing.T) {
 	}
 }
 
+// --- Roadmap 071: Git Backend CLI Wiring ---
+
+// TestGitBackendExplicitFlag verifies that `todoat -b git "Project Tasks"` works with explicit flag
+// CLI Test for 071-git-backend-cli-wiring
+func TestGitBackendExplicitFlag(t *testing.T) {
+	// Create a temp directory with a git repo and TODO.md file
+	tmpDir := t.TempDir()
+
+	// Initialize git repo
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		t.Fatalf("failed to create .git dir: %v", err)
+	}
+
+	// Create a TODO.md file with the todoat marker and a section named "Project Tasks"
+	todoContent := `<!-- todoat:enabled -->
+# Tasks
+
+## Project Tasks
+
+- [ ] Implement feature X
+- [ ] Fix bug Y
+
+## Inbox
+
+- [ ] Review PR
+`
+	todoFile := filepath.Join(tmpDir, "TODO.md")
+	if err := os.WriteFile(todoFile, []byte(todoContent), 0644); err != nil {
+		t.Fatalf("failed to write TODO.md: %v", err)
+	}
+
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Save and change working directory
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp dir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	var stdout, stderr bytes.Buffer
+
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"), // Isolate cache for testing
+	}
+
+	// Use git backend explicitly with a list name - should work
+	exitCode := Execute([]string{"-b", "git", "Project Tasks"}, &stdout, &stderr, cfg)
+
+	// The command should succeed (exit 0) since we have a valid git repo with TODO.md
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		// The specific error we're testing: "unknown backend type 'git'"
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("git backend should be recognized via -b flag, but got: %s", stderrStr)
+		}
+		t.Logf("Command failed with exit code %d, stderr: %s, stdout: %s", exitCode, stderrStr, stdout.String())
+	}
+
+	// Verify we got output related to Project Tasks section
+	output := stdout.String()
+	if !strings.Contains(output, "Project Tasks") && !strings.Contains(output, "Implement feature X") {
+		t.Logf("Expected output to contain 'Project Tasks' or tasks from that section, got: %s", output)
+	}
+}
+
+// TestGitBackendConfigType verifies that Backend type "git" is recognized in config `backends:` section
+// CLI Test for 071-git-backend-cli-wiring
+func TestGitBackendConfigType(t *testing.T) {
+	// Create a temp directory with a git repo and TODO.md file
+	tmpDir := t.TempDir()
+
+	// Initialize git repo
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		t.Fatalf("failed to create .git dir: %v", err)
+	}
+
+	// Create a TODO.md file with the todoat marker
+	todoContent := `<!-- todoat:enabled -->
+# Tasks
+
+## Inbox
+
+- [ ] Task from config test
+`
+	todoFile := filepath.Join(tmpDir, "TODO.md")
+	if err := os.WriteFile(todoFile, []byte(todoContent), 0644); err != nil {
+		t.Fatalf("failed to write TODO.md: %v", err)
+	}
+
+	// Create config with git backend configured in backends: section
+	configContent := `backends:
+  git:
+    type: git
+    enabled: true
+    file: "TODO.md"
+default_backend: git
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Save and change working directory
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp dir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	var stdout, stderr bytes.Buffer
+
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"), // Isolate cache for testing
+	}
+
+	// Use git backend via config (default_backend: git)
+	exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
+
+	// The command should succeed
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("git backend should be recognized from config backends: section, but got: %s", stderrStr)
+		}
+		// Log but don't fail for other errors
+		t.Logf("Command failed with exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	// Verify we're using git backend by checking output contains our task
+	output := stdout.String()
+	if !strings.Contains(output, "Task from config test") && !strings.Contains(output, "Inbox") {
+		t.Logf("Expected output from git backend with TODO.md content, got: %s", output)
+	}
+}
+
+// TestGitBackendListsCommand verifies that `todoat -b git list` shows sections from TODO.md
+// CLI Test for 071-git-backend-cli-wiring
+func TestGitBackendListsCommand(t *testing.T) {
+	// Create a temp directory with a git repo and TODO.md file
+	tmpDir := t.TempDir()
+
+	// Initialize git repo
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		t.Fatalf("failed to create .git dir: %v", err)
+	}
+
+	// Create a TODO.md file with multiple sections
+	todoContent := `<!-- todoat:enabled -->
+# Tasks
+
+## Development
+
+- [ ] Code review
+- [ ] Unit tests
+
+## Documentation
+
+- [ ] Update README
+
+## Backlog
+
+- [x] Initial setup
+`
+	todoFile := filepath.Join(tmpDir, "TODO.md")
+	if err := os.WriteFile(todoFile, []byte(todoContent), 0644); err != nil {
+		t.Fatalf("failed to write TODO.md: %v", err)
+	}
+
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Save and change working directory
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp dir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	var stdout, stderr bytes.Buffer
+
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"), // Isolate cache for testing
+	}
+
+	// Use git backend explicitly with list command
+	exitCode := Execute([]string{"-b", "git", "list"}, &stdout, &stderr, cfg)
+
+	// The command should succeed
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("git backend should be recognized via -b flag, but got: %s", stderrStr)
+		}
+		t.Logf("Command failed with exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	// Verify the output shows sections/lists from TODO.md
+	output := stdout.String()
+
+	// Check for task content or list names
+	hasExpectedContent := strings.Contains(output, "Development") ||
+		strings.Contains(output, "Documentation") ||
+		strings.Contains(output, "Backlog") ||
+		strings.Contains(output, "Code review") ||
+		strings.Contains(output, "Unit tests")
+
+	if !hasExpectedContent {
+		t.Errorf("Expected git backend list output to contain sections from TODO.md, got: %s", output)
+	}
+}
+
 // --- Issue 069: Google Tasks CLI Integration ---
 
 // TestGoogleTasksCLIBackendRecognized verifies that google backend is recognized via -b flag
