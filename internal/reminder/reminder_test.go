@@ -16,6 +16,82 @@ import (
 // CLI Tests (032-task-reminders)
 // =============================================================================
 
+// TestReminderStatusCLI tests the 'todoat reminder status' command
+func TestReminderStatusCLI(t *testing.T) {
+	t.Run("shows enabled status with intervals", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"7 days",
+				"1 day",
+				"at due time",
+			},
+			OSNotification:  true,
+			LogNotification: true,
+		})
+
+		stdout := cli.MustExecute("-y", "reminder", "status")
+
+		// Verify command succeeds with info result code
+		testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+
+		// Verify status shows enabled
+		testutil.AssertContains(t, stdout, "enabled")
+
+		// Verify all configured intervals are shown
+		testutil.AssertContains(t, stdout, "7 days")
+		testutil.AssertContains(t, stdout, "1 day")
+		testutil.AssertContains(t, stdout, "at due time")
+
+		// Verify notification settings are shown
+		testutil.AssertContains(t, stdout, "OS Notification")
+		testutil.AssertContains(t, stdout, "Log Notification")
+	})
+
+	t.Run("shows disabled status", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: false,
+			Intervals: []string{
+				"1 day",
+			},
+			OSNotification:  false,
+			LogNotification: false,
+		})
+
+		stdout := cli.MustExecute("-y", "reminder", "status")
+
+		// Verify command succeeds
+		testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+
+		// Verify status shows disabled
+		testutil.AssertContains(t, stdout, "disabled")
+	})
+
+	t.Run("shows notification configuration", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"1 hour",
+			},
+			OSNotification:  true,
+			LogNotification: false,
+		})
+
+		stdout := cli.MustExecute("-y", "reminder", "status")
+
+		// Verify OS notification setting
+		testutil.AssertContains(t, stdout, "OS Notification: true")
+		// Verify Log notification setting
+		testutil.AssertContains(t, stdout, "Log Notification: false")
+	})
+}
+
 // TestReminderConfig tests that reminder settings can be configured in config.yaml
 func TestReminderConfig(t *testing.T) {
 	cli := testutil.NewCLITestWithReminder(t)
