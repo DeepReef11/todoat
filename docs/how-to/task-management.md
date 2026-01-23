@@ -373,6 +373,116 @@ todoat MyList d "task"
 
 Note: Task deletion is permanent. Unlike lists, tasks cannot be restored from trash.
 
+## Bulk Operations
+
+Operate on multiple tasks at once using glob patterns. Bulk operations work with hierarchical task structures.
+
+### Pattern Syntax
+
+| Pattern | Meaning |
+|---------|---------|
+| `Parent/*` | Direct children of Parent only |
+| `Parent/**` | All descendants of Parent (children, grandchildren, etc.) |
+
+### Bulk Complete
+
+Complete multiple tasks with a single command:
+
+```bash
+# Complete direct children only
+todoat MyList complete "Parent/*"
+
+# Complete all descendants (children, grandchildren, etc.)
+todoat MyList complete "Parent/**"
+```
+
+Example with a project hierarchy:
+
+```bash
+# Create project structure
+todoat MyList add "Release v2.0"
+todoat MyList add "Feature A" -P "Release v2.0"
+todoat MyList add "Feature B" -P "Release v2.0"
+todoat MyList add "Task A1" -P "Feature A"
+
+# Complete all release tasks at once
+todoat MyList complete "Release v2.0/**"
+# Output: Completed 4 tasks under "Release v2.0"
+```
+
+### Bulk Update
+
+Update properties on multiple tasks:
+
+```bash
+# Set high priority on all subtasks
+todoat MyList update "Project/**" -p 1
+
+# Update direct children only
+todoat MyList update "Project/*" -p 2
+```
+
+### Bulk Delete
+
+Delete multiple tasks with a single command:
+
+```bash
+# Delete direct children only
+todoat MyList delete "Parent/*"
+
+# Delete all descendants
+todoat MyList delete "Parent/**"
+```
+
+Note: When deleting direct children with `/*`, grandchildren are also deleted (cascade delete).
+
+### Output and Feedback
+
+Bulk operations display the count of affected tasks:
+
+```
+Completed 5 tasks under "Release v2.0"
+```
+
+### JSON Output
+
+Use `--json` for machine-readable bulk operation results:
+
+```bash
+todoat --json MyList complete "Parent/**"
+```
+
+JSON response structure:
+
+```json
+{
+  "result": "ACTION_COMPLETED",
+  "affected_count": 3,
+  "pattern": "**",
+  "parent": "Parent"
+}
+```
+
+### Error Handling
+
+| Scenario | Result Code | Description |
+|----------|-------------|-------------|
+| Parent not found | `ERROR` | The specified parent task doesn't exist |
+| No children match | `INFO_ONLY` | Parent exists but has no children (count: 0) |
+| Success | `ACTION_COMPLETED` | Tasks were modified |
+
+Examples:
+
+```bash
+# Error: Parent doesn't exist
+todoat MyList complete "NonExistent/*"
+# Result: ERROR - task "NonExistent" not found
+
+# Info: Parent exists but has no children
+todoat MyList complete "LeafTask/*"
+# Result: INFO_ONLY - 0 tasks affected
+```
+
 ## Task Search and Matching
 
 todoat uses intelligent matching to find tasks:
