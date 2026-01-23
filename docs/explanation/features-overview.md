@@ -81,14 +81,14 @@ This document provides a high-level summary of all features in todoat, organized
 
 | Feature | Description | Status | Documentation |
 |---------|-------------|--------|---------------|
-| **Create Subtasks** | Add child tasks under parent tasks using `-P` flag | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#create-subtasks) |
-| **Path-Based Creation** | Auto-create hierarchy using path notation (`parent/child/grandchild`) | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#path-based-creation) |
-| **Tree Visualization** | Display hierarchical structure with box-drawing characters (├─, └─, │) | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#tree-visualization) |
-| **Multi-Level Hierarchy** | Support unlimited nesting depth | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#multi-level-hierarchy) |
-| **Parent Path Resolution** | Reference parents by path or name | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#parent-path-resolution) |
-| **Hierarchical Filtering** | Show subtasks when parent matches filter | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#hierarchical-filtering) |
-| **Orphan Detection** | Identify subtasks with missing parents | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#orphan-detection) |
-| **Indented Display** | Visual indentation to show task depth | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#indented-display) |
+| **Create Subtasks** | Add child tasks under parent tasks using `-P` flag | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#1-parent-child-relationships) |
+| **Path-Based Creation** | Auto-create hierarchy using path notation (`parent/child/grandchild`) | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#2-path-based-task-creation) |
+| **Tree Visualization** | Display hierarchical structure with box-drawing characters (├─, └─, │) | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#3-hierarchical-display-and-navigation) |
+| **Multi-Level Hierarchy** | Support unlimited nesting depth | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#1-parent-child-relationships) |
+| **Parent Path Resolution** | Reference parents by path or name | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#2-path-based-task-creation) |
+| **Hierarchical Filtering** | Show subtasks when parent matches filter | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#integration-with-other-features) |
+| **Orphan Detection** | Identify subtasks with missing parents | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#4-subtask-operations-and-management) |
+| **Indented Display** | Visual indentation to show task depth | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#3-hierarchical-display-and-navigation) |
 
 **Key Use Cases**:
 - Breaking down complex projects into manageable subtasks
@@ -106,17 +106,17 @@ This document provides a high-level summary of all features in todoat, organized
 
 | Feature | Description | Status | Documentation |
 |---------|-------------|--------|---------------|
-| **Nextcloud CalDAV Backend** | Sync with Nextcloud Tasks using CalDAV protocol | ✅ Stable | [Backend System](backend-system.md#nextcloud-caldav-backend) |
-| **Todoist Backend** | Integrate with Todoist using REST API | ✅ Stable | [Backend System](backend-system.md#todoist-backend) |
-| **SQLite Backend** | Local database storage with full CRUD operations | ✅ Stable | [Backend System](backend-system.md#sqlite-backend) |
-| **Git/Markdown Backend** | Store tasks as markdown files in Git repositories | 🚧 In Development | [Backend System](backend-system.md#git-markdown-backend) |
-| **File Backend** | Plain text file storage (placeholder) | 🚧 In Development | [Backend System](backend-system.md#file-backend) |
-| **Backend Auto-Detection** | Automatically detect and configure backends | ✅ Stable | [Backend System](backend-system.md#backend-auto-detection) |
-| **Backend Selection Priority** | Configurable priority order for backend selection | ✅ Stable | [Backend System](backend-system.md#backend-selection-priority) |
-| **Pluggable Architecture** | TaskManager interface for adding new backends | ✅ Stable | [Backend System](backend-system.md#pluggable-architecture) |
-| **List Backends Command** | Display all configured backends and their status | ✅ Stable | [Backend System](backend-system.md#list-backends) |
-| **Backend-Specific Options** | Per-backend configuration and behavior | ✅ Stable | [Backend System](backend-system.md#backend-specific-options) |
-| **Multi-Backend Support** | Use multiple backends simultaneously | ✅ Stable | [Backend System](backend-system.md#multi-backend-support) |
+| **Nextcloud CalDAV Backend** | Sync with Nextcloud Tasks using CalDAV protocol | ✅ Stable | [Backend System](backend-system.md#1-nextcloud-backend-remote-caldav) |
+| **Todoist Backend** | Integrate with Todoist using REST API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
+| **SQLite Backend** | Local database storage with full CRUD operations | ✅ Stable | [Backend System](backend-system.md#2-sqlite-backend-local-database) |
+| **Git/Markdown Backend** | Store tasks as markdown files in Git repositories | 🚧 In Development | [Backend System](backend-system.md#3-git-backend-markdown-in-repositories) |
+| **File Backend** | Plain text file storage (placeholder) | 🚧 In Development | [Backend System](backend-system.md#4-file-backend-placeholder) |
+| **Backend Auto-Detection** | Automatically detect and configure backends | ✅ Stable | [Backend System](backend-system.md#auto-detection-interface) |
+| **Backend Selection Priority** | Configurable priority order for backend selection | ✅ Stable | [Backend System](backend-system.md#selection-priority) |
+| **Pluggable Architecture** | TaskManager interface for adding new backends | ✅ Stable | [Backend System](backend-system.md#1-taskmanager-interface) |
+| **List Backends Command** | Display all configured backends and their status | ✅ Stable | [Backend System](backend-system.md#backend-display-information) |
+| **Backend-Specific Options** | Per-backend configuration and behavior | ✅ Stable | [Backend System](backend-system.md#backend-configuration-formats) |
+| **Multi-Backend Support** | Use multiple backends simultaneously | ✅ Stable | [Backend System](backend-system.md#2-backend-registry) |
 
 **Key Use Cases**:
 - Syncing tasks with Nextcloud tasks
@@ -382,7 +382,7 @@ This diagram shows how major features interact with each other:
 - **Add tasks quickly**: Use [Add Tasks](task-management.md#add-tasks) with [Action Abbreviations](cli-interface.md#action-abbreviations)
 - **Organize projects**: Use [Lists](list-management.md) and [Subtasks](subtasks-hierarchy.md)
 - **Work offline**: Enable [Synchronization](synchronization.md) with [Offline Mode](synchronization.md#offline-mode)
-- **Sync with Nextcloud**: Configure [Nextcloud Backend](backend-system.md#nextcloud-caldav-backend) with [Keyring Storage](credential-management.md#keyring-storage)
+- **Sync with Nextcloud**: Configure [Nextcloud Backend](backend-system.md#1-nextcloud-backend-remote-caldav) with [Keyring Storage](credential-management.md#keyring-storage)
 - **Customize display**: Create [Custom Views](views-customization.md#custom-views) or [Plugin Formatters](views-customization.md#plugin-formatters)
 - **Track deadlines**: Use [Filter by Dates](task-management.md#filter-by-dates) and [Due Date fields](task-management.md#add-tasks)
 - **Prioritize work**: Use [Priority levels](task-management.md#add-tasks) and [Filter by Priority](task-management.md#filter-by-priority)
