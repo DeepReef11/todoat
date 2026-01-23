@@ -228,6 +228,22 @@ func (c *AddCommand) Execute(args []string) error {
 
 ---
 
+## Viewing Analytics Data
+
+There are currently no built-in CLI commands for viewing analytics data. To query your usage statistics, use `sqlite3` directly:
+
+```bash
+# Open the analytics database
+sqlite3 ~/.config/todoat/analytics.db
+
+# Or run a query directly
+sqlite3 ~/.config/todoat/analytics.db "SELECT command, COUNT(*) FROM events GROUP BY command;"
+```
+
+The sections below provide useful queries you can run to analyze your usage patterns.
+
+---
+
 ## Analytics Queries
 
 ### Success Rate by Command
