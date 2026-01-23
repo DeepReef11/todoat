@@ -55,6 +55,7 @@ Establish dependency and organizational relationships between tasks, enabling st
 - Parent task in different list: Error - parent and child must be in same list (this case should not happen unless maybe when using --uid)
 - Parent task deleted: Child tasks also get deleted (prompt user y/n)
 - Circular references: Prevented by database constraints and validation
+- Orphan tasks (parent missing externally): Automatically promoted to root level for display. If a task's parent is deleted externally (e.g., via remote backend, data import, or database corruption), the orphaned child tasks are displayed at the root level rather than being hidden or causing errors. This ensures data visibility and allows manual cleanup.
 
 #### User Journey
 
