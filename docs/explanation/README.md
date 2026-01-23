@@ -9,7 +9,7 @@ This documentation provides a comprehensive inventory of all features available 
 todoat is a command-line task management tool that allows you to:
 
 - Manage tasks seamlessly from your terminal
-- Work with multiple storage backends (Nextcloud CalDAV, Todoist, Google Tasks, Git/Markdown, File, SQLite)
+- Work with multiple storage backends (Nextcloud CalDAV, Todoist, Google Tasks, Microsoft To Do, Git/Markdown, File, SQLite)
 - Sync tasks across devices with offline support
 - Organize tasks hierarchically with subtasks
 - Customize task views with flexible formatters
@@ -58,9 +58,9 @@ todoat is a command-line task management tool that allows you to:
 
 | Status | Features |
 |--------|----------|
-| ✅ **Stable** | Task CRUD, List management, Nextcloud backend, Todoist backend, Google Tasks backend, Git backend, File backend, SQLite sync, Credential management, Custom views, Subtasks, Shell completion, Cross-backend migration, TUI interface |
+| ✅ **Stable** | Task CRUD, List management, Nextcloud backend, Todoist backend, Google Tasks backend, Microsoft To Do backend, Git backend, File backend, SQLite sync, Credential management, Custom views, Subtasks, Shell completion, Cross-backend migration, TUI interface |
 | 🚧 **In Development** | Auto-sync daemon (being redesigned) |
-| 📋 **Planned** | Microsoft To Do backend (backend code exists, not yet wired to CLI) |
+| 📋 **Planned** | No features currently planned |
 
 ## Getting Started
 

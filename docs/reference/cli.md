@@ -15,7 +15,7 @@ These flags are available for all commands:
 
 | Flag | Description |
 |------|-------------|
-| `-b, --backend <name>` | Backend to use (sqlite, todoist, nextcloud, google, git, file) |
+| `-b, --backend <name>` | Backend to use (sqlite, todoist, nextcloud, google, mstodo, git, file) |
 | `--detect-backend` | Show auto-detected backends and exit |
 | `--json` | Output in JSON format |
 | `-y, --no-prompt` | Disable interactive prompts |

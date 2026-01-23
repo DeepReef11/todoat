@@ -10,11 +10,9 @@ todoat supports multiple storage backends. This guide covers configuring each ba
 | Nextcloud | `nextcloud` | ✅ Yes | CalDAV-based cloud storage |
 | Todoist | `todoist` | ✅ Yes | Todoist cloud service |
 | Google Tasks | `google` | ✅ Yes | Google Tasks cloud service |
+| Microsoft To Do | `mstodo` | ✅ Yes | Microsoft Graph API cloud service |
 | Git | `git` | ✅ Yes | Markdown files in Git repositories |
 | File | `file` | ✅ Yes | Plain file-based storage |
-
-**Note**: The following backends are documented but not yet available via CLI:
-- **Microsoft To Do** (`mstodo`) - Backend code exists but not wired to CLI
 
 ## Nextcloud (CalDAV)
 
@@ -188,8 +186,6 @@ todoat -b google "My Tasks" add "Submit report" --due-date tomorrow
 
 ## Microsoft To Do
 
-> **Note**: The Microsoft To Do backend code exists but is **not yet available via CLI**. This section documents the planned functionality for future reference.
-
 ### Configuration
 
 ```yaml
@@ -222,7 +218,7 @@ Microsoft To Do requires OAuth2 authentication via Microsoft Graph API. You'll n
 
 ### Authentication
 
-Store your OAuth2 tokens securely via environment variables:
+Store your OAuth2 tokens securely via environment variables or the system keyring:
 
 ```bash
 # Set up tokens via environment variables
@@ -230,6 +226,10 @@ export TODOAT_MSTODO_ACCESS_TOKEN="your-access-token"
 export TODOAT_MSTODO_REFRESH_TOKEN="your-refresh-token"
 export TODOAT_MSTODO_CLIENT_ID="your-client-id"
 export TODOAT_MSTODO_CLIENT_SECRET="your-client-secret"
+
+# Or store the access token in the system keyring
+todoat credentials set mstodo token --prompt
+# Paste your access token when prompted
 ```
 
 The backend automatically refreshes expired access tokens using the refresh token.

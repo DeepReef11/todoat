@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Backend System in todoat provides a pluggable architecture that allows the application to store and retrieve tasks from multiple different storage providers. This design enables users to work with tasks in Nextcloud (CalDAV), local SQLite databases, Git repositories with markdown files, or plain files - all through a unified interface.
+The Backend System in todoat provides a pluggable architecture that allows the application to store and retrieve tasks from multiple different storage providers. This design enables users to work with tasks in Nextcloud (CalDAV), Todoist, Google Tasks, Microsoft To Do, local SQLite databases, Git repositories with markdown files, or plain files - all through a unified interface.
 
 **Related Features:**
 - [Synchronization](synchronization.md) - Syncing between local and remote backends

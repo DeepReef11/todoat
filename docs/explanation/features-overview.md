@@ -109,6 +109,7 @@ This document provides a high-level summary of all features in todoat, organized
 | **Nextcloud CalDAV Backend** | Sync with Nextcloud Tasks using CalDAV protocol | ✅ Stable | [Backend System](backend-system.md#1-nextcloud-backend-remote-caldav) |
 | **Todoist Backend** | Integrate with Todoist using REST API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
 | **Google Tasks Backend** | Integrate with Google Tasks using REST API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
+| **Microsoft To Do Backend** | Integrate with Microsoft To Do using Graph API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
 | **SQLite Backend** | Local database storage with full CRUD operations | ✅ Stable | [Backend System](backend-system.md#2-sqlite-backend-local-database) |
 | **Git/Markdown Backend** | Store tasks as markdown files in Git repositories | ✅ Stable | [Backend System](backend-system.md#3-git-backend-markdown-in-repositories) |
 | **File Backend** | Plain text file storage | ✅ Stable | [Backend System](backend-system.md#4-file-backend-plain-text-storage) |
@@ -123,6 +124,7 @@ This document provides a high-level summary of all features in todoat, organized
 - Syncing tasks with Nextcloud tasks
 - Integrating with Todoist projects
 - Syncing with Google Tasks
+- Syncing with Microsoft To Do
 - Offline-first task management with SQLite
 - Version-controlled task files with Git
 - Switching between backends based on context
@@ -365,13 +367,13 @@ This diagram shows how major features interact with each other:
 | Task Management | 12 | 12 | 0 | 0 |
 | List Management | 11 | 11 | 0 | 0 |
 | Subtasks & Hierarchy | 8 | 8 | 0 | 0 |
-| Backend System | 11 | 11 | 0 | 0 |
+| Backend System | 12 | 12 | 0 | 0 |
 | Synchronization | 18 | 17 | 1 | 0 |
 | Credential Management | 13 | 13 | 0 | 0 |
 | Views & Customization | 17 | 17 | 0 | 0 |
 | CLI Interface | 19 | 19 | 0 | 0 |
 | Configuration | 18 | 18 | 0 | 0 |
-| **TOTAL** | **128** | **126** | **2** | **0** |
+| **TOTAL** | **129** | **127** | **2** | **0** |
 
 ---
 
@@ -398,7 +400,7 @@ This diagram shows how major features interact with each other:
 - All task CRUD operations
 - All list management operations
 - All subtask/hierarchy features
-- Nextcloud, Todoist, and Google Tasks backends
+- Nextcloud, Todoist, Google Tasks, and Microsoft To Do backends
 - Git/Markdown and File backends
 - SQLite backend and sync
 - All credential management
@@ -412,7 +414,7 @@ This diagram shows how major features interact with each other:
 - Auto-sync daemon (redesign in progress)
 
 **Future Roadmap** (📋):
-- Microsoft To Do backend (backend code exists, not yet wired to CLI)
+- No features currently planned
 
 ---
 
@@ -425,5 +427,5 @@ This diagram shows how major features interact with each other:
 ---
 
 **Last Updated**: January 2026
-**Total Features Documented**: 121
+**Total Features Documented**: 129
 **Documentation Version**: 1.0

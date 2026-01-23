@@ -26,6 +26,7 @@ import (
 	"todoat/backend/file"
 	"todoat/backend/git"
 	"todoat/backend/google"
+	"todoat/backend/mstodo"
 	"todoat/backend/nextcloud"
 	"todoat/backend/sqlite"
 	"todoat/backend/todoist"
@@ -594,6 +595,8 @@ func getBackendName(be backend.TaskManager) string {
 		return "nextcloud"
 	case *google.Backend:
 		return "google"
+	case *mstodo.Backend:
+		return "mstodo"
 	case *syncAwareBackend:
 		// Recurse to get the underlying backend name
 		return "sync-" + getBackendName(v.TaskManager)
@@ -2303,6 +2306,16 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 				utils.Debugf("Using default backend: google")
 				return google.New(googleCfg)
 			}
+		case "mstodo":
+			// Create Microsoft To Do backend using config file + keyring + environment variables
+			mstodoCfg := buildMSTodoConfigWithKeyring("mstodo", rawConfig)
+			if mstodoCfg.AccessToken == "" {
+				// Warn user and fall back to sqlite
+				warnBackendFallback(cfg, "mstodo", "access token not found (use 'credentials set mstodo token' or set TODOAT_MSTODO_ACCESS_TOKEN)")
+			} else {
+				utils.Debugf("Using default backend: mstodo")
+				return mstodo.New(mstodoCfg)
+			}
 		default:
 			// Custom backend name (e.g., "nextcloud-test") - delegate to createBackendByName
 			// which handles custom backends defined in the config file
@@ -2487,6 +2500,18 @@ func createBackendByName(name string, dbPath string, rawConfig map[string]interf
 		}
 		utils.Debugf("Using backend: google")
 		return google.New(googleCfg)
+	case "mstodo":
+		// Check if "mstodo" is configured in config file - if so, use createCustomBackend
+		if rawConfig != nil && config.IsBackendConfigured(rawConfig, name) {
+			return createCustomBackend(name, dbPath, rawConfig)
+		}
+		// No config file entry - use keyring + environment variables
+		mstodoCfg := buildMSTodoConfigWithKeyring("mstodo", rawConfig)
+		if mstodoCfg.AccessToken == "" {
+			return nil, fmt.Errorf("mstodo backend requires access token (use 'credentials set mstodo token' or set TODOAT_MSTODO_ACCESS_TOKEN)")
+		}
+		utils.Debugf("Using backend: mstodo")
+		return mstodo.New(mstodoCfg)
 	}
 
 	// Check for custom backend name in config
@@ -2494,7 +2519,7 @@ func createBackendByName(name string, dbPath string, rawConfig map[string]interf
 		return createCustomBackend(name, dbPath, rawConfig)
 	}
 
-	return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud, google, git, file)", name)
+	return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud, google, mstodo, git, file)", name)
 }
 
 // createCustomBackend creates a backend from custom configuration.
@@ -2567,6 +2592,14 @@ func createCustomBackend(name string, dbPath string, rawConfig map[string]interf
 			return nil, fmt.Errorf("google backend '%s' requires access token (use 'credentials set %s token' or set TODOAT_GOOGLE_ACCESS_TOKEN)", name, name)
 		}
 		return google.New(googleCfg)
+
+	case "mstodo":
+		// Build mstodo config from config file + keyring + environment
+		mstodoCfg := buildMSTodoConfigWithKeyring(name, rawConfig)
+		if mstodoCfg.AccessToken == "" {
+			return nil, fmt.Errorf("mstodo backend '%s' requires access token (use 'credentials set %s token' or set TODOAT_MSTODO_ACCESS_TOKEN)", name, name)
+		}
+		return mstodo.New(mstodoCfg)
 
 	default:
 		return nil, fmt.Errorf("unknown backend type '%s' for custom backend '%s'", backendType, name)
@@ -2672,6 +2705,44 @@ func buildGoogleConfigWithKeyring(name string, rawConfig map[string]interface{})
 
 	// If access token is still missing, try the keyring
 	// For Google, we use "token" as the username since there's no actual username
+	if cfg.AccessToken == "" {
+		credMgr := credentials.NewManager()
+		// Try with "token" as username (standard for API tokens)
+		if credInfo, err := credMgr.Get(context.Background(), name, "token"); err == nil && credInfo.Found {
+			cfg.AccessToken = credInfo.Password
+			utils.Debugf("Using access token from keyring for %s", name)
+		}
+	}
+
+	return cfg
+}
+
+// buildMSTodoConfigWithKeyring builds a mstodo.Config from config file, keyring, and environment.
+// Priority: 1. Config file values, 2. Environment variables, 3. Keyring
+func buildMSTodoConfigWithKeyring(name string, rawConfig map[string]interface{}) mstodo.Config {
+	// Start with environment variables as defaults
+	cfg := mstodo.ConfigFromEnv()
+
+	// Override with config file settings if available
+	if rawConfig != nil {
+		if backendCfg, _, err := config.GetBackendConfig(rawConfig, name); err == nil {
+			if token, ok := backendCfg["access_token"].(string); ok && token != "" {
+				cfg.AccessToken = token
+			}
+			if token, ok := backendCfg["refresh_token"].(string); ok && token != "" {
+				cfg.RefreshToken = token
+			}
+			if clientID, ok := backendCfg["client_id"].(string); ok && clientID != "" {
+				cfg.ClientID = clientID
+			}
+			if clientSecret, ok := backendCfg["client_secret"].(string); ok && clientSecret != "" {
+				cfg.ClientSecret = clientSecret
+			}
+		}
+	}
+
+	// If access token is still missing, try the keyring
+	// For Microsoft To Do, we use "token" as the username since there's no actual username
 	if cfg.AccessToken == "" {
 		credMgr := credentials.NewManager()
 		// Try with "token" as username (standard for API tokens)
