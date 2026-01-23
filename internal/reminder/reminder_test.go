@@ -16,6 +16,113 @@ import (
 // CLI Tests (032-task-reminders)
 // =============================================================================
 
+// TestReminderCheckCLI tests the 'todoat reminder check' command
+func TestReminderCheckCLI(t *testing.T) {
+	t.Run("returns success when no reminders due", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"1 day",
+			},
+			OSNotification:  false,
+			LogNotification: true,
+		})
+
+		// Create a task with due date far in the future (outside 1-day window)
+		dueDate := time.Now().AddDate(0, 0, 30).Format("2006-01-02")
+		cli.MustExecute("-y", "Work", "add", "Future task", "--due-date", dueDate)
+
+		// Check reminders - should show "No reminders triggered"
+		stdout := cli.MustExecute("-y", "reminder", "check")
+
+		testutil.AssertContains(t, stdout, "No reminders triggered")
+		testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	})
+
+	t.Run("outputs list of due reminders when present", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"1 day",
+			},
+			OSNotification:  false,
+			LogNotification: true,
+		})
+
+		// Create a task due tomorrow (within 1-day window)
+		dueDate := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+		cli.MustExecute("-y", "Work", "add", "Soon task", "--due-date", dueDate)
+
+		// Check reminders - should show triggered reminders
+		stdout := cli.MustExecute("-y", "reminder", "check")
+
+		testutil.AssertContains(t, stdout, "Triggered")
+		testutil.AssertContains(t, stdout, "Soon task")
+		testutil.AssertContains(t, stdout, "reminder(s)")
+		testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	})
+
+	t.Run("handles multiple tasks with different due dates", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"7 days",
+			},
+			OSNotification:  false,
+			LogNotification: true,
+		})
+
+		// Create tasks with various due dates
+		dueSoon := time.Now().AddDate(0, 0, 2).Format("2006-01-02")    // Within 7-day window
+		dueLater := time.Now().AddDate(0, 0, 5).Format("2006-01-02")   // Within 7-day window
+		dueFuture := time.Now().AddDate(0, 0, 30).Format("2006-01-02") // Outside window
+
+		cli.MustExecute("-y", "Work", "add", "Task Soon", "--due-date", dueSoon)
+		cli.MustExecute("-y", "Work", "add", "Task Later", "--due-date", dueLater)
+		cli.MustExecute("-y", "Work", "add", "Task Future", "--due-date", dueFuture)
+
+		// Check reminders
+		stdout := cli.MustExecute("-y", "reminder", "check")
+
+		// Tasks within window should appear
+		testutil.AssertContains(t, stdout, "Task Soon")
+		testutil.AssertContains(t, stdout, "Task Later")
+		// Task outside window should not appear
+		testutil.AssertNotContains(t, stdout, "Task Future")
+		testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	})
+
+	t.Run("works when reminders are disabled", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		// Note: disabled reminders config
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: false,
+			Intervals: []string{
+				"1 day",
+			},
+			OSNotification:  false,
+			LogNotification: false,
+		})
+
+		// Create a task due tomorrow
+		dueDate := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+		cli.MustExecute("-y", "Work", "add", "Due task", "--due-date", dueDate)
+
+		// Check reminders - should not trigger when disabled
+		stdout := cli.MustExecute("-y", "reminder", "check")
+
+		testutil.AssertContains(t, stdout, "No reminders triggered")
+		testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+	})
+}
+
 // TestReminderStatusCLI tests the 'todoat reminder status' command
 func TestReminderStatusCLI(t *testing.T) {
 	t.Run("shows enabled status with intervals", func(t *testing.T) {
