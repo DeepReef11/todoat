@@ -1132,6 +1132,28 @@ func TestPriorityFilterCombinedWithStatusSQLiteCLI(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
+// TestPriorityFilterRangeSyntaxSQLiteCLI tests issue #072: priority range filter (1-3) should work
+func TestPriorityFilterRangeSyntaxSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create tasks with different priorities
+	cli.MustExecute("-y", "Work", "add", "Priority 1 task", "-p", "1")
+	cli.MustExecute("-y", "Work", "add", "Priority 2 task", "-p", "2")
+	cli.MustExecute("-y", "Work", "add", "Priority 3 task", "-p", "3")
+	cli.MustExecute("-y", "Work", "add", "Priority 5 task", "-p", "5")
+	cli.MustExecute("-y", "Work", "add", "Priority 7 task", "-p", "7")
+
+	// Filter using range syntax 1-3
+	stdout := cli.MustExecute("-y", "Work", "-p", "1-3")
+
+	testutil.AssertContains(t, stdout, "Priority 1 task")
+	testutil.AssertContains(t, stdout, "Priority 2 task")
+	testutil.AssertContains(t, stdout, "Priority 3 task")
+	testutil.AssertNotContains(t, stdout, "Priority 5 task")
+	testutil.AssertNotContains(t, stdout, "Priority 7 task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
 // =============================================================================
 // Status Filtering Tests (001-status-filter-comma-separated)
 // =============================================================================

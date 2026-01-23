@@ -3462,7 +3462,7 @@ func matchesPriorityFilter(taskPriority int, priorities []int) bool {
 }
 
 // parsePriorityFilter parses a priority filter string into a slice of priority values
-// Supports: single value (1), comma-separated (1,2,3), aliases (high, medium, low)
+// Supports: single value (1), comma-separated (1,2,3), range (1-3), aliases (high, medium, low)
 func parsePriorityFilter(s string) ([]int, error) {
 	if s == "" {
 		return nil, nil
@@ -3478,6 +3478,28 @@ func parsePriorityFilter(s string) ([]int, error) {
 		return []int{5}, nil
 	case "low":
 		return []int{6, 7, 8, 9}, nil
+	}
+
+	// Handle range syntax (e.g., "1-3")
+	if strings.Contains(s, "-") && !strings.Contains(s, ",") {
+		parts := strings.Split(s, "-")
+		if len(parts) == 2 {
+			minPrio, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+			maxPrio, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+			if err1 == nil && err2 == nil {
+				if minPrio < 0 || minPrio > 9 || maxPrio < 0 || maxPrio > 9 {
+					return nil, fmt.Errorf("priority must be between 0 and 9")
+				}
+				if minPrio > maxPrio {
+					return nil, fmt.Errorf("invalid priority range: %d-%d (min > max)", minPrio, maxPrio)
+				}
+				var priorities []int
+				for i := minPrio; i <= maxPrio; i++ {
+					priorities = append(priorities, i)
+				}
+				return priorities, nil
+			}
+		}
 	}
 
 	// Handle comma-separated values

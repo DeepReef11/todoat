@@ -60,3 +60,19 @@ FIX CODE - Implement priority range parsing for the `-p` flag to match the docum
 
 ## Dependencies
 none
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Added range syntax parsing (N-M) to parsePriorityFilter function in cmd/todoat/cmd/todoat.go
+**Test added**: TestPriorityFilterRangeSyntaxSQLiteCLI in backend/sqlite/cli_test.go
+
+### Verification Log
+```bash
+$ todoat Personal -p 1-3
+Tasks in 'Personal':
+  [TODO] Test task 1 [P1]
+  [TODO] Test task 2 [P2]
+  [TODO] Test task 3 [P3]
+```
+**Matches expected behavior**: YES
