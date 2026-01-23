@@ -15,6 +15,54 @@ import (
 // Sync Core System Tests (018-synchronization-core)
 // =============================================================================
 
+// TestSyncWithConfiguredRemoteBackend tests that `todoat sync` does NOT report
+// "no remote backend configured" when a remote backend IS configured (Issue 1)
+// This was a bug where the sync command was a stub that always said no remote was configured
+func TestSyncWithConfiguredRemoteBackend(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Create a config with a remote backend configured (nextcloud)
+	// and sync enabled with sqlite as local backend
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  nextcloud-test:
+    type: nextcloud
+    enabled: true
+    host: "localhost:8080"
+    username: "admin"
+    allow_http: true
+default_backend: nextcloud-test
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Run sync command
+	stdout, _, exitCode := cli.Execute("-y", "sync")
+
+	// The sync command should NOT say "no remote backend configured"
+	// when a remote backend IS configured
+	if strings.Contains(stdout, "no remote backend configured") {
+		t.Errorf("sync command incorrectly reports 'no remote backend configured' when nextcloud-test is configured.\nOutput: %s", stdout)
+	}
+
+	// Should succeed or fail gracefully (e.g., connectivity issues are acceptable)
+	// But it should NOT say there's no remote backend
+	if exitCode != 0 {
+		// Acceptable failure reasons (connectivity, auth, etc.)
+		// But NOT "no remote backend configured"
+		t.Logf("sync command exited with code %d (may be expected for connectivity issues)\nOutput: %s", exitCode, stdout)
+	}
+}
+
 // TestSyncPullCLI tests that `todoat sync` pulls changes from remote backend to local cache
 func TestSyncPullCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
