@@ -2010,6 +2010,13 @@ func doListStats(ctx context.Context, be backend.TaskManager, listName string, c
 			sqliteBe, ok = sab.TaskManager.(*sqlite.Backend)
 		}
 	}
+	if !ok {
+		// Try unwrapping DetectableBackend (used when auto_detect_backend is enabled)
+		if dbe, dbeOk := be.(*sqlite.DetectableBackend); dbeOk {
+			sqliteBe = dbe.Backend
+			ok = sqliteBe != nil
+		}
+	}
 	if !ok || sqliteBe == nil {
 		return fmt.Errorf("stats command is only supported for SQLite backend")
 	}
@@ -2125,6 +2132,13 @@ func doListVacuum(ctx context.Context, be backend.TaskManager, cfg *Config, stdo
 		// Try unwrapping syncAwareBackend
 		if sab, sabOk := be.(*syncAwareBackend); sabOk {
 			sqliteBe, ok = sab.TaskManager.(*sqlite.Backend)
+		}
+	}
+	if !ok {
+		// Try unwrapping DetectableBackend (used when auto_detect_backend is enabled)
+		if dbe, dbeOk := be.(*sqlite.DetectableBackend); dbeOk {
+			sqliteBe = dbe.Backend
+			ok = sqliteBe != nil
 		}
 	}
 	if !ok || sqliteBe == nil {

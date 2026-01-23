@@ -1787,6 +1787,106 @@ func TestListVacuumCommand(t *testing.T) {
 	}
 }
 
+// TestIssue034StatsWithAutoDetect verifies that list stats command works when
+// auto_detect_backend is enabled, which returns a DetectableBackend wrapper
+// instead of raw *sqlite.Backend. See issues/034-list-stats-vacuum-require-explicit-backend.md
+func TestIssue034StatsWithAutoDetect(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Enable auto_detect_backend=true - this triggers the bug
+	configYAML := `default_backend: sqlite
+auto_detect_backend: true
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and add some tasks for stats
+	exitCode := Execute([]string{"list", "create", "StatsTestAutoDetect"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"StatsTestAutoDetect", "add", "Task 1"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to add task: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Get database stats - this should work even with auto_detect_backend enabled
+	exitCode = Execute([]string{"list", "stats"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list stats failed with auto_detect_backend: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should show database statistics
+	if !strings.Contains(output, "Database Statistics") {
+		t.Errorf("list stats should show 'Database Statistics' header, got: %s", output)
+	}
+	if !strings.Contains(output, "Total tasks") {
+		t.Errorf("list stats should show 'Total tasks', got: %s", output)
+	}
+}
+
+// TestIssue034VacuumWithAutoDetect verifies that list vacuum command works when
+// auto_detect_backend is enabled, which returns a DetectableBackend wrapper
+// instead of raw *sqlite.Backend. See issues/034-list-stats-vacuum-require-explicit-backend.md
+func TestIssue034VacuumWithAutoDetect(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Enable auto_detect_backend=true - this triggers the bug
+	configYAML := `default_backend: sqlite
+auto_detect_backend: true
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list
+	exitCode := Execute([]string{"list", "create", "VacuumTestAutoDetect"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// Run vacuum - this should work even with auto_detect_backend enabled
+	exitCode = Execute([]string{"list", "vacuum"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list vacuum failed with auto_detect_backend: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should indicate success
+	if !strings.Contains(strings.ToLower(output), "vacuum") && !strings.Contains(strings.ToLower(output), "complet") {
+		t.Errorf("list vacuum should indicate success, got: %s", output)
+	}
+}
+
 // =============================================================================
 // List Trash Subcommand Tests
 // Tests for trash-related commands (trash, restore, purge).

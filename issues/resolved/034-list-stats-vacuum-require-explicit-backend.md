@@ -54,3 +54,46 @@ The backend resolution logic for these commands may be checking the backend type
 
 ## Recommended Fix
 FIX CODE - Ensure the stats and vacuum commands use the same backend resolution logic as other commands, so they correctly detect and use the default SQLite backend.
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Added unwrapping logic for `*sqlite.DetectableBackend` in `doListStats` and `doListVacuum` functions. When `auto_detect_backend` is enabled, the backend returned is a `*sqlite.DetectableBackend` wrapper rather than a raw `*sqlite.Backend`. The fix adds checks to unwrap this wrapper alongside the existing `*syncAwareBackend` unwrapping.
+**Test added**: `TestIssue034StatsWithAutoDetect` and `TestIssue034VacuumWithAutoDetect` in `cmd/todoat/cmd/todoat_test.go`
+
+### Verification Log
+```bash
+$ todoat config get default_backend
+sqlite
+
+$ todoat list stats
+Database Statistics
+==================
+Total tasks: 57
+
+Tasks per list:
+  Work Tasks           24
+  Personal             0
+  Work Tasks           6
+  Nonexistent          1
+  mylist               0
+  TestList             24
+  Work                 1
+  TempList             0
+  NonExistentList      1
+  detect               0
+
+Tasks by status:
+  DONE                 13
+  TODO                 42
+  IN-PROGRESS          2
+
+Database size: 56.00 KB (57344 bytes)
+Last vacuum: 2026-01-23 00:46:40
+
+$ todoat list vacuum
+Vacuum completed
+Size before: 56.00 KB
+Size after:  56.00 KB
+```
+**Matches expected behavior**: YES
