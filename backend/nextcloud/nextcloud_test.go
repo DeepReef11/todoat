@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -655,25 +654,15 @@ func TestNextcloudCredentialsFromKeyring(t *testing.T) {
 
 // TestNextcloudCredentialsFromEnv - Backend retrieves credentials from TODOAT_NEXTCLOUD_* env vars
 func TestNextcloudCredentialsFromEnv(t *testing.T) {
-	// Save original env vars
-	origHost := os.Getenv("TODOAT_NEXTCLOUD_HOST")
-	origUser := os.Getenv("TODOAT_NEXTCLOUD_USERNAME")
-	origPass := os.Getenv("TODOAT_NEXTCLOUD_PASSWORD")
-	defer func() {
-		_ = os.Setenv("TODOAT_NEXTCLOUD_HOST", origHost)
-		_ = os.Setenv("TODOAT_NEXTCLOUD_USERNAME", origUser)
-		_ = os.Setenv("TODOAT_NEXTCLOUD_PASSWORD", origPass)
-	}()
-
 	server := newMockCalDAVServer("envuser", "envpass")
 	defer server.Close()
 
 	server.AddCalendar("EnvTest")
 
-	// Set environment variables
-	_ = os.Setenv("TODOAT_NEXTCLOUD_HOST", strings.TrimPrefix(server.URL(), "http://"))
-	_ = os.Setenv("TODOAT_NEXTCLOUD_USERNAME", "envuser")
-	_ = os.Setenv("TODOAT_NEXTCLOUD_PASSWORD", "envpass")
+	// Set environment variables (auto-restored after test)
+	t.Setenv("TODOAT_NEXTCLOUD_HOST", strings.TrimPrefix(server.URL(), "http://"))
+	t.Setenv("TODOAT_NEXTCLOUD_USERNAME", "envuser")
+	t.Setenv("TODOAT_NEXTCLOUD_PASSWORD", "envpass")
 
 	// Create backend using env config
 	cfg := ConfigFromEnv()
@@ -1113,18 +1102,10 @@ func TestGenerateVTODO(t *testing.T) {
 
 // Helper function tests
 func TestConfigFromEnv(t *testing.T) {
-	origHost := os.Getenv("TODOAT_NEXTCLOUD_HOST")
-	origUser := os.Getenv("TODOAT_NEXTCLOUD_USERNAME")
-	origPass := os.Getenv("TODOAT_NEXTCLOUD_PASSWORD")
-	defer func() {
-		_ = os.Setenv("TODOAT_NEXTCLOUD_HOST", origHost)
-		_ = os.Setenv("TODOAT_NEXTCLOUD_USERNAME", origUser)
-		_ = os.Setenv("TODOAT_NEXTCLOUD_PASSWORD", origPass)
-	}()
-
-	_ = os.Setenv("TODOAT_NEXTCLOUD_HOST", "test.example.com")
-	_ = os.Setenv("TODOAT_NEXTCLOUD_USERNAME", "testuser")
-	_ = os.Setenv("TODOAT_NEXTCLOUD_PASSWORD", "testpass")
+	// Set environment variables (auto-restored after test)
+	t.Setenv("TODOAT_NEXTCLOUD_HOST", "test.example.com")
+	t.Setenv("TODOAT_NEXTCLOUD_USERNAME", "testuser")
+	t.Setenv("TODOAT_NEXTCLOUD_PASSWORD", "testpass")
 
 	cfg := ConfigFromEnv()
 

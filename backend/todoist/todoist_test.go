@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -767,19 +766,13 @@ func TestTodoistAPITokenFromKeyring(t *testing.T) {
 
 // TestTodoistAPITokenFromEnv - Backend retrieves token from TODOAT_TODOIST_TOKEN env var
 func TestTodoistAPITokenFromEnv(t *testing.T) {
-	// Save original env vars
-	origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
-	defer func() {
-		_ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
-	}()
-
 	server := newMockTodoistServer("env-api-token")
 	defer server.Close()
 
 	server.AddProject("proj-1", "EnvTest")
 
-	// Set environment variable
-	_ = os.Setenv("TODOAT_TODOIST_TOKEN", "env-api-token")
+	// Set environment variable (auto-restored after test)
+	t.Setenv("TODOAT_TODOIST_TOKEN", "env-api-token")
 
 	// Create backend using env config
 	cfg := ConfigFromEnv()
@@ -1069,12 +1062,8 @@ func TestGetTask(t *testing.T) {
 }
 
 func TestConfigFromEnv(t *testing.T) {
-	origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
-	defer func() {
-		_ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
-	}()
-
-	_ = os.Setenv("TODOAT_TODOIST_TOKEN", "my-secret-token")
+	// Set environment variable (auto-restored after test)
+	t.Setenv("TODOAT_TODOIST_TOKEN", "my-secret-token")
 
 	cfg := ConfigFromEnv()
 

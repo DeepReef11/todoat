@@ -678,22 +678,11 @@ func TestAppStartsWithoutExistingConfigSQLiteCLI(t *testing.T) {
 	// Create a temp directory to act as home
 	tempHome := t.TempDir()
 
-	// Set XDG environment variables for this test
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	oldDataHome := os.Getenv("XDG_DATA_HOME")
-	defer func() {
-		_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
-		_ = os.Setenv("XDG_DATA_HOME", oldDataHome)
-	}()
-
+	// Set XDG environment variables for this test (auto-restored after test)
 	configDir := filepath.Join(tempHome, ".config")
 	dataDir := filepath.Join(tempHome, ".local", "share")
-	if err := os.Setenv("XDG_CONFIG_HOME", configDir); err != nil {
-		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
-	}
-	if err := os.Setenv("XDG_DATA_HOME", dataDir); err != nil {
-		t.Fatalf("failed to set XDG_DATA_HOME: %v", err)
-	}
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+	t.Setenv("XDG_DATA_HOME", dataDir)
 
 	// Verify config doesn't exist
 	configPath := filepath.Join(configDir, "todoat", "config.yaml")
@@ -723,22 +712,11 @@ func TestDBCreatedAtCorrectPathSQLiteCLI(t *testing.T) {
 	// Create a temp directory to act as home
 	tempHome := t.TempDir()
 
-	// Set XDG environment variables for this test
-	oldDataHome := os.Getenv("XDG_DATA_HOME")
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	defer func() {
-		_ = os.Setenv("XDG_DATA_HOME", oldDataHome)
-		_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
-	}()
-
+	// Set XDG environment variables for this test (auto-restored after test)
 	dataDir := filepath.Join(tempHome, ".local", "share")
 	configDir := filepath.Join(tempHome, ".config")
-	if err := os.Setenv("XDG_DATA_HOME", dataDir); err != nil {
-		t.Fatalf("failed to set XDG_DATA_HOME: %v", err)
-	}
-	if err := os.Setenv("XDG_CONFIG_HOME", configDir); err != nil {
-		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
-	}
+	t.Setenv("XDG_DATA_HOME", dataDir)
+	t.Setenv("XDG_CONFIG_HOME", configDir)
 
 	// Use nil DBPath to test default path resolution
 	cfg := &Config{}
@@ -768,16 +746,9 @@ func TestConfigCreatedAtCorrectPathSQLiteCLI(t *testing.T) {
 	// Create a temp directory to act as home
 	tempHome := t.TempDir()
 
-	// Set XDG environment variables for this test
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	defer func() {
-		_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
-	}()
-
+	// Set XDG environment variables for this test (auto-restored after test)
 	configDir := filepath.Join(tempHome, ".config")
-	if err := os.Setenv("XDG_CONFIG_HOME", configDir); err != nil {
-		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
-	}
+	t.Setenv("XDG_CONFIG_HOME", configDir)
 
 	// Expected path should be XDG_CONFIG_HOME/todoat/config.yaml
 	expectedConfigPath := filepath.Join(configDir, "todoat", "config.yaml")
@@ -848,22 +819,11 @@ func TestConfigCreatedOnCLIExecutionSQLiteCLI(t *testing.T) {
 	// Create a temp directory to act as home
 	tempHome := t.TempDir()
 
-	// Set XDG environment variables for this test
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	oldDataHome := os.Getenv("XDG_DATA_HOME")
-	defer func() {
-		_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
-		_ = os.Setenv("XDG_DATA_HOME", oldDataHome)
-	}()
-
+	// Set XDG environment variables for this test (auto-restored after test)
 	configDir := filepath.Join(tempHome, ".config")
 	dataDir := filepath.Join(tempHome, ".local", "share")
-	if err := os.Setenv("XDG_CONFIG_HOME", configDir); err != nil {
-		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
-	}
-	if err := os.Setenv("XDG_DATA_HOME", dataDir); err != nil {
-		t.Fatalf("failed to set XDG_DATA_HOME: %v", err)
-	}
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+	t.Setenv("XDG_DATA_HOME", dataDir)
 
 	// Verify config doesn't exist before running CLI
 	configPath := filepath.Join(configDir, "todoat", "config.yaml")
