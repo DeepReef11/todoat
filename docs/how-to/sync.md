@@ -51,6 +51,14 @@ todoat sync queue
 
 Shows operations waiting to be synced.
 
+### Clear Sync Queue
+
+```bash
+todoat sync queue clear
+```
+
+Removes all pending sync operations from the queue. Use this when you want to discard unsynced local changes.
+
 ### View Conflicts
 
 ```bash

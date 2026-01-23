@@ -288,9 +288,22 @@ todoat sync [command]
 |---------|-------------|
 | `sync` | Synchronize now (default) |
 | `status` | Show sync status |
-| `queue` | View pending sync operations |
+| `queue` | View and manage pending sync operations |
 | `conflicts` | View and manage sync conflicts |
 | `daemon` | Manage the sync daemon |
+
+### sync queue
+
+View and manage the sync queue.
+
+```bash
+todoat sync queue [command]
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| (default) | View pending operations |
+| `clear` | Clear all pending operations |
 
 ### sync conflicts
 
@@ -339,6 +352,9 @@ todoat sync status
 
 # View pending operations
 todoat sync queue
+
+# Clear all pending operations
+todoat sync queue clear
 
 # View conflicts
 todoat sync conflicts
