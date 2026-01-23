@@ -2251,11 +2251,11 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 	if appConfig != nil && appConfig.DefaultBackend != "" && appConfig.DefaultBackend != "sqlite" {
 		switch appConfig.DefaultBackend {
 		case "todoist":
-			// Create Todoist backend using environment variable credentials
-			todoistCfg := todoist.ConfigFromEnv()
+			// Create Todoist backend using config file + keyring + environment variables
+			todoistCfg := buildTodoistConfigWithKeyring("todoist", rawConfig)
 			if todoistCfg.APIToken == "" {
 				// Warn user and fall back to sqlite
-				warnBackendFallback(cfg, "todoist", "TODOAT_TODOIST_TOKEN environment variable is not set")
+				warnBackendFallback(cfg, "todoist", "API token not found (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)")
 			} else {
 				utils.Debugf("Using default backend: todoist")
 				return todoist.New(todoistCfg)
@@ -2305,9 +2305,14 @@ func createBackendByName(name string, dbPath string, rawConfig map[string]interf
 		utils.Debugf("Using backend: sqlite")
 		return sqlite.New(dbPath)
 	case "todoist":
-		todoistCfg := todoist.ConfigFromEnv()
+		// Check if "todoist" is configured in config file - if so, use createCustomBackend
+		if rawConfig != nil && config.IsBackendConfigured(rawConfig, name) {
+			return createCustomBackend(name, dbPath, rawConfig)
+		}
+		// No config file entry - use keyring + environment variables
+		todoistCfg := buildTodoistConfigWithKeyring("todoist", rawConfig)
 		if todoistCfg.APIToken == "" {
-			return nil, fmt.Errorf("todoist backend requires TODOAT_TODOIST_TOKEN environment variable")
+			return nil, fmt.Errorf("todoist backend requires API token (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)")
 		}
 		utils.Debugf("Using backend: todoist")
 		return todoist.New(todoistCfg)
@@ -2377,9 +2382,10 @@ func createCustomBackend(name string, dbPath string, rawConfig map[string]interf
 		return sqlite.New(dbPath)
 
 	case "todoist":
-		todoistCfg := todoist.ConfigFromEnv()
+		// Build todoist config from config file + keyring + environment
+		todoistCfg := buildTodoistConfigWithKeyring(name, rawConfig)
 		if todoistCfg.APIToken == "" {
-			return nil, fmt.Errorf("todoist backend '%s' requires TODOAT_TODOIST_TOKEN environment variable", name)
+			return nil, fmt.Errorf("todoist backend '%s' requires API token (use 'credentials set %s token' or set TODOAT_TODOIST_TOKEN)", name, name)
 		}
 		return todoist.New(todoistCfg)
 
@@ -2458,6 +2464,39 @@ func buildNextcloudConfigWithKeyring(name string, rawConfig map[string]interface
 		if credInfo, err := credMgr.Get(context.Background(), name, cfg.Username); err == nil && credInfo.Found {
 			cfg.Password = credInfo.Password
 			utils.Debugf("Using password from keyring for %s/%s", name, cfg.Username)
+		}
+	}
+
+	return cfg
+}
+
+// buildTodoistConfigWithKeyring builds a todoist.Config from config file, keyring, and environment.
+// Priority: 1. Config file values, 2. Environment variables, 3. Keyring
+// This addresses issue #002 - keyring credentials should be used for backend validation.
+func buildTodoistConfigWithKeyring(name string, rawConfig map[string]interface{}) todoist.Config {
+	// Start with environment variables as defaults
+	cfg := todoist.ConfigFromEnv()
+
+	// Override with config file settings if available
+	if rawConfig != nil {
+		if backendCfg, _, err := config.GetBackendConfig(rawConfig, name); err == nil {
+			if token, ok := backendCfg["api_token"].(string); ok && token != "" {
+				cfg.APIToken = token
+			}
+			if token, ok := backendCfg["token"].(string); ok && token != "" {
+				cfg.APIToken = token
+			}
+		}
+	}
+
+	// If token is still missing, try the keyring
+	// For Todoist, we use "token" as the username since there's no actual username
+	if cfg.APIToken == "" {
+		credMgr := credentials.NewManager()
+		// Try with "token" as username (standard for API tokens)
+		if credInfo, err := credMgr.Get(context.Background(), name, "token"); err == nil && credInfo.Found {
+			cfg.APIToken = credInfo.Password
+			utils.Debugf("Using API token from keyring for %s", name)
 		}
 	}
 
