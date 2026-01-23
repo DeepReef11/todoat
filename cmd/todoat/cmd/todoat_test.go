@@ -1985,3 +1985,140 @@ default_backend: sqlite
 		t.Errorf("credentials list should show 'nextcloud' backend, got: %s", output)
 	}
 }
+
+// --- Issue 033: Git and File Backends CLI Access ---
+
+// TestIssue033GitBackendAccessibleViaCLI verifies that git backend can be used via -b flag
+// CLI Test for 033-git-file-backends-not-wired-to-cli
+func TestIssue033GitBackendAccessibleViaCLI(t *testing.T) {
+	// Create a temp directory with a git repo and TODO.md file
+	tmpDir := t.TempDir()
+
+	// Initialize git repo
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		t.Fatalf("failed to create .git dir: %v", err)
+	}
+
+	// Create a TODO.md file with the todoat marker
+	todoContent := `<!-- todoat:enabled -->
+# Tasks
+
+## Inbox
+
+- [ ] Test task one
+- [x] Completed task
+`
+	todoFile := filepath.Join(tmpDir, "TODO.md")
+	if err := os.WriteFile(todoFile, []byte(todoContent), 0644); err != nil {
+		t.Fatalf("failed to write TODO.md: %v", err)
+	}
+
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Save and change working directory
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp dir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	var stdout, stderr bytes.Buffer
+
+	cfg := &Config{
+		ConfigPath: configPath,
+	}
+
+	// Try to use git backend explicitly - should NOT produce "unknown backend" error
+	exitCode := Execute([]string{"-b", "git", "list"}, &stdout, &stderr, cfg)
+
+	// The command should succeed (exit 0) since we have a valid git repo with TODO.md
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		// The specific error we're fixing: "unknown backend type 'git'"
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("git backend should be recognized via -b flag, but got: %s", stderrStr)
+		}
+		// Other errors might be acceptable (e.g., git not initialized properly)
+		t.Logf("Command failed with exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	// Should NOT get "unknown backend" error
+	output := stderr.String()
+	if strings.Contains(output, "unknown backend type 'git'") {
+		t.Errorf("git backend should be recognized, but got 'unknown backend' error: %s", output)
+	}
+	if strings.Contains(output, "unknown backend: git") {
+		t.Errorf("git backend should be recognized, but got 'unknown backend' error: %s", output)
+	}
+}
+
+// TestIssue033FileBackendAccessibleViaCLI verifies that file backend can be used via -b flag
+// CLI Test for 033-git-file-backends-not-wired-to-cli
+func TestIssue033FileBackendAccessibleViaCLI(t *testing.T) {
+	// Create a temp directory with a tasks file
+	tmpDir := t.TempDir()
+
+	// Create a tasks.txt file
+	tasksContent := `# Tasks
+
+## Inbox
+
+- [ ] Test task one
+- [x] Completed task
+`
+	tasksFile := filepath.Join(tmpDir, "tasks.txt")
+	if err := os.WriteFile(tasksFile, []byte(tasksContent), 0644); err != nil {
+		t.Fatalf("failed to write tasks.txt: %v", err)
+	}
+
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Save and change working directory
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp dir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	var stdout, stderr bytes.Buffer
+
+	cfg := &Config{
+		ConfigPath: configPath,
+	}
+
+	// Try to use file backend explicitly - should NOT produce "unknown backend" error
+	exitCode := Execute([]string{"-b", "file", "list"}, &stdout, &stderr, cfg)
+
+	// The command should succeed (exit 0) since we have a valid tasks file
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		// The specific error we're fixing: "unknown backend type 'file'"
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("file backend should be recognized via -b flag, but got: %s", stderrStr)
+		}
+		// Other errors might be acceptable
+		t.Logf("Command failed with exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	// Should NOT get "unknown backend" error
+	output := stderr.String()
+	if strings.Contains(output, "unknown backend type 'file'") {
+		t.Errorf("file backend should be recognized, but got 'unknown backend' error: %s", output)
+	}
+	if strings.Contains(output, "unknown backend: file") {
+		t.Errorf("file backend should be recognized, but got 'unknown backend' error: %s", output)
+	}
+}

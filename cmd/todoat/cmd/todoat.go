@@ -23,7 +23,8 @@ import (
 	"gopkg.in/yaml.v3"
 	_ "modernc.org/sqlite"
 	"todoat/backend"
-	_ "todoat/backend/git" // Register git as detectable backend
+	"todoat/backend/file"
+	"todoat/backend/git"
 	"todoat/backend/nextcloud"
 	"todoat/backend/sqlite"
 	"todoat/backend/todoist"
@@ -2281,7 +2282,7 @@ func warnBackendFallback(cfg *Config, backendName string, reason string) {
 }
 
 // createBackendByName creates a backend based on the given name.
-// It first checks for built-in backend names (sqlite, todoist, nextcloud),
+// It first checks for built-in backend names (sqlite, todoist, nextcloud, git, file),
 // then checks if the name is a custom backend defined in the config file.
 func createBackendByName(name string, dbPath string, rawConfig map[string]interface{}) (backend.TaskManager, error) {
 	// First, check for exact match with built-in backend names
@@ -2316,6 +2317,22 @@ func createBackendByName(name string, dbPath string, rawConfig map[string]interf
 		}
 		utils.Debugf("Using backend: nextcloud")
 		return nextcloud.New(nextcloudCfg)
+	case "git":
+		// Check if "git" is configured in config file
+		if rawConfig != nil && config.IsBackendConfigured(rawConfig, name) {
+			return createCustomBackend(name, dbPath, rawConfig)
+		}
+		// No config file entry - use defaults (auto-detect in current directory)
+		utils.Debugf("Using backend: git")
+		return git.New(git.Config{})
+	case "file":
+		// Check if "file" is configured in config file
+		if rawConfig != nil && config.IsBackendConfigured(rawConfig, name) {
+			return createCustomBackend(name, dbPath, rawConfig)
+		}
+		// No config file entry - use defaults (tasks.txt in current directory)
+		utils.Debugf("Using backend: file")
+		return file.New(file.Config{})
 	}
 
 	// Check for custom backend name in config
@@ -2323,7 +2340,7 @@ func createBackendByName(name string, dbPath string, rawConfig map[string]interf
 		return createCustomBackend(name, dbPath, rawConfig)
 	}
 
-	return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud)", name)
+	return nil, fmt.Errorf("unknown backend: %s (supported: sqlite, todoist, nextcloud, git, file)", name)
 }
 
 // createCustomBackend creates a backend from custom configuration.
@@ -2365,6 +2382,28 @@ func createCustomBackend(name string, dbPath string, rawConfig map[string]interf
 			return nil, fmt.Errorf("nextcloud backend '%s' requires password (keyring, config file, or TODOAT_NEXTCLOUD_PASSWORD)", name)
 		}
 		return nextcloud.New(nextcloudCfg)
+
+	case "git":
+		// Build git config from config file
+		gitCfg := git.Config{}
+		if workDir, ok := backendCfg["work_dir"].(string); ok && workDir != "" {
+			gitCfg.WorkDir = config.ExpandPath(workDir)
+		}
+		if filePath, ok := backendCfg["file"].(string); ok && filePath != "" {
+			gitCfg.File = filePath
+		}
+		if autoCommit, ok := backendCfg["auto_commit"].(bool); ok {
+			gitCfg.AutoCommit = autoCommit
+		}
+		return git.New(gitCfg)
+
+	case "file":
+		// Build file config from config file
+		fileCfg := file.Config{}
+		if filePath, ok := backendCfg["path"].(string); ok && filePath != "" {
+			fileCfg.FilePath = config.ExpandPath(filePath)
+		}
+		return file.New(fileCfg)
 
 	default:
 		return nil, fmt.Errorf("unknown backend type '%s' for custom backend '%s'", backendType, name)

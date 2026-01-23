@@ -62,3 +62,28 @@ The git and file backends are implemented in `backend/git/git.go` and `backend/f
 
 ## Recommended Fix
 FIX CODE - Add cases for `git` and `file` backend types in `createBackendByName` and `createCustomBackend` functions to wire up the existing implementations.
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Added git and file backend support to CLI by:
+1. Changed import from `_ "todoat/backend/git"` to `"todoat/backend/git"` and added `"todoat/backend/file"`
+2. Added `case "git":` and `case "file":` in `createBackendByName` function
+3. Added `case "git":` and `case "file":` in `createCustomBackend` function with config support
+4. Updated error message to include git and file in supported backends list
+**Test added**: TestIssue033GitBackendAccessibleViaCLI and TestIssue033FileBackendAccessibleViaCLI in cmd/todoat/cmd/todoat_test.go
+
+### Verification Log
+```bash
+$ todoat -b git list
+Available lists (1):
+
+NAME                 TASKS
+Inbox                1
+$ todoat -b file list
+Available lists (1):
+
+NAME                 TASKS
+Inbox                1
+```
+**Matches expected behavior**: YES
