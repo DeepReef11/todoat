@@ -9,6 +9,7 @@ todoat supports multiple storage backends. This guide covers configuring each ba
 | Nextcloud | `nextcloud` | CalDAV-based cloud storage |
 | Todoist | `todoist` | Todoist cloud service |
 | Google Tasks | `google` | Google Tasks cloud service |
+| Microsoft To Do | `mstodo` | Microsoft To Do cloud service |
 | SQLite | `sqlite` | Local database storage |
 | Git | `git` | Markdown files in Git repositories |
 
@@ -181,6 +182,110 @@ todoat -b google "My Tasks" add "Submit report" --due tomorrow
 - **No tags/categories**: Google Tasks does not support labels or categories
 - **No start dates**: Only due dates are supported
 - **No recurrence**: Recurring tasks are not supported by the API
+
+## Microsoft To Do
+
+### Configuration
+
+```yaml
+backends:
+  mstodo:
+    type: mstodo
+    enabled: true
+```
+
+### OAuth2 Setup
+
+Microsoft To Do requires OAuth2 authentication via Microsoft Graph API. You'll need to create an app registration in the Azure portal:
+
+1. Go to [Azure Portal](https://portal.azure.com/)
+2. Navigate to Azure Active Directory > App registrations
+3. Click "New registration"
+4. Enter a name for your application
+5. Select "Accounts in any organizational directory and personal Microsoft accounts"
+6. Set redirect URI to `http://localhost` (or your preferred redirect)
+7. Click "Register"
+8. Note the **Application (client) ID**
+9. Go to "Certificates & secrets" > "New client secret"
+10. Create a secret and note its **Value** (this is your client secret)
+11. Go to "API permissions" > "Add a permission"
+12. Select "Microsoft Graph" > "Delegated permissions"
+13. Add the following permissions:
+    - `Tasks.ReadWrite`
+    - `User.Read`
+14. Grant admin consent if required by your organization
+
+### Authentication
+
+Store your OAuth2 tokens securely via environment variables:
+
+```bash
+# Set up tokens via environment variables
+export TODOAT_MSTODO_ACCESS_TOKEN="your-access-token"
+export TODOAT_MSTODO_REFRESH_TOKEN="your-refresh-token"
+export TODOAT_MSTODO_CLIENT_ID="your-client-id"
+export TODOAT_MSTODO_CLIENT_SECRET="your-client-secret"
+```
+
+The backend automatically refreshes expired access tokens using the refresh token.
+
+### Usage Examples
+
+```bash
+# List all task lists
+todoat -b mstodo list
+
+# View tasks in a specific list
+todoat -b mstodo "My Tasks"
+
+# Add a task to Microsoft To Do
+todoat -b mstodo "My Tasks" add "Buy groceries"
+
+# Add a task with due date
+todoat -b mstodo "My Tasks" add "Submit report" --due tomorrow
+
+# Add a high-priority task
+todoat -b mstodo "My Tasks" add "Urgent meeting prep" --priority 1
+```
+
+### Supported Features
+
+| Feature | Supported |
+|---------|-----------|
+| Task lists (CRUD) | Yes |
+| Tasks (CRUD) | Yes |
+| Due dates | Yes |
+| Task completion | Yes |
+| Notes/Description | Yes |
+| Priority/Importance | Yes |
+| In-progress status | Yes |
+
+### Priority/Importance Mapping
+
+Microsoft To Do uses "importance" with three levels (low, normal, high). todoat maps these to numeric priorities:
+
+| todoat Priority | Microsoft Importance |
+|-----------------|---------------------|
+| 1-3 (high) | high |
+| 4-6 (medium) | normal |
+| 7-9 (low) | low |
+
+### Status Mapping
+
+| todoat Status | Microsoft Status |
+|---------------|------------------|
+| NEEDS-ACTION | notStarted |
+| IN-PROGRESS | inProgress |
+| COMPLETED | completed |
+| CANCELLED | completed |
+
+### Limitations
+
+- **No trash/restore**: Microsoft To Do permanently deletes tasks and lists (no trash recovery)
+- **No tags/categories**: Microsoft To Do does not support labels or categories in the API
+- **No start dates**: Only due dates are supported
+- **No recurrence**: Recurring tasks are not supported via the API
+- **No subtask hierarchy**: Checklist items exist but are not exposed as subtasks
 
 ## SQLite (Local)
 
