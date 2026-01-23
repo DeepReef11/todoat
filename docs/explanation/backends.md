@@ -8,6 +8,7 @@ todoat supports multiple storage backends. This guide covers configuring each ba
 |---------|------|-------------|
 | Nextcloud | `nextcloud` | CalDAV-based cloud storage |
 | Todoist | `todoist` | Todoist cloud service |
+| Google Tasks | `google` | Google Tasks cloud service |
 | SQLite | `sqlite` | Local database storage |
 | Git | `git` | Markdown files in Git repositories |
 
@@ -107,6 +108,79 @@ backends:
 todoat credentials set todoist token --prompt
 # Paste your API token when prompted
 ```
+
+## Google Tasks
+
+### Configuration
+
+```yaml
+backends:
+  google:
+    type: google
+    enabled: true
+```
+
+### OAuth2 Setup
+
+Google Tasks requires OAuth2 authentication. You'll need to create credentials in the Google Cloud Console:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the **Google Tasks API** in APIs & Services > Library
+4. Go to APIs & Services > Credentials
+5. Click "Create Credentials" > "OAuth client ID"
+6. Select "Desktop app" as the application type
+7. Download the credentials JSON file
+
+### Authentication
+
+Store your OAuth2 tokens securely:
+
+```bash
+# Set up tokens via environment variables
+export TODOAT_GOOGLE_ACCESS_TOKEN="your-access-token"
+export TODOAT_GOOGLE_REFRESH_TOKEN="your-refresh-token"
+export TODOAT_GOOGLE_CLIENT_ID="your-client-id"
+export TODOAT_GOOGLE_CLIENT_SECRET="your-client-secret"
+```
+
+The backend automatically refreshes expired access tokens using the refresh token.
+
+### Usage Examples
+
+```bash
+# List all task lists
+todoat -b google list
+
+# View tasks in a specific list
+todoat -b google "My Tasks"
+
+# Add a task to Google Tasks
+todoat -b google "My Tasks" add "Buy groceries"
+
+# Add a task with due date
+todoat -b google "My Tasks" add "Submit report" --due tomorrow
+```
+
+### Supported Features
+
+| Feature | Supported |
+|---------|-----------|
+| Task lists (CRUD) | Yes |
+| Tasks (CRUD) | Yes |
+| Subtasks | Yes |
+| Due dates | Yes |
+| Task completion | Yes |
+| Notes/Description | Yes |
+
+### Limitations
+
+- **No trash/restore**: Google Tasks permanently deletes tasks and lists (no trash recovery)
+- **Status mapping**: Google Tasks only supports "needsAction" and "completed" statuses. IN-PROGRESS and CANCELLED tasks are mapped to "completed"
+- **No priorities**: Google Tasks does not support task priorities
+- **No tags/categories**: Google Tasks does not support labels or categories
+- **No start dates**: Only due dates are supported
+- **No recurrence**: Recurring tasks are not supported by the API
 
 ## SQLite (Local)
 
