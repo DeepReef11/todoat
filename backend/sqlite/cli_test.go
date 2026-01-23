@@ -4595,6 +4595,21 @@ func TestAddRecurringMonthlySQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "FREQ=MONTHLY")
 }
 
+// TestAddRecurringYearlySQLiteCLI tests that `todoat -y MyList add "Annual review" --recur yearly` creates yearly task
+func TestAddRecurringYearlySQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	stdout := cli.MustExecute("-y", "Work", "add", "Annual review", "--recur", "yearly")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify recurrence in JSON output
+	stdout = cli.MustExecute("-y", "--json", "Work")
+
+	testutil.AssertContains(t, stdout, "Annual review")
+	testutil.AssertContains(t, stdout, "FREQ=YEARLY")
+}
+
 // TestAddRecurringCustomSQLiteCLI tests that `todoat -y MyList add "Check" --recur "every 3 days"` works
 func TestAddRecurringCustomSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
