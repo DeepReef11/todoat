@@ -61,13 +61,43 @@ These flags are available for all commands:
 | Flag | Type | Description |
 |------|------|-------------|
 | `-s, --status <status>` | string | Filter by status (comma-separated) |
-| `-p, --priority <filter>` | string | Filter by priority (1,2,3 or high/medium/low) |
+| `-p, --priority <filter>` | string | Filter by priority (see below) |
 | `--tag <tag>` | strings | Filter by tag (can specify multiple) |
 | `-v, --view <name>` | string | View to use (default, all, or custom) |
 | `--due-after <date>` | string | Filter tasks due on or after date (YYYY-MM-DD) |
 | `--due-before <date>` | string | Filter tasks due before date (YYYY-MM-DD) |
 | `--created-after <date>` | string | Filter tasks created on or after date |
 | `--created-before <date>` | string | Filter tasks created before date |
+
+##### Priority Filter Syntax
+
+The priority filter supports multiple formats:
+
+| Format | Description | Example |
+|--------|-------------|---------|
+| Single value | Filter by specific priority | `-p 1` |
+| Comma-separated | Filter by multiple priorities | `-p 1,2,3` |
+| Range | Filter by priority range (inclusive) | `-p 1-3` |
+| Named levels | Filter by priority category | `-p high` |
+| Undefined | Filter tasks without priority | `-p 0` |
+
+**Named priority levels:**
+
+| Name | Priority Range | Description |
+|------|----------------|-------------|
+| `high` | 1-4 | High priority tasks |
+| `medium` | 5 | Medium priority tasks |
+| `low` | 6-9 | Low priority tasks |
+
+Priority filters can be combined with other filters like status:
+
+```bash
+# Show high priority TODO tasks
+todoat MyList -s TODO -p high
+
+# Show medium priority in-progress tasks
+todoat MyList -s IN-PROGRESS -p 5
+```
 
 #### Direct task selection:
 
