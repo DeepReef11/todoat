@@ -146,14 +146,14 @@ Suggestion: Check if the server is running and accessible
 
 **Cause**: No stored credentials for the specified backend and user.
 
-**Suggestion**: Run `todoat setup <backend>` to configure credentials.
+**Suggestion**: Run `todoat credentials set <backend> <username> --prompt` to configure credentials.
 
 **Example**:
 ```bash
 $ todoat -b todoist list
 Error: credentials not found for todoist user john@example.com
 
-Suggestion: Run 'todoat setup todoist' to configure credentials
+Suggestion: Run 'todoat credentials set todoist token --prompt' to configure credentials
 ```
 
 ### Authentication Failed
@@ -165,7 +165,7 @@ Suggestion: Run 'todoat setup todoist' to configure credentials
 **Suggestion**: Verify your credentials are correct and have not expired.
 
 **Possible fixes**:
-1. Re-run setup: `todoat setup <backend>`
+1. Re-run setup: `todoat credentials set <backend> <username> --prompt`
 2. Check if your API token has expired (Todoist, Google Tasks)
 3. Verify your password hasn't changed (Nextcloud)
 4. Ensure your account has not been locked
