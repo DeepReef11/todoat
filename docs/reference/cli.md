@@ -473,10 +473,10 @@ todoat credentials [command]
 | Command | Description |
 |---------|-------------|
 | `list` | List all backends with credential status |
-| `get <backend>` | Retrieve credentials and show source |
+| `get <backend> <username>` | Retrieve credentials and show source |
 | `set <backend> <username>` | Store credentials in system keyring |
 | `update <backend> <username>` | Update existing credentials |
-| `delete <backend>` | Remove credentials from keyring |
+| `delete <backend> <username>` | Remove credentials from keyring |
 
 ### credentials set
 
@@ -522,7 +522,7 @@ todoat credentials update nextcloud myuser --prompt
 todoat credentials update nextcloud myuser --prompt --verify
 
 # Delete credentials
-todoat credentials delete nextcloud
+todoat credentials delete nextcloud myuser
 ```
 
 ## migrate
