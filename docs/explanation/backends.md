@@ -9,12 +9,12 @@ todoat supports multiple storage backends. This guide covers configuring each ba
 | SQLite | `sqlite` | ✅ Yes | Local database storage (default) |
 | Nextcloud | `nextcloud` | ✅ Yes | CalDAV-based cloud storage |
 | Todoist | `todoist` | ✅ Yes | Todoist cloud service |
-| Git | `git` | 🚧 Planned | Markdown files in Git repositories |
+| Git | `git` | ✅ Yes | Markdown files in Git repositories |
+| File | `file` | ✅ Yes | Plain file-based storage |
 
 **Note**: The following backends are documented but not yet available via CLI:
 - **Google Tasks** (`google`) - Backend code exists but not wired to CLI
 - **Microsoft To Do** (`mstodo`) - Backend code exists but not wired to CLI
-- **File** (`file`) - Placeholder backend, not yet implemented
 
 ## Nextcloud (CalDAV)
 
@@ -326,7 +326,7 @@ Paths support:
 
 ## Git (Markdown)
 
-> **Note**: The Git backend code exists but is **not yet available via CLI**. This section documents the planned functionality for future reference.
+The Git backend stores tasks as markdown files in Git repositories, enabling version-controlled task management.
 
 ### Configuration
 
@@ -373,6 +373,56 @@ When `auto_detect: true`, todoat automatically uses Git backend when:
 - [x] Completed task
 - [>] In progress task
 ```
+
+## File (Plain Text)
+
+The File backend stores tasks in plain text files, providing a lightweight file-based storage option without Git dependency.
+
+### Configuration
+
+```yaml
+backends:
+  file:
+    type: file
+    enabled: true
+    path: "~/tasks.txt"
+```
+
+### Usage
+
+```bash
+# Use file backend
+todoat -b file MyList add "New task"
+
+# List tasks from file backend
+todoat -b file MyList
+```
+
+### File Format
+
+Tasks are stored in a text file with sections as lists:
+
+```markdown
+# Tasks
+
+## Work
+
+- [ ] Pending task
+- [x] Completed task
+- [>] In progress task
+
+## Personal
+
+- [ ] Another task
+```
+
+### Features
+
+- Lightweight file-based storage
+- Sections treated as task lists
+- Indented tasks parsed as subtasks
+- Supports priority, dates, status, and tags
+- No Git dependency (unlike Git backend)
 
 ## Backend Selection
 

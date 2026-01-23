@@ -118,6 +118,7 @@ Restores the default configuration. Requires confirmation.
 | `sync.local_backend` | string | Cache backend for remote syncing |
 | `sync.offline_mode` | string | `auto`, `always`, `never` |
 | `sync.conflict_resolution` | string | `server_wins`, `local_wins`, `merge`, `keep_both` |
+| `sync.connectivity_timeout` | string | Network timeout for connectivity checks (default: `5s`) |
 | `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
 
 ## Notification Configuration

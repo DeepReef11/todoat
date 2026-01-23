@@ -15,7 +15,7 @@ These flags are available for all commands:
 
 | Flag | Description |
 |------|-------------|
-| `-b, --backend <name>` | Backend to use (sqlite, todoist, nextcloud) |
+| `-b, --backend <name>` | Backend to use (sqlite, todoist, nextcloud, git, file) |
 | `--detect-backend` | Show auto-detected backends and exit |
 | `--json` | Output in JSON format |
 | `-y, --no-prompt` | Disable interactive prompts |
@@ -77,7 +77,6 @@ The priority filter supports multiple formats:
 |--------|-------------|---------|
 | Single value | Filter by specific priority | `-p 1` |
 | Comma-separated | Filter by multiple priorities | `-p 1,2,3` |
-| Range | Filter by priority range (inclusive) | `-p 1-3` |
 | Named levels | Filter by priority category | `-p high` |
 | Undefined | Filter tasks without priority | `-p 0` |
 
@@ -117,8 +116,6 @@ Date flags accept multiple formats:
 | `today` | Current date |
 | `tomorrow` | Next day |
 | `yesterday` | Previous day |
-| `next week` | 7 days from today |
-| `next month` | 1 month from today |
 
 **Relative date offsets:**
 
@@ -136,8 +133,8 @@ Combine a relative date with a time by separating with a space:
 # Tomorrow at 9am
 todoat MyList add "Meeting" --due-date "tomorrow 09:00"
 
-# Next week at 2:30pm
-todoat MyList add "Review" --due-date "next week 14:30"
+# One week from now at 2:30pm
+todoat MyList add "Review" --due-date "+7d 14:30"
 ```
 
 #### Direct task selection:
@@ -580,8 +577,8 @@ todoat migrate [flags]
 
 | Flag | Description |
 |------|-------------|
-| `--from <backend>` | Source backend (sqlite, nextcloud, todoist) |
-| `--to <backend>` | Target backend (sqlite, nextcloud, todoist) |
+| `--from <backend>` | Source backend (sqlite, nextcloud, todoist, file) |
+| `--to <backend>` | Target backend (sqlite, nextcloud, todoist, file) |
 | `--list <name>` | Migrate only specified list |
 | `--dry-run` | Show what would be migrated without making changes |
 | `--target-info <backend>` | Show tasks in target backend |
