@@ -48,3 +48,21 @@ The delete operation likely doesn't verify that the list exists before returning
 
 ## Recommended Fix
 FIX CODE - Add validation to check if the list exists before deletion. Return an error if the list is not found. This is consistent with the behavior of `todoat list info "NonExistentList"` which correctly returns an error.
+
+## Resolution
+
+**Fixed in**: Already implemented (duplicate of resolved issue 001)
+**Fix description**: The doListDelete function checks if the list exists by calling GetListByName before attempting deletion. If the list is not found, it returns "Error: list '%s' not found" with exit code 1.
+**Test added**: `TestListDeleteNotFoundSQLiteCLI` in backend/sqlite/cli_test.go
+
+### Verification Log
+```bash
+$ export XDG_DATA_HOME=/tmp/todoat_test_issue001/data
+$ export XDG_CONFIG_HOME=/tmp/todoat_test_issue001/config
+$ rm -rf /tmp/todoat_test_issue001
+$ ./todoat list delete "NonExistentList" -y
+Error: list 'NonExistentList' not found
+ERROR
+Exit code: 1
+```
+**Matches expected behavior**: YES - The command fails with an error indicating the list does not exist.
