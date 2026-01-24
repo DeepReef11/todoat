@@ -1,5 +1,19 @@
 # Synchronization System
 
+> **⚠️ Implementation Status**: This document describes the **planned** sync architecture. Currently, only the following features are implemented:
+> - Sync queue tracking (`sync_queue` table stores pending operations)
+> - Fallback behavior (CLI falls back to SQLite when remote is unavailable)
+> - Manual sync command (`todoat sync`) - connects to remote but **does not execute actual push/pull operations**
+>
+> The following documented features are **NOT YET IMPLEMENTED**:
+> - `SyncManager.Pull()` and `SyncManager.Push()` methods
+> - Actual bidirectional sync (operations are queued but not executed)
+> - Conflict resolution during sync
+> - Retry logic with exponential backoff
+> - Hierarchical sync ordering
+>
+> See issues [001], [002], [003] in the issues folder for implementation status.
+
 ## Overview
 
 The synchronization system provides bidirectional data synchronization between local SQLite databases (caches) and remote backends (Nextcloud, Todoist, etc.), enabling offline task management with automatic conflict resolution.
@@ -1330,16 +1344,16 @@ tx.Commit()  // Single disk write
 ## Additional Resources
 
 **Source Code:**
-- `backend/syncManager.go` - Core sync orchestration
-- `backend/sqliteBackend.go` - Cache database operations
-- `backend/schema.go` - Database schema definitions
-- `backend/database.go` - Database initialization
+- `backend/sqlite/` - SQLite backend implementation (cache database operations)
+- `backend/sync/` - Sync-related tests
+- `cmd/todoat/cmd/todoat.go` - CLI implementation including sync command
+
+> **Note**: The documented `backend/syncManager.go` file does not exist yet. Sync logic is currently embedded in `cmd/todoat/cmd/todoat.go`.
 
 **Tests:**
-- `backend/syncManager_test.go` - Unit tests for sync logic
-- `backend/integration_test.go` - End-to-end sync scenarios
-- `backend/sync_bench_test.go` - Performance benchmarks
+- `backend/sync/daemon_test.go` - Daemon tests
+- `backend/sync/offline_mode_test.go` - Offline mode tests
+- `backend/sync/sync_test.go` - Sync tests
 
 **Documentation:**
-- [../how-to/sync.md](../how-to/sync.md) - Complete sync usage guide
 - [../../CLAUDE.md](../../CLAUDE.md) - Developer guidance
