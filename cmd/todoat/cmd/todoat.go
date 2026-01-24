@@ -2232,8 +2232,21 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 		return createBackendByName(cfg.Backend, dbPath, rawConfig)
 	}
 
-	// If sync is enabled, return a sync-aware backend wrapper
+	// If sync is enabled, check default_backend first (Issue #002 fix)
+	// Previously, sync enabled would immediately use SQLite, ignoring default_backend.
+	// Now we respect default_backend and use sync fallback behavior for remote backends.
 	if cfg.SyncEnabled {
+		// Check if default_backend is set to a non-sqlite backend
+		if appConfig != nil && appConfig.DefaultBackend != "" && appConfig.DefaultBackend != "sqlite" {
+			// Use sync fallback for the default backend (same as -b flag behavior)
+			utils.Debugf("Sync enabled with default_backend: %s", appConfig.DefaultBackend)
+			be, err := createBackendWithSyncFallback(cfg, appConfig.DefaultBackend, dbPath, rawConfig, appConfig)
+			if err != nil {
+				return nil, err
+			}
+			return be, nil
+		}
+		// Default to SQLite with sync support
 		be, err := sqlite.New(dbPath)
 		if err != nil {
 			return nil, err

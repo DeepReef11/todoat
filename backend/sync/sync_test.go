@@ -533,6 +533,114 @@ backends:
 }
 
 // =============================================================================
+// Issue 002: default_backend Ignored When Sync Enabled
+// =============================================================================
+
+// TestDefaultBackendRespectedWhenSyncEnabled verifies that default_backend config is used
+// even when sync is enabled. Previously, the CLI would immediately use SQLite when sync
+// was enabled, ignoring the default_backend setting entirely.
+// This is Issue #002: default_backend Configuration Ignored When Sync Enabled
+func TestDefaultBackendRespectedWhenSyncEnabled(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Create a config with sync enabled AND default_backend set to a remote backend
+	// The remote backend is unreachable (192.0.2.1 is a test-net address that won't route)
+	// so it should fall back to SQLite, BUT it should still TRY the remote backend first
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  offline_mode: auto
+  connectivity_timeout: "500ms"
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  nextcloud-test:
+    type: nextcloud
+    enabled: true
+    host: "192.0.2.1:8080"
+    username: "admin"
+    password: "test"
+    allow_http: true
+default_backend: nextcloud-test
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// When running WITHOUT -b flag, with sync enabled and default_backend: nextcloud-test
+	// The CLI should:
+	// 1. Respect default_backend and try to use nextcloud-test
+	// 2. Detect that nextcloud-test is unavailable
+	// 3. Fall back to SQLite and show a warning about fallback
+	//
+	// BUG BEHAVIOR (before fix): SQLite used immediately, no warning, default_backend ignored
+	// EXPECTED BEHAVIOR: Warning about nextcloud-test unavailable, then SQLite fallback
+	stdout, stderr, exitCode := cli.Execute("-y", "Work", "add", "Test task")
+
+	// The operation should SUCCEED (using SQLite fallback)
+	if exitCode != 0 {
+		t.Errorf("Expected operation to succeed with fallback, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+	}
+
+	// CRITICAL: Should show warning about nextcloud-test being unavailable
+	// This proves that default_backend was respected and the backend was attempted
+	if !strings.Contains(stderr, "nextcloud-test") && !strings.Contains(stderr, "Using SQLite cache") {
+		t.Errorf("Expected warning about nextcloud-test fallback, but got no warning about the remote backend.\nstderr: %s\nThis suggests default_backend is being ignored when sync is enabled.", stderr)
+	}
+
+	// Verify task was created
+	testutil.AssertContains(t, stdout, "Created task")
+}
+
+// TestDefaultBackendWithBackendFlagOverride verifies that -b flag still takes priority
+// over default_backend when sync is enabled
+func TestDefaultBackendWithBackendFlagOverride(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Config with default_backend: nextcloud-test
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  offline_mode: auto
+  connectivity_timeout: "500ms"
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  nextcloud-test:
+    type: nextcloud
+    enabled: true
+    host: "192.0.2.1:8080"
+    username: "admin"
+    password: "test"
+    allow_http: true
+default_backend: nextcloud-test
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Using -b sqlite should use sqlite directly, no fallback message
+	stdout, stderr, exitCode := cli.Execute("-y", "-b", "sqlite", "Work", "add", "Test task with -b sqlite")
+
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0, got %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+	}
+
+	// Should NOT show any fallback warning since sqlite was explicitly requested
+	if strings.Contains(stderr, "Using SQLite cache") || strings.Contains(stderr, "unavailable") {
+		t.Errorf("Expected no fallback warning when -b sqlite is explicit, got: %s", stderr)
+	}
+
+	testutil.AssertContains(t, stdout, "Created task")
+}
+
+// =============================================================================
 // Sync Conflict Resolution Tests (019-sync-conflict-resolution)
 // =============================================================================
 
