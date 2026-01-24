@@ -1,19 +1,5 @@
 # Synchronization System
 
-> **⚠️ Implementation Status**: This document describes the **planned** sync architecture. Currently, only the following features are implemented:
-> - Sync queue tracking (`sync_queue` table stores pending operations)
-> - Fallback behavior (CLI falls back to SQLite when remote is unavailable)
-> - Manual sync command (`todoat sync`) - connects to remote but **does not execute actual push/pull operations**
->
-> The following documented features are **NOT YET IMPLEMENTED**:
-> - `SyncManager.Pull()` and `SyncManager.Push()` methods
-> - Actual bidirectional sync (operations are queued but not executed)
-> - Conflict resolution during sync
-> - Retry logic with exponential backoff
-> - Hierarchical sync ordering
->
-> See issues [001], [002], [003] in the issues folder for implementation status.
-
 ## Overview
 
 The synchronization system provides bidirectional data synchronization between local SQLite databases (caches) and remote backends (Nextcloud, Todoist, etc.), enabling offline task management with automatic conflict resolution.
@@ -108,23 +94,22 @@ User → CLI Command → Sync Manager →  Database (SQLite)
 
 ### Technical Details
 
-**SyncManager Component** (`backend/syncManager.go`):
-- **Primary Role**: Manages bidirectional synchronization between local cache (SQLite) and remote backends
-- **Operation Coordination**: When sync is enabled, all CLI operations (add, update, complete, delete) go through the Sync Manager
-- **Pull Operations**: Fetches changes from remote backend and updates local cache
-- **Push Operations**: Processes sync queue and applies queued operations to remote backend
-- **Conflict Resolution**: Detects and resolves conflicts based on configured strategy (server_wins, local_wins, merge, keep_both)
+**Sync Implementation** (`cmd/todoat/cmd/todoat.go`):
+- **Primary Role**: Manages synchronization between local SQLite cache and remote backends
+- **CLI Operations**: When sync is enabled with `offline_mode: auto` (default), CLI operations use SQLite cache directly for instant response
+- **Push Operations**: The `todoat sync` command processes the sync queue and applies queued operations to remote backend
+- **Queue Management**: Operations are queued in `sync_queue` table and processed during sync
 - **Hierarchical Ordering**: Ensures parents are synced before children (prevents foreign key violations)
-- **Retry Logic**: Implements exponential backoff for failed sync operations (max 5 retries)
-- **Metadata Management**: Tracks etags, sync tokens, and timestamps for efficient sync
 
-**SQLiteBackend Sync Methods** (used by SyncManager):
-- `MarkLocallyModified()` - Flag task as changed locally (called after CLI updates)
-- `MarkLocallyDeleted()` - Flag task for deletion on remote (called after CLI deletes)
-- `ClearSyncFlags()` - Reset sync state after successful push
-- `UpdateSyncMetadata()` - Store etags and sync timestamps after pull/push
+**Sync-Aware Backend Wrapper** (`syncAwareBackend`):
+- Wraps the SQLite backend to add sync queue support
+- Automatically queues create/update/delete operations for later sync
+- Provides `getSyncManager()` to access queue operations
+
+**SQLiteBackend Sync Methods** (used by sync commands):
 - `GetPendingSyncOperations()` - Retrieve queued operations for push
 - `AddToSyncQueue()` - Queue operation for later synchronization
+- `ClearQueue()` - Clear the sync queue after successful sync
 
 ### Related Features
 - [Backend System](backend-system.md) - Remote backend implementations
@@ -456,15 +441,15 @@ Allow users to work with tasks without network connectivity, with all changes qu
 
 ### How It Works
 
-**1. Offline Mode Detection**
+**1. Offline Mode Configuration**
 ```yaml
 sync:
   offline_mode: auto  # Options: auto, offline, online
 ```
 
-- `auto`: Automatically detect network connectivity
-- `offline`: Force offline mode (never attempt remote sync)
-- `online`: Require network, fail if unavailable
+- `auto` (default): CLI always uses SQLite cache for instant operations. Sync happens only when you run `todoat sync`.
+- `offline`: Same as auto - CLI always uses SQLite cache. Use this to explicitly indicate offline-first preference.
+- `online`: CLI uses remote backend directly (bypasses sync architecture). Use this when you need direct remote access without local caching.
 
 **2. Offline Operation Flow**
 
@@ -541,18 +526,21 @@ CREATE TABLE sync_queue (
 );
 ```
 
-**Auto-Detection Logic:**
+**Offline Mode Logic:**
 ```go
-// Simplified offline detection
-func detectOfflineMode(config Config) bool {
-    if config.OfflineMode == "offline" {
-        return true
+// CLI backend selection based on offline_mode
+func createBackendWithSyncFallback(cfg Config, backendName string) Backend {
+    offlineMode := cfg.GetOfflineMode()  // defaults to "auto"
+
+    // For "auto" and "offline": CLI always uses SQLite cache
+    // Operations are queued in sync_queue for daemon to sync later
+    if offlineMode == "auto" || offlineMode == "offline" {
+        return createSQLiteBackend(cfg)
     }
-    if config.OfflineMode == "online" {
-        return false
-    }
-    // Auto mode: try network ping
-    return !canReachRemote(config.RemoteHost, timeout=2s)
+
+    // For "online": CLI uses remote backend directly
+    // This bypasses sync architecture for direct remote access
+    return createRemoteBackend(backendName)
 }
 ```
 
@@ -1348,7 +1336,7 @@ tx.Commit()  // Single disk write
 - `backend/sync/` - Sync-related tests
 - `cmd/todoat/cmd/todoat.go` - CLI implementation including sync command
 
-> **Note**: The documented `backend/syncManager.go` file does not exist yet. Sync logic is currently embedded in `cmd/todoat/cmd/todoat.go`.
+> **Note**: Sync logic is implemented in `cmd/todoat/cmd/todoat.go` rather than a separate `backend/syncManager.go` file.
 
 **Tests:**
 - `backend/sync/daemon_test.go` - Daemon tests

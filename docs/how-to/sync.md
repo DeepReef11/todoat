@@ -157,33 +157,32 @@ sync:
 
 | Mode | Behavior |
 |------|----------|
-| `auto` | Detect network automatically (default) |
-| `offline` | Force offline, never attempt sync |
-| `online` | Require network, fail if unavailable |
+| `auto` | CLI always uses SQLite cache (default) |
+| `offline` | CLI always uses SQLite cache (explicit offline preference) |
+| `online` | CLI uses remote backend directly (bypasses sync) |
 
 ## How Sync Works
 
-### Automatic Fallback to Cache
+### Offline-First Architecture
 
-When sync is enabled and a remote backend becomes unavailable (connection timeout, network issues), todoat automatically falls back to the SQLite cache:
+When sync is enabled with `offline_mode: auto` (the default), all CLI operations use the local SQLite cache for instant response. No network calls are made during normal CLI usage.
 
 ```bash
 todoat -b nextcloud MyList add "New task"
 ```
 
-If Nextcloud is unreachable, you'll see:
+The task is immediately saved to the local SQLite cache:
 
 ```
-Warning: Backend 'nextcloud' unavailable (connection timeout). Using SQLite cache (operations will be queued for sync).
 Created task: New task (ID: abc123)
 ```
 
-The task is saved locally and queued for sync. When the backend becomes available again, run `todoat sync` to push changes.
+Operations are queued automatically. Run `todoat sync` when you're ready to push changes to the remote backend.
 
-This fallback behavior is controlled by `offline_mode`:
-- `auto` (default): Automatically fall back to cache if backend unavailable
-- `offline`: Always use cache, never attempt remote connection
-- `online`: Require connection, fail if backend unavailable
+The `offline_mode` setting controls CLI behavior:
+- `auto` (default): CLI always uses SQLite cache - operations are instant, sync happens separately
+- `offline`: Same as auto - explicitly indicates offline-first preference
+- `online`: CLI uses remote backend directly - bypasses the sync architecture entirely
 
 ### Adding a Task Offline
 

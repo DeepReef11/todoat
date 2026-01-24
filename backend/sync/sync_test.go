@@ -902,8 +902,8 @@ default_backend: sqlite-remote
 				WHERE t.summary = 'Test sync architecture task'
 			`).Scan(&count)
 			if err == nil && count > 0 {
-				t.Errorf("ISSUE #001 CONFIRMED: Task exists in remote DB but should only be in local cache.\n"+
-					"With sync architecture, CLI should write to SQLite cache, not remote directly.\n"+
+				t.Errorf("ISSUE #001 CONFIRMED: Task exists in remote DB but should only be in local cache.\n" +
+					"With sync architecture, CLI should write to SQLite cache, not remote directly.\n" +
 					"Daemon should sync to remote later.")
 			}
 		}
@@ -994,9 +994,9 @@ default_backend: sqlite-remote
 	}
 
 	if taskCount > 0 {
-		t.Errorf("ISSUE #001: CLI wrote directly to remote backend.\n"+
-			"Expected: task in local cache + sync queue only\n"+
-			"Got: task already in remote database\n"+
+		t.Errorf("ISSUE #001: CLI wrote directly to remote backend.\n" +
+			"Expected: task in local cache + sync queue only\n" +
+			"Got: task already in remote database\n" +
 			"This means CLI used remote backend instead of sync architecture")
 	}
 }

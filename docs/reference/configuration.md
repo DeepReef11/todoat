@@ -116,7 +116,7 @@ Restores the default configuration. Requires confirmation.
 | `output_format` | string | Default output format (`text` or `json`) |
 | `sync.enabled` | bool | Enable synchronization |
 | `sync.local_backend` | string | Cache backend for remote syncing |
-| `sync.offline_mode` | string | `auto`, `offline`, `online` |
+| `sync.offline_mode` | string | CLI backend mode: `auto`/`offline` (use SQLite cache) or `online` (direct remote) |
 | `sync.conflict_resolution` | string | `server_wins`, `local_wins`, `merge`, `keep_both` |
 | `sync.connectivity_timeout` | string | Network timeout for connectivity checks (default: `5s`) |
 | `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
