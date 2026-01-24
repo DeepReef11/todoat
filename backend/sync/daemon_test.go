@@ -351,6 +351,63 @@ func TestSyncDaemonStartWithIntervalCLI(t *testing.T) {
 	cli.MustExecute("-y", "sync", "daemon", "stop")
 }
 
+// TestDaemonActuallySyncs verifies that daemon calls doSync at each interval (issue #005)
+func TestDaemonActuallySyncs(t *testing.T) {
+	cli := testutil.NewCLITestWithDaemon(t)
+	configPath := cli.ConfigPath()
+
+	// Configure sync with a file backend as the remote sync target
+	// Using file backend since it doesn't require network connectivity
+	fileBackendPath := cli.TmpDir() + "/file-backend/tasks.txt"
+	if err := os.MkdirAll(cli.TmpDir()+"/file-backend", 0755); err != nil {
+		t.Fatalf("failed to create file backend dir: %v", err)
+	}
+
+	syncConfig := fmt.Sprintf(`
+backends:
+  sqlite:
+    enabled: true
+  file:
+    type: file
+    path: %s
+    enabled: true
+default_backend: file
+sync:
+  enabled: true
+  daemon:
+    interval: 1
+`, fileBackendPath)
+	if err := os.WriteFile(configPath, []byte(syncConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Add a task (gets queued for sync)
+	cli.MustExecute("-y", "Work", "add", "Test task for daemon sync")
+
+	// Verify task is queued
+	queueOut := cli.MustExecute("-y", "sync", "queue")
+	if !strings.Contains(queueOut, "Pending Operations: 1") {
+		t.Logf("Expected 1 pending operation, got: %s", queueOut)
+	}
+
+	// Configure short interval for testing
+	cli.SetDaemonInterval(100 * time.Millisecond)
+
+	// Start daemon
+	cli.MustExecute("-y", "sync", "daemon", "start")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
+
+	// Wait for daemon sync cycle - at least 2 cycles to ensure sync happened
+	cli.WaitForSyncCount(5*time.Second, 2)
+
+	// CRITICAL: Queue should be empty after daemon sync
+	// This verifies daemon actually calls doSync() and clears pending operations
+	queueOut = cli.MustExecute("-y", "sync", "queue")
+	if !strings.Contains(queueOut, "Pending Operations: 0") {
+		t.Errorf("Queue should be empty after daemon sync, but got: %s", queueOut)
+	}
+}
+
 // =============================================================================
 // Multi-Backend Daemon Tests (073-auto-sync-daemon-redesign)
 // =============================================================================

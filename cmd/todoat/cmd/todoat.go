@@ -7052,9 +7052,15 @@ func daemonSyncLoop(daemon *daemonState, logPath string) {
 				logEntry := fmt.Sprintf("[%s] Sync attempt %d (offline mode)\n", time.Now().Format(time.RFC3339), daemon.syncCount)
 				_ = appendToLogFile(logPath, logEntry)
 			} else {
-				// Normal sync
-				logEntry := fmt.Sprintf("[%s] Sync completed (count: %d)\n", time.Now().Format(time.RFC3339), daemon.syncCount)
-				_ = appendToLogFile(logPath, logEntry)
+				// Actually call doSync to perform real synchronization
+				syncErr = doSync(daemon.cfg, io.Discard, io.Discard)
+				if syncErr != nil {
+					logEntry := fmt.Sprintf("[%s] Sync error (count: %d): %v\n", time.Now().Format(time.RFC3339), daemon.syncCount, syncErr)
+					_ = appendToLogFile(logPath, logEntry)
+				} else {
+					logEntry := fmt.Sprintf("[%s] Sync completed (count: %d)\n", time.Now().Format(time.RFC3339), daemon.syncCount)
+					_ = appendToLogFile(logPath, logEntry)
+				}
 			}
 
 			// Send notification
