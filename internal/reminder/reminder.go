@@ -138,9 +138,10 @@ func (s *Service) CheckReminders(tasks []*backend.Task) ([]*backend.Task, error)
 			shouldTrigger := false
 			if isAtDue {
 				// "at due time" - trigger if due date is today
-				dueDate := task.DueDate.Truncate(24 * time.Hour)
-				today := now.Truncate(24 * time.Hour)
-				shouldTrigger = dueDate.Equal(today)
+				// Compare year, month, day in local time (not UTC truncation)
+				dueY, dueM, dueD := task.DueDate.Date()
+				nowY, nowM, nowD := now.Date()
+				shouldTrigger = dueY == nowY && dueM == nowM && dueD == nowD
 			} else {
 				// Duration-based - trigger if within window
 				timeUntilDue := task.DueDate.Sub(now)

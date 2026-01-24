@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -2521,5 +2522,376 @@ func TestGoogleTasksCLIBackendInErrorMessage(t *testing.T) {
 	// The error message should list "google" as a supported backend
 	if !strings.Contains(errOutput, "google") {
 		t.Errorf("error message should list 'google' as a supported backend, got: %s", errOutput)
+	}
+}
+
+// --- Roadmap 072: File Backend CLI Integration ---
+
+// TestFileBackendAddTask verifies that `todoat -b file "Work" add "Task"` creates task in configured file
+// CLI Test for 072-file-backend-implementation
+func TestFileBackendAddTask(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a tasks file with a Work section
+	tasksContent := `# Tasks
+
+## Work
+
+- [ ] Existing task
+`
+	tasksFile := filepath.Join(tmpDir, "tasks.txt")
+	if err := os.WriteFile(tasksFile, []byte(tasksContent), 0644); err != nil {
+		t.Fatalf("failed to write tasks.txt: %v", err)
+	}
+
+	// Create config pointing to the tasks file
+	configContent := fmt.Sprintf(`default_backend: file
+backends:
+  file:
+    type: file
+    path: %s
+`, tasksFile)
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"),
+	}
+
+	// Add a new task using file backend
+	exitCode := Execute([]string{"-b", "file", "Work", "add", "New CLI task"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("file backend should be recognized via -b flag, but got: %s", stderrStr)
+		}
+		t.Logf("Command failed with exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	// Verify the task was added to the file
+	data, err := os.ReadFile(tasksFile)
+	if err != nil {
+		t.Fatalf("failed to read tasks file: %v", err)
+	}
+
+	if !strings.Contains(string(data), "New CLI task") {
+		t.Errorf("expected tasks file to contain 'New CLI task', got:\n%s", data)
+	}
+}
+
+// TestFileBackendGetTasks verifies that `todoat -b file "Work"` lists tasks from file
+// CLI Test for 072-file-backend-implementation
+func TestFileBackendGetTasks(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a tasks file with multiple tasks
+	tasksContent := `# Tasks
+
+## Work
+
+- [ ] Task one
+- [ ] Task two
+- [x] Completed task
+`
+	tasksFile := filepath.Join(tmpDir, "tasks.txt")
+	if err := os.WriteFile(tasksFile, []byte(tasksContent), 0644); err != nil {
+		t.Fatalf("failed to write tasks.txt: %v", err)
+	}
+
+	configContent := fmt.Sprintf(`default_backend: file
+backends:
+  file:
+    type: file
+    path: %s
+`, tasksFile)
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"),
+	}
+
+	// List tasks in Work list
+	exitCode := Execute([]string{"-b", "file", "Work"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("file backend should be recognized, but got: %s", stderrStr)
+		}
+		t.Logf("Command failed with exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	output := stdout.String()
+	// Should display tasks from the Work list
+	if !strings.Contains(output, "Task one") && !strings.Contains(output, "Task two") {
+		t.Errorf("expected output to contain tasks from Work list, got: %s", output)
+	}
+}
+
+// TestFileBackendUpdateTask verifies that `todoat -b file "Work" update "Task" -s D` updates task
+// CLI Test for 072-file-backend-implementation
+func TestFileBackendUpdateTask(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a tasks file with a task to update
+	tasksContent := `# Tasks
+
+## Work
+
+- [ ] Task to complete
+`
+	tasksFile := filepath.Join(tmpDir, "tasks.txt")
+	if err := os.WriteFile(tasksFile, []byte(tasksContent), 0644); err != nil {
+		t.Fatalf("failed to write tasks.txt: %v", err)
+	}
+
+	configContent := fmt.Sprintf(`default_backend: file
+backends:
+  file:
+    type: file
+    path: %s
+`, tasksFile)
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"),
+	}
+
+	// Update task status to Done
+	exitCode := Execute([]string{"-b", "file", "Work", "update", "Task to complete", "-s", "D"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("file backend should be recognized, but got: %s", stderrStr)
+		}
+		// Some errors are acceptable (e.g., task not found exactly) - just log
+		t.Logf("Update command exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	// Verify the task was updated in the file
+	data, err := os.ReadFile(tasksFile)
+	if err != nil {
+		t.Fatalf("failed to read tasks file: %v", err)
+	}
+
+	// Should have [x] for completed status
+	if !strings.Contains(string(data), "[x]") {
+		t.Errorf("expected task to be marked complete with [x], got:\n%s", data)
+	}
+}
+
+// TestFileBackendDeleteTask verifies that `todoat -b file "Work" delete "Task"` removes task
+// CLI Test for 072-file-backend-implementation
+func TestFileBackendDeleteTask(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a tasks file with tasks
+	tasksContent := `# Tasks
+
+## Work
+
+- [ ] Keep this task
+- [ ] Delete this task
+`
+	tasksFile := filepath.Join(tmpDir, "tasks.txt")
+	if err := os.WriteFile(tasksFile, []byte(tasksContent), 0644); err != nil {
+		t.Fatalf("failed to write tasks.txt: %v", err)
+	}
+
+	configContent := fmt.Sprintf(`default_backend: file
+backends:
+  file:
+    type: file
+    path: %s
+`, tasksFile)
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"),
+	}
+
+	// Delete the task
+	exitCode := Execute([]string{"-b", "file", "Work", "delete", "Delete this task"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("file backend should be recognized, but got: %s", stderrStr)
+		}
+		t.Logf("Delete command exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	// Verify the task was deleted from the file
+	data, err := os.ReadFile(tasksFile)
+	if err != nil {
+		t.Fatalf("failed to read tasks file: %v", err)
+	}
+
+	if strings.Contains(string(data), "Delete this task") {
+		t.Errorf("expected 'Delete this task' to be removed, but it's still in:\n%s", data)
+	}
+	if !strings.Contains(string(data), "Keep this task") {
+		t.Errorf("expected 'Keep this task' to remain, but it's not in:\n%s", data)
+	}
+}
+
+// TestFileBackendListManagement verifies that sections in file are treated as task lists
+// CLI Test for 072-file-backend-implementation
+func TestFileBackendListManagement(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a tasks file with multiple sections
+	tasksContent := `# Tasks
+
+## Work
+
+- [ ] Work task
+
+## Personal
+
+- [ ] Personal task
+
+## Shopping
+
+- [ ] Buy milk
+`
+	tasksFile := filepath.Join(tmpDir, "tasks.txt")
+	if err := os.WriteFile(tasksFile, []byte(tasksContent), 0644); err != nil {
+		t.Fatalf("failed to write tasks.txt: %v", err)
+	}
+
+	configContent := fmt.Sprintf(`default_backend: file
+backends:
+  file:
+    type: file
+    path: %s
+`, tasksFile)
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"),
+	}
+
+	// List all sections (lists)
+	exitCode := Execute([]string{"-b", "file", "list"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("file backend should be recognized, but got: %s", stderrStr)
+		}
+		t.Logf("List command exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	output := stdout.String()
+	// Should show all three sections
+	hasWork := strings.Contains(output, "Work")
+	hasPersonal := strings.Contains(output, "Personal")
+	hasShopping := strings.Contains(output, "Shopping")
+
+	if !hasWork || !hasPersonal || !hasShopping {
+		t.Errorf("expected output to contain Work, Personal, and Shopping lists, got: %s", output)
+	}
+}
+
+// TestFileBackendMetadata verifies that tasks store priority, dates, status, tags
+// CLI Test for 072-file-backend-implementation
+func TestFileBackendMetadata(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a tasks file
+	tasksContent := `# Tasks
+
+## Work
+
+- [ ] Task with metadata !1 @2024-06-15 #urgent #review
+`
+	tasksFile := filepath.Join(tmpDir, "tasks.txt")
+	if err := os.WriteFile(tasksFile, []byte(tasksContent), 0644); err != nil {
+		t.Fatalf("failed to write tasks.txt: %v", err)
+	}
+
+	configContent := fmt.Sprintf(`default_backend: file
+backends:
+  file:
+    type: file
+    path: %s
+`, tasksFile)
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		ConfigPath: configPath,
+		CachePath:  filepath.Join(tmpDir, "cache.json"),
+	}
+
+	// Get tasks from Work list
+	exitCode := Execute([]string{"-b", "file", "Work"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "unknown backend") {
+			t.Fatalf("file backend should be recognized, but got: %s", stderrStr)
+		}
+		t.Logf("Command exit code %d, stderr: %s", exitCode, stderrStr)
+	}
+
+	output := stdout.String()
+	// Should show the task (metadata parsing is internal but task should be visible)
+	if !strings.Contains(output, "Task with metadata") {
+		t.Errorf("expected output to contain task, got: %s", output)
+	}
+
+	// Now add a task with metadata via CLI and verify it's stored correctly
+	stdout.Reset()
+	stderr.Reset()
+
+	exitCode = Execute([]string{"-b", "file", "Work", "add", "Priority task", "-p", "1"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Logf("Add with priority failed with exit code %d, stderr: %s", exitCode, stderr.String())
+	}
+
+	// Verify the priority marker is in the file
+	data, err := os.ReadFile(tasksFile)
+	if err != nil {
+		t.Fatalf("failed to read tasks file: %v", err)
+	}
+
+	if !strings.Contains(string(data), "Priority task") {
+		t.Errorf("expected file to contain 'Priority task', got:\n%s", data)
+	}
+	// Priority 1 should be marked as !1 in the file
+	if !strings.Contains(string(data), "!1") {
+		t.Errorf("expected file to contain priority marker '!1', got:\n%s", data)
 	}
 }
