@@ -289,6 +289,11 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	cmd.Flags().String("due-after", "", "Filter tasks due on or after date (YYYY-MM-DD, inclusive)")
 	cmd.Flags().String("created-before", "", "Filter tasks created before date (YYYY-MM-DD, inclusive)")
 	cmd.Flags().String("created-after", "", "Filter tasks created on or after date (YYYY-MM-DD, inclusive)")
+	// Pagination flags for get command
+	cmd.Flags().Int("limit", 0, "Maximum number of tasks to show (for pagination)")
+	cmd.Flags().Int("offset", 0, "Number of tasks to skip (for pagination)")
+	cmd.Flags().Int("page", 0, "Page number to show (1-indexed, alternative to offset)")
+	cmd.Flags().Int("page-size", 50, "Number of tasks per page (default: 50)")
 
 	// Add list subcommand
 	cmd.AddCommand(newListCmd(stdout, cfg))
@@ -2946,7 +2951,18 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		if err != nil {
 			return err
 		}
-		return doGet(ctx, be, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, cfg, stdout, jsonOutput)
+		// Parse pagination flags
+		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
+		page, _ := cmd.Flags().GetInt("page")
+		pageSize, _ := cmd.Flags().GetInt("page-size")
+		pagination := PaginationOptions{
+			Limit:    limit,
+			Offset:   offset,
+			Page:     page,
+			PageSize: pageSize,
+		}
+		return doGet(ctx, be, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, pagination, cfg, stdout, jsonOutput)
 	case "add":
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		priority, err := parsePrioritySingle(priorityStr)
@@ -3119,7 +3135,7 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 }
 
 // doGet lists all tasks in a list, optionally filtering by status, priority, tags, and/or dates
-func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, dateFilter DateFilter, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, dateFilter DateFilter, viewName string, pagination PaginationOptions, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	tasks, err := be.GetTasks(ctx, list.ID)
 	if err != nil {
 		return err
@@ -3127,7 +3143,7 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 
 	// Load and apply view if specified
 	if viewName != "" {
-		return doGetWithView(ctx, be, tasks, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, cfg, stdout, jsonOutput)
+		return doGetWithView(ctx, be, tasks, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, pagination, cfg, stdout, jsonOutput)
 	}
 
 	// Filter by status if specified (supports comma-separated values)
@@ -3178,15 +3194,42 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		tasks = filteredTasks
 	}
 
-	if jsonOutput {
-		return outputTaskListJSON(ctx, be, tasks, list, cfg, stdout)
+	// Store total count before pagination
+	totalCount := len(tasks)
+
+	// Apply pagination if specified
+	offset := pagination.GetEffectiveOffset()
+	limit := pagination.GetEffectiveLimit()
+	var paginatedTasks []backend.Task
+	if pagination.HasPagination() {
+		if offset >= len(tasks) {
+			paginatedTasks = []backend.Task{}
+		} else {
+			end := offset + limit
+			if limit == 0 || end > len(tasks) {
+				end = len(tasks)
+			}
+			paginatedTasks = tasks[offset:end]
+		}
+	} else {
+		paginatedTasks = tasks
 	}
 
-	if len(tasks) == 0 {
+	if jsonOutput {
+		return outputTaskListJSONWithPagination(ctx, be, paginatedTasks, list, totalCount, pagination, cfg, stdout)
+	}
+
+	if len(paginatedTasks) == 0 {
 		_, _ = fmt.Fprintf(stdout, "No tasks in list '%s'\n", list.Name)
 	} else {
 		_, _ = fmt.Fprintf(stdout, "Tasks in '%s':\n", list.Name)
-		printTaskTree(tasks, stdout)
+		printTaskTree(paginatedTasks, stdout)
+		// Show pagination info if pagination is active
+		if pagination.HasPagination() && totalCount > 0 {
+			start := offset + 1
+			end := offset + len(paginatedTasks)
+			_, _ = fmt.Fprintf(stdout, "Showing %d-%d of %d tasks\n", start, end, totalCount)
+		}
 	}
 
 	// Emit INFO_ONLY result code in no-prompt mode
@@ -3198,7 +3241,7 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 
 // doGetWithView lists tasks using a view configuration
 // CLI filters (statusFilter, priorityFilter, tagFilter, dateFilter) are combined with view filters
-func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, dateFilter DateFilter, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, dateFilter DateFilter, viewName string, pagination PaginationOptions, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Load view
 	viewsDir := getViewsDir(cfg)
 	loader := views.NewLoader(viewsDir)
@@ -3262,15 +3305,42 @@ func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.
 	// Apply sorting
 	sortedTasks := views.SortTasks(filteredTasks, view.Sort)
 
-	if jsonOutput {
-		return outputTaskListJSON(ctx, be, sortedTasks, list, cfg, stdout)
+	// Store total count before pagination
+	totalCount := len(sortedTasks)
+
+	// Apply pagination if specified
+	offset := pagination.GetEffectiveOffset()
+	limit := pagination.GetEffectiveLimit()
+	var paginatedTasks []backend.Task
+	if pagination.HasPagination() {
+		if offset >= len(sortedTasks) {
+			paginatedTasks = []backend.Task{}
+		} else {
+			end := offset + limit
+			if limit == 0 || end > len(sortedTasks) {
+				end = len(sortedTasks)
+			}
+			paginatedTasks = sortedTasks[offset:end]
+		}
+	} else {
+		paginatedTasks = sortedTasks
 	}
 
-	if len(sortedTasks) == 0 {
+	if jsonOutput {
+		return outputTaskListJSONWithPagination(ctx, be, paginatedTasks, list, totalCount, pagination, cfg, stdout)
+	}
+
+	if len(paginatedTasks) == 0 {
 		_, _ = fmt.Fprintf(stdout, "No tasks in list '%s'\n", list.Name)
 	} else {
 		_, _ = fmt.Fprintf(stdout, "Tasks in '%s':\n", list.Name)
-		views.RenderTasksWithView(sortedTasks, view, stdout)
+		views.RenderTasksWithView(paginatedTasks, view, stdout)
+		// Show pagination info if pagination is active
+		if pagination.HasPagination() && totalCount > 0 {
+			start := offset + 1
+			end := offset + len(paginatedTasks)
+			_, _ = fmt.Fprintf(stdout, "Showing %d-%d of %d tasks\n", start, end, totalCount)
+		}
 	}
 
 	// Emit INFO_ONLY result code in no-prompt mode
@@ -3877,6 +3947,38 @@ type DateFilter struct {
 	DueAfter      *time.Time
 	CreatedBefore *time.Time
 	CreatedAfter  *time.Time
+}
+
+// PaginationOptions holds pagination settings for task listing
+type PaginationOptions struct {
+	Limit    int // Maximum number of tasks to show (0 = unlimited)
+	Offset   int // Number of tasks to skip
+	Page     int // Page number (1-indexed, used to calculate Offset)
+	PageSize int // Number of tasks per page (default: 50)
+}
+
+// HasPagination returns true if pagination is enabled
+func (p PaginationOptions) HasPagination() bool {
+	return p.Limit > 0 || p.Offset > 0 || p.Page > 0
+}
+
+// GetEffectiveOffset returns the effective offset considering Page and PageSize
+func (p PaginationOptions) GetEffectiveOffset() int {
+	if p.Page > 0 {
+		return (p.Page - 1) * p.PageSize
+	}
+	return p.Offset
+}
+
+// GetEffectiveLimit returns the effective limit considering Page and PageSize
+func (p PaginationOptions) GetEffectiveLimit() int {
+	if p.Limit > 0 {
+		return p.Limit
+	}
+	if p.Page > 0 {
+		return p.PageSize
+	}
+	return 0 // No limit
 }
 
 // IsEmpty returns true if no date filters are set
@@ -5302,10 +5404,14 @@ type taskJSON struct {
 }
 
 type listTasksResponse struct {
-	Tasks  []taskJSON `json:"tasks"`
-	List   string     `json:"list"`
-	Count  int        `json:"count"`
-	Result string     `json:"result"`
+	Tasks    []taskJSON `json:"tasks"`
+	List     string     `json:"list"`
+	Count    int        `json:"count"`
+	Total    int        `json:"total,omitempty"`
+	Page     int        `json:"page,omitempty"`
+	PageSize int        `json:"page_size,omitempty"`
+	HasMore  bool       `json:"has_more,omitempty"`
+	Result   string     `json:"result"`
 }
 
 type actionResponse struct {
@@ -5383,8 +5489,8 @@ func statusToString(s backend.TaskStatus) string {
 	}
 }
 
-// outputTaskListJSON outputs tasks in JSON format
-func outputTaskListJSON(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, cfg *Config, stdout io.Writer) error {
+// outputTaskListJSONWithPagination outputs tasks in JSON format with pagination metadata
+func outputTaskListJSONWithPagination(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, totalCount int, pagination PaginationOptions, cfg *Config, stdout io.Writer) error {
 	var jsonTasks []taskJSON
 
 	// Check if backend supports local-id lookup and sync is enabled
@@ -5415,6 +5521,21 @@ func outputTaskListJSON(ctx context.Context, be backend.TaskManager, tasks []bac
 		List:   list.Name,
 		Count:  len(jsonTasks),
 		Result: ResultInfoOnly,
+	}
+
+	// Add pagination metadata if pagination is active
+	if pagination.HasPagination() {
+		response.Total = totalCount
+		offset := pagination.GetEffectiveOffset()
+		limit := pagination.GetEffectiveLimit()
+		if limit > 0 {
+			response.Page = (offset / limit) + 1
+			response.PageSize = limit
+		} else {
+			response.Page = 1
+			response.PageSize = len(jsonTasks)
+		}
+		response.HasMore = offset+len(jsonTasks) < totalCount
 	}
 
 	jsonBytes, err := json.Marshal(response)

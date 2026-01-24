@@ -102,6 +102,41 @@ todoat MyList --tag urgent
 todoat MyList --tag "work,important"
 ```
 
+### Pagination
+
+For large task lists, use pagination to limit output:
+
+```bash
+# Show first 20 tasks
+todoat MyList --limit 20
+
+# Show page 2 (with default page size of 50)
+todoat MyList --page 2
+
+# Custom page size
+todoat MyList --page 1 --page-size 25
+
+# Manual offset and limit
+todoat MyList --offset 50 --limit 25
+```
+
+| Flag | Description |
+|------|-------------|
+| `--limit` | Maximum number of tasks to show |
+| `--offset` | Number of tasks to skip |
+| `--page` | Page number (1-indexed) |
+| `--page-size` | Tasks per page (default: 50) |
+
+Combine pagination with filters:
+
+```bash
+# First 10 high-priority TODO tasks
+todoat MyList -s TODO -p high --limit 10
+
+# Page 2 of tasks due this week
+todoat MyList --due-before +7d --page 2
+```
+
 ## Adding Tasks
 
 ### Basic Task Creation

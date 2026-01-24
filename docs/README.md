@@ -131,6 +131,15 @@ Background and conceptual information:
 | `--created-after` | Filter tasks created on or after date |
 | `--created-before` | Filter tasks created before date |
 
+### Pagination Flags (for get)
+
+| Flag | Description |
+|------|-------------|
+| `--limit` | Maximum number of tasks to show |
+| `--offset` | Number of tasks to skip |
+| `--page` | Page number (1-indexed) |
+| `--page-size` | Tasks per page (default: 50) |
+
 ### Direct Task Selection Flags
 
 | Flag | Description |
@@ -148,6 +157,7 @@ Background and conceptual information:
 | `todoat view` | Manage custom views |
 | `todoat config` | View and modify configuration |
 | `todoat credentials` | Manage backend credentials |
+| `todoat analytics` | View usage statistics and backend performance |
 | `todoat migrate` | Migrate tasks between backends |
 | `todoat notification` | Manage notification system |
 | `todoat reminder` | Manage task reminders |

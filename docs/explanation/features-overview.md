@@ -37,6 +37,7 @@ This document provides a high-level summary of all features in todoat, organized
 | **Interactive Task Selection** | Fuzzy matching and selection when multiple tasks match query | ✅ Stable | [Task Management](task-management.md#interactive-task-selection) |
 | **Task Search** | Intelligent search with exact, partial, and multi-match support | ✅ Stable | [Task Management](task-management.md#task-search) |
 | **Bulk Operations** | Operate on multiple tasks using filters | ✅ Stable | [Task Management](task-management.md#bulk-operations) |
+| **Pagination** | Control output size with limit, offset, and page flags for large task lists | ✅ Stable | [Task Management](../how-to/task-management.md#pagination) |
 
 **Key Use Cases**:
 - Daily task management (adding todos, marking complete)

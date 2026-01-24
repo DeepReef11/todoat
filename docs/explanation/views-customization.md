@@ -1162,7 +1162,20 @@ team-views/
 **Overall Performance:**
 - Views without plugins: 1000 tasks render in < 100ms
 - Views with plugins: Depends on plugin execution time
-- Large task sets (>5000): Consider pagination (not yet implemented)
+- Large task sets (>5000): Use pagination with `--limit`, `--offset`, `--page`, and `--page-size` flags
+
+**Pagination:**
+For large task sets, pagination prevents slow rendering and memory issues:
+```bash
+# Show first 50 tasks (default page size)
+todoat MyList --limit 50
+
+# Show page 2 with 50 tasks per page
+todoat MyList --page 2
+
+# Custom page size
+todoat MyList --page 1 --page-size 100
+```
 
 ---
 

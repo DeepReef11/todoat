@@ -69,6 +69,30 @@ These flags are available for all commands:
 | `--created-after <date>` | string | Filter tasks created on or after date (see [Date Syntax](#date-syntax)) |
 | `--created-before <date>` | string | Filter tasks created before date (see [Date Syntax](#date-syntax)) |
 
+#### Pagination:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--limit <n>` | int | | Maximum number of tasks to show |
+| `--offset <n>` | int | 0 | Number of tasks to skip |
+| `--page <n>` | int | | Page number (1-indexed, alternative to offset) |
+| `--page-size <n>` | int | 50 | Number of tasks per page |
+
+**Pagination examples:**
+```bash
+# Show first 20 tasks
+todoat MyList --limit 20
+
+# Show second page (tasks 51-100 with default page size)
+todoat MyList --page 2
+
+# Custom page size with page number
+todoat MyList --page 2 --page-size 25
+
+# Manual offset and limit
+todoat MyList --offset 50 --limit 25
+```
+
 ##### Priority Filter Syntax
 
 The priority filter supports multiple formats:
@@ -177,6 +201,12 @@ todoat MyList --due-before 2026-01-31
 
 # Use a custom view
 todoat MyList -v urgent
+
+# Pagination - show first 20 tasks
+todoat MyList --limit 20
+
+# Pagination - show page 2
+todoat MyList --page 2
 ```
 
 ## list
