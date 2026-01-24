@@ -64,3 +64,35 @@ When a view is specified, the code likely uses ONLY the view's filter configurat
 
 ## Recommended Fix
 FIX CODE - Combine command-line filters with view filters. When both are specified, the result should be tasks that match BOTH the view's filters AND the command-line filters (logical AND). This allows users to further narrow down results from a view.
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Modified `doGetWithView` in `cmd/todoat/cmd/todoat.go` to accept CLI filter parameters (statusFilter, priorityFilter, tagFilter, dateFilter) and apply them on top of view filters. CLI filters are now combined with view filters using AND logic.
+**Test added**: TestViewWithCLITagFilter, TestViewWithCLIStatusFilter, TestViewWithCLIPriorityFilter in `internal/views/cli_test.go`
+
+### Verification Log
+```bash
+$ ./todoat -y TestManualJourney add "Bug fix" --tags "urgent"
+Created task: Bug fix (ID: 01c4b6f8-a514-4d4f-b26f-5a7f461fafb1)
+
+$ ./todoat -y TestManualJourney add "Feature request" --tags "feature"
+Created task: Feature request (ID: f65856a6-e98b-47db-ad9c-b78e4484ff00)
+
+$ ./todoat -y TestManualJourney --tag urgent -v all
+Tasks in 'TestManualJourney':
+  [TODO] Bug fix     2026-01-24 2026-01-24  {urgent} 01c4b6f8-a514-4d4f-b26f-5a7f461fafb1
+INFO_ONLY
+
+$ ./todoat -y TestManualJourney -s TODO -v all
+Tasks in 'TestManualJourney':
+  [TODO] Bug fix     2026-01-24 2026-01-24  {urgent} 01c4b6f8-a514-4d4f-b26f-5a7f461fafb1
+  [TODO] Feature request     2026-01-24 2026-01-24  {feature} f65856a6-e98b-47db-ad9c-b78e4484ff00
+INFO_ONLY
+
+$ ./todoat -y TestManualJourney -p 1 -v all
+Tasks in 'TestManualJourney':
+  [TODO] Urgent task  [P1]   2026-01-24 2026-01-24   17eadb30-8360-4d09-9ae5-acfb3c0079a3
+INFO_ONLY
+```
+**Matches expected behavior**: YES

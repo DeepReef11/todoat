@@ -502,3 +502,62 @@ func TestViewCreate_CombinedFilters(t *testing.T) {
 	testutil.AssertNotContains(t, listStdout, "Low priority TODO")
 	testutil.AssertNotContains(t, listStdout, "High priority DONE")
 }
+
+// =============================================================================
+// Issue 001: Command-line filters ignored when view is specified
+// =============================================================================
+
+// TestViewWithCLITagFilter verifies that --tag filter works in combination with -v all
+func TestViewWithCLITagFilter(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add tasks with different tags
+	cli.MustExecute("-y", "list", "create", "ViewTagFilterTest")
+	cli.MustExecute("-y", "ViewTagFilterTest", "add", "Bug fix", "--tags", "urgent")
+	cli.MustExecute("-y", "ViewTagFilterTest", "add", "Feature request", "--tags", "feature")
+
+	// Filter by tag without view - works correctly
+	stdout1, _, exitCode1 := cli.Execute("-y", "ViewTagFilterTest", "--tag", "urgent")
+	testutil.AssertExitCode(t, exitCode1, 0)
+	testutil.AssertContains(t, stdout1, "Bug fix")
+	testutil.AssertNotContains(t, stdout1, "Feature request")
+
+	// Filter by tag with -v all - should ALSO respect --tag filter
+	stdout2, _, exitCode2 := cli.Execute("-y", "ViewTagFilterTest", "--tag", "urgent", "-v", "all")
+	testutil.AssertExitCode(t, exitCode2, 0)
+	testutil.AssertContains(t, stdout2, "Bug fix")
+	testutil.AssertNotContains(t, stdout2, "Feature request") // This was failing before fix
+}
+
+// TestViewWithCLIStatusFilter verifies that -s filter works in combination with -v all
+func TestViewWithCLIStatusFilter(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add tasks with different statuses
+	cli.MustExecute("-y", "list", "create", "ViewStatusFilterTest")
+	cli.MustExecute("-y", "ViewStatusFilterTest", "add", "Active task")
+	cli.MustExecute("-y", "ViewStatusFilterTest", "add", "Completed task")
+	cli.MustExecute("-y", "ViewStatusFilterTest", "complete", "Completed task")
+
+	// Filter by status with -v all - should respect -s filter
+	stdout, _, exitCode := cli.Execute("-y", "ViewStatusFilterTest", "-s", "TODO", "-v", "all")
+	testutil.AssertExitCode(t, exitCode, 0)
+	testutil.AssertContains(t, stdout, "Active task")
+	testutil.AssertNotContains(t, stdout, "Completed task") // This was failing before fix
+}
+
+// TestViewWithCLIPriorityFilter verifies that -p filter works in combination with -v all
+func TestViewWithCLIPriorityFilter(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and add tasks with different priorities
+	cli.MustExecute("-y", "list", "create", "ViewPrioFilterTest")
+	cli.MustExecute("-y", "ViewPrioFilterTest", "add", "Urgent task", "-p", "1")
+	cli.MustExecute("-y", "ViewPrioFilterTest", "add", "Low priority task", "-p", "9")
+
+	// Filter by priority with -v all - should respect -p filter
+	stdout, _, exitCode := cli.Execute("-y", "ViewPrioFilterTest", "-p", "1", "-v", "all")
+	testutil.AssertExitCode(t, exitCode, 0)
+	testutil.AssertContains(t, stdout, "Urgent task")
+	testutil.AssertNotContains(t, stdout, "Low priority task") // This was failing before fix
+}

@@ -3088,7 +3088,7 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 
 	// Load and apply view if specified
 	if viewName != "" {
-		return doGetWithView(ctx, be, tasks, list, viewName, cfg, stdout, jsonOutput)
+		return doGetWithView(ctx, be, tasks, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, cfg, stdout, jsonOutput)
 	}
 
 	// Filter by status if specified (supports comma-separated values)
@@ -3158,7 +3158,8 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 }
 
 // doGetWithView lists tasks using a view configuration
-func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+// CLI filters (statusFilter, priorityFilter, tagFilter, dateFilter) are combined with view filters
+func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, dateFilter DateFilter, viewName string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Load view
 	viewsDir := getViewsDir(cfg)
 	loader := views.NewLoader(viewsDir)
@@ -3167,8 +3168,59 @@ func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.
 		return err
 	}
 
-	// Apply view filters and sorting
+	// Apply view filters first
 	filteredTasks := views.FilterTasks(tasks, view.Filters)
+
+	// Apply CLI filters on top of view filters (combining them with AND logic)
+	// Filter by status if specified
+	if statusFilter != "" {
+		filterStatuses, err := parseStatusFilter(statusFilter)
+		if err != nil {
+			return err
+		}
+		var statusFiltered []backend.Task
+		for _, t := range filteredTasks {
+			if matchesStatusFilter(t.Status, filterStatuses) {
+				statusFiltered = append(statusFiltered, t)
+			}
+		}
+		filteredTasks = statusFiltered
+	}
+
+	// Filter by priority if specified
+	if len(priorityFilter) > 0 {
+		var priorityFiltered []backend.Task
+		for _, t := range filteredTasks {
+			if matchesPriorityFilter(t.Priority, priorityFilter) {
+				priorityFiltered = append(priorityFiltered, t)
+			}
+		}
+		filteredTasks = priorityFiltered
+	}
+
+	// Filter by tags if specified (OR logic - match any tag)
+	if len(tagFilter) > 0 {
+		var tagFiltered []backend.Task
+		for _, t := range filteredTasks {
+			if matchesTagFilter(t.Categories, tagFilter) {
+				tagFiltered = append(tagFiltered, t)
+			}
+		}
+		filteredTasks = tagFiltered
+	}
+
+	// Filter by date if specified
+	if !dateFilter.IsEmpty() {
+		var dateFiltered []backend.Task
+		for _, t := range filteredTasks {
+			if matchesDateFilter(t, dateFilter) {
+				dateFiltered = append(dateFiltered, t)
+			}
+		}
+		filteredTasks = dateFiltered
+	}
+
+	// Apply sorting
 	sortedTasks := views.SortTasks(filteredTasks, view.Sort)
 
 	if jsonOutput {
