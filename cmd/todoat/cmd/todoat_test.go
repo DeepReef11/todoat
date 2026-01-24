@@ -2895,3 +2895,85 @@ backends:
 		t.Errorf("expected file to contain priority marker '!1', got:\n%s", data)
 	}
 }
+
+// TestIssue008_CustomSQLiteBackendUsesBackendID verifies that custom SQLite backends
+// use the backend name as backend_id for data isolation.
+// Issue #008: Backend isolation capability exists but isn't used in createCustomBackend().
+func TestIssue008_CustomSQLiteBackendUsesBackendID(t *testing.T) {
+	tmpDir := t.TempDir()
+	sharedDBPath := filepath.Join(tmpDir, "shared.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Create config with two custom SQLite backends sharing the same database file
+	configContent := fmt.Sprintf(`
+backends:
+  sqlite-work:
+    type: sqlite
+    path: %s
+  sqlite-personal:
+    type: sqlite
+    path: %s
+`, sharedDBPath, sharedDBPath)
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Use sqlite-work backend to add a task (using -y to auto-confirm list creation)
+	cfg1 := &Config{
+		DBPath:     sharedDBPath,
+		ConfigPath: configPath,
+	}
+	var stdout1, stderr1 bytes.Buffer
+	exitCode := Execute([]string{"--backend", "sqlite-work", "-y", "TestList", "add", "Work task"}, &stdout1, &stderr1, cfg1)
+	if exitCode != 0 {
+		t.Fatalf("add task to sqlite-work failed: exit=%d stderr=%s", exitCode, stderr1.String())
+	}
+
+	// Use sqlite-personal backend to add a task (using -y to auto-confirm list creation)
+	cfg2 := &Config{
+		DBPath:     sharedDBPath,
+		ConfigPath: configPath,
+	}
+	var stdout2, stderr2 bytes.Buffer
+	exitCode = Execute([]string{"--backend", "sqlite-personal", "-y", "TestList", "add", "Personal task"}, &stdout2, &stderr2, cfg2)
+	if exitCode != 0 {
+		t.Fatalf("add task to sqlite-personal failed: exit=%d stderr=%s", exitCode, stderr2.String())
+	}
+
+	// List tasks from sqlite-work - should only see "Work task"
+	cfg3 := &Config{
+		DBPath:     sharedDBPath,
+		ConfigPath: configPath,
+	}
+	var stdout3, stderr3 bytes.Buffer
+	exitCode = Execute([]string{"--backend", "sqlite-work", "TestList"}, &stdout3, &stderr3, cfg3)
+	if exitCode != 0 {
+		t.Fatalf("list from sqlite-work failed: exit=%d stderr=%s", exitCode, stderr3.String())
+	}
+	workOutput := stdout3.String()
+	if !strings.Contains(workOutput, "Work task") {
+		t.Errorf("sqlite-work should see 'Work task', got: %s", workOutput)
+	}
+	if strings.Contains(workOutput, "Personal task") {
+		t.Errorf("sqlite-work should NOT see 'Personal task' (isolation broken), got: %s", workOutput)
+	}
+
+	// List tasks from sqlite-personal - should only see "Personal task"
+	cfg4 := &Config{
+		DBPath:     sharedDBPath,
+		ConfigPath: configPath,
+	}
+	var stdout4, stderr4 bytes.Buffer
+	exitCode = Execute([]string{"--backend", "sqlite-personal", "TestList"}, &stdout4, &stderr4, cfg4)
+	if exitCode != 0 {
+		t.Fatalf("list from sqlite-personal failed: exit=%d stderr=%s", exitCode, stderr4.String())
+	}
+	personalOutput := stdout4.String()
+	if !strings.Contains(personalOutput, "Personal task") {
+		t.Errorf("sqlite-personal should see 'Personal task', got: %s", personalOutput)
+	}
+	if strings.Contains(personalOutput, "Work task") {
+		t.Errorf("sqlite-personal should NOT see 'Work task' (isolation broken), got: %s", personalOutput)
+	}
+}

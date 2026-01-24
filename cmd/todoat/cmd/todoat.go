@@ -2543,7 +2543,8 @@ func createCustomBackend(name string, dbPath string, rawConfig map[string]interf
 		if customPath, ok := backendCfg["path"].(string); ok && customPath != "" {
 			dbPath = config.ExpandPath(customPath)
 		}
-		return sqlite.New(dbPath)
+		// Use backend name for isolation when multiple SQLite backends share same db
+		return sqlite.NewWithBackendID(dbPath, name)
 
 	case "todoist":
 		// Build todoist config from config file + keyring + environment
