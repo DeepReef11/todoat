@@ -15,7 +15,8 @@ import (
 
 // Backend implements backend.TaskManager using SQLite
 type Backend struct {
-	db *sql.DB
+	db        *sql.DB
+	backendID string // Identifies this backend instance for data isolation
 }
 
 // Migration represents a database schema migration
@@ -83,16 +84,50 @@ var migrations = []Migration{
 			return err
 		},
 	},
+	{
+		Version: 4,
+		Name:    "add_backend_id_for_isolation",
+		Up: func(db *sql.DB) error {
+			// Add backend_id column to tasks table with default 'sqlite' for existing data
+			if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN backend_id TEXT NOT NULL DEFAULT 'sqlite'"); err != nil {
+				return err
+			}
+			// Add backend_id column to task_lists table with default 'sqlite' for existing data
+			if _, err := db.Exec("ALTER TABLE task_lists ADD COLUMN backend_id TEXT NOT NULL DEFAULT 'sqlite'"); err != nil {
+				return err
+			}
+			// Create indexes for efficient backend filtering
+			if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_backend_id ON tasks(backend_id)"); err != nil {
+				return err
+			}
+			if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_task_lists_backend_id ON task_lists(backend_id)"); err != nil {
+				return err
+			}
+			return nil
+		},
+	},
 }
 
-// New creates a new SQLite backend and initializes the database schema
+// New creates a new SQLite backend and initializes the database schema.
+// Uses "sqlite" as the default backend ID for backward compatibility.
 func New(path string) (*Backend, error) {
+	return NewWithBackendID(path, "sqlite")
+}
+
+// NewWithBackendID creates a new SQLite backend with a specific backend ID.
+// The backend ID is used to isolate data between different backends sharing
+// the same database file (e.g., sync cache scenario in Issue #007).
+func NewWithBackendID(path string, backendID string) (*Backend, error) {
+	if backendID == "" {
+		backendID = "sqlite"
+	}
+
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
 	}
 
-	b := &Backend{db: db}
+	b := &Backend{db: db, backendID: backendID}
 	if err := b.initSchema(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -172,9 +207,11 @@ func (b *Backend) GetSchemaVersion() (int, error) {
 	return b.getSchemaVersionInternal()
 }
 
-// GetLists returns all active (non-deleted) task lists
+// GetLists returns all active (non-deleted) task lists for this backend
 func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
-	rows, err := b.db.QueryContext(ctx, "SELECT id, name, color, description, modified FROM task_lists WHERE deleted_at IS NULL")
+	rows, err := b.db.QueryContext(ctx,
+		"SELECT id, name, color, description, modified FROM task_lists WHERE deleted_at IS NULL AND backend_id = ?",
+		b.backendID)
 	if err != nil {
 		return nil, err
 	}
@@ -197,13 +234,13 @@ func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
 	return lists, rows.Err()
 }
 
-// GetList returns a specific active list by ID
+// GetList returns a specific active list by ID for this backend
 func (b *Backend) GetList(ctx context.Context, listID string) (*backend.List, error) {
 	var l backend.List
 	var modifiedStr string
 	err := b.db.QueryRowContext(ctx,
-		"SELECT id, name, color, description, modified FROM task_lists WHERE id = ? AND deleted_at IS NULL",
-		listID,
+		"SELECT id, name, color, description, modified FROM task_lists WHERE id = ? AND deleted_at IS NULL AND backend_id = ?",
+		listID, b.backendID,
 	).Scan(&l.ID, &l.Name, &l.Color, &l.Description, &modifiedStr)
 
 	if err == sql.ErrNoRows {
@@ -217,13 +254,13 @@ func (b *Backend) GetList(ctx context.Context, listID string) (*backend.List, er
 	return &l, nil
 }
 
-// GetListByName returns a specific active list by name (case-insensitive)
+// GetListByName returns a specific active list by name (case-insensitive) for this backend
 func (b *Backend) GetListByName(ctx context.Context, name string) (*backend.List, error) {
 	var l backend.List
 	var modifiedStr string
 	err := b.db.QueryRowContext(ctx,
-		"SELECT id, name, color, description, modified FROM task_lists WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL",
-		name,
+		"SELECT id, name, color, description, modified FROM task_lists WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL AND backend_id = ?",
+		name, b.backendID,
 	).Scan(&l.ID, &l.Name, &l.Color, &l.Description, &modifiedStr)
 
 	if err == sql.ErrNoRows {
@@ -237,15 +274,15 @@ func (b *Backend) GetListByName(ctx context.Context, name string) (*backend.List
 	return &l, nil
 }
 
-// CreateList creates a new task list
+// CreateList creates a new task list for this backend
 func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
 
 	_, err := b.db.ExecContext(ctx,
-		"INSERT INTO task_lists (id, name, color, description, modified) VALUES (?, ?, '', '', ?)",
-		id, name, nowStr,
+		"INSERT INTO task_lists (id, name, color, description, modified, backend_id) VALUES (?, ?, '', '', ?, ?)",
+		id, name, nowStr, b.backendID,
 	)
 	if err != nil {
 		return nil, err
@@ -260,14 +297,14 @@ func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, e
 	}, nil
 }
 
-// UpdateList updates an existing task list
+// UpdateList updates an existing task list for this backend
 func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.List, error) {
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
 
 	_, err := b.db.ExecContext(ctx,
-		"UPDATE task_lists SET name = ?, color = ?, description = ?, modified = ? WHERE id = ? AND deleted_at IS NULL",
-		list.Name, list.Color, list.Description, nowStr, list.ID,
+		"UPDATE task_lists SET name = ?, color = ?, description = ?, modified = ? WHERE id = ? AND deleted_at IS NULL AND backend_id = ?",
+		list.Name, list.Color, list.Description, nowStr, list.ID, b.backendID,
 	)
 	if err != nil {
 		return nil, err
@@ -277,16 +314,18 @@ func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.
 	return list, nil
 }
 
-// DeleteList soft-deletes a task list (moves to trash)
+// DeleteList soft-deletes a task list (moves to trash) for this backend
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := b.db.ExecContext(ctx, "UPDATE task_lists SET deleted_at = ? WHERE id = ?", now, listID)
+	_, err := b.db.ExecContext(ctx, "UPDATE task_lists SET deleted_at = ? WHERE id = ? AND backend_id = ?", now, listID, b.backendID)
 	return err
 }
 
-// GetDeletedLists returns all deleted (trashed) task lists
+// GetDeletedLists returns all deleted (trashed) task lists for this backend
 func (b *Backend) GetDeletedLists(ctx context.Context) ([]backend.List, error) {
-	rows, err := b.db.QueryContext(ctx, "SELECT id, name, color, description, modified, deleted_at FROM task_lists WHERE deleted_at IS NOT NULL")
+	rows, err := b.db.QueryContext(ctx,
+		"SELECT id, name, color, description, modified, deleted_at FROM task_lists WHERE deleted_at IS NOT NULL AND backend_id = ?",
+		b.backendID)
 	if err != nil {
 		return nil, err
 	}
@@ -314,14 +353,14 @@ func (b *Backend) GetDeletedLists(ctx context.Context) ([]backend.List, error) {
 	return lists, rows.Err()
 }
 
-// GetDeletedListByName returns a specific deleted list by name (case-insensitive)
+// GetDeletedListByName returns a specific deleted list by name (case-insensitive) for this backend
 func (b *Backend) GetDeletedListByName(ctx context.Context, name string) (*backend.List, error) {
 	var l backend.List
 	var modifiedStr string
 	var deletedAtStr sql.NullString
 	err := b.db.QueryRowContext(ctx,
-		"SELECT id, name, color, description, modified, deleted_at FROM task_lists WHERE LOWER(name) = LOWER(?) AND deleted_at IS NOT NULL",
-		name,
+		"SELECT id, name, color, description, modified, deleted_at FROM task_lists WHERE LOWER(name) = LOWER(?) AND deleted_at IS NOT NULL AND backend_id = ?",
+		name, b.backendID,
 	).Scan(&l.ID, &l.Name, &l.Color, &l.Description, &modifiedStr, &deletedAtStr)
 
 	if err == sql.ErrNoRows {
@@ -339,30 +378,30 @@ func (b *Backend) GetDeletedListByName(ctx context.Context, name string) (*backe
 	return &l, nil
 }
 
-// RestoreList restores a deleted list from trash
+// RestoreList restores a deleted list from trash for this backend
 func (b *Backend) RestoreList(ctx context.Context, listID string) error {
-	_, err := b.db.ExecContext(ctx, "UPDATE task_lists SET deleted_at = NULL WHERE id = ?", listID)
+	_, err := b.db.ExecContext(ctx, "UPDATE task_lists SET deleted_at = NULL WHERE id = ? AND backend_id = ?", listID, b.backendID)
 	return err
 }
 
-// PurgeList permanently deletes a list and all its tasks
+// PurgeList permanently deletes a list and all its tasks for this backend
 func (b *Backend) PurgeList(ctx context.Context, listID string) error {
-	// First delete all tasks in this list
-	_, err := b.db.ExecContext(ctx, "DELETE FROM tasks WHERE list_id = ?", listID)
+	// First delete all tasks in this list for this backend
+	_, err := b.db.ExecContext(ctx, "DELETE FROM tasks WHERE list_id = ? AND backend_id = ?", listID, b.backendID)
 	if err != nil {
 		return err
 	}
 
-	_, err = b.db.ExecContext(ctx, "DELETE FROM task_lists WHERE id = ?", listID)
+	_, err = b.db.ExecContext(ctx, "DELETE FROM task_lists WHERE id = ? AND backend_id = ?", listID, b.backendID)
 	return err
 }
 
-// GetTasks returns all tasks in a list
+// GetTasks returns all tasks in a list for this backend
 func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
 	rows, err := b.db.QueryContext(ctx,
 		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due
-		 FROM tasks WHERE list_id = ?`,
-		listID,
+		 FROM tasks WHERE list_id = ? AND backend_id = ?`,
+		listID, b.backendID,
 	)
 	if err != nil {
 		return nil, err
@@ -384,12 +423,12 @@ func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, 
 	return tasks, rows.Err()
 }
 
-// GetTask returns a specific task
+// GetTask returns a specific task for this backend
 func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.Task, error) {
 	row := b.db.QueryRowContext(ctx,
 		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due
-		 FROM tasks WHERE list_id = ? AND id = ?`,
-		listID, taskID,
+		 FROM tasks WHERE list_id = ? AND id = ? AND backend_id = ?`,
+		listID, taskID, b.backendID,
 	)
 
 	t, err := scanTaskRow(row)
@@ -399,12 +438,12 @@ func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.
 	return t, err
 }
 
-// GetTaskByLocalID returns a task by its SQLite rowid (local ID)
+// GetTaskByLocalID returns a task by its SQLite rowid (local ID) for this backend
 func (b *Backend) GetTaskByLocalID(ctx context.Context, listID string, localID int64) (*backend.Task, error) {
 	row := b.db.QueryRowContext(ctx,
 		`SELECT id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due
-		 FROM tasks WHERE list_id = ? AND rowid = ?`,
-		listID, localID,
+		 FROM tasks WHERE list_id = ? AND rowid = ? AND backend_id = ?`,
+		listID, localID, b.backendID,
 	)
 
 	t, err := scanTaskRow(row)
@@ -414,12 +453,12 @@ func (b *Backend) GetTaskByLocalID(ctx context.Context, listID string, localID i
 	return t, err
 }
 
-// GetTaskLocalID returns the SQLite rowid for a task
+// GetTaskLocalID returns the SQLite rowid for a task for this backend
 func (b *Backend) GetTaskLocalID(ctx context.Context, taskID string) (int64, error) {
 	var localID int64
 	err := b.db.QueryRowContext(ctx,
-		`SELECT rowid FROM tasks WHERE id = ?`,
-		taskID,
+		`SELECT rowid FROM tasks WHERE id = ? AND backend_id = ?`,
+		taskID, b.backendID,
 	).Scan(&localID)
 	if err == sql.ErrNoRows {
 		return 0, nil
@@ -504,7 +543,7 @@ func scanTaskRow(row *sql.Row) (*backend.Task, error) {
 	return scanTaskFrom(row)
 }
 
-// CreateTask adds a new task to a list
+// CreateTask adds a new task to a list for this backend
 func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC()
@@ -526,10 +565,10 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 	}
 
 	_, err := b.db.ExecContext(ctx,
-		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (id, list_id, summary, description, status, priority, due_date, start_date, completed, created, modified, parent_id, categories, recurrence, recur_from_due, backend_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, listID, task.Summary, task.Description, status, task.Priority,
-		dueDateStr, startDateStr, completedStr, nowStr, nowStr, task.ParentID, task.Categories, task.Recurrence, recurFromDueInt,
+		dueDateStr, startDateStr, completedStr, nowStr, nowStr, task.ParentID, task.Categories, task.Recurrence, recurFromDueInt, b.backendID,
 	)
 	if err != nil {
 		return nil, err
@@ -554,7 +593,7 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 	}, nil
 }
 
-// UpdateTask modifies an existing task
+// UpdateTask modifies an existing task for this backend
 func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
@@ -571,9 +610,9 @@ func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.T
 
 	_, err := b.db.ExecContext(ctx,
 		`UPDATE tasks SET summary = ?, description = ?, status = ?, priority = ?, due_date = ?, start_date = ?, completed = ?, modified = ?, parent_id = ?, categories = ?, recurrence = ?, recur_from_due = ?
-		 WHERE id = ? AND list_id = ?`,
+		 WHERE id = ? AND list_id = ? AND backend_id = ?`,
 		task.Summary, task.Description, task.Status, task.Priority, dueDateStr, startDateStr, completedStr, nowStr, task.ParentID, task.Categories, task.Recurrence, recurFromDueInt,
-		task.ID, listID,
+		task.ID, listID, b.backendID,
 	)
 	if err != nil {
 		return nil, err
@@ -583,9 +622,9 @@ func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.T
 	return b.GetTask(ctx, listID, task.ID)
 }
 
-// DeleteTask removes a task
+// DeleteTask removes a task for this backend
 func (b *Backend) DeleteTask(ctx context.Context, listID, taskID string) error {
-	_, err := b.db.ExecContext(ctx, "DELETE FROM tasks WHERE id = ? AND list_id = ?", taskID, listID)
+	_, err := b.db.ExecContext(ctx, "DELETE FROM tasks WHERE id = ? AND list_id = ? AND backend_id = ?", taskID, listID, b.backendID)
 	return err
 }
 

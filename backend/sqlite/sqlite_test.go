@@ -590,3 +590,112 @@ func TestAllTaskStatuses(t *testing.T) {
 		}
 	}
 }
+
+// TestBackendIsolation_Issue007 verifies that backends don't share data.
+// Issue #007: When multiple backends use the same database file (sync cache),
+// they must have isolated data via backend_id column.
+func TestBackendIsolation_Issue007(t *testing.T) {
+	// Create two backends pointing to the same database file
+	// (simulating the sync cache scenario)
+	tmpFile := t.TempDir() + "/shared.db"
+
+	// Create "sqlite" backend (local)
+	sqliteBE, err := NewWithBackendID(tmpFile, "sqlite")
+	if err != nil {
+		t.Fatalf("NewWithBackendID for sqlite: %v", err)
+	}
+	defer func() { _ = sqliteBE.Close() }()
+
+	// Create "nextcloud-test" backend (remote cache)
+	nextcloudBE, err := NewWithBackendID(tmpFile, "nextcloud-test")
+	if err != nil {
+		t.Fatalf("NewWithBackendID for nextcloud-test: %v", err)
+	}
+	defer func() { _ = nextcloudBE.Close() }()
+
+	ctx := context.Background()
+
+	// Create a list and task in sqlite backend
+	sqliteList, err := sqliteBE.CreateList(ctx, "LocalList")
+	if err != nil {
+		t.Fatalf("CreateList for sqlite: %v", err)
+	}
+	sqliteTask, err := sqliteBE.CreateTask(ctx, sqliteList.ID, &backend.Task{Summary: "Local task"})
+	if err != nil {
+		t.Fatalf("CreateTask for sqlite: %v", err)
+	}
+
+	// Create a list and task in nextcloud backend
+	nextcloudList, err := nextcloudBE.CreateList(ctx, "RemoteList")
+	if err != nil {
+		t.Fatalf("CreateList for nextcloud: %v", err)
+	}
+	nextcloudTask, err := nextcloudBE.CreateTask(ctx, nextcloudList.ID, &backend.Task{Summary: "Remote task"})
+	if err != nil {
+		t.Fatalf("CreateTask for nextcloud: %v", err)
+	}
+
+	// Verify sqlite backend only sees its own data
+	sqliteLists, err := sqliteBE.GetLists(ctx)
+	if err != nil {
+		t.Fatalf("GetLists for sqlite: %v", err)
+	}
+	if len(sqliteLists) != 1 {
+		t.Errorf("sqlite backend has %d lists, want 1", len(sqliteLists))
+	}
+	if len(sqliteLists) > 0 && sqliteLists[0].Name != "LocalList" {
+		t.Errorf("sqlite list name = %q, want %q", sqliteLists[0].Name, "LocalList")
+	}
+
+	sqliteTasks, err := sqliteBE.GetTasks(ctx, sqliteList.ID)
+	if err != nil {
+		t.Fatalf("GetTasks for sqlite: %v", err)
+	}
+	if len(sqliteTasks) != 1 {
+		t.Errorf("sqlite list has %d tasks, want 1", len(sqliteTasks))
+	}
+	if len(sqliteTasks) > 0 && sqliteTasks[0].Summary != "Local task" {
+		t.Errorf("sqlite task summary = %q, want %q", sqliteTasks[0].Summary, "Local task")
+	}
+
+	// Verify nextcloud backend only sees its own data
+	nextcloudLists, err := nextcloudBE.GetLists(ctx)
+	if err != nil {
+		t.Fatalf("GetLists for nextcloud: %v", err)
+	}
+	if len(nextcloudLists) != 1 {
+		t.Errorf("nextcloud backend has %d lists, want 1", len(nextcloudLists))
+	}
+	if len(nextcloudLists) > 0 && nextcloudLists[0].Name != "RemoteList" {
+		t.Errorf("nextcloud list name = %q, want %q", nextcloudLists[0].Name, "RemoteList")
+	}
+
+	nextcloudTasks, err := nextcloudBE.GetTasks(ctx, nextcloudList.ID)
+	if err != nil {
+		t.Fatalf("GetTasks for nextcloud: %v", err)
+	}
+	if len(nextcloudTasks) != 1 {
+		t.Errorf("nextcloud list has %d tasks, want 1", len(nextcloudTasks))
+	}
+	if len(nextcloudTasks) > 0 && nextcloudTasks[0].Summary != "Remote task" {
+		t.Errorf("nextcloud task summary = %q, want %q", nextcloudTasks[0].Summary, "Remote task")
+	}
+
+	// Verify cross-backend isolation - sqlite backend shouldn't see nextcloud's task
+	crossCheckTask, err := sqliteBE.GetTask(ctx, nextcloudList.ID, nextcloudTask.ID)
+	if err != nil {
+		t.Fatalf("GetTask cross-check: %v", err)
+	}
+	if crossCheckTask != nil {
+		t.Errorf("sqlite backend should NOT see nextcloud's task, but found: %+v", crossCheckTask)
+	}
+
+	// Verify cross-backend isolation - nextcloud backend shouldn't see sqlite's task
+	crossCheckTask2, err := nextcloudBE.GetTask(ctx, sqliteList.ID, sqliteTask.ID)
+	if err != nil {
+		t.Fatalf("GetTask cross-check 2: %v", err)
+	}
+	if crossCheckTask2 != nil {
+		t.Errorf("nextcloud backend should NOT see sqlite's task, but found: %+v", crossCheckTask2)
+	}
+}
