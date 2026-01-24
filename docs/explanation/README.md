@@ -53,6 +53,7 @@ todoat is a command-line task management tool that allows you to:
 | **Credentials** | Secure keyring storage | `credentials set`, `credentials get`, `credentials delete` |
 | **Views** | Customizable display formats | `view list`, `view create`, `-v <view-name>` |
 | **Shell Integration** | Tab completion for all shells | `completion bash/zsh/fish/powershell` |
+| **Analytics** | Usage statistics and backend performance | `analytics stats`, `analytics backends`, `analytics errors` |
 
 ## Feature Maturity
 

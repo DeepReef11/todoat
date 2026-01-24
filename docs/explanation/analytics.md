@@ -230,7 +230,52 @@ func (c *AddCommand) Execute(args []string) error {
 
 ## Viewing Analytics Data
 
-There are currently no built-in CLI commands for viewing analytics data. To query your usage statistics, use `sqlite3` directly:
+### CLI Commands
+
+The `todoat analytics` command provides built-in access to analytics data:
+
+```bash
+# View command usage statistics
+todoat analytics stats
+
+# View backend performance metrics
+todoat analytics backends
+
+# View most common errors
+todoat analytics errors
+```
+
+All commands support time filtering with `--since`:
+
+```bash
+# Stats from the past 7 days
+todoat analytics stats --since 7d
+
+# Backend performance from the past month
+todoat analytics backends --since 30d
+
+# Errors from the past year
+todoat analytics errors --since 1y
+```
+
+For machine-parseable output, use the `--json` flag:
+
+```bash
+todoat analytics stats --json
+todoat analytics backends --json
+todoat analytics errors --json
+```
+
+The `errors` command also supports `--limit` to control output:
+
+```bash
+# Show top 20 errors
+todoat analytics errors --limit 20
+```
+
+### Direct Database Access
+
+For advanced queries, you can access the database directly with `sqlite3`:
 
 ```bash
 # Open the analytics database

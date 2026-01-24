@@ -88,6 +88,8 @@ type Config struct {
 	Backend string // Backend name to use (from --backend flag)
 	// IO writers for output (for testing)
 	Stderr io.Writer // Writer for warnings/errors (defaults to os.Stderr)
+	// Analytics-related config fields (for testing)
+	AnalyticsPath string // Path to analytics database file (for testing)
 }
 
 // LocalIDBackend is an interface for backends that support local_id lookup (e.g., SQLite)
@@ -320,6 +322,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add tags subcommand
 	cmd.AddCommand(newTagsCmd(stdout, cfg))
+
+	// Add analytics subcommand
+	cmd.AddCommand(newAnalyticsCmd(stdout, cfg))
 
 	return cmd
 }
@@ -9547,4 +9552,455 @@ func doTags(ctx context.Context, be backend.TaskManager, listName string, cfg *C
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
 	return nil
+}
+
+// =============================================================================
+// Analytics Command (075-analytics-cli-commands)
+// =============================================================================
+
+// AnalyticsStats holds command usage statistics
+type AnalyticsStats struct {
+	Commands []CommandStats `json:"commands"`
+	Result   string         `json:"result,omitempty"`
+}
+
+// CommandStats holds statistics for a single command
+type CommandStats struct {
+	Command     string  `json:"command"`
+	Total       int     `json:"total"`
+	Successful  int     `json:"successful"`
+	SuccessRate float64 `json:"success_rate"`
+}
+
+// BackendStats holds backend performance metrics
+type BackendStats struct {
+	Backends []BackendMetrics `json:"backends"`
+	Result   string           `json:"result,omitempty"`
+}
+
+// BackendMetrics holds metrics for a single backend
+type BackendMetrics struct {
+	Backend     string  `json:"backend"`
+	Uses        int     `json:"uses"`
+	AvgDuration float64 `json:"avg_duration_ms"`
+	SuccessRate float64 `json:"success_rate"`
+}
+
+// ErrorStats holds error statistics
+type ErrorStats struct {
+	Errors []ErrorInfo `json:"errors"`
+	Result string      `json:"result,omitempty"`
+}
+
+// ErrorInfo holds information about a specific error type
+type ErrorInfo struct {
+	Command     string `json:"command"`
+	ErrorType   string `json:"error_type"`
+	Occurrences int    `json:"occurrences"`
+}
+
+// newAnalyticsCmd creates the 'analytics' subcommand for viewing analytics data
+func newAnalyticsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	analyticsCmd := &cobra.Command{
+		Use:   "analytics",
+		Short: "View usage analytics and statistics",
+		Long:  "View command usage statistics, backend performance metrics, and error reports from local analytics data.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	// Add subcommands
+	analyticsCmd.AddCommand(newAnalyticsStatsCmd(stdout, cfg))
+	analyticsCmd.AddCommand(newAnalyticsBackendsCmd(stdout, cfg))
+	analyticsCmd.AddCommand(newAnalyticsErrorsCmd(stdout, cfg))
+
+	return analyticsCmd
+}
+
+// getAnalyticsDB opens the analytics database, using test path if provided
+func getAnalyticsDB(cfg *Config) (*sql.DB, error) {
+	var dbPath string
+	if cfg != nil && cfg.AnalyticsPath != "" {
+		dbPath = cfg.AnalyticsPath
+	} else {
+		// Get XDG config dir
+		configDir := os.Getenv("XDG_CONFIG_HOME")
+		if configDir == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get home directory: %w", err)
+			}
+			configDir = filepath.Join(home, ".config")
+		}
+		dbPath = filepath.Join(configDir, "todoat", "analytics.db")
+	}
+
+	// Check if database exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("analytics database not found at %s (analytics may not be enabled)", dbPath)
+	}
+
+	return sql.Open("sqlite", dbPath)
+}
+
+// parseSinceDuration parses a duration string like "7d", "30d", "1y" into seconds
+func parseSinceDuration(since string) (int64, error) {
+	if since == "" {
+		return 0, nil
+	}
+
+	// Parse the number and unit
+	if len(since) < 2 {
+		return 0, fmt.Errorf("invalid duration format: %s (expected format like '7d', '30d', '1y')", since)
+	}
+
+	numStr := since[:len(since)-1]
+	unit := since[len(since)-1:]
+
+	num, err := strconv.ParseInt(numStr, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration number: %s", numStr)
+	}
+
+	var seconds int64
+	switch unit {
+	case "d":
+		seconds = num * 86400 // days to seconds
+	case "w":
+		seconds = num * 7 * 86400 // weeks to seconds
+	case "m":
+		seconds = num * 30 * 86400 // months to seconds (approximate)
+	case "y":
+		seconds = num * 365 * 86400 // years to seconds (approximate)
+	default:
+		return 0, fmt.Errorf("invalid duration unit: %s (expected 'd', 'w', 'm', or 'y')", unit)
+	}
+
+	return seconds, nil
+}
+
+// newAnalyticsStatsCmd creates the 'analytics stats' subcommand
+func newAnalyticsStatsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	statsCmd := &cobra.Command{
+		Use:   "stats",
+		Short: "Show command usage statistics",
+		Long:  "Display summary of command usage including counts and success rates.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			since, _ := cmd.Flags().GetString("since")
+
+			db, err := getAnalyticsDB(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = db.Close() }()
+
+			// Build query with optional time filter
+			var sinceTimestamp int64
+			if since != "" {
+				sinceDuration, err := parseSinceDuration(since)
+				if err != nil {
+					return err
+				}
+				sinceTimestamp = time.Now().Unix() - sinceDuration
+			}
+
+			var rows *sql.Rows
+			if sinceTimestamp > 0 {
+				rows, err = db.Query(`
+					SELECT
+						command,
+						COUNT(*) as total,
+						SUM(success) as successful
+					FROM events
+					WHERE timestamp >= ?
+					GROUP BY command
+					ORDER BY total DESC
+				`, sinceTimestamp)
+			} else {
+				rows, err = db.Query(`
+					SELECT
+						command,
+						COUNT(*) as total,
+						SUM(success) as successful
+					FROM events
+					GROUP BY command
+					ORDER BY total DESC
+				`)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to query stats: %w", err)
+			}
+			defer func() { _ = rows.Close() }()
+
+			stats := AnalyticsStats{
+				Commands: []CommandStats{},
+				Result:   ResultInfoOnly,
+			}
+
+			for rows.Next() {
+				var cs CommandStats
+				if err := rows.Scan(&cs.Command, &cs.Total, &cs.Successful); err != nil {
+					return fmt.Errorf("failed to scan row: %w", err)
+				}
+				if cs.Total > 0 {
+					cs.SuccessRate = float64(cs.Successful) / float64(cs.Total) * 100
+				}
+				stats.Commands = append(stats.Commands, cs)
+			}
+
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("error reading rows: %w", err)
+			}
+
+			if jsonOutput {
+				enc := json.NewEncoder(stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(stats)
+			}
+
+			// Human-readable output
+			if len(stats.Commands) == 0 {
+				_, _ = fmt.Fprintln(stdout, "No analytics data found.")
+				return nil
+			}
+
+			_, _ = fmt.Fprintln(stdout, "Command Usage Statistics")
+			_, _ = fmt.Fprintln(stdout, "========================")
+			_, _ = fmt.Fprintf(stdout, "%-15s %8s %10s %12s\n", "Command", "Total", "Success", "Success Rate")
+			_, _ = fmt.Fprintf(stdout, "%-15s %8s %10s %12s\n", "-------", "-----", "-------", "------------")
+			for _, cs := range stats.Commands {
+				_, _ = fmt.Fprintf(stdout, "%-15s %8d %10d %11.1f%%\n",
+					cs.Command, cs.Total, cs.Successful, cs.SuccessRate)
+			}
+
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	statsCmd.Flags().String("since", "", "Filter events from the past duration (e.g., 7d, 30d, 1y)")
+
+	return statsCmd
+}
+
+// newAnalyticsBackendsCmd creates the 'analytics backends' subcommand
+func newAnalyticsBackendsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	backendsCmd := &cobra.Command{
+		Use:   "backends",
+		Short: "Show backend performance metrics",
+		Long:  "Display performance metrics for each backend including usage count, average duration, and success rate.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			since, _ := cmd.Flags().GetString("since")
+
+			db, err := getAnalyticsDB(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = db.Close() }()
+
+			// Build query with optional time filter
+			var sinceTimestamp int64
+			if since != "" {
+				sinceDuration, err := parseSinceDuration(since)
+				if err != nil {
+					return err
+				}
+				sinceTimestamp = time.Now().Unix() - sinceDuration
+			}
+
+			var rows *sql.Rows
+			if sinceTimestamp > 0 {
+				rows, err = db.Query(`
+					SELECT
+						backend,
+						COUNT(*) as uses,
+						ROUND(AVG(duration_ms), 2) as avg_duration_ms,
+						ROUND(100.0 * SUM(success) / COUNT(*), 2) as success_rate
+					FROM events
+					WHERE backend IS NOT NULL AND timestamp >= ?
+					GROUP BY backend
+					ORDER BY uses DESC
+				`, sinceTimestamp)
+			} else {
+				rows, err = db.Query(`
+					SELECT
+						backend,
+						COUNT(*) as uses,
+						ROUND(AVG(duration_ms), 2) as avg_duration_ms,
+						ROUND(100.0 * SUM(success) / COUNT(*), 2) as success_rate
+					FROM events
+					WHERE backend IS NOT NULL
+					GROUP BY backend
+					ORDER BY uses DESC
+				`)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to query backend stats: %w", err)
+			}
+			defer func() { _ = rows.Close() }()
+
+			stats := BackendStats{
+				Backends: []BackendMetrics{},
+				Result:   ResultInfoOnly,
+			}
+
+			for rows.Next() {
+				var bm BackendMetrics
+				if err := rows.Scan(&bm.Backend, &bm.Uses, &bm.AvgDuration, &bm.SuccessRate); err != nil {
+					return fmt.Errorf("failed to scan row: %w", err)
+				}
+				stats.Backends = append(stats.Backends, bm)
+			}
+
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("error reading rows: %w", err)
+			}
+
+			if jsonOutput {
+				enc := json.NewEncoder(stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(stats)
+			}
+
+			// Human-readable output
+			if len(stats.Backends) == 0 {
+				_, _ = fmt.Fprintln(stdout, "No backend analytics data found.")
+				return nil
+			}
+
+			_, _ = fmt.Fprintln(stdout, "Backend Performance Metrics")
+			_, _ = fmt.Fprintln(stdout, "===========================")
+			_, _ = fmt.Fprintf(stdout, "%-15s %8s %12s %12s\n", "Backend", "Uses", "Avg ms", "Success Rate")
+			_, _ = fmt.Fprintf(stdout, "%-15s %8s %12s %12s\n", "-------", "----", "------", "------------")
+			for _, bm := range stats.Backends {
+				_, _ = fmt.Fprintf(stdout, "%-15s %8d %12.2f %11.1f%%\n",
+					bm.Backend, bm.Uses, bm.AvgDuration, bm.SuccessRate)
+			}
+
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	backendsCmd.Flags().String("since", "", "Filter events from the past duration (e.g., 7d, 30d, 1y)")
+
+	return backendsCmd
+}
+
+// newAnalyticsErrorsCmd creates the 'analytics errors' subcommand
+func newAnalyticsErrorsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	errorsCmd := &cobra.Command{
+		Use:   "errors",
+		Short: "Show most common errors",
+		Long:  "Display the most common errors grouped by command and error type.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			since, _ := cmd.Flags().GetString("since")
+			limit, _ := cmd.Flags().GetInt("limit")
+
+			db, err := getAnalyticsDB(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = db.Close() }()
+
+			// Build query with optional time filter
+			var sinceTimestamp int64
+			if since != "" {
+				sinceDuration, err := parseSinceDuration(since)
+				if err != nil {
+					return err
+				}
+				sinceTimestamp = time.Now().Unix() - sinceDuration
+			}
+
+			var rows *sql.Rows
+			if sinceTimestamp > 0 {
+				rows, err = db.Query(`
+					SELECT
+						command,
+						error_type,
+						COUNT(*) as occurrences
+					FROM events
+					WHERE success = 0 AND error_type IS NOT NULL AND timestamp >= ?
+					GROUP BY command, error_type
+					ORDER BY occurrences DESC
+					LIMIT ?
+				`, sinceTimestamp, limit)
+			} else {
+				rows, err = db.Query(`
+					SELECT
+						command,
+						error_type,
+						COUNT(*) as occurrences
+					FROM events
+					WHERE success = 0 AND error_type IS NOT NULL
+					GROUP BY command, error_type
+					ORDER BY occurrences DESC
+					LIMIT ?
+				`, limit)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to query error stats: %w", err)
+			}
+			defer func() { _ = rows.Close() }()
+
+			stats := ErrorStats{
+				Errors: []ErrorInfo{},
+				Result: ResultInfoOnly,
+			}
+
+			for rows.Next() {
+				var ei ErrorInfo
+				if err := rows.Scan(&ei.Command, &ei.ErrorType, &ei.Occurrences); err != nil {
+					return fmt.Errorf("failed to scan row: %w", err)
+				}
+				stats.Errors = append(stats.Errors, ei)
+			}
+
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("error reading rows: %w", err)
+			}
+
+			if jsonOutput {
+				enc := json.NewEncoder(stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(stats)
+			}
+
+			// Human-readable output
+			if len(stats.Errors) == 0 {
+				_, _ = fmt.Fprintln(stdout, "No error data found.")
+				return nil
+			}
+
+			_, _ = fmt.Fprintln(stdout, "Most Common Errors")
+			_, _ = fmt.Fprintln(stdout, "==================")
+			_, _ = fmt.Fprintf(stdout, "%-15s %-15s %12s\n", "Command", "Error Type", "Occurrences")
+			_, _ = fmt.Fprintf(stdout, "%-15s %-15s %12s\n", "-------", "----------", "-----------")
+			for _, ei := range stats.Errors {
+				_, _ = fmt.Fprintf(stdout, "%-15s %-15s %12d\n",
+					ei.Command, ei.ErrorType, ei.Occurrences)
+			}
+
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	errorsCmd.Flags().String("since", "", "Filter events from the past duration (e.g., 7d, 30d, 1y)")
+	errorsCmd.Flags().Int("limit", 10, "Maximum number of errors to show")
+
+	return errorsCmd
 }

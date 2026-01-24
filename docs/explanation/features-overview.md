@@ -13,6 +13,7 @@ This document provides a high-level summary of all features in todoat, organized
 - [Views & Customization Features](#views--customization-features)
 - [CLI Interface Features](#cli-interface-features)
 - [Configuration Features](#configuration-features)
+- [Analytics Features](#analytics-features)
 
 ---
 
@@ -324,6 +325,30 @@ See [Notification Manager](notification-manager.md) for configuration details.
 
 ---
 
+## Analytics Features
+
+**Purpose**: Track command usage, backend performance, and errors locally for insights into usage patterns.
+
+| Feature | Description | Status | Documentation |
+|---------|-------------|--------|---------------|
+| **Command Statistics** | View usage counts and success rates by command | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
+| **Backend Performance** | Track performance metrics for each backend | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
+| **Error Tracking** | View most common errors grouped by command | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
+| **Time Filtering** | Filter analytics by time range (7d, 30d, 1y) | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
+| **JSON Output** | Machine-parseable analytics output | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
+| **Privacy-First** | All data stored locally, never transmitted | ✅ Stable | [Analytics](analytics.md#privacy-considerations) |
+| **Opt-In** | Disabled by default, requires explicit enabling | ✅ Stable | [Analytics](analytics.md#configuration) |
+
+**Key Use Cases**:
+- Understanding command usage patterns
+- Identifying slow or failing backends
+- Debugging common errors
+- Performance monitoring over time
+
+**Related Features**: [Configuration](#configuration-features), [Backend System](#backend-system-features)
+
+---
+
 ## Feature Interaction Map
 
 This diagram shows how major features interact with each other:
@@ -373,7 +398,8 @@ This diagram shows how major features interact with each other:
 | Views & Customization | 17 | 17 | 0 | 0 |
 | CLI Interface | 19 | 19 | 0 | 0 |
 | Configuration | 18 | 18 | 0 | 0 |
-| **TOTAL** | **129** | **127** | **2** | **0** |
+| Analytics | 7 | 7 | 0 | 0 |
+| **TOTAL** | **136** | **134** | **2** | **0** |
 
 ---
 
@@ -393,6 +419,7 @@ This diagram shows how major features interact with each other:
 - **Use in scripts**: Leverage [CLI Interface](cli-interface.md) and [Shell Completion](cli-interface.md#shell-completion)
 - **Automate task management**: Use [No-Prompt Mode](cli-interface.md#no-prompt-mode) with [JSON Output](cli-interface.md#json-output-mode) and [UID Selection](cli-interface.md#action-flags)
 - **Integrate with CI/CD**: Enable [No-Prompt Mode](configuration.md#no-prompt-mode-configuration) in config for non-interactive operation
+- **View usage statistics**: Use [Analytics Commands](analytics.md#viewing-analytics-data) to see command usage and backend performance
 
 ### By Maturity Level
 
@@ -409,6 +436,7 @@ This diagram shows how major features interact with each other:
 - All configuration features
 - Cross-backend task migration
 - TUI interface
+- Analytics and usage statistics
 
 **In Development** (🔧):
 - Auto-sync daemon (redesign in progress)
@@ -427,5 +455,5 @@ This diagram shows how major features interact with each other:
 ---
 
 **Last Updated**: January 2026
-**Total Features Documented**: 129
+**Total Features Documented**: 136
 **Documentation Version**: 1.0

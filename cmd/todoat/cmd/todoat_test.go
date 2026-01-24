@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 	"todoat/internal/config"
@@ -2975,5 +2976,368 @@ backends:
 	}
 	if strings.Contains(personalOutput, "Work task") {
 		t.Errorf("sqlite-personal should NOT see 'Work task' (isolation broken), got: %s", personalOutput)
+	}
+}
+
+// =============================================================================
+// Analytics CLI Tests (075-analytics-cli-commands)
+// =============================================================================
+
+// setupAnalyticsDB creates an analytics database with test data and returns the path
+func setupAnalyticsDB(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	analyticsPath := filepath.Join(tmpDir, "analytics.db")
+
+	// Create the analytics database with schema
+	db, err := sql.Open("sqlite", analyticsPath)
+	if err != nil {
+		t.Fatalf("failed to create analytics db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Create schema
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			timestamp INTEGER NOT NULL,
+			command TEXT NOT NULL,
+			subcommand TEXT,
+			backend TEXT,
+			success INTEGER NOT NULL,
+			duration_ms INTEGER,
+			error_type TEXT,
+			flags TEXT,
+			created_at INTEGER DEFAULT (strftime('%s', 'now'))
+		);
+		CREATE INDEX IF NOT EXISTS idx_timestamp ON events(timestamp);
+		CREATE INDEX IF NOT EXISTS idx_command ON events(command);
+		CREATE INDEX IF NOT EXISTS idx_backend ON events(backend);
+		CREATE INDEX IF NOT EXISTS idx_success ON events(success);
+	`)
+	if err != nil {
+		t.Fatalf("failed to create schema: %v", err)
+	}
+
+	// Insert test data
+	now := time.Now().Unix()
+	yesterday := now - 86400
+	lastWeek := now - (7 * 86400)
+	lastMonth := now - (30 * 86400)
+
+	// Insert various commands with different backends and success states
+	testData := []struct {
+		timestamp  int64
+		command    string
+		subcommand string
+		backend    string
+		success    int
+		durationMs int
+		errorType  string
+	}{
+		{now, "add", "", "sqlite", 1, 50, ""},
+		{now, "add", "", "sqlite", 1, 45, ""},
+		{now, "list", "", "sqlite", 1, 30, ""},
+		{now, "complete", "", "sqlite", 1, 60, ""},
+		{now, "sync", "", "todoist", 0, 5000, "timeout"},
+		{now, "sync", "", "todoist", 1, 200, ""},
+		{yesterday, "add", "", "todoist", 1, 100, ""},
+		{yesterday, "delete", "", "sqlite", 0, 20, "not_found"},
+		{lastWeek, "add", "", "sqlite", 1, 55, ""},
+		{lastWeek, "sync", "", "nextcloud", 0, 3000, "network"},
+		{lastMonth, "add", "", "sqlite", 1, 40, ""},
+		{lastMonth, "list", "", "file", 1, 10, ""},
+	}
+
+	for _, d := range testData {
+		_, err = db.Exec(`
+			INSERT INTO events (timestamp, command, subcommand, backend, success, duration_ms, error_type)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, d.timestamp, d.command, nullStr(d.subcommand), d.backend, d.success, d.durationMs, nullStr(d.errorType))
+		if err != nil {
+			t.Fatalf("failed to insert test data: %v", err)
+		}
+	}
+
+	return analyticsPath
+}
+
+// nullStr returns nil for empty strings, otherwise the string
+func nullStr(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// TestAnalyticsStatsCommand tests 'todoat analytics stats' shows usage summary
+func TestAnalyticsStatsCommand(t *testing.T) {
+	analyticsPath := setupAnalyticsDB(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	// Write config file
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"analytics", "stats"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Should show command usage summary
+	if !strings.Contains(output, "add") {
+		t.Errorf("stats output should contain 'add' command, got: %s", output)
+	}
+	if !strings.Contains(output, "list") {
+		t.Errorf("stats output should contain 'list' command, got: %s", output)
+	}
+	// Should show success rate
+	if !strings.Contains(output, "%") || !strings.Contains(strings.ToLower(output), "success") {
+		t.Errorf("stats output should show success rate percentage, got: %s", output)
+	}
+}
+
+// TestAnalyticsBackendPerformance tests 'todoat analytics backends' shows backend metrics
+func TestAnalyticsBackendPerformance(t *testing.T) {
+	analyticsPath := setupAnalyticsDB(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"analytics", "backends"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Should show backend names
+	if !strings.Contains(output, "sqlite") {
+		t.Errorf("backends output should contain 'sqlite', got: %s", output)
+	}
+	if !strings.Contains(output, "todoist") {
+		t.Errorf("backends output should contain 'todoist', got: %s", output)
+	}
+	// Should show metrics (avg duration, success rate)
+	if !strings.Contains(strings.ToLower(output), "ms") || !strings.Contains(output, "%") {
+		t.Errorf("backends output should show duration (ms) and success rate (%%), got: %s", output)
+	}
+}
+
+// TestAnalyticsErrorsCommand tests 'todoat analytics errors' shows common errors
+func TestAnalyticsErrorsCommand(t *testing.T) {
+	analyticsPath := setupAnalyticsDB(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"analytics", "errors"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Should show error types
+	if !strings.Contains(output, "timeout") {
+		t.Errorf("errors output should contain 'timeout' error, got: %s", output)
+	}
+	if !strings.Contains(output, "network") {
+		t.Errorf("errors output should contain 'network' error, got: %s", output)
+	}
+}
+
+// TestAnalyticsTimeRange tests 'todoat analytics stats --since 7d' filters by time
+func TestAnalyticsTimeRange(t *testing.T) {
+	analyticsPath := setupAnalyticsDB(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	// Get stats for last 7 days (should exclude lastMonth data)
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"analytics", "stats", "--since", "7d"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Get stats for all time to compare
+	var stdoutAll, stderrAll bytes.Buffer
+	exitCode = Execute([]string{"analytics", "stats"}, &stdoutAll, &stderrAll, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderrAll.String())
+	}
+
+	// The 7d output should have fewer total commands than all-time output
+	// Since lastMonth data is excluded
+	outputFiltered := stdout.String()
+	outputAll := stdoutAll.String()
+
+	// Both outputs should be valid (contain command counts)
+	if !strings.Contains(outputFiltered, "add") {
+		t.Errorf("filtered stats should contain 'add', got: %s", outputFiltered)
+	}
+	if !strings.Contains(outputAll, "add") {
+		t.Errorf("all-time stats should contain 'add', got: %s", outputAll)
+	}
+}
+
+// TestAnalyticsJSONOutput tests 'todoat analytics stats --json' outputs JSON
+func TestAnalyticsJSONOutput(t *testing.T) {
+	analyticsPath := setupAnalyticsDB(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"analytics", "stats", "--json"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Output should be valid JSON
+	output := stdout.String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("expected valid JSON output, got: %s, error: %v", output, err)
+	}
+
+	// Should contain stats data
+	if _, ok := result["commands"]; !ok {
+		t.Errorf("JSON output should contain 'commands' field, got: %v", result)
+	}
+}
+
+// TestAnalyticsBackendsJSONOutput tests 'todoat analytics backends --json' outputs JSON
+func TestAnalyticsBackendsJSONOutput(t *testing.T) {
+	analyticsPath := setupAnalyticsDB(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"analytics", "backends", "--json"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Output should be valid JSON
+	output := stdout.String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("expected valid JSON output, got: %s, error: %v", output, err)
+	}
+
+	// Should contain backends data
+	if _, ok := result["backends"]; !ok {
+		t.Errorf("JSON output should contain 'backends' field, got: %v", result)
+	}
+}
+
+// TestAnalyticsErrorsJSONOutput tests 'todoat analytics errors --json' outputs JSON
+func TestAnalyticsErrorsJSONOutput(t *testing.T) {
+	analyticsPath := setupAnalyticsDB(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"analytics", "errors", "--json"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Output should be valid JSON
+	output := stdout.String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("expected valid JSON output, got: %s, error: %v", output, err)
+	}
+
+	// Should contain errors data
+	if _, ok := result["errors"]; !ok {
+		t.Errorf("JSON output should contain 'errors' field, got: %v", result)
 	}
 }

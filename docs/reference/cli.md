@@ -304,6 +304,88 @@ todoat list export MyList --format ical --output tasks.ics
 todoat list import tasks.json
 ```
 
+## analytics
+
+View usage analytics and statistics.
+
+### Synopsis
+
+```bash
+todoat analytics [command]
+```
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `stats` | Show command usage statistics |
+| `backends` | Show backend performance metrics |
+| `errors` | Show most common errors |
+
+### analytics stats
+
+Display summary of command usage including counts and success rates.
+
+```bash
+todoat analytics stats [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--since` | string | Filter events from the past duration (e.g., 7d, 30d, 1y) |
+
+### analytics backends
+
+Display performance metrics for each backend.
+
+```bash
+todoat analytics backends [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--since` | string | Filter events from the past duration (e.g., 7d, 30d, 1y) |
+
+### analytics errors
+
+Display the most common errors grouped by command and error type.
+
+```bash
+todoat analytics errors [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--since` | string | | Filter events from the past duration (e.g., 7d, 30d, 1y) |
+| `--limit` | int | 10 | Maximum number of errors to show |
+
+### Examples
+
+```bash
+# Show command usage statistics
+todoat analytics stats
+
+# Show stats from past week
+todoat analytics stats --since 7d
+
+# Show backend performance
+todoat analytics backends
+
+# Show backend performance from past month
+todoat analytics backends --since 30d
+
+# Show top 10 errors (default)
+todoat analytics errors
+
+# Show top 20 errors from past year
+todoat analytics errors --since 1y --limit 20
+
+# Output in JSON format
+todoat analytics stats --json
+todoat analytics backends --json
+todoat analytics errors --json
+```
+
 ## config
 
 View and manage configuration.
