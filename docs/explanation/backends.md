@@ -606,9 +606,24 @@ sync:
 
 ## Migrating Between Backends
 
-Use the `migrate` command to move tasks from one backend to another while preserving metadata.
+> **Note**: Migration to real backends (nextcloud, todoist, file) is not yet implemented.
+> Currently, migration only works for testing purposes using mock backends (`nextcloud-mock`, `todoist-mock`, `file-mock`).
+> For now, to move tasks between backends, export from the source and import to the target manually.
 
-### Basic Migration
+The `migrate` command is designed to move tasks from one backend to another while preserving metadata.
+
+### Current Status
+
+| From/To | sqlite | nextcloud | todoist | file |
+|---------|--------|-----------|---------|------|
+| sqlite | N/A | Not implemented | Not implemented | Not implemented |
+| nextcloud | Not implemented | N/A | Not implemented | Not implemented |
+| todoist | Not implemented | Not implemented | N/A | Not implemented |
+| file | Not implemented | Not implemented | Not implemented | N/A |
+
+### Future Functionality
+
+When implemented, the migrate command will support:
 
 ```bash
 # Migrate from SQLite to Nextcloud
@@ -641,9 +656,9 @@ Check existing tasks in the target before migrating:
 todoat migrate --target-info nextcloud --list Work
 ```
 
-### What Gets Migrated
+### What Will Be Migrated
 
-Migration preserves:
+When implemented, migration will preserve:
 - Task summary and description
 - Priority and status
 - Due dates and start dates

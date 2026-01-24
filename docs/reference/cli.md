@@ -581,6 +581,9 @@ todoat credentials delete nextcloud myuser
 
 Migrate tasks between backends.
 
+> **Note**: Migration to real backends (nextcloud, todoist, file) is not yet implemented.
+> The command is scaffolded for future use. See [Backends - Migrating Between Backends](../explanation/backends.md#migrating-between-backends) for current status.
+
 ### Synopsis
 
 ```bash
@@ -597,19 +600,27 @@ todoat migrate [flags]
 | `--dry-run` | Show what would be migrated without making changes |
 | `--target-info <backend>` | Show tasks in target backend |
 
-### Examples
+### Current Limitations
+
+Migration between real backends is not yet implemented. Attempting to migrate to nextcloud, todoist, or file backends will return an error:
+
+```
+Error: real [backend] backend not yet implemented for migration
+```
+
+### Examples (Future Functionality)
 
 ```bash
-# Migrate from SQLite to Nextcloud
+# Migrate from SQLite to Nextcloud (not yet implemented)
 todoat migrate --from sqlite --to nextcloud
 
-# Migrate specific list
+# Migrate specific list (not yet implemented)
 todoat migrate --from sqlite --to nextcloud --list "Work"
 
-# Preview migration
+# Preview migration (not yet implemented)
 todoat migrate --from sqlite --to nextcloud --dry-run
 
-# Check target backend contents
+# Check target backend contents (not yet implemented)
 todoat migrate --target-info nextcloud
 ```
 

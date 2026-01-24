@@ -52,3 +52,36 @@ Migration functionality is only scaffolded but not yet implemented for actual ba
 
 ## Recommended Fix
 IMPLEMENT FEATURE or FIX DOCS - Either implement the migration functionality or clearly document in --help and docs that this feature is not yet available.
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Documentation updated to clearly indicate that migration to real backends (nextcloud, todoist, file) is not yet implemented. The feature is scaffolded but currently only works with mock backends for testing.
+**Test added**: N/A (documentation-only fix)
+
+**Files updated**:
+1. `docs/explanation/backends.md` - Added note about unimplemented status, status table showing all combinations as "Not implemented"
+2. `docs/reference/cli.md` - Added note and "Current Limitations" section explaining the error users will see
+3. `docs/feature-demo.sh` - Updated to show migration is not yet implemented
+
+### Verification Log
+```bash
+$ grep -A 5 "Migration to real backends" docs/explanation/backends.md
+> **Note**: Migration to real backends (nextcloud, todoist, file) is not yet implemented.
+> Currently, migration only works for testing purposes using mock backends (`nextcloud-mock`, `todoist-mock`, `file-mock`).
+> For now, to move tasks between backends, export from the source and import to the target manually.
+
+The `migrate` command is designed to move tasks from one backend to another while preserving metadata.
+
+$ grep -A 3 "Migration to real backends" docs/reference/cli.md
+> **Note**: Migration to real backends (nextcloud, todoist, file) is not yet implemented.
+> The command is scaffolded for future use. See [Backends - Migrating Between Backends](../explanation/backends.md#migrating-between-backends) for current status.
+
+$ go test ./...
+ok  	todoat/backend	(cached)
+ok  	todoat/backend/file	(cached)
+...
+ok  	todoat/internal/views	(cached)
+```
+
+**Matches expected behavior**: YES (documentation now accurately reflects implementation status)
