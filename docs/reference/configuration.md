@@ -119,6 +119,7 @@ Restores the default configuration. Requires confirmation.
 | `sync.offline_mode` | string | CLI backend mode: `auto`/`offline` (use SQLite cache) or `online` (direct remote) |
 | `sync.conflict_resolution` | string | `server_wins`, `local_wins`, `merge`, `keep_both` |
 | `sync.connectivity_timeout` | string | Network timeout for connectivity checks (default: `5s`) |
+| `sync.auto_sync_after_operation` | bool | Sync immediately after add/update/delete operations (default: `false`) |
 | `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
 
 ## Notification Configuration

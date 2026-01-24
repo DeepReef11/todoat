@@ -100,7 +100,7 @@ backend_priority:
 # Synchronization
 sync:
   enabled: true
-  auto_sync: true
+  auto_sync_after_operation: true  # Sync immediately after add/update/delete
   local_backend: sqlite
   conflict_resolution: server_wins
   offline_mode: auto
@@ -338,7 +338,7 @@ file:
 3. todoat creates shared cache database on startup
 4. Each enabled remote backend is automatically cached
 5. User performs task operations (local-first, instant response)
-6. Sync happens manually (`todoat sync`) or in background (if auto_sync: true)
+6. Sync happens manually (`todoat sync`) or automatically after operations (if `auto_sync_after_operation: true`)
 7. Changes propagate between local cache and remote backends
 
 **Prerequisites**:
@@ -357,11 +357,11 @@ file:
 
 ```yaml
 sync:
-  enabled: true                  # Enable automatic caching for all remote backends
-  auto_sync: true                # Auto-sync in background after write operations
-  local_backend: sqlite          # Cache backend type: sqlite, file, git (default: sqlite)
-  conflict_resolution: server_wins  # server_wins, local_wins, merge, keep_both
-  offline_mode: auto             # auto, online, offline
+  enabled: true                        # Enable automatic caching for all remote backends
+  auto_sync_after_operation: true      # Sync immediately after add/update/delete operations
+  local_backend: sqlite                # Cache backend type (default: sqlite)
+  conflict_resolution: server_wins     # server_wins, local_wins, merge, keep_both
+  offline_mode: auto                   # auto, online, offline
 ```
 
 **Sync Configuration Fields**:
@@ -369,10 +369,11 @@ sync:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | false | Enable automatic caching for remote backends |
-| `local_backend` | string | sqlite | Cache storage type (sqlite, file, git) |
+| `local_backend` | string | sqlite | Cache storage type |
 | `conflict_resolution` | string | server_wins | Conflict strategy (server_wins, local_wins, merge, keep_both) |
-| `auto_sync` | boolean | true | Background sync after write operations |
+| `auto_sync_after_operation` | boolean | false | Sync immediately after add/update/delete operations |
 | `offline_mode` | string | auto | Offline behavior (auto, online, offline) |
+| `connectivity_timeout` | string | 5s | Timeout for connectivity checks |
 
 **Validation Rules**:
 - `local_backend` must be: sqlite, file, or git
@@ -1887,8 +1888,7 @@ default_backend: nextcloud-prod
 
 sync:
   enabled: true
-  auto_sync: true 
-  sync_interval: 5
+  auto_sync_after_operation: true
   local_backend: sqlite
   conflict_resolution: server_wins
   offline_mode: auto
@@ -1973,8 +1973,8 @@ default_backend: nextcloud-prod
 sync:
   enabled: true
   local_backend: sqlite
-  conflict_resolution: local_wins  # Prefer local changes
-  auto_sync: false                 # Manual sync only
+  conflict_resolution: local_wins        # Prefer local changes
+  auto_sync_after_operation: false       # Manual sync only
   offline_mode: auto
 
 canWriteConfig: true

@@ -947,9 +947,9 @@ Configure synchronization behavior, conflict resolution, offline mode, and cache
 ```yaml
 sync:
   enabled: true                          # Enable/disable sync globally
+  auto_sync_after_operation: false       # Sync immediately after add/update/delete
   local_backend: sqlite                  # Cache implementation (only sqlite supported)
   conflict_resolution: server_wins       # Conflict strategy
-  sync_interval: 5                       # Minutes (future auto-sync)
   offline_mode: auto                     # auto, offline, online
 ```
 
@@ -985,9 +985,10 @@ backends:
 - `merge`: Intelligently combine changes
 - `keep_both`: Create duplicate tasks for manual resolution
 
-**sync.sync_interval:**
-- Number in minutes for future auto-sync feature
-- Currently unused (manual sync only)
+**sync.auto_sync_after_operation:**
+- `true`: Sync immediately after each operation (add, update, delete)
+- `false`: Queue operations for manual sync (default)
+- When enabled, eliminates need to run `todoat sync` manually after each operation
 
 **sync.offline_mode:**
 - `auto`: Detect network automatically
@@ -1048,11 +1049,11 @@ backends:
 **Configuration Loading:**
 ```go
 type SyncConfig struct {
-    Enabled            bool   `yaml:"enabled"`
-    LocalBackend       string `yaml:"local_backend"`
-    ConflictResolution string `yaml:"conflict_resolution"`
-    SyncInterval       int    `yaml:"sync_interval"`
-    OfflineMode        string `yaml:"offline_mode"`
+    Enabled                 bool   `yaml:"enabled"`
+    AutoSyncAfterOperation  bool   `yaml:"auto_sync_after_operation"`
+    LocalBackend            string `yaml:"local_backend"`
+    ConflictResolution      string `yaml:"conflict_resolution"`
+    OfflineMode             string `yaml:"offline_mode"`
 }
 
 func LoadConfig() (*Config, error) {

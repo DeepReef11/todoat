@@ -123,6 +123,17 @@ sync:
 
 When `true`, remote backends are cached locally for offline access.
 
+### auto_sync_after_operation
+
+```yaml
+sync:
+  auto_sync_after_operation: true  # or false (default)
+```
+
+When `true`, operations (add, update, delete) automatically trigger a sync to push changes to the remote backend immediately. This eliminates the need to run `todoat sync` manually after each operation.
+
+Without this option (or when set to `false`), changes are queued locally and only pushed when you explicitly run `todoat sync` or when the sync daemon runs.
+
 ### local_backend
 
 ```yaml

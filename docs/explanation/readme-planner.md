@@ -104,7 +104,7 @@ backends:
 
 sync:
   enabled: true
-  auto_sync: true
+  auto_sync_after_operation: true  # Sync immediately after each operation
   local_backend: sqlite
   conflict_resolution: server_wins
 
