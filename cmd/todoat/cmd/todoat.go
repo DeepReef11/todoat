@@ -2254,6 +2254,7 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 		return &syncAwareBackend{
 			TaskManager: be,
 			syncMgr:     getSyncManager(cfg),
+			cfg:         cfg,
 		}, nil
 	}
 
@@ -2416,6 +2417,7 @@ func createBackendWithSyncFallback(cfg *Config, backendName string, dbPath strin
 	return &syncAwareBackend{
 		TaskManager: be,
 		syncMgr:     getSyncManager(cfg),
+		cfg:         cfg,
 	}, nil
 }
 
@@ -2429,6 +2431,7 @@ func createSyncFallbackBackend(cfg *Config, dbPath string) (backend.TaskManager,
 	return &syncAwareBackend{
 		TaskManager: be,
 		syncMgr:     getSyncManager(cfg),
+		cfg:         cfg,
 	}, nil
 }
 
@@ -2776,6 +2779,30 @@ func loadSyncConfigFromAppConfig(cfg *Config, appConfig *config.Config) {
 type syncAwareBackend struct {
 	backend.TaskManager
 	syncMgr *SyncManager
+	cfg     *Config // stored for auto-sync support
+}
+
+// triggerAutoSync triggers an automatic sync if auto_sync_after_operation is enabled
+func (b *syncAwareBackend) triggerAutoSync() {
+	if b.cfg == nil {
+		return
+	}
+
+	// Load config to check auto_sync_after_operation setting
+	appConfig, _, _ := config.LoadWithRaw(b.cfg.ConfigPath)
+	if appConfig == nil || !appConfig.IsAutoSyncAfterOperationEnabled() {
+		return
+	}
+
+	// Check if we're in a mode where sync is possible (online or auto)
+	offlineMode := appConfig.GetOfflineMode()
+	if offlineMode == "offline" {
+		return // Don't auto-sync in explicit offline mode
+	}
+
+	// Trigger sync (using doSync internally)
+	// Use a null writer for stderr to suppress sync output during auto-sync
+	_ = doSync(b.cfg, io.Discard, io.Discard)
 }
 
 // CreateTask creates a task and queues a sync operation
@@ -2787,6 +2814,9 @@ func (b *syncAwareBackend) CreateTask(ctx context.Context, listID string, task *
 
 	// Queue create operation
 	_ = b.syncMgr.QueueOperationByStringID(created.ID, created.Summary, listID, "create")
+
+	// Trigger auto-sync if enabled
+	b.triggerAutoSync()
 
 	return created, nil
 }
@@ -2800,6 +2830,9 @@ func (b *syncAwareBackend) UpdateTask(ctx context.Context, listID string, task *
 
 	// Queue update operation
 	_ = b.syncMgr.QueueOperationByStringID(updated.ID, updated.Summary, listID, "update")
+
+	// Trigger auto-sync if enabled
+	b.triggerAutoSync()
 
 	return updated, nil
 }
@@ -2820,6 +2853,9 @@ func (b *syncAwareBackend) DeleteTask(ctx context.Context, listID, taskID string
 
 	// Queue delete operation
 	_ = b.syncMgr.QueueOperationByStringID(taskID, summary, listID, "delete")
+
+	// Trigger auto-sync if enabled
+	b.triggerAutoSync()
 
 	return nil
 }

@@ -39,11 +39,12 @@ type TrashConfig struct {
 
 // SyncConfig holds synchronization settings
 type SyncConfig struct {
-	Enabled             bool   `yaml:"enabled"`
-	LocalBackend        string `yaml:"local_backend"`
-	ConflictResolution  string `yaml:"conflict_resolution"`
-	OfflineMode         string `yaml:"offline_mode"`         // auto, online, offline
-	ConnectivityTimeout string `yaml:"connectivity_timeout"` // e.g., "5s"
+	Enabled               bool   `yaml:"enabled"`
+	LocalBackend          string `yaml:"local_backend"`
+	ConflictResolution    string `yaml:"conflict_resolution"`
+	OfflineMode           string `yaml:"offline_mode"`               // auto, online, offline
+	ConnectivityTimeout   string `yaml:"connectivity_timeout"`       // e.g., "5s"
+	AutoSyncAfterOperation bool   `yaml:"auto_sync_after_operation"` // sync immediately after operations
 }
 
 // BackendsConfig holds configuration for all backends
@@ -217,6 +218,11 @@ func (c *Config) GetConnectivityTimeout() string {
 		return "5s"
 	}
 	return timeout
+}
+
+// IsAutoSyncAfterOperationEnabled returns true if auto-sync after operation is enabled
+func (c *Config) IsAutoSyncAfterOperationEnabled() bool {
+	return c.Sync.AutoSyncAfterOperation
 }
 
 // IsAutoDetectEnabled returns true if auto-detection is enabled
