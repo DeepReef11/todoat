@@ -2,11 +2,13 @@ package sync_test
 
 import (
 	"bytes"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	_ "modernc.org/sqlite"
 	cmd "todoat/cmd/todoat/cmd"
 	"todoat/internal/testutil"
 )
@@ -804,5 +806,116 @@ func TestConflictJSONOutputCLI(t *testing.T) {
 	// Empty conflicts list should be [] or {"conflicts": []}
 	if !strings.Contains(stdout, "[") && !strings.Contains(stdout, "{") {
 		t.Errorf("expected JSON output, got: %s", stdout)
+	}
+}
+
+// =============================================================================
+// Issue 003: Sync Command Does Not Actually Sync
+// =============================================================================
+
+// TestSyncActuallySyncsToRemote verifies that `todoat sync` actually executes
+// pending operations on the remote backend, not just clears the queue.
+// This is Issue #003: Sync Command Does Not Actually Sync - Just Clears Queue
+func TestSyncActuallySyncsToRemote(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Set up path for "remote" SQLite database
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+
+	// Create a config with:
+	// - sync enabled with sqlite as local cache
+	// - a "remote" SQLite backend (simulating a remote that happens to be SQLite)
+	// - default_backend set to the remote
+	// - offline_mode: offline to force local cache usage (which queues operations)
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: offline
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Step 1: Add a task - with offline_mode: offline, this goes to local SQLite cache
+	// and queues a create operation for later sync
+	stdout, stderr, exitCode := cli.Execute("-y", "Work", "add", "Task to sync")
+	if exitCode != 0 {
+		t.Fatalf("failed to add task: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Step 2: Verify the operation is queued
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	testutil.AssertContains(t, stdout, "Pending Operations: 1")
+	testutil.AssertContains(t, stdout, "create")
+	testutil.AssertContains(t, stdout, "Task to sync")
+
+	// Step 3: Change to online mode so sync can actually push to the remote
+	configContentOnline := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: online
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	if err := os.WriteFile(configPath, []byte(configContentOnline), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Step 4: Run sync - this should push the create operation to sqlite-remote
+	stdout, stderr, exitCode = cli.Execute("-y", "sync")
+	if exitCode != 0 {
+		t.Errorf("sync command failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "Sync completed")
+	testutil.AssertContains(t, stdout, "Operations processed: 1")
+
+	// Step 5: Verify queue is now empty
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	testutil.AssertContains(t, stdout, "Pending Operations: 0")
+
+	// Step 6: CRITICAL - Verify the task actually exists in the remote SQLite database
+	// This is the key assertion that catches the bug: if sync just clears the queue
+	// without actually syncing, the task won't exist in the remote db.
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote db: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	var count int
+	err = remoteDB.QueryRow(`
+		SELECT COUNT(*) FROM tasks t
+		JOIN task_lists l ON t.list_id = l.id
+		WHERE t.summary = 'Task to sync' AND l.name = 'Work'
+	`).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to query remote db: %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("sync did NOT push task to remote backend; expected 1 task in remote db, got %d. "+
+			"This confirms Issue #003: sync command just clears queue without actually syncing.", count)
 	}
 }
