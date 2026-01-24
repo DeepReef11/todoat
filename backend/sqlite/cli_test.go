@@ -1678,6 +1678,30 @@ func TestListInfoSQLiteCLI(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
+// TestListInfoNotFoundSQLiteCLI verifies that `todoat list info NonExistent` shows error once (issue 002)
+func TestListInfoNotFoundSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Call list info on a non-existent list
+	stdout, stderr, exitCode := cli.Execute("-y", "list", "info", "NonExistentList")
+
+	// Expected: exit code should be non-zero (error)
+	testutil.AssertExitCode(t, exitCode, 1)
+
+	// Combine stdout and stderr to count error occurrences
+	combinedOutput := stdout + stderr
+
+	// Count how many times the error message appears
+	errorMsg := "list 'NonExistentList' not found"
+	count := strings.Count(combinedOutput, errorMsg)
+
+	// Bug: error message was appearing twice (once in stdout, once in stderr)
+	// Fix: should appear exactly once
+	if count != 1 {
+		t.Errorf("expected error message to appear exactly once, but found %d occurrences.\nstdout: %s\nstderr: %s", count, stdout, stderr)
+	}
+}
+
 // =============================================================================
 // Subtasks and Hierarchical Task Support Tests (014)
 // =============================================================================

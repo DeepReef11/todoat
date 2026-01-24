@@ -957,10 +957,6 @@ func doListInfo(ctx context.Context, be backend.TaskManager, name string, cfg *C
 		return err
 	}
 	if list == nil {
-		_, _ = fmt.Fprintf(stdout, "Error: list '%s' not found\n", name)
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultError)
-		}
 		return fmt.Errorf("list '%s' not found", name)
 	}
 

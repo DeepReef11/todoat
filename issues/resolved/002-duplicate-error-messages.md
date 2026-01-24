@@ -44,3 +44,16 @@ The error is likely being printed by the command handler and then again by the C
 
 ## Recommended Fix
 FIX CODE - Ensure that errors are either printed directly OR returned to Cobra for handling, not both. Typically, returning the error to Cobra is preferred as it provides consistent error formatting across all commands.
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Removed duplicate error printing in doListInfo(). The function was printing the error to stdout AND returning it to Cobra, which also prints errors. Now only returns the error, letting Cobra handle the printing consistently.
+**Test added**: TestListInfoNotFoundSQLiteCLI in backend/sqlite/cli_test.go
+
+### Verification Log
+```bash
+$ todoat list info "NonExistentList"
+Error: list 'NonExistentList' not found
+```
+**Matches expected behavior**: YES
