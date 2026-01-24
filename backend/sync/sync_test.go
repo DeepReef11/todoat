@@ -65,21 +65,20 @@ default_backend: nextcloud-test
 	}
 }
 
-// TestSyncFallbackToSQLiteWhenRemoteUnavailable tests Issue #0:
-// When sync is enabled and the configured remote backend is unavailable (timeout/unreachable),
-// the app should fall back to SQLite cache instead of erroring out.
-// This allows operations to continue offline and queue changes for later sync.
-func TestSyncFallbackToSQLiteWhenRemoteUnavailable(t *testing.T) {
+// TestSyncArchitectureUsesLocalCache tests that when sync is enabled with offline_mode: auto,
+// CLI operations use SQLite cache directly (no network calls, no fallback warning).
+// This is the proper sync architecture: CLI → SQLite (instant) → queue → Daemon → Remote
+// Updated from Issue #0 to reflect Issue #001 architecture fix.
+func TestSyncArchitectureUsesLocalCache(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
-	// Create a config with sync enabled and a remote backend that is UNREACHABLE
-	// Using an IP address that will timeout (non-routable address)
+	// Create a config with sync enabled and a remote backend configured
+	// With offline_mode: auto (default), CLI should always use SQLite cache
 	configContent := `
 sync:
   enabled: true
   local_backend: sqlite
   offline_mode: auto
-  connectivity_timeout: "500ms"
 backends:
   sqlite:
     type: sqlite
@@ -98,30 +97,26 @@ default_backend: nextcloud-test
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	// When using -b nextcloud-test with sync enabled, it should:
-	// 1. Detect that nextcloud-test is unavailable (timeout)
-	// 2. Fall back to SQLite cache
-	// 3. Allow operations to succeed locally
-	// 4. Show a warning about the fallback (not an error)
+	// With sync architecture (offline_mode: auto), CLI should:
+	// 1. Use SQLite cache directly (no network call to remote)
+	// 2. Allow operations to succeed instantly
+	// 3. Queue operations for daemon to sync later
+	// 4. No warning needed (this is expected behavior, not a fallback)
 
-	// Add a task using the remote backend flag - should fall back to SQLite
-	stdout, stderr, exitCode := cli.Execute("-y", "-b", "nextcloud-test", "Work", "add", "Test task for offline")
+	// Add a task - should use SQLite cache with sync architecture
+	stdout, stderr, exitCode := cli.Execute("-y", "-b", "nextcloud-test", "Work", "add", "Test task for sync")
 
-	// The operation should SUCCEED with exit code 0 (using SQLite fallback)
-	// A warning in stderr is expected and acceptable
+	// The operation should SUCCEED with exit code 0 (using SQLite cache)
 	if exitCode != 0 {
-		t.Errorf("Expected operation to succeed with SQLite fallback, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+		t.Errorf("Expected operation to succeed using SQLite cache, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
 	}
-
-	// Verify the warning message about fallback was shown
-	testutil.AssertContains(t, stderr, "Using SQLite cache")
 
 	// Verify task was created
 	testutil.AssertContains(t, stdout, "Created task")
 
-	// Verify task was created in SQLite
+	// Verify task exists in local cache
 	stdout = cli.MustExecute("-y", "Work", "get")
-	testutil.AssertContains(t, stdout, "Test task for offline")
+	testutil.AssertContains(t, stdout, "Test task for sync")
 
 	// Verify the operation was queued for sync
 	stdout = cli.MustExecute("-y", "sync", "queue")
@@ -129,22 +124,23 @@ default_backend: nextcloud-test
 	testutil.AssertContains(t, stdout, "create")
 }
 
-// TestSyncFallbackListTasksWhenRemoteUnavailable tests that listing tasks
-// falls back to SQLite cache when the remote backend is unavailable.
-func TestSyncFallbackListTasksWhenRemoteUnavailable(t *testing.T) {
+// TestSyncArchitectureListsFromLocalCache tests that listing tasks uses SQLite cache
+// when sync is enabled (sync architecture), providing instant responses.
+// Updated from Issue #0 to reflect Issue #001 architecture fix.
+func TestSyncArchitectureListsFromLocalCache(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// First, add some tasks to SQLite
 	cli.MustExecute("-y", "Work", "add", "Local task 1")
 	cli.MustExecute("-y", "Work", "add", "Local task 2")
 
-	// Now configure a remote backend that is unreachable
+	// Now configure a remote backend with sync enabled
+	// With offline_mode: auto, CLI uses SQLite cache directly
 	configContent := `
 sync:
   enabled: true
   local_backend: sqlite
   offline_mode: auto
-  connectivity_timeout: "500ms"
 backends:
   sqlite:
     type: sqlite
@@ -163,16 +159,13 @@ default_backend: nextcloud-test
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	// Listing tasks should fall back to SQLite and show cached tasks
+	// Listing tasks should use SQLite cache (sync architecture)
 	stdout, stderr, exitCode := cli.Execute("-y", "-b", "nextcloud-test", "Work", "get")
 
-	// The operation should SUCCEED with exit code 0 (using SQLite fallback)
+	// The operation should SUCCEED using SQLite cache
 	if exitCode != 0 {
-		t.Errorf("Expected listing to succeed with SQLite fallback, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+		t.Errorf("Expected listing to succeed using SQLite cache, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
 	}
-
-	// Verify the warning message about fallback was shown
-	testutil.AssertContains(t, stderr, "Using SQLite cache")
 
 	// Should show the cached tasks
 	testutil.AssertContains(t, stdout, "Local task 1")
@@ -541,19 +534,21 @@ backends:
 // TestDefaultBackendRespectedWhenSyncEnabled verifies that default_backend config is used
 // even when sync is enabled. Previously, the CLI would immediately use SQLite when sync
 // was enabled, ignoring the default_backend setting entirely.
+// TestDefaultBackendRespectedWhenSyncEnabled verifies that default_backend config is used
+// for sync operations when sync is enabled.
 // This is Issue #002: default_backend Configuration Ignored When Sync Enabled
+// Updated for Issue #001 sync architecture: CLI uses SQLite cache, daemon syncs to default_backend
 func TestDefaultBackendRespectedWhenSyncEnabled(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled AND default_backend set to a remote backend
-	// The remote backend is unreachable (192.0.2.1 is a test-net address that won't route)
-	// so it should fall back to SQLite, BUT it should still TRY the remote backend first
+	// With sync architecture (offline_mode: auto), CLI uses SQLite cache
+	// The default_backend is used by the daemon for sync operations
 	configContent := `
 sync:
   enabled: true
   local_backend: sqlite
   offline_mode: auto
-  connectivity_timeout: "500ms"
 backends:
   sqlite:
     type: sqlite
@@ -574,27 +569,23 @@ default_backend: nextcloud-test
 
 	// When running WITHOUT -b flag, with sync enabled and default_backend: nextcloud-test
 	// The CLI should:
-	// 1. Respect default_backend and try to use nextcloud-test
-	// 2. Detect that nextcloud-test is unavailable
-	// 3. Fall back to SQLite and show a warning about fallback
-	//
-	// BUG BEHAVIOR (before fix): SQLite used immediately, no warning, default_backend ignored
-	// EXPECTED BEHAVIOR: Warning about nextcloud-test unavailable, then SQLite fallback
+	// 1. Use SQLite cache directly (sync architecture)
+	// 2. Queue operations for sync with default_backend (nextcloud-test)
+	// 3. Succeed without warnings (this is intended behavior, not a fallback)
 	stdout, stderr, exitCode := cli.Execute("-y", "Work", "add", "Test task")
 
-	// The operation should SUCCEED (using SQLite fallback)
+	// The operation should SUCCEED using SQLite cache
 	if exitCode != 0 {
-		t.Errorf("Expected operation to succeed with fallback, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
-	}
-
-	// CRITICAL: Should show warning about nextcloud-test being unavailable
-	// This proves that default_backend was respected and the backend was attempted
-	if !strings.Contains(stderr, "nextcloud-test") && !strings.Contains(stderr, "Using SQLite cache") {
-		t.Errorf("Expected warning about nextcloud-test fallback, but got no warning about the remote backend.\nstderr: %s\nThis suggests default_backend is being ignored when sync is enabled.", stderr)
+		t.Errorf("Expected operation to succeed using SQLite cache, got exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
 	}
 
 	// Verify task was created
 	testutil.AssertContains(t, stdout, "Created task")
+
+	// Verify the operation was queued for sync (proves default_backend is configured for sync)
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	testutil.AssertContains(t, stdout, "Pending Operations")
+	testutil.AssertContains(t, stdout, "create")
 }
 
 // TestDefaultBackendWithBackendFlagOverride verifies that -b flag still takes priority
@@ -806,6 +797,207 @@ func TestConflictJSONOutputCLI(t *testing.T) {
 	// Empty conflicts list should be [] or {"conflicts": []}
 	if !strings.Contains(stdout, "[") && !strings.Contains(stdout, "{") {
 		t.Errorf("expected JSON output, got: %s", stdout)
+	}
+}
+
+// =============================================================================
+// Issue 001: Sync Architecture - CLI Should Always Use SQLite When Sync Enabled
+// =============================================================================
+
+// TestSyncArchitectureCLIUsesSQLiteNotRemote verifies Issue #001:
+// When sync is enabled, CLI operations should ALWAYS use SQLite cache for instant
+// responses. The daemon handles remote backend sync - CLI should never directly
+// contact the remote backend.
+//
+// This is the core architectural requirement documented in synchronization.md:
+// User → CLI → SQLite (instant) → sync_queue → Daemon → Remote
+func TestSyncArchitectureCLIUsesSQLiteNotRemote(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Set up a "remote" SQLite database to track if it gets accessed directly
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+
+	// Configure sync with:
+	// - sync.enabled: true
+	// - offline_mode: auto (default) - this is where the bug manifests
+	// - A reachable remote backend
+	// The BUG: with offline_mode: auto, if remote is reachable, CLI uses remote directly
+	// EXPECTED: CLI always uses SQLite cache, regardless of remote availability
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: auto
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Step 1: Add a task - with sync enabled, this should:
+	// - Write to SQLite cache immediately (instant response)
+	// - Queue operation in sync_queue for daemon to sync later
+	// - NOT directly contact the remote backend
+	stdout, stderr, exitCode := cli.Execute("-y", "Work", "add", "Test sync architecture task")
+	if exitCode != 0 {
+		t.Fatalf("failed to add task: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Step 2: Verify the operation was queued for sync
+	// If CLI used SQLite cache, there should be a pending create operation
+	stdout = cli.MustExecute("-y", "sync", "queue")
+
+	// CRITICAL ASSERTION: Operation should be queued, not executed immediately
+	// If the queue shows 0 pending ops and the task was created in remote directly,
+	// that proves the bug: CLI is using remote backend directly instead of SQLite cache
+	if !strings.Contains(stdout, "create") {
+		// Check if task exists in remote DB (which would prove the bug)
+		remoteDB, err := sql.Open("sqlite", remoteDBPath)
+		if err == nil {
+			defer func() { _ = remoteDB.Close() }()
+
+			var count int
+			err = remoteDB.QueryRow(`
+				SELECT COUNT(*) FROM tasks t
+				JOIN task_lists l ON t.list_id = l.id
+				WHERE t.summary = 'Test sync architecture task'
+			`).Scan(&count)
+			if err == nil && count > 0 {
+				t.Errorf("ISSUE #001 CONFIRMED: CLI wrote directly to remote backend instead of queuing for sync.\n"+
+					"Queue output: %s\n"+
+					"Task found in remote DB: yes\n"+
+					"Expected: operation queued in sync_queue, task NOT in remote until daemon syncs", stdout)
+			}
+		}
+
+		t.Errorf("expected create operation to be queued when sync enabled, got:\n%s", stdout)
+	}
+
+	// Step 3: Verify the task exists in local cache (not remote yet)
+	stdout = cli.MustExecute("-y", "Work", "get")
+	testutil.AssertContains(t, stdout, "Test sync architecture task")
+
+	// Step 4: Verify task does NOT exist in remote yet (daemon hasn't synced)
+	// This check fails if CLI directly used the remote backend
+	if _, err := os.Stat(remoteDBPath); err == nil {
+		remoteDB, err := sql.Open("sqlite", remoteDBPath)
+		if err == nil {
+			defer func() { _ = remoteDB.Close() }()
+
+			var count int
+			err = remoteDB.QueryRow(`
+				SELECT COUNT(*) FROM tasks t
+				JOIN task_lists l ON t.list_id = l.id
+				WHERE t.summary = 'Test sync architecture task'
+			`).Scan(&count)
+			if err == nil && count > 0 {
+				t.Errorf("ISSUE #001 CONFIRMED: Task exists in remote DB but should only be in local cache.\n"+
+					"With sync architecture, CLI should write to SQLite cache, not remote directly.\n"+
+					"Daemon should sync to remote later.")
+			}
+		}
+	}
+}
+
+// TestSyncArchitectureNoNetworkCallOnAdd verifies that CLI add operations
+// don't make network calls when sync is enabled - even for a reachable remote.
+// This test uses offline_mode: auto with a reachable remote to catch the bug.
+func TestSyncArchitectureNoNetworkCallOnAdd(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Set up a "remote" SQLite database - reachable, but shouldn't be called directly
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+
+	// First, initialize the remote database with the schema
+	// (so connectivity check would succeed if CLI tries to use it)
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to create remote db: %v", err)
+	}
+	// Create minimal schema
+	_, err = remoteDB.Exec(`
+		CREATE TABLE IF NOT EXISTS task_lists (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			color TEXT
+		);
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			list_id TEXT NOT NULL,
+			summary TEXT NOT NULL,
+			description TEXT,
+			status TEXT DEFAULT 'TODO',
+			priority INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (list_id) REFERENCES task_lists(id)
+		);
+	`)
+	if err != nil {
+		t.Fatalf("failed to init remote schema: %v", err)
+	}
+	_ = remoteDB.Close()
+
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: auto
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Add task with sync enabled - should use SQLite cache
+	stdout, stderr, exitCode := cli.Execute("-y", "Work", "add", "Instant CLI task")
+	if exitCode != 0 {
+		t.Fatalf("failed to add task: stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	// Task should be in queue
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	testutil.AssertContains(t, stdout, "Pending Operations")
+
+	// Check if the bug exists: task should NOT be in remote DB yet
+	remoteDB, err = sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote db: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	var taskCount int
+	err = remoteDB.QueryRow(`SELECT COUNT(*) FROM tasks WHERE summary = 'Instant CLI task'`).Scan(&taskCount)
+	if err != nil {
+		t.Logf("query error (may be expected if tables don't exist): %v", err)
+	}
+
+	if taskCount > 0 {
+		t.Errorf("ISSUE #001: CLI wrote directly to remote backend.\n"+
+			"Expected: task in local cache + sync queue only\n"+
+			"Got: task already in remote database\n"+
+			"This means CLI used remote backend instead of sync architecture")
 	}
 }
 

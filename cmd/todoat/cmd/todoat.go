@@ -2355,16 +2355,39 @@ func warnBackendFallback(cfg *Config, backendName string, reason string) {
 	_, _ = fmt.Fprintf(stderr, "Warning: Default backend '%s' unavailable (%s). Using 'sqlite' instead.\n", backendName, reason)
 }
 
-// createBackendWithSyncFallback creates a remote backend with connectivity check.
-// If the remote backend is unavailable and offline_mode is "auto" or "offline",
-// it falls back to SQLite cache wrapped in syncAwareBackend.
-// This implements the sync fallback behavior for issue #0.
+// createBackendWithSyncFallback implements the sync architecture for CLI operations.
+//
+// When sync is enabled, the CLI should use SQLite cache for all operations to provide
+// instant responses. The sync daemon handles remote backend communication separately.
+// This is the architecture documented in synchronization.md:
+//
+//	User → CLI → SQLite (instant) → sync_queue → Daemon → Remote
+//
+// offline_mode controls the behavior:
+//   - "auto" (default): CLI always uses SQLite cache (sync architecture)
+//   - "offline": CLI always uses SQLite cache (explicit offline)
+//   - "online": CLI uses remote backend directly (bypass sync architecture)
+//
+// This fixes Issue #001: CLI was using remote directly when reachable instead of
+// always using SQLite cache as the sync architecture requires.
 func createBackendWithSyncFallback(cfg *Config, backendName string, dbPath string, rawConfig map[string]interface{}, appConfig *config.Config) (backend.TaskManager, error) {
-	// Get offline mode and connectivity timeout from config
+	// Get offline mode from config
 	offlineMode := "auto"
-	connectivityTimeout := 5 * time.Second
 	if appConfig != nil {
 		offlineMode = appConfig.GetOfflineMode()
+	}
+
+	// For "auto" and "offline" modes: CLI always uses SQLite cache (sync architecture)
+	// Operations are queued in sync_queue for the daemon to sync later
+	if offlineMode == "auto" || offlineMode == "offline" {
+		utils.Debugf("Sync architecture: using SQLite cache for CLI (offline_mode=%s, backend=%s)", offlineMode, backendName)
+		return createSyncFallbackBackend(cfg, dbPath)
+	}
+
+	// For "online" mode: CLI uses remote backend directly (bypass sync architecture)
+	// This is for users who want direct remote access without offline-first behavior
+	connectivityTimeout := 5 * time.Second
+	if appConfig != nil {
 		if timeoutStr := appConfig.GetConnectivityTimeout(); timeoutStr != "" {
 			if parsed, err := time.ParseDuration(timeoutStr); err == nil {
 				connectivityTimeout = parsed
@@ -2372,50 +2395,24 @@ func createBackendWithSyncFallback(cfg *Config, backendName string, dbPath strin
 		}
 	}
 
-	// If offline_mode is "offline", always use SQLite cache (no connectivity check)
-	if offlineMode == "offline" {
-		utils.Debugf("Offline mode: using SQLite cache (sync enabled, offline_mode=offline)")
-		warnSyncFallback(cfg, backendName, "offline mode enabled")
-		return createSyncFallbackBackend(cfg, dbPath)
-	}
-
-	// Try to create the backend and check connectivity
+	// Try to create and connect to the backend
 	be, err := createBackendByName(backendName, dbPath, rawConfig)
 	if err != nil {
-		// Backend creation failed (config error, not connectivity)
-		// For "online" mode, propagate the error
-		if offlineMode == "online" {
-			return nil, err
-		}
-		// For "auto" mode, fall back to SQLite
-		utils.Debugf("Backend creation failed, falling back to SQLite cache: %v", err)
-		warnSyncFallback(cfg, backendName, err.Error())
-		return createSyncFallbackBackend(cfg, dbPath)
+		return nil, err
 	}
 
-	// Try a connectivity check with timeout
+	// Verify connectivity
 	ctx, cancel := context.WithTimeout(context.Background(), connectivityTimeout)
 	defer cancel()
 
-	// Use GetLists as a lightweight connectivity check
 	_, err = be.GetLists(ctx)
 	if err != nil {
-		// Connectivity check failed
-		_ = be.Close() // Close the failed backend
-
-		// For "online" mode, propagate the error
-		if offlineMode == "online" {
-			return nil, fmt.Errorf("backend '%s' unavailable (offline_mode=online): %w", backendName, err)
-		}
-
-		// For "auto" mode, fall back to SQLite cache
-		utils.Debugf("Backend connectivity check failed, falling back to SQLite cache: %v", err)
-		warnSyncFallback(cfg, backendName, err.Error())
-		return createSyncFallbackBackend(cfg, dbPath)
+		_ = be.Close()
+		return nil, fmt.Errorf("backend '%s' unavailable (offline_mode=online): %w", backendName, err)
 	}
 
 	// Backend is available, wrap it in syncAwareBackend for sync support
-	utils.Debugf("Backend '%s' is available, using with sync support", backendName)
+	utils.Debugf("Online mode: using remote backend '%s' directly", backendName)
 	return &syncAwareBackend{
 		TaskManager: be,
 		syncMgr:     getSyncManager(cfg),
@@ -2433,15 +2430,6 @@ func createSyncFallbackBackend(cfg *Config, dbPath string) (backend.TaskManager,
 		TaskManager: be,
 		syncMgr:     getSyncManager(cfg),
 	}, nil
-}
-
-// warnSyncFallback writes a warning message about sync fallback to stderr
-func warnSyncFallback(cfg *Config, backendName string, reason string) {
-	stderr := cfg.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	_, _ = fmt.Fprintf(stderr, "Warning: Backend '%s' unavailable (%s). Using SQLite cache (operations will be queued for sync).\n", backendName, reason)
 }
 
 // createBackendByName creates a backend based on the given name.
