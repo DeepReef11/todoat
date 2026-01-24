@@ -812,7 +812,7 @@ func TestTodoistRateLimiting(t *testing.T) {
 	be, err := New(Config{
 		APIToken:        "test-api-token",
 		BaseURL:         server.URL(),
-		MaxRetries:      2,
+		MaxRetries:      5,
 		RetryDelay:      50 * time.Millisecond,
 		EnableRateLimit: true,
 	})
@@ -824,8 +824,10 @@ func TestTodoistRateLimiting(t *testing.T) {
 	ctx := context.Background()
 
 	// First call should get rate limited and retry
+	// Lift rate limit after 80ms to ensure at least 1 retry happens
+	// but before all retries are exhausted (5 retries * 50ms = 250ms max)
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(80 * time.Millisecond)
 		server.SetRateLimited(false)
 	}()
 
