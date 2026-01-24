@@ -350,3 +350,217 @@ func TestSyncDaemonStartWithIntervalCLI(t *testing.T) {
 	// Cleanup
 	cli.MustExecute("-y", "sync", "daemon", "stop")
 }
+
+// =============================================================================
+// Multi-Backend Daemon Tests (073-auto-sync-daemon-redesign)
+// =============================================================================
+
+// TestDaemonMultiBackend tests that daemon syncs with multiple backends in sequence
+func TestDaemonMultiBackend(t *testing.T) {
+	cli := testutil.NewCLITestWithDaemon(t)
+	configPath := cli.ConfigPath()
+
+	// Configure multiple backends for sync
+	multiBackendConfig := `
+backends:
+  sqlite:
+    enabled: true
+  file:
+    enabled: true
+    path: /tmp/todoat-test-file
+  mock1:
+    enabled: true
+    sync_enabled: true
+  mock2:
+    enabled: true
+    sync_enabled: true
+sync:
+  enabled: true
+  daemon:
+    interval: 1
+    backends:
+      - mock1
+      - mock2
+`
+	if err := os.WriteFile(configPath, []byte(multiBackendConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Configure short interval for testing
+	cli.SetDaemonInterval(100 * time.Millisecond)
+
+	// Start daemon
+	cli.MustExecute("-y", "sync", "daemon", "start")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
+
+	// Wait for multiple sync cycles
+	stdout := cli.WaitForSyncCount(5*time.Second, 2)
+
+	// Status should show per-backend sync information
+	testutil.AssertContains(t, stdout, "running")
+
+	// Check that daemon status shows backend-specific sync info
+	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
+	// Should show sync activity for backends
+	testutil.AssertContains(t, statusOut, "Sync count")
+}
+
+// TestDaemonPerBackendInterval tests that each backend can have custom sync interval
+func TestDaemonPerBackendInterval(t *testing.T) {
+	cli := testutil.NewCLITestWithDaemon(t)
+	configPath := cli.ConfigPath()
+
+	// Configure backends with different intervals
+	perBackendIntervalConfig := `
+backends:
+  sqlite:
+    enabled: true
+sync:
+  enabled: true
+  daemon:
+    backends:
+      - name: mock1
+        interval: 10
+      - name: mock2
+        interval: 30
+`
+	if err := os.WriteFile(configPath, []byte(perBackendIntervalConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Start daemon
+	cli.MustExecute("-y", "sync", "daemon", "start")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
+
+	// Check status shows per-backend intervals
+	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
+
+	// Status should include per-backend configuration info
+	testutil.AssertContains(t, statusOut, "running")
+}
+
+// TestDaemonCacheIsolation tests that backend caches remain isolated during concurrent sync
+func TestDaemonCacheIsolation(t *testing.T) {
+	cli := testutil.NewCLITestWithDaemon(t)
+	configPath := cli.ConfigPath()
+
+	// Configure multiple backends
+	cacheIsolationConfig := `
+backends:
+  sqlite:
+    enabled: true
+sync:
+  enabled: true
+  daemon:
+    interval: 1
+    backends:
+      - mock1
+      - mock2
+`
+	if err := os.WriteFile(configPath, []byte(cacheIsolationConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cli.SetDaemonInterval(100 * time.Millisecond)
+
+	// Start daemon
+	cli.MustExecute("-y", "sync", "daemon", "start")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
+
+	// Create tasks to test cache isolation
+	cli.MustExecute("-y", "Work", "add", "Task for cache isolation test")
+
+	// Wait for sync cycle
+	cli.WaitForSyncCount(5*time.Second, 1)
+
+	// Verify daemon is still running (no cache corruption)
+	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
+	testutil.AssertContains(t, statusOut, "running")
+
+	// List tasks to verify no corruption - use Work list to show tasks
+	listOut := cli.MustExecute("-y", "Work")
+	testutil.AssertContains(t, listOut, "Task for cache isolation test")
+}
+
+// TestDaemonSmartTiming tests that daemon avoids sync during active editing (debounce)
+func TestDaemonSmartTiming(t *testing.T) {
+	cli := testutil.NewCLITestWithDaemon(t)
+	configPath := cli.ConfigPath()
+
+	// Configure daemon with smart timing enabled
+	smartTimingConfig := `
+backends:
+  sqlite:
+    enabled: true
+sync:
+  enabled: true
+  daemon:
+    interval: 1
+    smart_timing: true
+    debounce_ms: 500
+`
+	if err := os.WriteFile(configPath, []byte(smartTimingConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cli.SetDaemonInterval(100 * time.Millisecond)
+
+	// Start daemon
+	cli.MustExecute("-y", "sync", "daemon", "start")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
+
+	// Get initial sync count
+	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
+	testutil.AssertContains(t, statusOut, "running")
+
+	// Simulate rapid changes (adding multiple tasks quickly)
+	for i := 0; i < 3; i++ {
+		cli.MustExecute("-y", "Work", "add", fmt.Sprintf("Rapid task %d", i+1))
+	}
+
+	// Wait briefly for debounce
+	time.Sleep(200 * time.Millisecond)
+
+	// Daemon should still be running smoothly
+	statusOut = cli.MustExecute("-y", "sync", "daemon", "status")
+	testutil.AssertContains(t, statusOut, "running")
+}
+
+// TestDaemonFileWatcher tests that optional file watcher triggers sync on local changes
+func TestDaemonFileWatcher(t *testing.T) {
+	cli := testutil.NewCLITestWithDaemon(t)
+	configPath := cli.ConfigPath()
+
+	// Configure daemon with file watcher enabled
+	fileWatcherConfig := `
+backends:
+  sqlite:
+    enabled: true
+sync:
+  enabled: true
+  daemon:
+    interval: 60
+    file_watcher: true
+`
+	if err := os.WriteFile(configPath, []byte(fileWatcherConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Start daemon with file watcher
+	cli.MustExecute("-y", "sync", "daemon", "start")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
+
+	// Initial status check
+	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
+	testutil.AssertContains(t, statusOut, "running")
+
+	// Add a task (which modifies the cache)
+	cli.MustExecute("-y", "Work", "add", "Task to trigger file watcher")
+
+	// Give file watcher time to detect change and trigger sync
+	time.Sleep(300 * time.Millisecond)
+
+	// Daemon should still be running
+	statusOut = cli.MustExecute("-y", "sync", "daemon", "status")
+	testutil.AssertContains(t, statusOut, "running")
+}

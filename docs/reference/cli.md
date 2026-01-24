@@ -413,6 +413,16 @@ todoat sync daemon [command]
 | `status` | Show daemon status |
 | `stop` | Stop the sync daemon |
 
+#### sync daemon start
+
+```bash
+todoat sync daemon start [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--interval` | int | 300 | Sync interval in seconds |
+
 ### Examples
 
 ```bash

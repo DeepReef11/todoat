@@ -87,7 +87,14 @@ Run sync automatically in the background:
 todoat sync daemon start
 ```
 
-Starts background sync with configured interval.
+Starts background sync with the default interval (300 seconds / 5 minutes).
+
+To use a custom sync interval:
+
+```bash
+# Sync every 60 seconds
+todoat sync daemon start --interval 60
+```
 
 ### Check Daemon Status
 
