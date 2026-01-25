@@ -7956,7 +7956,8 @@ func generateUUID() string {
 
 // getMigrateBackend returns a backend instance for migration
 func getMigrateBackend(cfg *Config, backendName string) (backend.TaskManager, error) {
-	ctx := context.Background()
+	// Load config to get backend settings
+	_, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
 
 	switch backendName {
 	case "sqlite":
@@ -7984,15 +7985,42 @@ func getMigrateBackend(cfg *Config, backendName string) (backend.TaskManager, er
 		return mb, nil
 
 	case "nextcloud":
-		// For real nextcloud, we'd need credentials
-		_ = ctx
-		return nil, fmt.Errorf("real nextcloud backend not yet implemented for migration")
+		// Build nextcloud config from config file + keyring + environment
+		nextcloudCfg := buildNextcloudConfigWithKeyring("nextcloud", rawConfig)
+		if nextcloudCfg.Host == "" {
+			return nil, fmt.Errorf("nextcloud backend requires host (config file or TODOAT_NEXTCLOUD_HOST)")
+		}
+		if nextcloudCfg.Username == "" {
+			return nil, fmt.Errorf("nextcloud backend requires username (config file or TODOAT_NEXTCLOUD_USERNAME)")
+		}
+		if nextcloudCfg.Password == "" {
+			return nil, fmt.Errorf("nextcloud backend requires password (keyring, config file, or TODOAT_NEXTCLOUD_PASSWORD)")
+		}
+		return nextcloud.New(nextcloudCfg)
 
 	case "todoist":
-		return nil, fmt.Errorf("real todoist backend not yet implemented for migration")
+		// Build todoist config from config file + keyring + environment
+		todoistCfg := buildTodoistConfigWithKeyring("todoist", rawConfig)
+		if todoistCfg.APIToken == "" {
+			return nil, fmt.Errorf("todoist backend requires API token (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)")
+		}
+		return todoist.New(todoistCfg)
 
 	case "file":
-		return nil, fmt.Errorf("real file backend not yet implemented for migration")
+		// Build file config from config file or use migrate target directory
+		fileCfg := file.Config{}
+		if rawConfig != nil {
+			if backendCfg, _, err := config.GetBackendConfig(rawConfig, "file"); err == nil {
+				if filePath, ok := backendCfg["path"].(string); ok && filePath != "" {
+					fileCfg.FilePath = config.ExpandPath(filePath)
+				}
+			}
+		}
+		// If no config path, use migrate target dir if available
+		if fileCfg.FilePath == "" && cfg.MigrateTargetDir != "" {
+			fileCfg.FilePath = filepath.Join(cfg.MigrateTargetDir, "tasks.txt")
+		}
+		return file.New(fileCfg)
 
 	default:
 		return nil, fmt.Errorf("unknown backend: %s", backendName)

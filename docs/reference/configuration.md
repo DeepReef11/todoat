@@ -121,6 +121,36 @@ Restores the default configuration. Requires confirmation.
 | `sync.connectivity_timeout` | string | Network timeout for connectivity checks (default: `5s`) |
 | `sync.auto_sync_after_operation` | bool | Sync immediately after add/update/delete operations (default: `false`) |
 | `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
+| `analytics.enabled` | bool | Enable command usage tracking (default: `false`) |
+| `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |
+
+## Analytics Configuration
+
+Configure local command usage analytics:
+
+```yaml
+analytics:
+  enabled: true           # Enable analytics tracking
+  retention_days: 365     # Auto-cleanup after this many days (0 = forever)
+```
+
+Analytics data is stored locally at `~/.config/todoat/analytics.db` and is never transmitted. See [Analytics](../explanation/analytics.md) for details.
+
+### View Analytics Data
+
+```bash
+# View command usage statistics
+todoat analytics stats
+
+# View stats from past week
+todoat analytics stats --since 7d
+
+# View backend performance
+todoat analytics backends
+
+# View most common errors
+todoat analytics errors
+```
 
 ## Notification Configuration
 

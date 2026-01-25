@@ -693,9 +693,6 @@ todoat credentials delete nextcloud myuser
 
 Migrate tasks between backends.
 
-> **Note**: Migration to real backends (nextcloud, todoist, file) is not yet implemented.
-> The command is scaffolded for future use. See [Backends - Migrating Between Backends](../explanation/backends.md#migrating-between-backends) for current status.
-
 ### Synopsis
 
 ```bash
@@ -712,27 +709,44 @@ todoat migrate [flags]
 | `--dry-run` | Show what would be migrated without making changes |
 | `--target-info <backend>` | Show tasks in target backend |
 
-### Current Limitations
+### Supported Migrations
 
-Migration between real backends is not yet implemented. Attempting to migrate to nextcloud, todoist, or file backends will return an error:
+| From/To | sqlite | nextcloud | todoist | file |
+|---------|--------|-----------|---------|------|
+| sqlite | N/A | ✓ | ✓ | ✓ |
+| nextcloud | ✓ | N/A | ✓ | ✓ |
+| todoist | ✓ | ✓ | N/A | ✓ |
+| file | ✓ | ✓ | ✓ | N/A |
 
-```
-Error: real [backend] backend not yet implemented for migration
-```
+### What Gets Migrated
 
-### Examples (Future Functionality)
+- Task summary and description
+- Priority and status
+- Due dates and start dates
+- Tags/categories
+- Parent-child relationships (task hierarchy)
+- Recurrence rules
+
+### Migration Notes
+
+- UIDs are preserved where possible
+- Status values are mapped between backends (e.g., IN-PROGRESS may become different values for backends that don't support it)
+- Large lists are migrated in batches with progress indicators
+- Use `--dry-run` first to verify the migration plan
+
+### Examples
 
 ```bash
-# Migrate from SQLite to Nextcloud (not yet implemented)
+# Migrate from SQLite to Nextcloud
 todoat migrate --from sqlite --to nextcloud
 
-# Migrate specific list (not yet implemented)
+# Migrate specific list
 todoat migrate --from sqlite --to nextcloud --list "Work"
 
-# Preview migration (not yet implemented)
+# Preview migration (dry run)
 todoat migrate --from sqlite --to nextcloud --dry-run
 
-# Check target backend contents (not yet implemented)
+# Check target backend contents
 todoat migrate --target-info nextcloud
 ```
 

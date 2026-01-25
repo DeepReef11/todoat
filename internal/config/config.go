@@ -22,15 +22,15 @@ func GetSampleConfig() string {
 
 // Config represents the application configuration
 type Config struct {
-	Backends          BackendsConfig   `yaml:"backends"`
-	DefaultBackend    string           `yaml:"default_backend"`
-	DefaultView       string           `yaml:"default_view"`
-	NoPrompt          bool             `yaml:"no_prompt"`
-	OutputFormat      string           `yaml:"output_format"`
-	Sync              SyncConfig       `yaml:"sync"`
-	AutoDetectBackend bool             `yaml:"auto_detect_backend"`
-	Trash             TrashConfig      `yaml:"trash"`
-	Analytics         AnalyticsConfig  `yaml:"analytics"`
+	Backends          BackendsConfig  `yaml:"backends"`
+	DefaultBackend    string          `yaml:"default_backend"`
+	DefaultView       string          `yaml:"default_view"`
+	NoPrompt          bool            `yaml:"no_prompt"`
+	OutputFormat      string          `yaml:"output_format"`
+	Sync              SyncConfig      `yaml:"sync"`
+	AutoDetectBackend bool            `yaml:"auto_detect_backend"`
+	Trash             TrashConfig     `yaml:"trash"`
+	Analytics         AnalyticsConfig `yaml:"analytics"`
 }
 
 // AnalyticsConfig holds analytics settings
