@@ -18,7 +18,7 @@ Add to your `config.yaml`:
 sync:
   enabled: true
   local_backend: sqlite
-  conflict_resolution: server_wins
+  conflict_resolution: remote
   offline_mode: auto
 ```
 
@@ -147,17 +147,16 @@ The storage type for local cache.
 
 ```yaml
 sync:
-  conflict_resolution: server_wins
+  conflict_resolution: remote
 ```
 
 How to handle conflicts when the same task is modified both locally and remotely:
 
 | Strategy | Behavior |
 |----------|----------|
-| `server_wins` | Remote changes override local (default) |
-| `local_wins` | Local changes override remote |
-| `merge` | Combine non-conflicting fields |
-| `keep_both` | Create duplicate for manual resolution |
+| `remote` | Remote changes override local (default) |
+| `local` | Local changes override remote |
+| `manual` | Flag for manual resolution |
 
 ### offline_mode
 
@@ -221,7 +220,7 @@ todoat sync
 Syncing with backend: nextcloud
 Pull: 15 tasks updated, 3 new tasks, 1 deleted
 Push: 5 local changes pushed
-Conflicts: 2 (resolved with server_wins)
+Conflicts: 2 (resolved with remote strategy)
 Sync completed successfully
 ```
 
@@ -271,11 +270,11 @@ A conflict happens when:
 
 ### Resolution Strategies
 
-**Server Wins (Recommended for teams)**
+**Remote Wins (Recommended for teams)**
 
 ```yaml
 sync:
-  conflict_resolution: server_wins
+  conflict_resolution: remote
 ```
 
 Remote version replaces local. Safe when remote is the source of truth.
@@ -284,35 +283,19 @@ Remote version replaces local. Safe when remote is the source of truth.
 
 ```yaml
 sync:
-  conflict_resolution: local_wins
+  conflict_resolution: local
 ```
 
 Local version kept, pushed to remote. Good for single-user offline work.
 
-**Merge**
+**Manual Resolution**
 
 ```yaml
 sync:
-  conflict_resolution: merge
+  conflict_resolution: manual
 ```
 
-Combines changes when possible:
-- Different fields: Both changes kept
-- Same field: Local wins
-- Tags: Union of both
-
-**Keep Both**
-
-```yaml
-sync:
-  conflict_resolution: keep_both
-```
-
-Creates two tasks:
-- Original task with remote version
-- Duplicate with "(local)" suffix
-
-You resolve manually later.
+Conflicts are flagged for manual resolution. You decide which version to keep on a case-by-case basis.
 
 ## Per-Backend Sync Settings
 
@@ -392,7 +375,7 @@ backends:
 
 sync:
   enabled: true
-  conflict_resolution: local_wins
+  conflict_resolution: local
   offline_mode: auto
 ```
 
@@ -408,7 +391,7 @@ backends:
 
 sync:
   enabled: true
-  conflict_resolution: server_wins
+  conflict_resolution: remote
   offline_mode: auto
 ```
 
@@ -429,7 +412,7 @@ backends:
 
 sync:
   enabled: true
-  conflict_resolution: merge
+  conflict_resolution: remote
 ```
 
 Each backend gets its own isolated cache.

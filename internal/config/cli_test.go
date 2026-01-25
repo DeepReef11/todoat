@@ -212,6 +212,91 @@ output_format: json
 	testutil.AssertContains(t, stdout, "text")
 }
 
+// --- Config Set Analytics Tests (078-fix-config-set-analytics-key) ---
+
+// TestConfigSetAnalyticsEnabledCLI verifies 'todoat config set analytics.enabled true' works
+func TestConfigSetAnalyticsEnabledCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+analytics:
+  enabled: false
+  retention_days: 30
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "analytics.enabled", "true")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the value was changed
+	stdout = cli.MustExecute("-y", "config", "get", "analytics.enabled")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigSetAnalyticsRetentionDaysCLI verifies 'todoat config set analytics.retention_days 365' works
+func TestConfigSetAnalyticsRetentionDaysCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+analytics:
+  enabled: true
+  retention_days: 30
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "analytics.retention_days", "365")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the value was changed
+	stdout = cli.MustExecute("-y", "config", "get", "analytics.retention_days")
+	testutil.AssertContains(t, stdout, "365")
+}
+
+// TestConfigSetAnalyticsValidationCLI verifies invalid values are rejected
+func TestConfigSetAnalyticsValidationCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+analytics:
+  enabled: false
+  retention_days: 30
+`)
+
+	// Test invalid boolean for analytics.enabled
+	stdout, stderr := cli.ExecuteAndFail("-y", "config", "set", "analytics.enabled", "invalid")
+	combined := stdout + stderr
+	if !strings.Contains(combined, "true") || !strings.Contains(combined, "false") {
+		t.Errorf("expected error message to mention valid boolean values, got: %s", combined)
+	}
+
+	// Test negative value for analytics.retention_days
+	// Note: Use "--" to separate flags from arguments so "-1" is not interpreted as a flag
+	stdout, stderr = cli.ExecuteAndFail("-y", "config", "set", "analytics.retention_days", "--", "-1")
+	combined = stdout + stderr
+	if !strings.Contains(combined, "non-negative") && !strings.Contains(combined, "invalid") {
+		t.Errorf("expected error message about invalid value for retention_days, got: %s", combined)
+	}
+
+	// Test non-integer value for analytics.retention_days
+	stdout, stderr = cli.ExecuteAndFail("-y", "config", "set", "analytics.retention_days", "abc")
+	combined = stdout + stderr
+	if !strings.Contains(combined, "invalid") && !strings.Contains(combined, "integer") {
+		t.Errorf("expected error message about invalid value for retention_days, got: %s", combined)
+	}
+}
+
 // --- Config JSON Output Test ---
 
 // TestConfigJSONCLI verifies 'todoat --json config get' returns JSON format

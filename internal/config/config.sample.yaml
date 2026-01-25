@@ -66,10 +66,9 @@ auto_detect_backend: false
 sync:
   enabled: false
   # local_backend: sqlite                    # Cache backend for remote syncing
-  # conflict_resolution: server_wins         # Options: server_wins | local_wins | merge | keep_both
+  # conflict_resolution: remote              # Options: remote | local | manual
   # offline_mode: auto                       # Options: auto | online | offline
   # connectivity_timeout: "5s"               # Timeout for connectivity checks
-  # auto_sync_after_operation: false         # Sync immediately after add/update/delete operations
 
 # =============================================================================
 # User Interface Settings

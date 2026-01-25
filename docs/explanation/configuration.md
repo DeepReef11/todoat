@@ -100,9 +100,8 @@ backend_priority:
 # Synchronization
 sync:
   enabled: true
-  auto_sync_after_operation: true  # Sync immediately after add/update/delete
   local_backend: sqlite
-  conflict_resolution: server_wins
+  conflict_resolution: remote
   offline_mode: auto
 
 # UI & Display
@@ -358,9 +357,8 @@ file:
 ```yaml
 sync:
   enabled: true                        # Enable automatic caching for all remote backends
-  auto_sync_after_operation: true      # Sync immediately after add/update/delete operations
   local_backend: sqlite                # Cache backend type (default: sqlite)
-  conflict_resolution: server_wins     # server_wins, local_wins, merge, keep_both
+  conflict_resolution: remote          # remote, local, manual
   offline_mode: auto                   # auto, online, offline
 ```
 
@@ -370,14 +368,13 @@ sync:
 |-------|------|---------|-------------|
 | `enabled` | boolean | false | Enable automatic caching for remote backends |
 | `local_backend` | string | sqlite | Cache storage type |
-| `conflict_resolution` | string | server_wins | Conflict strategy (server_wins, local_wins, merge, keep_both) |
-| `auto_sync_after_operation` | boolean | false | Sync immediately after add/update/delete operations |
+| `conflict_resolution` | string | remote | Conflict strategy (remote, local, manual) |
 | `offline_mode` | string | auto | Offline behavior (auto, online, offline) |
 | `connectivity_timeout` | string | 5s | Timeout for connectivity checks |
 
 **Validation Rules**:
 - `local_backend` must be: sqlite, file, or git
-- `conflict_resolution` must be: server_wins, local_wins, merge, or keep_both
+- `conflict_resolution` must be: remote, local, or manual
 - `offline_mode` must be: auto, online, or offline
 - `sync_interval` cannot be negative (0 = manual only)
 
@@ -823,7 +820,7 @@ func (c Config) Validate() error {
 | `default_backend` | Must exist in backends map and be enabled |
 | `backend_priority` | All entries must exist in backends map |
 | `sync.local_backend` | Must be sqlite, file, or git |
-| `sync.conflict_resolution` | Must be server_wins, local_wins, merge, or keep_both |
+| `sync.conflict_resolution` | Must be remote, local, or manual |
 | `sync.offline_mode` | Must be auto, online, or offline |
 | `sync.sync_interval` | Cannot be negative |
 
@@ -852,11 +849,11 @@ Missing field(s) in YAML config file ~/.config/todoat/config.yaml:
 
 default backend "sqlite-cache" not found in configured backends
 
-sync.conflict_resolution must be server_wins, local_wins, merge, or keep_both, got "always_local"
+sync.conflict_resolution must be remote, local, or manual, got "always_local"
 ```
 
 **Auto-Fix Features**:
-- Missing defaults are applied (auto-sync: true, conflict_resolution: server_wins)
+- Missing defaults are applied (conflict_resolution: remote)
 
 **Related Features**:
 - [Multi-Backend Configuration](#multi-backend-configuration) - Backend validation rules
@@ -1115,23 +1112,22 @@ RETURN default_backend OR first enabled backend
 ```yaml
 sync:
   enabled: true
-  conflict_resolution: server_wins  # Choose strategy
+  conflict_resolution: remote  # Choose strategy
 ```
 
 **Available Strategies**:
 
 | Strategy | Behavior | Use Case | Data Loss Risk |
 |----------|----------|----------|----------------|
-| **server_wins** | Remote changes override local changes | Trust remote as source of truth, collaborative environments | Local changes lost |
-| **local_wins** | Local changes override remote changes | Offline-first workflow, local edits more important | Remote changes lost |
-| **merge** | Intelligently combine local and remote changes | Best-effort preservation of all changes | Minimal (but possible edge cases) |
-| **keep_both** | Create duplicate tasks for both versions | Never lose data, manual resolution later | Duplicates require cleanup |
+| **remote** | Remote changes override local changes | Trust remote as source of truth, collaborative environments | Local changes lost |
+| **local** | Local changes override remote changes | Offline-first workflow, local edits more important | Remote changes lost |
+| **manual** | Flag conflicts for manual resolution | User decides on case-by-case basis | No automatic loss |
 
 **Strategy Details**:
 
-**1. server_wins (Default)**:
+**1. remote (Default)**:
 ```yaml
-conflict_resolution: server_wins
+conflict_resolution: remote
 ```
 - **Behavior**: Remote version is kept, local changes discarded
 - **Use case**:
@@ -1143,9 +1139,9 @@ conflict_resolution: server_wins
   - Remote: Changed status to DONE
   - **Result**: Remote wins → Status is DONE, priority unchanged
 
-**2. local_wins**:
+**2. local**:
 ```yaml
-conflict_resolution: local_wins
+conflict_resolution: local
 ```
 - **Behavior**: Local version is kept, remote changes discarded
 - **Use case**:
@@ -1157,81 +1153,62 @@ conflict_resolution: local_wins
   - Remote: Changed status to DONE
   - **Result**: Local wins → Priority is 1, status unchanged
 
-**3. merge**:
+**3. manual**:
 ```yaml
-conflict_resolution: merge
+conflict_resolution: manual
 ```
-- **Behavior**: Combine non-conflicting fields, prefer local for conflicts
+- **Behavior**: Conflicts are flagged for user to resolve manually
 - **Use case**:
-  - Want to preserve all changes when possible
-  - Non-overlapping field changes common
-  - Best-effort data preservation
+  - Never want automatic resolution
+  - User prefers to review each conflict
+  - Critical data where wrong resolution is costly
 - **Example**:
   - Local: Changed priority to 1
   - Remote: Changed status to DONE
-  - **Result**: Merged → Priority is 1 AND status is DONE
+  - **Result**: Conflict flagged, user resolves via `todoat sync conflicts resolve`
 
-**Merge Field Priority**:
-```
-If both changed summary: local wins
-If both changed description: local wins
-If only one changed field: keep that change
-If different fields changed: merge both changes
-```
+**Per-Conflict Resolution**:
 
-**4. keep_both**:
-```yaml
-conflict_resolution: keep_both
+When using `manual` strategy or resolving specific conflicts, the `sync conflicts resolve` command offers additional strategies:
+
+```bash
+todoat sync conflicts resolve <uid> --strategy server_wins
+todoat sync conflicts resolve <uid> --strategy local_wins
+todoat sync conflicts resolve <uid> --strategy merge
+todoat sync conflicts resolve <uid> --strategy keep_both
 ```
-- **Behavior**: Create two tasks (original + duplicate with suffix)
-- **Use case**:
-  - Never want to lose any changes
-  - Manual conflict resolution preferred
-  - Data preservation critical
-- **Example**:
-  - Local: Changed priority to 1
-  - Remote: Changed status to DONE
-  - **Result**: Two tasks created:
-    - "Task name" (remote version - status DONE)
-    - "Task name (conflict)" (local version - priority 1)
 
 **Validation**:
 
 ```go
 // Validate conflict resolution strategy
 validStrategies := map[string]bool{
-    "server_wins": true,
-    "local_wins":  true,
-    "merge":       true,
-    "keep_both":   true,
+    "remote": true,
+    "local":  true,
+    "manual": true,
 }
 if !validStrategies[c.Sync.ConflictResolution] {
-    return fmt.Errorf("sync.conflict_resolution must be server_wins, local_wins, merge, or keep_both, got %q", c.Sync.ConflictResolution)
+    return fmt.Errorf("sync.conflict_resolution must be remote, local, or manual, got %q", c.Sync.ConflictResolution)
 }
 ```
 
 **Choosing a Strategy**:
 
 ```
-Use server_wins if:
+Use remote if:
 - Working in team with shared remote
 - Remote backend is source of truth
 - Local is just a cache
 
-Use local_wins if:
+Use local if:
 - Working alone
 - Offline-first workflow
 - Remote is backup only
 
-Use merge if:
-- Want best of both worlds
-- Typically edit different fields on each device
-- Accept occasional merge quirks
-
-Use keep_both if:
+Use manual if:
 - Cannot afford to lose any data
-- Want to manually review conflicts
-- Don't mind duplicate cleanup
+- Want to review each conflict individually
+- Need fine-grained control over resolution
 ```
 
 **Related Features**:
@@ -1888,9 +1865,8 @@ default_backend: nextcloud-prod
 
 sync:
   enabled: true
-  auto_sync_after_operation: true
   local_backend: sqlite
-  conflict_resolution: server_wins
+  conflict_resolution: remote
   offline_mode: auto
 
 canWriteConfig: true
@@ -1973,8 +1949,7 @@ default_backend: nextcloud-prod
 sync:
   enabled: true
   local_backend: sqlite
-  conflict_resolution: local_wins        # Prefer local changes
-  auto_sync_after_operation: false       # Manual sync only
+  conflict_resolution: local             # Prefer local changes
   offline_mode: auto
 
 canWriteConfig: true

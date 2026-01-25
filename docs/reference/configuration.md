@@ -131,9 +131,8 @@ Restores the default configuration. Requires confirmation.
 | `sync.enabled` | bool | Enable synchronization |
 | `sync.local_backend` | string | Cache backend for remote syncing |
 | `sync.offline_mode` | string | CLI backend mode: `auto`/`offline` (use SQLite cache) or `online` (direct remote) |
-| `sync.conflict_resolution` | string | `server_wins`, `local_wins`, `merge`, `keep_both` |
+| `sync.conflict_resolution` | string | `local`, `remote`, or `manual` |
 | `sync.connectivity_timeout` | string | Network timeout for connectivity checks (default: `5s`) |
-| `sync.auto_sync_after_operation` | bool | Sync immediately after add/update/delete operations (default: `false`) |
 | `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `false`) |
 | `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |

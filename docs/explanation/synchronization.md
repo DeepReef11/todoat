@@ -270,7 +270,7 @@ todoat sync queue
 Syncing with backend: nextcloud
 Pull: 15 tasks updated, 3 new tasks, 1 deleted
 Push: 5 local changes pushed
-Conflicts: 2 (resolved with server_wins)
+Conflicts: 2 (resolved with remote strategy)
 Sync completed successfully
 ```
 
@@ -389,26 +389,26 @@ switch strategy:
 2. Same task modified remotely by another device
 3. User runs sync: `todoat sync`
 4. Conflict detected and auto-resolved based on strategy
-5. User sees: "Conflicts: 1 (resolved with server_wins)"
+5. User sees: "Conflicts: 1 (resolved with remote strategy)"
 
-**Manual Resolution (keep_both):**
-1. After sync, two versions exist: "Task" and "Task (local)"
-2. User reviews both versions
-3. User manually merges or chooses one
-4. User deletes unwanted version
+**Manual Resolution:**
+1. With `conflict_resolution: manual`, conflicts are flagged for resolution
+2. User runs `todoat sync conflicts` to view conflicts
+3. User resolves each with `todoat sync conflicts resolve <uid> --strategy <strategy>`
+4. Available strategies for per-conflict resolution: `server_wins`, `local_wins`, `merge`, `keep_both`
 
 ### Configuration
 
 ```yaml
 sync:
   enabled: true
-  conflict_resolution: server_wins  # Options: server_wins, local_wins, merge, keep_both
+  conflict_resolution: remote  # Options: remote, local, manual
 ```
 
 ### Outputs/Results
 - Conflict count shown in sync output
 - Resolution strategy applied automatically
-- For `keep_both`: duplicate tasks created with " (local)" suffix
+- For `manual`: conflicts are flagged for user resolution
 
 ### Technical Details
 
@@ -948,9 +948,8 @@ Configure synchronization behavior, conflict resolution, offline mode, and cache
 ```yaml
 sync:
   enabled: true                          # Enable/disable sync globally
-  auto_sync_after_operation: false       # Sync immediately after add/update/delete
   local_backend: sqlite                  # Cache implementation (only sqlite supported)
-  conflict_resolution: server_wins       # Conflict strategy
+  conflict_resolution: remote            # Conflict strategy: remote, local, manual
   offline_mode: auto                     # auto, offline, online
 ```
 
@@ -981,15 +980,11 @@ backends:
 - Future: `postgres`, `mysql`, etc.
 
 **sync.conflict_resolution:**
-- `server_wins`: Remote changes override local (default)
-- `local_wins`: Local changes override remote
-- `merge`: Intelligently combine changes
-- `keep_both`: Create duplicate tasks for manual resolution
+- `remote`: Remote changes override local (default)
+- `local`: Local changes override remote
+- `manual`: Flag for manual resolution
 
-**sync.auto_sync_after_operation:**
-- `true`: Sync immediately after each operation (add, update, delete)
-- `false`: Queue operations for manual sync (default)
-- When enabled, eliminates need to run `todoat sync` manually after each operation
+Note: The `sync conflicts resolve --strategy` command uses different values (`server_wins`, `local_wins`, `merge`, `keep_both`) for per-conflict resolution.
 
 **sync.offline_mode:**
 - `auto`: Detect network automatically
@@ -1008,7 +1003,7 @@ backends:
    ```yaml
    sync:
      enabled: true
-     conflict_resolution: server_wins
+     conflict_resolution: remote
    ```
 
 3. Save and perform initial sync:
@@ -1017,10 +1012,10 @@ backends:
    ```
 
 **Changing Conflict Resolution:**
-1. Edit config to try `merge` strategy:
+1. Edit config to change strategy:
    ```yaml
    sync:
-     conflict_resolution: merge
+     conflict_resolution: local
    ```
 
 2. Next sync uses new strategy automatically

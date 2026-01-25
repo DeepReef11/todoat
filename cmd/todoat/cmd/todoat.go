@@ -9293,6 +9293,10 @@ func configToMap(c *config.Config) map[string]interface{} {
 		"trash": map[string]interface{}{
 			"retention_days": c.GetTrashRetentionDays(),
 		},
+		"analytics": map[string]interface{}{
+			"enabled":        c.Analytics.Enabled,
+			"retention_days": c.GetAnalyticsRetentionDays(),
+		},
 	}
 }
 
@@ -9380,6 +9384,19 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 		switch parts[1] {
 		case "retention_days":
 			return c.GetTrashRetentionDays(), nil
+		}
+	case "analytics":
+		if len(parts) < 2 {
+			return map[string]interface{}{
+				"enabled":        c.Analytics.Enabled,
+				"retention_days": c.GetAnalyticsRetentionDays(),
+			}, nil
+		}
+		switch parts[1] {
+		case "enabled":
+			return c.Analytics.Enabled, nil
+		case "retention_days":
+			return c.GetAnalyticsRetentionDays(), nil
 		}
 	}
 
@@ -9543,6 +9560,26 @@ func setConfigValue(c *config.Config, key, value string) error {
 				return fmt.Errorf("invalid value for trash.retention_days: %s (must be a non-negative integer)", value)
 			}
 			c.Trash.RetentionDays = &days
+			return nil
+		}
+	case "analytics":
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid key: %s (use analytics.<setting>)", key)
+		}
+		switch parts[1] {
+		case "enabled":
+			boolVal, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid value for analytics.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+			}
+			c.Analytics.Enabled = boolVal
+			return nil
+		case "retention_days":
+			days, err := strconv.Atoi(value)
+			if err != nil || days < 0 {
+				return fmt.Errorf("invalid value for analytics.retention_days: %s (must be a non-negative integer)", value)
+			}
+			c.Analytics.RetentionDays = days
 			return nil
 		}
 	}
