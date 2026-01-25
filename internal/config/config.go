@@ -22,14 +22,21 @@ func GetSampleConfig() string {
 
 // Config represents the application configuration
 type Config struct {
-	Backends          BackendsConfig `yaml:"backends"`
-	DefaultBackend    string         `yaml:"default_backend"`
-	DefaultView       string         `yaml:"default_view"`
-	NoPrompt          bool           `yaml:"no_prompt"`
-	OutputFormat      string         `yaml:"output_format"`
-	Sync              SyncConfig     `yaml:"sync"`
-	AutoDetectBackend bool           `yaml:"auto_detect_backend"`
-	Trash             TrashConfig    `yaml:"trash"`
+	Backends          BackendsConfig   `yaml:"backends"`
+	DefaultBackend    string           `yaml:"default_backend"`
+	DefaultView       string           `yaml:"default_view"`
+	NoPrompt          bool             `yaml:"no_prompt"`
+	OutputFormat      string           `yaml:"output_format"`
+	Sync              SyncConfig       `yaml:"sync"`
+	AutoDetectBackend bool             `yaml:"auto_detect_backend"`
+	Trash             TrashConfig      `yaml:"trash"`
+	Analytics         AnalyticsConfig  `yaml:"analytics"`
+}
+
+// AnalyticsConfig holds analytics settings
+type AnalyticsConfig struct {
+	Enabled       bool `yaml:"enabled"`
+	RetentionDays int  `yaml:"retention_days"`
 }
 
 // TrashConfig holds trash management settings
@@ -239,6 +246,20 @@ func (c *Config) GetTrashRetentionDays() int {
 	}
 	// Return the configured value (0 means disabled)
 	return *c.Trash.RetentionDays
+}
+
+// IsAnalyticsEnabled returns true if analytics is enabled in config
+func (c *Config) IsAnalyticsEnabled() bool {
+	return c.Analytics.Enabled
+}
+
+// GetAnalyticsRetentionDays returns the analytics retention period in days.
+// Returns 365 (default) if not configured.
+func (c *Config) GetAnalyticsRetentionDays() int {
+	if c.Analytics.RetentionDays <= 0 {
+		return 365 // Default retention period
+	}
+	return c.Analytics.RetentionDays
 }
 
 // LoadFromPath loads configuration from a specific path without creating defaults

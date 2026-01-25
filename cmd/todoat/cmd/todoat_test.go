@@ -3341,3 +3341,120 @@ func TestAnalyticsErrorsJSONOutput(t *testing.T) {
 		t.Errorf("JSON output should contain 'errors' field, got: %v", result)
 	}
 }
+
+// =============================================================================
+// Analytics Integration Tests (003-analytics-tracking-not-integrated)
+// =============================================================================
+
+// TestAnalyticsTrackingIntegration verifies that commands are tracked in analytics
+// when analytics is enabled. This tests the integration between command execution
+// and the analytics tracker.
+func TestAnalyticsTrackingIntegration(t *testing.T) {
+	tmpDir := t.TempDir()
+	analyticsPath := filepath.Join(tmpDir, "analytics.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	// Write config with analytics enabled
+	configContent := `default_backend: sqlite
+analytics:
+  enabled: true
+  retention_days: 365
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	// Run the 'list' command which should trigger analytics tracking
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Wait for async logging to complete (analytics logs asynchronously)
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify that analytics database was created
+	if _, err := os.Stat(analyticsPath); os.IsNotExist(err) {
+		t.Fatalf("analytics database was not created at %s", analyticsPath)
+	}
+
+	// Verify that an event was recorded
+	db, err := sql.Open("sqlite", analyticsPath)
+	if err != nil {
+		t.Fatalf("failed to open analytics db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// First check what events exist
+	rows, err := db.Query("SELECT command FROM events")
+	if err != nil {
+		t.Fatalf("failed to query events: %v", err)
+	}
+	var commands []string
+	for rows.Next() {
+		var cmd string
+		if err := rows.Scan(&cmd); err != nil {
+			t.Fatalf("failed to scan command: %v", err)
+		}
+		commands = append(commands, cmd)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatalf("failed to close rows: %v", err)
+	}
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM events WHERE command = 'list'").Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to query events: %v", err)
+	}
+
+	if count == 0 {
+		t.Errorf("expected at least 1 'list' event to be recorded, got 0 (found commands: %v)", commands)
+	}
+}
+
+// TestAnalyticsTrackingDisabled verifies that analytics is not tracked when disabled
+func TestAnalyticsTrackingDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	analyticsPath := filepath.Join(tmpDir, "analytics.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	// Write config with analytics disabled (default)
+	configContent := `default_backend: sqlite
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:        dbPath,
+		ConfigPath:    configPath,
+		AnalyticsPath: analyticsPath,
+	}
+
+	// Run the 'list' command
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Wait for any potential async logging
+	time.Sleep(200 * time.Millisecond)
+
+	// Analytics database should NOT be created when analytics is disabled
+	if _, err := os.Stat(analyticsPath); !os.IsNotExist(err) {
+		t.Errorf("analytics database should not be created when analytics is disabled")
+	}
+}

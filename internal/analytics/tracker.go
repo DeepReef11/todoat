@@ -13,6 +13,7 @@ type Tracker struct {
 	db      *sql.DB
 	enabled bool
 	mu      sync.Mutex
+	wg      sync.WaitGroup
 }
 
 // NewTracker creates a new analytics tracker.
@@ -29,8 +30,10 @@ func NewTracker(dbPath string, enabled bool) (*Tracker, error) {
 	}, nil
 }
 
-// Close closes the database connection
+// Close waits for pending writes and closes the database connection
 func (t *Tracker) Close() error {
+	// Wait for any pending async writes to complete
+	t.wg.Wait()
 	if t.db != nil {
 		return t.db.Close()
 	}
@@ -68,7 +71,11 @@ func (t *Tracker) TrackCommand(cmd, subcmd, backend string, flags []string, fn f
 	}
 
 	// Log asynchronously to avoid slowing down commands
-	go t.logEvent(event)
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+		t.logEvent(event)
+	}()
 
 	return err
 }

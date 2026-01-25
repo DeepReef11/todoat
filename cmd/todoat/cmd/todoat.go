@@ -30,6 +30,7 @@ import (
 	"todoat/backend/nextcloud"
 	"todoat/backend/sqlite"
 	"todoat/backend/todoist"
+	"todoat/internal/analytics"
 	"todoat/internal/cache"
 	"todoat/internal/config"
 	"todoat/internal/credentials"
@@ -124,27 +125,135 @@ func validateAndNormalizeColor(color string) (string, error) {
 
 // Execute runs the CLI with the given arguments and IO writers
 func Execute(args []string, stdout, stderr io.Writer, cfg *Config) int {
+	if cfg == nil {
+		cfg = &Config{}
+	}
+
+	// Initialize analytics tracker if enabled
+	tracker := initAnalyticsTracker(cfg)
+	if tracker != nil {
+		defer func() { _ = tracker.Close() }()
+	}
+
 	rootCmd := NewTodoAt(stdout, stderr, cfg)
 
 	rootCmd.SetArgs(args)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(stderr)
 
-	if err := rootCmd.Execute(); err != nil {
+	// Extract command and backend info for analytics
+	cmdName := extractCommandName(args)
+	backendName := extractBackendName(args, cfg)
+
+	// Wrap execution with analytics tracking
+	var execErr error
+	if tracker != nil {
+		execErr = tracker.TrackCommand(cmdName, "", backendName, args, func() error {
+			return rootCmd.Execute()
+		})
+	} else {
+		execErr = rootCmd.Execute()
+	}
+
+	if execErr != nil {
 		// Check if --json flag was passed to output error as JSON
 		jsonOutput := containsJSONFlag(args)
 		if jsonOutput {
-			outputErrorJSON(err, stdout)
+			outputErrorJSON(execErr, stdout)
 		} else {
-			_, _ = fmt.Fprintln(stderr, "Error:", err)
+			_, _ = fmt.Fprintln(stderr, "Error:", execErr)
 			// Emit ERROR result code in no-prompt mode
-			if cfg != nil && cfg.NoPrompt {
+			if cfg.NoPrompt {
 				_, _ = fmt.Fprintln(stdout, ResultError)
 			}
 		}
 		return 1
 	}
 	return 0
+}
+
+// initAnalyticsTracker initializes the analytics tracker based on config.
+// Returns nil if analytics is disabled or there's an error.
+func initAnalyticsTracker(cfg *Config) *analytics.Tracker {
+	// Determine analytics database path
+	var analyticsPath string
+	if cfg.AnalyticsPath != "" {
+		analyticsPath = cfg.AnalyticsPath
+	} else {
+		analyticsPath = filepath.Join(config.GetConfigDir(), "analytics.db")
+	}
+
+	// Load config to check if analytics is enabled
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+	}
+
+	appConfig, err := config.LoadFromPath(configPath)
+	if err != nil || appConfig == nil {
+		return nil
+	}
+
+	// Check if analytics is enabled (env var can override config)
+	enabled := analytics.IsEnabledFromEnv(appConfig.IsAnalyticsEnabled())
+	if !enabled {
+		return nil
+	}
+
+	// Create tracker
+	tracker, err := analytics.NewTracker(analyticsPath, true)
+	if err != nil {
+		// Log error but don't fail - analytics is optional
+		utils.Debugf("Failed to initialize analytics tracker: %v", err)
+		return nil
+	}
+
+	// Run cleanup based on retention days
+	retentionDays := appConfig.GetAnalyticsRetentionDays()
+	if retentionDays > 0 {
+		go func() {
+			_, _ = tracker.Cleanup(retentionDays)
+		}()
+	}
+
+	return tracker
+}
+
+// extractCommandName extracts the main command name from args
+func extractCommandName(args []string) string {
+	for _, arg := range args {
+		// Skip flags
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		// Return first non-flag argument as command name
+		return arg
+	}
+	return "root" // Default for no-args invocation
+}
+
+// extractBackendName extracts the backend name from args or config
+func extractBackendName(args []string, cfg *Config) string {
+	// Check for -b or --backend flag
+	for i, arg := range args {
+		if (arg == "-b" || arg == "--backend") && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(arg, "--backend=") {
+			return strings.TrimPrefix(arg, "--backend=")
+		}
+		if strings.HasPrefix(arg, "-b=") {
+			return strings.TrimPrefix(arg, "-b=")
+		}
+	}
+
+	// Check config for backend
+	if cfg.Backend != "" {
+		return cfg.Backend
+	}
+
+	// Return empty - let analytics figure it out
+	return ""
 }
 
 // containsJSONFlag checks if args contain --json flag
