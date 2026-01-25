@@ -9535,7 +9535,7 @@ func setConfigValue(c *config.Config, key, value string) error {
 			c.Sync.LocalBackend = value
 			return nil
 		case "conflict_resolution":
-			validValues := []string{"local", "remote", "manual"}
+			validValues := []string{"server_wins", "local_wins", "merge", "keep_both"}
 			if !contains(validValues, value) {
 				return fmt.Errorf("invalid value for sync.conflict_resolution: %s (valid: %s)", value, strings.Join(validValues, ", "))
 			}

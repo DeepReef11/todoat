@@ -49,3 +49,15 @@ Documentation was written with one set of values (`server_wins`, `local_wins`, `
 
 ## Recommended Fix
 FIX DOCS - Update documentation to match actual valid values (`local`, `remote`, `manual`), or FIX CODE if the documented values are the intended ones
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Changed code validation to accept the documented values (`server_wins`, `local_wins`, `merge`, `keep_both`) instead of the incorrect values (`local`, `remote`, `manual`). Also updated `docs/reference/configuration.md` to list the correct values.
+
+### Verification Log
+```bash
+$ todoat config set sync.conflict_resolution server_wins
+Set sync.conflict_resolution = server_wins
+```
+**Matches expected behavior**: YES
