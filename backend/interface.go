@@ -2,11 +2,17 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrListCreationNotSupported is returned when a backend does not support creating lists.
+// CalDAV/Nextcloud backends return this error because calendar creation is typically
+// not supported via CalDAV protocol.
+var ErrListCreationNotSupported = errors.New("creating lists is not supported by this backend")
 
 // Task represents a todo item
 type Task struct {

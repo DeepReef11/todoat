@@ -6054,9 +6054,15 @@ func syncCreateOperation(ctx context.Context, localBE, remoteBE backend.TaskMana
 	// Ensure the list exists on the remote backend
 	remoteList, err := remoteBE.GetListByName(ctx, localList.Name)
 	if err != nil || remoteList == nil {
-		// Create the list on remote if it doesn't exist
+		// Try to create the list on remote if it doesn't exist
 		remoteList, err = remoteBE.CreateList(ctx, localList.Name)
 		if err != nil {
+			// If the backend doesn't support list creation (e.g., CalDAV),
+			// skip this task with a warning instead of failing completely
+			if errors.Is(err, backend.ErrListCreationNotSupported) {
+				_, _ = fmt.Fprintf(stderr, "Skipping task '%s': list '%s' doesn't exist on remote and cannot be created\n", op.TaskSummary, localList.Name)
+				return nil // Return nil to indicate "skipped" not "failed"
+			}
 			return fmt.Errorf("failed to create list '%s' on remote: %w", localList.Name, err)
 		}
 	}
@@ -6096,9 +6102,15 @@ func syncUpdateOperation(ctx context.Context, localBE, remoteBE backend.TaskMana
 	// Get the corresponding list on remote
 	remoteList, err := remoteBE.GetListByName(ctx, localList.Name)
 	if err != nil || remoteList == nil {
-		// Create the list on remote if it doesn't exist (shouldn't happen for update, but be safe)
+		// Try to create the list on remote if it doesn't exist (shouldn't happen for update, but be safe)
 		remoteList, err = remoteBE.CreateList(ctx, localList.Name)
 		if err != nil {
+			// If the backend doesn't support list creation (e.g., CalDAV),
+			// skip this task with a warning instead of failing completely
+			if errors.Is(err, backend.ErrListCreationNotSupported) {
+				_, _ = fmt.Fprintf(stderr, "Skipping task '%s': list '%s' doesn't exist on remote and cannot be created\n", op.TaskSummary, localList.Name)
+				return nil // Return nil to indicate "skipped" not "failed"
+			}
 			return fmt.Errorf("failed to create list '%s' on remote: %w", localList.Name, err)
 		}
 	}

@@ -1161,6 +1161,39 @@ func TestTrashOperationsNotSupported(t *testing.T) {
 	// This is acceptable to error
 }
 
+// TestCreateListReturnsNotSupported verifies that CreateList returns
+// ErrListCreationNotSupported, which allows sync operations to skip
+// tasks gracefully when the list doesn't exist on the CalDAV remote.
+// This is the fix for Issue #007.
+func TestCreateListReturnsNotSupported(t *testing.T) {
+	server := newMockCalDAVServer("testuser", "testpass")
+	defer server.Close()
+
+	be, err := New(Config{
+		Host:      strings.TrimPrefix(server.URL(), "http://"),
+		Username:  "testuser",
+		Password:  "testpass",
+		AllowHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create backend: %v", err)
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+
+	// Try to create a list - should return ErrListCreationNotSupported
+	_, err = be.CreateList(ctx, "NewCalendar")
+	if err == nil {
+		t.Fatal("CreateList should return an error for CalDAV backends")
+	}
+
+	// Verify it's the specific sentinel error
+	if err != backend.ErrListCreationNotSupported {
+		t.Errorf("CreateList should return backend.ErrListCreationNotSupported, got: %v", err)
+	}
+}
+
 // TestIssue010HostURLWithProtocolPrefix reproduces issue #010:
 // When user specifies http:// in host config, app prepends https:// resulting
 // in malformed URLs like "https://http//localhost:8080".

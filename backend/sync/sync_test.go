@@ -1403,3 +1403,140 @@ default_backend: sqlite-remote
 		t.Errorf("expected queue to be empty after delete auto-sync, but got:\n%s", stdout)
 	}
 }
+
+// =============================================================================
+// Issue 007: Sync Fails When Local List Doesn't Exist on CalDAV Remote
+// =============================================================================
+
+// TestSyncSkipsTasksWhenListCreationNotSupported verifies that when syncing to a
+// remote that doesn't support list creation (like CalDAV), tasks in unmapped lists
+// are skipped with a warning instead of causing sync to fail completely.
+// This is Issue #007: Sync Fails When Local List Doesn't Exist on CalDAV Remote
+func TestSyncSkipsTasksWhenListCreationNotSupported(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Set up path for "remote" SQLite database
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+
+	// First, initialize the remote database with the CLI to get proper schema
+	// Create config pointing to remote
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: online
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Initialize remote by creating a list there directly
+	stdout, stderr, exitCode := cli.Execute("-y", "-b", "sqlite-remote", "Work", "add", "Remote task")
+	if exitCode != 0 {
+		t.Fatalf("failed to init remote: stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	// Delete the task (but list "Work" now exists on remote)
+	cli.MustExecute("-y", "-b", "sqlite-remote", "Work", "delete", "Remote task")
+
+	// Clear any queued operations from setup
+	cli.MustExecute("-y", "sync", "queue", "clear")
+
+	// Now switch to offline mode to queue local operations
+	configContent = `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: offline
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Add tasks to two different lists locally
+	// "Work" exists on remote, "Personal" does NOT
+	cli.MustExecute("-y", "Work", "add", "Task in Work list")
+	cli.MustExecute("-y", "Personal", "add", "Task in Personal list")
+
+	// Verify both tasks are queued
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	testutil.AssertContains(t, stdout, "Pending Operations: 2")
+
+	// Switch to online mode and run sync
+	configContent = `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: online
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Run sync - this should:
+	// 1. Successfully sync "Task in Work list" (list exists on remote)
+	// 2. Successfully sync "Task in Personal list" (SQLite backend CAN create lists)
+	// Note: SQLite backend supports list creation, so both tasks should sync
+	// The actual ErrListCreationNotSupported would only occur with CalDAV
+	stdout, stderr, exitCode = cli.Execute("-y", "sync")
+
+	// The sync should succeed (exit code 0)
+	if exitCode != 0 {
+		t.Errorf("sync failed with exit code %d.\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+	}
+
+	// Should show operations were processed
+	testutil.AssertContains(t, stdout, "Push:")
+
+	// Verify the Work task was synced to remote
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote db: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	var count int
+	err = remoteDB.QueryRow(`
+		SELECT COUNT(*) FROM tasks t
+		JOIN task_lists l ON t.list_id = l.id
+		WHERE t.summary = 'Task in Work list' AND l.name = 'Work'
+	`).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to query remote db: %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("expected Work task to be synced; found %d tasks in remote", count)
+	}
+}

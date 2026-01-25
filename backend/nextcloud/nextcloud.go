@@ -194,8 +194,8 @@ func (b *Backend) GetListByName(ctx context.Context, name string) (*backend.List
 // CreateList creates a new calendar (not commonly supported via CalDAV)
 func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, error) {
 	// Creating calendars via CalDAV is typically done with MKCALENDAR
-	// For now, return an error as this is complex and not all servers support it
-	return nil, fmt.Errorf("creating calendars is not supported via CalDAV")
+	// For now, return a sentinel error as this is complex and not all servers support it
+	return nil, backend.ErrListCreationNotSupported
 }
 
 // UpdateList updates a calendar (not fully supported in CalDAV)
