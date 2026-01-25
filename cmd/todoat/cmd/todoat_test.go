@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	_ "modernc.org/sqlite"
 	"todoat/internal/config"
+	"todoat/internal/credentials"
 )
 
 // =============================================================================
@@ -1313,6 +1315,12 @@ default_backend: nextcloud
 	})
 
 	t.Run("warns when todoist backend is unavailable", func(t *testing.T) {
+		// Skip if keyring has todoist credentials - we can't isolate the keyring in CLI tests
+		credMgr := credentials.NewManager()
+		if credInfo, err := credMgr.Get(context.Background(), "todoist", "token"); err == nil && credInfo.Found {
+			t.Skip("Skipping test: keyring has todoist credentials that cannot be isolated")
+		}
+
 		tmpDir := t.TempDir()
 		dbPath := filepath.Join(tmpDir, "test.db")
 		configPath := filepath.Join(tmpDir, "config.yaml")

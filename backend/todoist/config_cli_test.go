@@ -1,9 +1,11 @@
 package todoist_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"todoat/internal/credentials"
 	"todoat/internal/testutil"
 )
 
@@ -131,6 +133,12 @@ no_prompt: true
 // but credentials are missing, the CLI warns and falls back to SQLite gracefully.
 // This test relates to issue 001 (backend detection fallback warning).
 func TestDefaultBackendTodoistUsedCLI(t *testing.T) {
+	// Skip if keyring has todoist credentials - we can't isolate the keyring in CLI tests
+	credMgr := credentials.NewManager()
+	if credInfo, err := credMgr.Get(context.Background(), "todoist", "token"); err == nil && credInfo.Found {
+		t.Skip("Skipping test: keyring has todoist credentials that cannot be isolated")
+	}
+
 	cli := testutil.NewCLITestWithConfig(t)
 
 	cli.SetFullConfig(`
