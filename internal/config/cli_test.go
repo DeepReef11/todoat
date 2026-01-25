@@ -297,6 +297,53 @@ analytics:
 	}
 }
 
+// --- Config Set Sync Auto-Sync Tests (002-config-set-sync-auto-sync-key-not-recognized) ---
+
+// TestConfigSetSyncAutoSyncAfterOperationCLI verifies 'todoat config set sync.auto_sync_after_operation true' works
+func TestConfigSetSyncAutoSyncAfterOperationCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: false
+  auto_sync_after_operation: false
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.auto_sync_after_operation", "true")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the value was changed
+	stdout = cli.MustExecute("-y", "config", "get", "sync.auto_sync_after_operation")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigSetSyncAutoSyncAfterOperationValidationCLI verifies invalid values are rejected
+func TestConfigSetSyncAutoSyncAfterOperationValidationCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: false
+  auto_sync_after_operation: false
+`)
+
+	// Test invalid boolean for sync.auto_sync_after_operation
+	stdout, stderr := cli.ExecuteAndFail("-y", "config", "set", "sync.auto_sync_after_operation", "invalid")
+	combined := stdout + stderr
+	if !strings.Contains(combined, "true") || !strings.Contains(combined, "false") {
+		t.Errorf("expected error message to mention valid boolean values, got: %s", combined)
+	}
+}
+
 // --- Config JSON Output Test ---
 
 // TestConfigJSONCLI verifies 'todoat --json config get' returns JSON format

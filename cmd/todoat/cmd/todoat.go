@@ -9356,11 +9356,12 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 	case "sync":
 		if len(parts) < 2 {
 			return map[string]interface{}{
-				"enabled":              c.Sync.Enabled,
-				"local_backend":        c.Sync.LocalBackend,
-				"conflict_resolution":  c.Sync.ConflictResolution,
-				"offline_mode":         c.GetOfflineMode(),
-				"connectivity_timeout": c.GetConnectivityTimeout(),
+				"enabled":                   c.Sync.Enabled,
+				"local_backend":             c.Sync.LocalBackend,
+				"conflict_resolution":       c.Sync.ConflictResolution,
+				"offline_mode":              c.GetOfflineMode(),
+				"connectivity_timeout":      c.GetConnectivityTimeout(),
+				"auto_sync_after_operation": c.Sync.AutoSyncAfterOperation,
 			}, nil
 		}
 		switch parts[1] {
@@ -9374,6 +9375,8 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 			return c.GetOfflineMode(), nil
 		case "connectivity_timeout":
 			return c.GetConnectivityTimeout(), nil
+		case "auto_sync_after_operation":
+			return c.Sync.AutoSyncAfterOperation, nil
 		}
 	case "trash":
 		if len(parts) < 2 {
@@ -9547,6 +9550,13 @@ func setConfigValue(c *config.Config, key, value string) error {
 			return nil
 		case "connectivity_timeout":
 			c.Sync.ConnectivityTimeout = value
+			return nil
+		case "auto_sync_after_operation":
+			boolVal, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid value for sync.auto_sync_after_operation: %s (valid: true, false, yes, no, 1, 0)", value)
+			}
+			c.Sync.AutoSyncAfterOperation = boolVal
 			return nil
 		}
 	case "trash":

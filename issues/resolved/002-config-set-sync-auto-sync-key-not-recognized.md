@@ -46,3 +46,19 @@ The `config set` command handler does not have `sync.auto_sync_after_operation` 
 
 ## Recommended Fix
 FIX CODE - Add sync.auto_sync_after_operation to the list of settable config keys in the config set command handler
+
+## Resolution
+
+**Fixed in**: this session
+**Fix description**: Added sync.auto_sync_after_operation to both setConfigValue and getConfigValue functions in cmd/todoat/cmd/todoat.go
+**Test added**: TestConfigSetSyncAutoSyncAfterOperationCLI, TestConfigSetSyncAutoSyncAfterOperationValidationCLI in internal/config/cli_test.go
+
+### Verification Log
+```bash
+$ todoat config set sync.auto_sync_after_operation true
+Set sync.auto_sync_after_operation = true
+
+$ todoat config get sync.auto_sync_after_operation
+true
+```
+**Matches expected behavior**: YES
