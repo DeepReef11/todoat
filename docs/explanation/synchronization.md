@@ -23,6 +23,7 @@ The synchronization system provides bidirectional data synchronization between l
 - [Sync Queue System](#sync-queue-system)
 - [Manual Sync Workflow](#manual-sync-workflow)
 - [Configuration](#configuration)
+- [Database Locations](#database-locations)
 - [Database Schema](#database-schema)
 - [Performance Characteristics](#performance-characteristics)
 
@@ -1078,6 +1079,72 @@ func getCachePath(backendName string) string {
 - [Configuration](configuration.md) - Complete config documentation
 - [Backend System](backend-system.md) - Backend-specific settings
 - [Conflict Resolution](#conflict-resolution) - Strategy details
+
+---
+
+## Database Locations
+
+### Purpose
+Understand where todoat stores sync-related data to enable proper backup, troubleshooting, and data management.
+
+### Database Files
+
+todoat uses **separate database files** for different purposes:
+
+| Database | Location | Contents |
+|----------|----------|----------|
+| **Sync Queue** | `~/.todoat/todoat.db` | Pending sync operations, retry state |
+| **Backend Caches** | `~/.local/share/todoat/caches/[backend].db` | Cached tasks per remote backend |
+| **Default SQLite Backend** | `~/.local/share/todoat/tasks.db` | Tasks for the local sqlite backend |
+
+### Sync Queue Database (`~/.todoat/todoat.db`)
+
+The sync queue database is **separate** from the task cache databases. It stores:
+
+- `sync_queue` table: Pending create/update/delete operations
+- `sync_conflicts` table: Unresolved sync conflicts
+
+**Important**: This database persists across cache resets. If you delete a backend cache database, the sync queue may still contain operations referencing tasks that no longer exist locally.
+
+### Backend Cache Databases
+
+Each remote backend gets its own cache database at `~/.local/share/todoat/caches/`:
+
+```
+~/.local/share/todoat/caches/
+├── nextcloud.db    # Nextcloud backend cache
+├── todoist.db      # Todoist backend cache
+└── caldav.db       # CalDAV backend cache
+```
+
+These databases contain:
+- Cached tasks from the remote backend
+- Sync metadata (etags, timestamps)
+- List sync metadata (ctags, sync tokens)
+
+### Implications for Data Management
+
+**Resetting sync state completely:**
+```bash
+# Clear the sync queue
+todoat sync queue clear
+
+# Or manually delete sync queue database
+rm ~/.todoat/todoat.db
+
+# Delete backend caches if needed
+rm ~/.local/share/todoat/caches/*.db
+```
+
+**Backup considerations:**
+- Backup both `~/.todoat/` and `~/.local/share/todoat/` directories
+- The sync queue database contains pending operations that would be lost
+
+**Troubleshooting orphaned operations:**
+If you see sync operations for tasks that don't exist:
+1. Check `todoat sync queue` for pending operations
+2. Run `todoat sync queue clear` to remove orphaned entries
+3. Re-sync with `todoat sync` to restore consistent state
 
 ---
 

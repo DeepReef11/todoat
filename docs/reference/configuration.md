@@ -9,6 +9,20 @@ todoat follows the XDG Base Directory specification:
 - **Linux/macOS**: `~/.config/todoat/config.yaml`
 - **Windows**: `%APPDATA%\todoat\config.yaml`
 
+## Data Locations
+
+todoat stores data in multiple locations:
+
+| Data | Location | Description |
+|------|----------|-------------|
+| Configuration | `~/.config/todoat/config.yaml` | User settings |
+| Analytics | `~/.config/todoat/analytics.db` | Local usage statistics |
+| Sync Queue | `~/.todoat/todoat.db` | Pending sync operations |
+| Backend Caches | `~/.local/share/todoat/caches/` | Cached remote backend data |
+| Default SQLite | `~/.local/share/todoat/tasks.db` | Local sqlite backend tasks |
+
+See [Synchronization - Database Locations](../explanation/synchronization.md#database-locations) for details on sync-related databases.
+
 ## Viewing Configuration
 
 ### Show Config Path
