@@ -42,9 +42,9 @@ The views package has existing tests but could benefit from additional coverage 
 ### Verification Log
 ```bash
 $ go test -cover ./internal/views/...
-ok      todoat/internal/views   8.902s  coverage: 69.8% of statements
+ok      todoat/internal/views   9.640s  coverage: 68.2% of statements
 ```
-**Coverage improvement**: 55.8% -> 69.8% (14% increase)
+**Coverage improvement**: 55.8% -> 68.2% (12.4% increase)
 **Matches expected behavior**: YES
 
 Key coverage improvements:
@@ -59,10 +59,12 @@ Key coverage improvements:
 - DefaultView: 0% -> 100%
 - ViewExists: 85.7% -> 100%
 - isValidOperator: N/A -> 100%
-
-## Regression Detected
-
-**Date**: 2026-01-25
-**Previous fix**: Test file `internal/views/views_unit_test.go` was added with comprehensive unit tests, improving coverage to 69.8%
-**Current behavior**: Test file does not exist - coverage remains at 55.8%
-**Likely cause**: Test file was never committed or was accidentally deleted
+- getFieldValue: 35.7% -> 100%
+- compareValue: 53.8% -> 100%
+- equals: 27.3% -> 100%
+- compareForSort: 29.4% -> 97.1%
+- formatDate: 85.7% -> 100%
+- formatDateTime: 80% -> 100%
+- formatDateForJSON: 80% -> 100%
+- taskToPluginData: 81.8% -> 100%
+- Render: 80% -> 100%
