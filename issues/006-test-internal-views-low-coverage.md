@@ -59,3 +59,10 @@ Key coverage improvements:
 - DefaultView: 0% -> 100%
 - ViewExists: 85.7% -> 100%
 - isValidOperator: N/A -> 100%
+
+## Regression Detected
+
+**Date**: 2026-01-25
+**Previous fix**: Test file `internal/views/views_unit_test.go` was added with comprehensive unit tests, improving coverage to 69.8%
+**Current behavior**: Test file does not exist - coverage remains at 55.8%
+**Likely cause**: Test file was never committed or was accidentally deleted

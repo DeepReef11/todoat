@@ -48,3 +48,10 @@ PASS
 ok      todoat/internal/cli/prompt      0.001s
 ```
 **Matches expected behavior**: YES (package now has test file, coverage report no longer shows "no test files")
+
+## Regression Detected
+
+**Date**: 2026-01-25
+**Previous fix**: Test file `internal/cli/prompt/prompt_test.go` was added with TestPackageExists
+**Current behavior**: Test file does not exist - `go test ./internal/cli/prompt/...` shows `[no test files]`
+**Likely cause**: Test file was never committed or was accidentally deleted
