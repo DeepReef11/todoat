@@ -6003,15 +6003,23 @@ func doSync(cfg *Config, stdout, stderr io.Writer) error {
 		return lastError
 	}
 
+	// Phase 2: Pull from remote
+	// Get all lists and tasks from remote and sync to local
+	pullNew, pullUpdated, pullDeleted, pullErr := syncPullFromRemote(ctx, localBE, remoteBE, stderr)
+	if pullErr != nil {
+		_, _ = fmt.Fprintf(stderr, "Pull error: %v\n", pullErr)
+	}
+
 	// Update last sync time
 	syncMgr.SetLastSyncTime(time.Now())
 
 	// Report results
 	_, _ = fmt.Fprintf(stdout, "Sync completed with backend '%s'\n", remoteBackendName)
-	_, _ = fmt.Fprintf(stdout, "  Operations processed: %d\n", successCount)
+	_, _ = fmt.Fprintf(stdout, "  Push: %d operations processed\n", successCount)
 	if errorCount > 0 {
-		_, _ = fmt.Fprintf(stdout, "  Errors: %d\n", errorCount)
+		_, _ = fmt.Fprintf(stdout, "  Push errors: %d\n", errorCount)
 	}
+	_, _ = fmt.Fprintf(stdout, "  Pull: %d new, %d updated, %d deleted\n", pullNew, pullUpdated, pullDeleted)
 
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
@@ -6136,6 +6144,128 @@ func syncDeleteOperation(ctx context.Context, remoteBE backend.TaskManager, op S
 	}
 
 	return nil
+}
+
+// syncPullFromRemote pulls tasks from remote backend to local
+// Returns counts of new, updated, and deleted tasks
+func syncPullFromRemote(ctx context.Context, localBE, remoteBE backend.TaskManager, stderr io.Writer) (newCount, updatedCount, deletedCount int, err error) {
+	// Get all lists from remote
+	remoteLists, err := remoteBE.GetLists(ctx)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to get lists from remote: %w", err)
+	}
+
+	// Get all lists from local for comparison
+	localLists, err := localBE.GetLists(ctx)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to get lists from local: %w", err)
+	}
+
+	// Build map of local lists by name for quick lookup
+	localListByName := make(map[string]*backend.List)
+	for i := range localLists {
+		localListByName[localLists[i].Name] = &localLists[i]
+	}
+
+	// Build map of remote lists by name
+	remoteListByName := make(map[string]*backend.List)
+	for i := range remoteLists {
+		remoteListByName[remoteLists[i].Name] = &remoteLists[i]
+	}
+
+	// Process each remote list
+	for _, remoteList := range remoteLists {
+		// Get or create local list with same name
+		localList := localListByName[remoteList.Name]
+		if localList == nil {
+			// Create list locally
+			newList, createErr := localBE.CreateList(ctx, remoteList.Name)
+			if createErr != nil {
+				_, _ = fmt.Fprintf(stderr, "Failed to create local list '%s': %v\n", remoteList.Name, createErr)
+				continue
+			}
+			localList = newList
+			localListByName[remoteList.Name] = localList
+		}
+
+		// Get tasks from remote list
+		remoteTasks, getErr := remoteBE.GetTasks(ctx, remoteList.ID)
+		if getErr != nil {
+			_, _ = fmt.Fprintf(stderr, "Failed to get tasks from remote list '%s': %v\n", remoteList.Name, getErr)
+			continue
+		}
+
+		// Get tasks from local list
+		localTasks, getErr := localBE.GetTasks(ctx, localList.ID)
+		if getErr != nil {
+			_, _ = fmt.Fprintf(stderr, "Failed to get tasks from local list '%s': %v\n", localList.Name, getErr)
+			continue
+		}
+
+		// Build map of local tasks by ID
+		localTaskByID := make(map[string]*backend.Task)
+		for i := range localTasks {
+			localTaskByID[localTasks[i].ID] = &localTasks[i]
+		}
+
+		// Build map of remote tasks by ID
+		remoteTaskByID := make(map[string]*backend.Task)
+		for i := range remoteTasks {
+			remoteTaskByID[remoteTasks[i].ID] = &remoteTasks[i]
+		}
+
+		// Sync remote tasks to local
+		for _, remoteTask := range remoteTasks {
+			localTask := localTaskByID[remoteTask.ID]
+			if localTask == nil {
+				// Create task locally
+				_, createErr := localBE.CreateTask(ctx, localList.ID, &remoteTask)
+				if createErr != nil {
+					_, _ = fmt.Fprintf(stderr, "Failed to create local task '%s': %v\n", remoteTask.Summary, createErr)
+					continue
+				}
+				newCount++
+			} else {
+				// Check if remote is newer (compare modified times)
+				if remoteTask.Modified.After(localTask.Modified) {
+					// Update local task with remote data
+					_, updateErr := localBE.UpdateTask(ctx, localList.ID, &remoteTask)
+					if updateErr != nil {
+						_, _ = fmt.Fprintf(stderr, "Failed to update local task '%s': %v\n", remoteTask.Summary, updateErr)
+						continue
+					}
+					updatedCount++
+				}
+			}
+		}
+
+		// Delete local tasks that don't exist on remote
+		for _, localTask := range localTasks {
+			if remoteTaskByID[localTask.ID] == nil {
+				// Task exists locally but not on remote - delete locally
+				deleteErr := localBE.DeleteTask(ctx, localList.ID, localTask.ID)
+				if deleteErr != nil {
+					_, _ = fmt.Fprintf(stderr, "Failed to delete local task '%s': %v\n", localTask.Summary, deleteErr)
+					continue
+				}
+				deletedCount++
+			}
+		}
+	}
+
+	// Delete local lists that don't exist on remote
+	for _, localList := range localLists {
+		if remoteListByName[localList.Name] == nil {
+			// List exists locally but not on remote - delete locally
+			deleteErr := localBE.DeleteList(ctx, localList.ID)
+			if deleteErr != nil {
+				_, _ = fmt.Fprintf(stderr, "Failed to delete local list '%s': %v\n", localList.Name, deleteErr)
+				continue
+			}
+		}
+	}
+
+	return newCount, updatedCount, deletedCount, nil
 }
 
 // doSyncStatus displays sync status for all backends

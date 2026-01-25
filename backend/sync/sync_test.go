@@ -173,20 +173,63 @@ default_backend: nextcloud-test
 }
 
 // TestSyncPullCLI tests that `todoat sync` pulls changes from remote backend to local cache
+// This test verifies that tasks created on a remote backend are pulled to local
 func TestSyncPullCLI(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
-	// Create a config with sync enabled
-	createSyncConfig(t, tmpDir, true)
+	// Set up a second SQLite database as "remote" backend
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
 
-	// Run sync command
-	stdout, _, exitCode := cli.Execute("-y", "sync")
-
-	// Sync should complete (exit 0) or report no remote configured
-	// For this test, we expect it to run without crashing
-	if exitCode != 0 && !strings.Contains(stdout, "no remote backend") {
-		testutil.AssertContains(t, stdout, "Sync")
+	// Create config that points to the remote sqlite backend
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  remote-sqlite:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: remote-sqlite
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
 	}
+
+	// Initialize the remote database using the same CLI with -b flag to point to remote
+	// This ensures the schema is properly created via migrations
+	remoteStdout, remoteStderr, exitCode := cli.Execute("-y", "-b", "remote-sqlite", "Work", "add", "Remote task from server")
+	if exitCode != 0 {
+		t.Fatalf("failed to add task to remote: stdout=%s stderr=%s", remoteStdout, remoteStderr)
+	}
+
+	// Verify the task exists on remote but NOT on local
+	// Local should be empty since we only added to remote
+	localOutput := cli.MustExecute("-y", "list")
+	if strings.Contains(localOutput, "Remote task from server") {
+		t.Fatalf("task should not exist on local before sync: %s", localOutput)
+	}
+
+	// Run sync command - should pull from remote
+	stdout, stderr, exitCode := cli.Execute("-y", "sync")
+
+	// Sync should complete successfully
+	if exitCode != 0 {
+		t.Fatalf("sync failed with exit code %d: stdout=%s stderr=%s", exitCode, stdout, stderr)
+	}
+
+	// Sync output should show pull results
+	// Expected format: "Pull: X new, Y updated, Z deleted"
+	testutil.AssertContains(t, stdout, "Pull:")
+	testutil.AssertContains(t, stdout, "1 new") // Should have pulled 1 new task
+
+	// Verify the task was pulled to local (use 'Work' to list tasks in Work list)
+	listOutput := cli.MustExecute("-y", "Work")
+	testutil.AssertContains(t, listOutput, "Remote task from server")
 }
 
 // TestSyncPushCLI tests that `todoat sync` pushes queued local changes to remote backend
@@ -1081,7 +1124,7 @@ default_backend: sqlite-remote
 		t.Errorf("sync command failed: stdout=%s stderr=%s", stdout, stderr)
 	}
 	testutil.AssertContains(t, stdout, "Sync completed")
-	testutil.AssertContains(t, stdout, "Operations processed: 1")
+	testutil.AssertContains(t, stdout, "Push: 1 operations processed")
 
 	// Step 5: Verify queue is now empty
 	stdout = cli.MustExecute("-y", "sync", "queue")
