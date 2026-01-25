@@ -78,3 +78,39 @@ backends:
     path: "%s"
 `, dbPath)
 ```
+
+## Resolution
+
+**Fixed in**: 5f5ca55 (test: fix issue034 tests to isolate environment variables)
+**Fix description**: The actual issue was environment variable contamination. When `TODOAT_TODOIST_TOKEN` was set in the environment, auto-detection would pick Todoist backend instead of SQLite, causing the tests to use a shared database location. The fix adds environment variable isolation at the start of each test.
+
+**Test changes**: Added env var clearing in both `TestIssue034StatsWithAutoDetect` and `TestIssue034VacuumWithAutoDetect`:
+```go
+origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
+_ = os.Unsetenv("TODOAT_TODOIST_TOKEN")
+defer func() {
+    if origToken != "" {
+        _ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
+    }
+}()
+```
+
+### Verification Log
+```bash
+$ go test ./cmd/todoat/cmd -run TestIssue034 -v -count=3
+=== RUN   TestIssue034StatsWithAutoDetect
+--- PASS: TestIssue034StatsWithAutoDetect (0.04s)
+=== RUN   TestIssue034VacuumWithAutoDetect
+--- PASS: TestIssue034VacuumWithAutoDetect (0.04s)
+=== RUN   TestIssue034StatsWithAutoDetect
+--- PASS: TestIssue034StatsWithAutoDetect (0.03s)
+=== RUN   TestIssue034VacuumWithAutoDetect
+--- PASS: TestIssue034VacuumWithAutoDetect (0.04s)
+=== RUN   TestIssue034StatsWithAutoDetect
+--- PASS: TestIssue034StatsWithAutoDetect (0.04s)
+=== RUN   TestIssue034VacuumWithAutoDetect
+--- PASS: TestIssue034VacuumWithAutoDetect (0.04s)
+PASS
+ok  	todoat/cmd/todoat/cmd	0.221s
+```
+**Matches expected behavior**: YES
