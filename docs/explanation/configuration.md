@@ -52,9 +52,8 @@ The configuration file follows the XDG Base Directory Specification:
 
 | Priority | Location | Description |
 |----------|----------|-------------|
-| **1. Custom Path** | `--config` flag | Explicit path specified via command-line |
-| **2. XDG Config** | `$XDG_CONFIG_HOME/todoat/config.yaml` | User-specific configuration |
-| **3. Default** | `~/.config/todoat/config.yaml` | Fallback if XDG_CONFIG_HOME not set |
+| **1. XDG Config** | `$XDG_CONFIG_HOME/todoat/config.yaml` | User-specific configuration |
+| **2. Default** | `~/.config/todoat/config.yaml` | Fallback if XDG_CONFIG_HOME not set |
 
 **Related XDG Directories**:
 
@@ -613,106 +612,6 @@ func createConfigFromSample(configPath string) []byte {
 **Related Features**:
 - [Config Validation](#config-validation) - Validates sample config
 - [Views & Customization](views-customization.md) - Built-in views installation
-
----
-
-### Custom Config Path
-
-**Purpose**: Allows users to specify a custom configuration file location using the `--config` flag, enabling per-project configs, testing configurations, or non-standard setups.
-
-**How It Works**:
-
-1. **Flag Parsing**: `--config` flag is parsed before config loading
-2. **Path Resolution**: Determines if path is file or directory
-3. **Priority Override**: Custom path takes priority over XDG defaults
-4. **Singleton Reset**: Resets config singleton to force reload with new path
-5. **Relative Paths**: Supports relative paths (resolved from current directory)
-
-**User Journey**:
-
-1. User wants to use different config for testing/project
-2. User specifies config path: `todoat --config /path/to/config.yaml [command]`
-3. todoat loads config from specified path instead of default
-4. All operations use custom config for this session
-5. Default config location remains unchanged
-
-**Prerequisites**:
-- Config file exists at specified path (or directory to create in)
-- Valid YAML configuration in custom file
-
-**Outputs/Results**:
-- Custom config loaded and used for session
-- XDG default config unaffected
-- Useful for:
-  - Testing configurations
-  - Per-project settings
-  - CI/CD environments
-  - Development vs production configs
-
-**Technical Details**:
-
-**Usage Patterns**:
-
-```bash
-# Specify config file directly
-todoat --config /path/to/config.yaml MyList
-
-# Specify config directory (looks for config.yaml inside)
-todoat --config /path/to/config-dir/ MyList
-
-# Use current directory
-todoat --config . MyList
-# Looks for: ./todoat/config.yaml
-
-# Relative path
-todoat --config ../other-project/config.yaml MyList
-```
-
-**Path Resolution Logic**:
-
-```go
-func SetCustomConfigPath(path string) {
-    if path == "" || path == "." {
-        // Current directory: ./todoat/config.yaml
-        customConfigPath = filepath.Join(".", CONFIG_DIR_PATH, CONFIG_FILE_PATH)
-    } else {
-        info, err := os.Stat(path)
-        if err == nil && info.IsDir() {
-            // Existing directory: append config.yaml
-            customConfigPath = filepath.Join(path, CONFIG_FILE_PATH)
-        } else if filepath.Ext(path) == ".yaml" || filepath.Ext(path) == ".yml" {
-            // File path: use directly
-            customConfigPath = path
-        } else {
-            // Unknown: assume directory, append config.yaml
-            customConfigPath = filepath.Join(path, CONFIG_FILE_PATH)
-        }
-    }
-
-    // Reset singleton to force reload
-    configOnce = sync.Once{}
-    globalConfig = nil
-}
-```
-
-**Extension Detection**:
-- `.yaml`, `.yml` → treated as file path
-- `.YAML`, `.YML` → treated as file path
-- No extension → treated as directory
-
-**Testing Use Case**:
-
-```bash
-# Test config for Docker test server
-todoat --config ./todoat/config MyList
-
-# CI/CD config
-todoat --config /etc/todoat/ci-config.yaml sync
-```
-
-**Related Features**:
-- [XDG Base Directory Compliance](#xdg-base-directory-compliance) - Default config locations
-- [Config Validation](#config-validation) - Custom configs are validated too
 
 ---
 

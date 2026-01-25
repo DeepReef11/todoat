@@ -302,7 +302,6 @@ See [Notification Manager](notification-manager.md) for configuration details.
 | **Sync Configuration** | Global and per-backend sync settings | ✅ Stable | [Configuration](configuration.md#sync-configuration) |
 | **Path Expansion** | Expand `~`, `$HOME`, and environment variables in paths | ✅ Stable | [Configuration](configuration.md#path-expansion) |
 | **Auto-Initialization** | Create config from embedded sample on first run | ✅ Stable | [Configuration](configuration.md#auto-initialization) |
-| **Custom Config Path** | Specify config location with `--config` flag | ✅ Stable | [Configuration](configuration.md#custom-config-path) |
 | **Config Validation** | Verify configuration on load with helpful errors | ✅ Stable | [Configuration](configuration.md#config-validation) |
 | **Default Backend** | Set preferred backend when multiple configured | ✅ Stable | [Configuration](configuration.md#default-backend) |
 | **Backend Priority** | Ordered list for backend selection | ✅ Stable | [Configuration](configuration.md#backend-priority) |
