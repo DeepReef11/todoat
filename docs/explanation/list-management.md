@@ -593,7 +593,7 @@ Stores and manages additional information about lists beyond just names, includi
 **User Actions:**
 ```bash
 # View properties
-todoat list show "Work Tasks"
+todoat list info "Work Tasks"
 
 # Update color
 todoat list update "Work Tasks" --color "#FF5733"
