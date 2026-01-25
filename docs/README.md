@@ -32,7 +32,7 @@ Run the feature demo script to see all todoat features in action:
 ./docs/feature-demo.sh views      # Views and filtering demo
 ```
 
-Available sections: `version`, `config`, `lists`, `tasks`, `subtasks`, `dates`, `recurring`, `tags`, `priority`, `views`, `filters`, `json`, `sync`, `reminders`, `credentials`, `migration`, `export`, `scripting`, `tui`, `cleanup`
+Available sections: `version`, `help`, `config`, `lists`, `tasks`, `subtasks`, `dates`, `recurring`, `tags`, `priority`, `views`, `filters`, `json`, `sync`, `reminders`, `notifications`, `credentials`, `migration`, `export`, `scripting`, `tui`, `cleanup`, `all`
 
 ## Documentation
 
