@@ -344,6 +344,133 @@ sync:
 	}
 }
 
+// --- Config Set Sync Conflict Resolution Tests (080-fix-conflict-resolution-values-mismatch) ---
+
+// TestConfigSetSyncConflictResolutionServerWinsCLI verifies 'todoat config set sync.conflict_resolution server_wins' works
+func TestConfigSetSyncConflictResolutionServerWinsCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: false
+  conflict_resolution: local_wins
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.conflict_resolution", "server_wins")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the value was changed
+	stdout = cli.MustExecute("-y", "config", "get", "sync.conflict_resolution")
+	testutil.AssertContains(t, stdout, "server_wins")
+}
+
+// TestConfigSetSyncConflictResolutionLocalWinsCLI verifies 'todoat config set sync.conflict_resolution local_wins' works
+func TestConfigSetSyncConflictResolutionLocalWinsCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: false
+  conflict_resolution: server_wins
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.conflict_resolution", "local_wins")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the value was changed
+	stdout = cli.MustExecute("-y", "config", "get", "sync.conflict_resolution")
+	testutil.AssertContains(t, stdout, "local_wins")
+}
+
+// TestConfigSetSyncConflictResolutionMergeCLI verifies 'todoat config set sync.conflict_resolution merge' works
+func TestConfigSetSyncConflictResolutionMergeCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: false
+  conflict_resolution: server_wins
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.conflict_resolution", "merge")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the value was changed
+	stdout = cli.MustExecute("-y", "config", "get", "sync.conflict_resolution")
+	testutil.AssertContains(t, stdout, "merge")
+}
+
+// TestConfigSetSyncConflictResolutionKeepBothCLI verifies 'todoat config set sync.conflict_resolution keep_both' works
+func TestConfigSetSyncConflictResolutionKeepBothCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: false
+  conflict_resolution: server_wins
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.conflict_resolution", "keep_both")
+
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the value was changed
+	stdout = cli.MustExecute("-y", "config", "get", "sync.conflict_resolution")
+	testutil.AssertContains(t, stdout, "keep_both")
+}
+
+// TestConfigSetSyncConflictResolutionValidationCLI verifies invalid values are rejected with correct error message
+func TestConfigSetSyncConflictResolutionValidationCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: false
+  conflict_resolution: server_wins
+`)
+
+	// Test invalid value for sync.conflict_resolution
+	stdout, stderr := cli.ExecuteAndFail("-y", "config", "set", "sync.conflict_resolution", "invalid")
+	combined := stdout + stderr
+
+	// Error message should mention all valid values
+	if !strings.Contains(combined, "server_wins") {
+		t.Errorf("expected error message to mention 'server_wins', got: %s", combined)
+	}
+	if !strings.Contains(combined, "local_wins") {
+		t.Errorf("expected error message to mention 'local_wins', got: %s", combined)
+	}
+	if !strings.Contains(combined, "merge") {
+		t.Errorf("expected error message to mention 'merge', got: %s", combined)
+	}
+	if !strings.Contains(combined, "keep_both") {
+		t.Errorf("expected error message to mention 'keep_both', got: %s", combined)
+	}
+}
+
 // --- Config JSON Output Test ---
 
 // TestConfigJSONCLI verifies 'todoat --json config get' returns JSON format
