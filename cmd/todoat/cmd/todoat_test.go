@@ -1801,6 +1801,16 @@ func TestListVacuumCommand(t *testing.T) {
 // auto_detect_backend is enabled, which returns a DetectableBackend wrapper
 // instead of raw *sqlite.Backend. See issues/034-list-stats-vacuum-require-explicit-backend.md
 func TestIssue034StatsWithAutoDetect(t *testing.T) {
+	// Clear any Todoist credentials from env to ensure auto-detection uses SQLite
+	// (if TODOAT_TODOIST_TOKEN is set, auto-detect will pick Todoist instead)
+	origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
+	_ = os.Unsetenv("TODOAT_TODOIST_TOKEN")
+	defer func() {
+		if origToken != "" {
+			_ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
+		}
+	}()
+
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 	configPath := filepath.Join(tmpDir, "config.yaml")
@@ -1856,6 +1866,16 @@ auto_detect_backend: true
 // auto_detect_backend is enabled, which returns a DetectableBackend wrapper
 // instead of raw *sqlite.Backend. See issues/034-list-stats-vacuum-require-explicit-backend.md
 func TestIssue034VacuumWithAutoDetect(t *testing.T) {
+	// Clear any Todoist credentials from env to ensure auto-detection uses SQLite
+	// (if TODOAT_TODOIST_TOKEN is set, auto-detect will pick Todoist instead)
+	origToken := os.Getenv("TODOAT_TODOIST_TOKEN")
+	_ = os.Unsetenv("TODOAT_TODOIST_TOKEN")
+	defer func() {
+		if origToken != "" {
+			_ = os.Setenv("TODOAT_TODOIST_TOKEN", origToken)
+		}
+	}()
+
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 	configPath := filepath.Join(tmpDir, "config.yaml")

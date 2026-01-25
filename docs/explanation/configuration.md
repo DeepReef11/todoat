@@ -14,7 +14,6 @@ This document provides comprehensive documentation for todoat' configuration sys
   - [Sync Configuration](#sync-configuration)
   - [Path Expansion](#path-expansion)
   - [Auto-Initialization](#auto-initialization)
-  - [Custom Config Path](#custom-config-path)
   - [Config Validation](#config-validation)
   - [Default Backend](#default-backend)
   - [Backend Priority](#backend-priority)
@@ -1716,7 +1715,6 @@ func anotherFunction() {
 
 **Related Features**:
 - [Config Validation](#config-validation) - Validated on singleton initialization
-- [Custom Config Path](#custom-config-path) - Can reset singleton for new path
 
 ---
 

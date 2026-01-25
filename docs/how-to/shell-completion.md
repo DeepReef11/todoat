@@ -82,8 +82,8 @@ For permanent setup, add the above command to your PowerShell profile.
 
 ```bash
 todoat <TAB>
-# Shows: completion, config, credentials, help, list, migrate, notification,
-#        reminder, sync, tags, tui, version, view
+# Shows: analytics, completion, config, credentials, help, list, migrate,
+#        notification, reminder, sync, tags, tui, version, view
 ```
 
 ### List Names
