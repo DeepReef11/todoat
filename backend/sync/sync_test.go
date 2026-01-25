@@ -127,14 +127,11 @@ default_backend: nextcloud-test
 // TestSyncArchitectureListsFromLocalCache tests that listing tasks uses SQLite cache
 // when sync is enabled (sync architecture), providing instant responses.
 // Updated from Issue #0 to reflect Issue #001 architecture fix.
+// Updated from Issue #011 to use the same backend for add and list (proper isolation).
 func TestSyncArchitectureListsFromLocalCache(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
-	// First, add some tasks to SQLite
-	cli.MustExecute("-y", "Work", "add", "Local task 1")
-	cli.MustExecute("-y", "Work", "add", "Local task 2")
-
-	// Now configure a remote backend with sync enabled
+	// Configure a remote backend with sync enabled
 	// With offline_mode: auto, CLI uses SQLite cache directly
 	configContent := `
 sync:
@@ -158,6 +155,11 @@ default_backend: nextcloud-test
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
+
+	// Add tasks using the nextcloud-test backend (which uses SQLite cache for storage)
+	// This ensures the tasks are stored with backend_id="nextcloud-test" (Issue #011 fix)
+	cli.MustExecute("-y", "-b", "nextcloud-test", "Work", "add", "Local task 1")
+	cli.MustExecute("-y", "-b", "nextcloud-test", "Work", "add", "Local task 2")
 
 	// Listing tasks should use SQLite cache (sync architecture)
 	stdout, stderr, exitCode := cli.Execute("-y", "-b", "nextcloud-test", "Work", "get")

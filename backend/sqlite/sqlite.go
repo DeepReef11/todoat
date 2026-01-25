@@ -19,6 +19,12 @@ type Backend struct {
 	backendID string // Identifies this backend instance for data isolation
 }
 
+// BackendID returns the backend identifier for this instance (Issue #011).
+// This is used for cache isolation when multiple backends share the same database.
+func (b *Backend) BackendID() string {
+	return b.backendID
+}
+
 // Migration represents a database schema migration
 type Migration struct {
 	Version int

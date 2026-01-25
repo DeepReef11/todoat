@@ -3486,3 +3486,125 @@ func TestAnalyticsTrackingDisabled(t *testing.T) {
 		t.Errorf("analytics database should not be created when analytics is disabled")
 	}
 }
+
+// TestIssue011BackendDataIsolation verifies that different backends have isolated
+// data in the SQLite cache when sync is enabled.
+// Issue #011: SQLite cache mixes data between backends because createSyncFallbackBackend()
+// always uses sqlite.New() which defaults to backend_id="sqlite".
+func TestIssue011BackendDataIsolation(t *testing.T) {
+	// Create temp directory for config and data
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	// Create a config with sync enabled
+	configYAML := `
+default_backend: sqlite
+sync:
+  enabled: true
+  offline_mode: auto
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Simulate adding a task to "todoist" backend (via sync cache)
+	cfgTodoist := &Config{
+		Backend:     "todoist",
+		DBPath:      dbPath,
+		ConfigPath:  configPath,
+		NoPrompt:    true,
+		SyncEnabled: true, // Explicitly enable sync
+	}
+
+	var stdout1, stderr1 bytes.Buffer
+	exitCode := Execute([]string{"Inbox", "add", "Todoist Task"}, &stdout1, &stderr1, cfgTodoist)
+	if exitCode != 0 {
+		t.Fatalf("failed to add task to todoist backend: exit=%d, stderr=%s", exitCode, stderr1.String())
+	}
+
+	// Simulate adding a task to "nextcloud-test" backend (via sync cache)
+	cfgNextcloud := &Config{
+		Backend:     "nextcloud-test",
+		DBPath:      dbPath,
+		ConfigPath:  configPath,
+		NoPrompt:    true,
+		SyncEnabled: true, // Explicitly enable sync
+	}
+
+	var stdout2, stderr2 bytes.Buffer
+	exitCode = Execute([]string{"Work", "add", "Nextcloud Task"}, &stdout2, &stderr2, cfgNextcloud)
+	if exitCode != 0 {
+		t.Fatalf("failed to add task to nextcloud backend: exit=%d, stderr=%s", exitCode, stderr2.String())
+	}
+
+	// Now verify isolation: list tasks for each backend and check they only see their own lists
+	// List todoist lists
+	var stdout3, stderr3 bytes.Buffer
+	exitCode = Execute([]string{"list", "--json"}, &stdout3, &stderr3, cfgTodoist)
+	if exitCode != 0 {
+		t.Fatalf("failed to list todoist lists: exit=%d, stderr=%s", exitCode, stderr3.String())
+	}
+
+	// Parse the JSON output for todoist
+	todoistOutput := stdout3.String()
+	// Todoist backend should see "Inbox" list, but NOT "Work" list (which belongs to nextcloud)
+	if !strings.Contains(todoistOutput, "Inbox") {
+		t.Errorf("todoist backend should see Inbox list, got: %s", todoistOutput)
+	}
+	if strings.Contains(todoistOutput, `"name":"Work"`) {
+		t.Errorf("todoist backend should NOT see Work list (belongs to nextcloud), got: %s", todoistOutput)
+	}
+
+	// List nextcloud lists
+	var stdout4, stderr4 bytes.Buffer
+	exitCode = Execute([]string{"list", "--json"}, &stdout4, &stderr4, cfgNextcloud)
+	if exitCode != 0 {
+		t.Fatalf("failed to list nextcloud lists: exit=%d, stderr=%s", exitCode, stderr4.String())
+	}
+
+	// Parse the JSON output for nextcloud
+	nextcloudOutput := stdout4.String()
+	// Nextcloud backend should see "Work" list, but NOT "Inbox" list (which belongs to todoist)
+	if !strings.Contains(nextcloudOutput, "Work") {
+		t.Errorf("nextcloud backend should see Work list, got: %s", nextcloudOutput)
+	}
+	if strings.Contains(nextcloudOutput, `"name":"Inbox"`) {
+		t.Errorf("nextcloud backend should NOT see Inbox list (belongs to todoist), got: %s", nextcloudOutput)
+	}
+
+	// Additional verification: Check the database directly to verify backend_id values
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Check that tasks have different backend_ids
+	rows, err := db.Query("SELECT backend_id, summary FROM tasks")
+	if err != nil {
+		t.Fatalf("failed to query tasks: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	backendTasks := make(map[string][]string)
+	for rows.Next() {
+		var backendID, summary string
+		if err := rows.Scan(&backendID, &summary); err != nil {
+			t.Fatalf("failed to scan row: %v", err)
+		}
+		backendTasks[backendID] = append(backendTasks[backendID], summary)
+	}
+
+	// With the bug, all tasks would have backend_id="sqlite"
+	// After fix, tasks should have backend_id="todoist" and backend_id="nextcloud-test"
+	if _, ok := backendTasks["todoist"]; !ok {
+		t.Errorf("expected backend_id='todoist' in database, got backend_ids: %v", backendTasks)
+	}
+	if _, ok := backendTasks["nextcloud-test"]; !ok {
+		t.Errorf("expected backend_id='nextcloud-test' in database, got backend_ids: %v", backendTasks)
+	}
+	if tasks, ok := backendTasks["sqlite"]; ok && len(tasks) > 0 {
+		t.Errorf("tasks should NOT have backend_id='sqlite' when using named backends, but found: %v", tasks)
+	}
+}

@@ -707,6 +707,11 @@ func getBackendName(be backend.TaskManager) string {
 	// Use type name as backend identifier
 	switch v := be.(type) {
 	case *sqlite.Backend:
+		// Use the backendID for isolation when not default "sqlite" (Issue #011)
+		backendID := v.BackendID()
+		if backendID != "" && backendID != "sqlite" {
+			return "sqlite-" + backendID
+		}
 		return "sqlite"
 	case *todoist.Backend:
 		return "todoist"
@@ -2497,7 +2502,7 @@ func createBackendWithSyncFallback(cfg *Config, backendName string, dbPath strin
 	// Operations are queued in sync_queue for the daemon to sync later
 	if offlineMode == "auto" || offlineMode == "offline" {
 		utils.Debugf("Sync architecture: using SQLite cache for CLI (offline_mode=%s, backend=%s)", offlineMode, backendName)
-		return createSyncFallbackBackend(cfg, dbPath)
+		return createSyncFallbackBackend(cfg, dbPath, backendName)
 	}
 
 	// For "online" mode: CLI uses remote backend directly (bypass sync architecture)
@@ -2538,8 +2543,9 @@ func createBackendWithSyncFallback(cfg *Config, backendName string, dbPath strin
 
 // createSyncFallbackBackend creates a SQLite backend wrapped in syncAwareBackend
 // for offline operation with sync queue support.
-func createSyncFallbackBackend(cfg *Config, dbPath string) (backend.TaskManager, error) {
-	be, err := sqlite.New(dbPath)
+// The backendName is used to isolate data in the SQLite cache (Issue #011).
+func createSyncFallbackBackend(cfg *Config, dbPath string, backendName string) (backend.TaskManager, error) {
+	be, err := sqlite.NewWithBackendID(dbPath, backendName)
 	if err != nil {
 		return nil, err
 	}
@@ -5949,7 +5955,8 @@ func doSync(cfg *Config, stdout, stderr io.Writer) error {
 	defer func() { _ = remoteBE.Close() }()
 
 	// Get local SQLite backend to read task data for syncing
-	localBE, err := sqlite.New(dbPath)
+	// Use the remote backend name for isolation (Issue #011)
+	localBE, err := sqlite.NewWithBackendID(dbPath, remoteBackendName)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "Error opening local database: %v\n", err)
 		if cfg != nil && cfg.NoPrompt {
