@@ -392,7 +392,7 @@ switch strategy:
 5. User sees: "Conflicts: 1 (resolved with remote strategy)"
 
 **Manual Resolution:**
-1. With `conflict_resolution: manual`, conflicts are flagged for resolution
+1. With `conflict_resolution: keep_both`, conflicts create duplicate tasks for review
 2. User runs `todoat sync conflicts` to view conflicts
 3. User resolves each with `todoat sync conflicts resolve <uid> --strategy <strategy>`
 4. Available strategies for per-conflict resolution: `server_wins`, `local_wins`, `merge`, `keep_both`
@@ -402,7 +402,7 @@ switch strategy:
 ```yaml
 sync:
   enabled: true
-  conflict_resolution: remote  # Options: remote, local, manual
+  conflict_resolution: server_wins  # Options: server_wins, local_wins, merge, keep_both
 ```
 
 ### Outputs/Results
@@ -949,7 +949,7 @@ Configure synchronization behavior, conflict resolution, offline mode, and cache
 sync:
   enabled: true                          # Enable/disable sync globally
   local_backend: sqlite                  # Cache implementation (only sqlite supported)
-  conflict_resolution: remote            # Conflict strategy: remote, local, manual
+  conflict_resolution: server_wins       # Conflict strategy: server_wins, local_wins, merge, keep_both
   offline_mode: auto                     # auto, offline, online
 ```
 
@@ -980,11 +980,10 @@ backends:
 - Future: `postgres`, `mysql`, etc.
 
 **sync.conflict_resolution:**
-- `remote`: Remote changes override local (default)
-- `local`: Local changes override remote
-- `manual`: Flag for manual resolution
-
-Note: The `sync conflicts resolve --strategy` command uses different values (`server_wins`, `local_wins`, `merge`, `keep_both`) for per-conflict resolution.
+- `server_wins`: Remote/server changes override local (default)
+- `local_wins`: Local changes override remote
+- `merge`: Combine changes from both versions
+- `keep_both`: Keep both versions as separate tasks
 
 **sync.offline_mode:**
 - `auto`: Detect network automatically
@@ -1003,7 +1002,7 @@ Note: The `sync conflicts resolve --strategy` command uses different values (`se
    ```yaml
    sync:
      enabled: true
-     conflict_resolution: remote
+     conflict_resolution: server_wins
    ```
 
 3. Save and perform initial sync:
@@ -1015,7 +1014,7 @@ Note: The `sync conflicts resolve --strategy` command uses different values (`se
 1. Edit config to change strategy:
    ```yaml
    sync:
-     conflict_resolution: local
+     conflict_resolution: local_wins
    ```
 
 2. Next sync uses new strategy automatically

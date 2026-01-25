@@ -105,7 +105,7 @@ backends:
 sync:
   enabled: true
   local_backend: sqlite
-  conflict_resolution: remote
+  conflict_resolution: server_wins
 
 default_backend: nextcloud
 ```

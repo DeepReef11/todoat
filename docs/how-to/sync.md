@@ -18,7 +18,7 @@ Add to your `config.yaml`:
 sync:
   enabled: true
   local_backend: sqlite
-  conflict_resolution: remote
+  conflict_resolution: server_wins
   offline_mode: auto
 ```
 
@@ -147,16 +147,17 @@ The storage type for local cache.
 
 ```yaml
 sync:
-  conflict_resolution: remote
+  conflict_resolution: server_wins
 ```
 
 How to handle conflicts when the same task is modified both locally and remotely:
 
 | Strategy | Behavior |
 |----------|----------|
-| `remote` | Remote changes override local (default) |
-| `local` | Local changes override remote |
-| `manual` | Flag for manual resolution |
+| `server_wins` | Remote/server changes override local (default) |
+| `local_wins` | Local changes override remote |
+| `merge` | Combine changes from both versions |
+| `keep_both` | Keep both versions as separate tasks |
 
 ### offline_mode
 
@@ -270,32 +271,41 @@ A conflict happens when:
 
 ### Resolution Strategies
 
-**Remote Wins (Recommended for teams)**
+**Server Wins (Recommended for teams)**
 
 ```yaml
 sync:
-  conflict_resolution: remote
+  conflict_resolution: server_wins
 ```
 
-Remote version replaces local. Safe when remote is the source of truth.
+Remote/server version replaces local. Safe when remote is the source of truth.
 
 **Local Wins**
 
 ```yaml
 sync:
-  conflict_resolution: local
+  conflict_resolution: local_wins
 ```
 
 Local version kept, pushed to remote. Good for single-user offline work.
 
-**Manual Resolution**
+**Merge**
 
 ```yaml
 sync:
-  conflict_resolution: manual
+  conflict_resolution: merge
 ```
 
-Conflicts are flagged for manual resolution. You decide which version to keep on a case-by-case basis.
+Combine changes from both versions where possible. Useful when different fields were modified.
+
+**Keep Both**
+
+```yaml
+sync:
+  conflict_resolution: keep_both
+```
+
+Keep both versions as separate tasks. You decide which to keep later.
 
 ## Per-Backend Sync Settings
 
@@ -375,7 +385,7 @@ backends:
 
 sync:
   enabled: true
-  conflict_resolution: local
+  conflict_resolution: local_wins
   offline_mode: auto
 ```
 
@@ -391,7 +401,7 @@ backends:
 
 sync:
   enabled: true
-  conflict_resolution: remote
+  conflict_resolution: server_wins
   offline_mode: auto
 ```
 
@@ -412,7 +422,7 @@ backends:
 
 sync:
   enabled: true
-  conflict_resolution: remote
+  conflict_resolution: server_wins
 ```
 
 Each backend gets its own isolated cache.
