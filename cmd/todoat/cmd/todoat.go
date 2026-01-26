@@ -3745,6 +3745,11 @@ With -y flag (non-interactive mode), creates a default view or uses provided fla
 
 // doViewCreate creates a new view either interactively or from flags
 func doViewCreate(viewName, fieldsFlag, sortFlag, filterStatusFlag, filterPriorityFlag string, cfg *Config, stdout io.Writer) error {
+	// Validate view name first to prevent path traversal attacks
+	if err := views.ValidateViewName(viewName); err != nil {
+		return fmt.Errorf("invalid view name: %w", err)
+	}
+
 	viewsDir := getViewsDir(cfg)
 
 	// Check if view already exists

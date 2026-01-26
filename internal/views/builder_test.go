@@ -3,6 +3,7 @@ package views_test
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -459,5 +460,107 @@ func TestViewBuilderCompleteWorkflow(t *testing.T) {
 		if !fieldNames[ef] {
 			t.Errorf("expected field %q in workflow view, got: %v", ef, view.Fields)
 		}
+	}
+}
+
+// --- Path Traversal Security Tests ---
+
+// TestViewBuilderPathTraversal verifies that the builder rejects path traversal attempts
+// This is a SECURITY test - it ensures files cannot be created outside the views directory
+func TestViewBuilderPathTraversal(t *testing.T) {
+	// Create directory structure: /tmp/xxx/views/ and /tmp/xxx/outside/
+	tmpDir := t.TempDir()
+	viewsDir := filepath.Join(tmpDir, "views")
+	outsideDir := filepath.Join(tmpDir, "outside")
+
+	if err := os.MkdirAll(viewsDir, 0755); err != nil {
+		t.Fatalf("failed to create views dir: %v", err)
+	}
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatalf("failed to create outside dir: %v", err)
+	}
+
+	// Test path traversal names that should be rejected
+	traversalNames := []struct {
+		name        string
+		description string
+		checkPath   string // Path to check for file creation
+	}{
+		{"../malicious", "parent directory traversal", filepath.Join(tmpDir, "malicious.yaml")},
+		{"../outside/bad", "traversal to sibling directory", filepath.Join(outsideDir, "bad.yaml")},
+		{"foo/../../bad", "hidden traversal in path", filepath.Join(tmpDir, "bad.yaml")},
+		{"/tmp/absolute", "absolute path", "/tmp/absolute.yaml"},
+	}
+
+	for _, tc := range traversalNames {
+		t.Run(tc.description, func(t *testing.T) {
+			// Try to create a builder with path traversal name
+			builder := views.NewBuilder(tc.name, viewsDir)
+
+			tm := teatest.NewTestModel(t, builder, teatest.WithInitialTermSize(100, 30))
+			waitForRender(t, tm)
+
+			// Select a field so we can try to save
+			sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeySpace})
+
+			// Try to save
+			sendKeyAndWait(tm, tea.KeyMsg{Type: tea.KeyCtrlS})
+
+			// Wait for potential save
+			time.Sleep(100 * time.Millisecond)
+
+			// Cancel the builder
+			tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+			tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+
+			// SECURITY CHECK: Verify no file was created outside viewsDir
+			if tc.checkPath != "" {
+				if _, err := os.Stat(tc.checkPath); !os.IsNotExist(err) {
+					t.Errorf("SECURITY VULNERABILITY: File created at %s with traversal name %q", tc.checkPath, tc.name)
+				}
+			}
+
+			// Check that no file was created in the expected traversal location
+			// Also verify nothing was created in viewsDir with the raw name
+			entries, err := os.ReadDir(viewsDir)
+			if err != nil {
+				t.Fatalf("failed to read views dir: %v", err)
+			}
+
+			for _, entry := range entries {
+				t.Logf("file in viewsDir: %s", entry.Name())
+			}
+		})
+	}
+}
+
+// TestViewBuilderPathTraversalValidation tests that ValidateViewName properly rejects bad names
+func TestViewBuilderPathTraversalValidation(t *testing.T) {
+	testCases := []struct {
+		name        string
+		expectError bool
+	}{
+		{"valid-view", false},
+		{"my_view_123", false},
+		{"../../../etc/passwd", true},
+		{"../parent", true},
+		{"foo/bar", true},
+		{"foo\\bar", true},
+		{".hidden", true},
+		{"..", true},
+		{"", true},
+		{"foo/../bar", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := views.ValidateViewName(tc.name)
+			if tc.expectError && err == nil {
+				t.Errorf("ValidateViewName(%q) should return error, got nil", tc.name)
+			}
+			if !tc.expectError && err != nil {
+				t.Errorf("ValidateViewName(%q) should succeed, got error: %v", tc.name, err)
+			}
+		})
 	}
 }

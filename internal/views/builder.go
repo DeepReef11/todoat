@@ -501,6 +501,12 @@ func (b *Builder) save() (tea.Model, tea.Cmd) {
 		return b, nil
 	}
 
+	// Validate view name to prevent path traversal attacks
+	if err := ValidateViewName(b.viewName); err != nil {
+		b.errorMsg = "Error: " + err.Error()
+		return b, nil
+	}
+
 	// Build the view
 	view := View{
 		Name:    b.viewName,

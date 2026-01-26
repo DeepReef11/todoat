@@ -19,9 +19,10 @@ func NewLoader(viewsDir string) *Loader {
 	return &Loader{viewsDir: viewsDir}
 }
 
-// validateViewName checks if a view name is safe to use in file paths.
+// ValidateViewName checks if a view name is safe to use in file paths.
 // It rejects names containing path traversal sequences or invalid characters.
-func validateViewName(name string) error {
+// This function is exported so it can be called from view creation code.
+func ValidateViewName(name string) error {
 	// Reject empty names
 	if name == "" {
 		return fmt.Errorf("view name cannot be empty")
@@ -57,7 +58,7 @@ func (l *Loader) LoadView(name string) (*View, error) {
 	}
 
 	// Validate view name to prevent path traversal
-	if err := validateViewName(name); err != nil {
+	if err := ValidateViewName(name); err != nil {
 		return nil, err
 	}
 
@@ -174,7 +175,7 @@ func (l *Loader) ViewExists(name string) bool {
 	}
 
 	// Validate view name to prevent path traversal
-	if err := validateViewName(name); err != nil {
+	if err := ValidateViewName(name); err != nil {
 		return false
 	}
 
