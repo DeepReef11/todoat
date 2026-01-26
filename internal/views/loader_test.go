@@ -106,11 +106,17 @@ func TestLoaderViewExistsPathTraversal(t *testing.T) {
 	viewsDir := filepath.Join(tmpDir, "views")
 	secretDir := filepath.Join(tmpDir, "secret")
 
-	os.MkdirAll(viewsDir, 0755)
-	os.MkdirAll(secretDir, 0755)
+	if err := os.MkdirAll(viewsDir, 0755); err != nil {
+		t.Fatalf("failed to create views dir: %v", err)
+	}
+	if err := os.MkdirAll(secretDir, 0755); err != nil {
+		t.Fatalf("failed to create secret dir: %v", err)
+	}
 
 	// Create a file outside the views directory
-	os.WriteFile(filepath.Join(secretDir, "secret.yaml"), []byte("test"), 0644)
+	if err := os.WriteFile(filepath.Join(secretDir, "secret.yaml"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to write secret file: %v", err)
+	}
 
 	loader := NewLoader(viewsDir)
 
