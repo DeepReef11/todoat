@@ -2509,6 +2509,29 @@ func TestListImportPreservesMetadataCLI(t *testing.T) {
 	}
 }
 
+// TestListImportDuplicateNameCLI verifies that importing a list when a list with the same name already exists
+// returns an error (issue #9: List import allows creating duplicate list names)
+func TestListImportDuplicateNameCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with a task
+	cli.MustExecute("-y", "list", "create", "DuplicateTest")
+	cli.MustExecute("-y", "DuplicateTest", "add", "Task 1")
+
+	// Export the list
+	exportPath := cli.TmpDir() + "/DuplicateTest.json"
+	cli.MustExecute("-y", "list", "export", "DuplicateTest", "--format", "json", "--output", exportPath)
+
+	// Try to import while the list still exists - should fail
+	stdout, stderr := cli.ExecuteAndFail("-y", "list", "import", exportPath)
+
+	// Should fail with error about duplicate name
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+	if !strings.Contains(stderr, "already exists") {
+		t.Errorf("error should mention 'already exists', got stderr: %s, stdout: %s", stderr, stdout)
+	}
+}
+
 // =============================================================================
 // Database Maintenance Tests (039-database-maintenance)
 // =============================================================================

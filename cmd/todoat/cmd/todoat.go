@@ -1731,6 +1731,15 @@ func doListImport(ctx context.Context, be backend.TaskManager, inputPath, format
 		return importErr
 	}
 
+	// Check if a list with this name already exists
+	existingList, err := be.GetListByName(ctx, list.Name)
+	if err != nil {
+		return fmt.Errorf("failed to check for existing list: %w", err)
+	}
+	if existingList != nil {
+		return fmt.Errorf("list '%s' already exists", list.Name)
+	}
+
 	// Create the list in the backend
 	newList, err := be.CreateList(ctx, list.Name)
 	if err != nil {
