@@ -2974,7 +2974,8 @@ func (b *syncAwareBackend) triggerBackgroundPullSync() {
 	}()
 }
 
-// triggerAutoSync triggers an automatic sync if auto_sync_after_operation is enabled
+// triggerAutoSync triggers an automatic sync if auto_sync_after_operation is enabled.
+// The sync runs in the background so operations return immediately (Issue #014).
 func (b *syncAwareBackend) triggerAutoSync() {
 	if b.cfg == nil {
 		return
@@ -2992,41 +2993,28 @@ func (b *syncAwareBackend) triggerAutoSync() {
 		return // Don't auto-sync in explicit offline mode
 	}
 
-	// Check if another sync is running (including background sync)
+	// Check if another sync is running - if so, skip (will be picked up later)
 	b.syncMutex.Lock()
 	if b.syncRunning {
-		// Wait for the running sync to finish - we need to sync our changes
 		b.syncMutex.Unlock()
-		// Spin wait with small sleep (sync typically completes quickly)
-		// Timeout after 30 seconds to avoid indefinite blocking if sync gets stuck
-		const syncWaitTimeout = 30 * time.Second
-		startWait := time.Now()
-		for {
-			time.Sleep(50 * time.Millisecond)
-			if time.Since(startWait) > syncWaitTimeout {
-				utils.Debugf("Timeout waiting for running sync to complete after %v, skipping auto-sync", syncWaitTimeout)
-				return
-			}
-			b.syncMutex.Lock()
-			if !b.syncRunning {
-				break
-			}
-			b.syncMutex.Unlock()
-		}
+		utils.Debugf("Auto-sync skipped (another sync is running)")
+		return
 	}
 	b.lastBackgroundSync = time.Now()
 	b.syncRunning = true
 	b.syncMutex.Unlock()
 
-	defer func() {
-		b.syncMutex.Lock()
-		b.syncRunning = false
-		b.syncMutex.Unlock()
+	// Trigger sync in background goroutine (Issue #014)
+	go func() {
+		defer func() {
+			b.syncMutex.Lock()
+			b.syncRunning = false
+			b.syncMutex.Unlock()
+		}()
+		utils.Debugf("Background auto-sync triggered")
+		// Use a null writer for stderr to suppress sync output during auto-sync
+		_ = doSync(b.cfg, io.Discard, io.Discard)
 	}()
-
-	// Trigger sync (using doSync internally)
-	// Use a null writer for stderr to suppress sync output during auto-sync
-	_ = doSync(b.cfg, io.Discard, io.Discard)
 }
 
 // CreateTask creates a task and queues a sync operation
