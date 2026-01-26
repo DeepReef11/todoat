@@ -9368,7 +9368,7 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 				"conflict_resolution":       c.Sync.ConflictResolution,
 				"offline_mode":              c.GetOfflineMode(),
 				"connectivity_timeout":      c.GetConnectivityTimeout(),
-				"auto_sync_after_operation": c.Sync.AutoSyncAfterOperation,
+				"auto_sync_after_operation": c.GetAutoSyncAfterOperationConfigValue(),
 			}, nil
 		}
 		switch parts[1] {
@@ -9383,7 +9383,7 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 		case "connectivity_timeout":
 			return c.GetConnectivityTimeout(), nil
 		case "auto_sync_after_operation":
-			return c.Sync.AutoSyncAfterOperation, nil
+			return c.GetAutoSyncAfterOperationConfigValue(), nil
 		}
 	case "trash":
 		if len(parts) < 2 {
@@ -9563,7 +9563,7 @@ func setConfigValue(c *config.Config, key, value string) error {
 			if err != nil {
 				return fmt.Errorf("invalid value for sync.auto_sync_after_operation: %s (valid: true, false, yes, no, 1, 0)", value)
 			}
-			c.Sync.AutoSyncAfterOperation = boolVal
+			c.Sync.AutoSyncAfterOperation = &boolVal
 			return nil
 		}
 	case "trash":

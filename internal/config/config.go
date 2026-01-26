@@ -51,7 +51,7 @@ type SyncConfig struct {
 	ConflictResolution     string `yaml:"conflict_resolution"`
 	OfflineMode            string `yaml:"offline_mode"`              // auto, online, offline
 	ConnectivityTimeout    string `yaml:"connectivity_timeout"`      // e.g., "5s"
-	AutoSyncAfterOperation bool   `yaml:"auto_sync_after_operation"` // sync immediately after operations
+	AutoSyncAfterOperation *bool  `yaml:"auto_sync_after_operation"` // sync immediately after operations (default: true when sync enabled)
 }
 
 // BackendsConfig holds configuration for all backends
@@ -227,9 +227,31 @@ func (c *Config) GetConnectivityTimeout() string {
 	return timeout
 }
 
-// IsAutoSyncAfterOperationEnabled returns true if auto-sync after operation is enabled
+// IsAutoSyncAfterOperationEnabled returns true if auto-sync after operation is enabled.
+// When sync is enabled and auto_sync_after_operation is not explicitly set, it defaults to true.
+// When sync is disabled, auto-sync is always disabled regardless of the setting.
 func (c *Config) IsAutoSyncAfterOperationEnabled() bool {
-	return c.Sync.AutoSyncAfterOperation
+	// If sync is disabled, auto-sync is always disabled
+	if !c.Sync.Enabled {
+		return false
+	}
+	// If auto_sync_after_operation is not set (nil), default to true when sync is enabled
+	if c.Sync.AutoSyncAfterOperation == nil {
+		return true
+	}
+	// Return the explicitly set value
+	return *c.Sync.AutoSyncAfterOperation
+}
+
+// GetAutoSyncAfterOperationConfigValue returns the configured value of auto_sync_after_operation.
+// This returns the raw value stored in config, not the effective runtime value.
+// If not explicitly set, it returns the default (true when sync is enabled).
+func (c *Config) GetAutoSyncAfterOperationConfigValue() bool {
+	if c.Sync.AutoSyncAfterOperation == nil {
+		// Default to true when sync is enabled, false otherwise
+		return c.Sync.Enabled
+	}
+	return *c.Sync.AutoSyncAfterOperation
 }
 
 // IsAutoDetectEnabled returns true if auto-detection is enabled

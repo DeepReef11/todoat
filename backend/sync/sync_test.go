@@ -69,16 +69,21 @@ default_backend: nextcloud-test
 // CLI operations use SQLite cache directly (no network calls, no fallback warning).
 // This is the proper sync architecture: CLI → SQLite (instant) → queue → Daemon → Remote
 // Updated from Issue #0 to reflect Issue #001 architecture fix.
+// Updated for Issue #009: auto_sync_after_operation now defaults to true, so explicitly disable
+// to test the queuing behavior.
 func TestSyncArchitectureUsesLocalCache(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled and a remote backend configured
 	// With offline_mode: auto (default), CLI should always use SQLite cache
+	// Note: auto_sync_after_operation: false to test the queuing behavior
+	// (default is now true per Issue #009)
 	configContent := `
 sync:
   enabled: true
   local_backend: sqlite
   offline_mode: auto
+  auto_sync_after_operation: false
 backends:
   sqlite:
     type: sqlite
@@ -583,17 +588,22 @@ backends:
 // for sync operations when sync is enabled.
 // This is Issue #002: default_backend Configuration Ignored When Sync Enabled
 // Updated for Issue #001 sync architecture: CLI uses SQLite cache, daemon syncs to default_backend
+// Updated for Issue #009: auto_sync_after_operation now defaults to true, so explicitly disable
+// to test the queuing behavior.
 func TestDefaultBackendRespectedWhenSyncEnabled(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Create a config with sync enabled AND default_backend set to a remote backend
 	// With sync architecture (offline_mode: auto), CLI uses SQLite cache
 	// The default_backend is used by the daemon for sync operations
+	// Note: auto_sync_after_operation: false to test the queuing behavior
+	// (default is now true per Issue #009)
 	configContent := `
 sync:
   enabled: true
   local_backend: sqlite
   offline_mode: auto
+  auto_sync_after_operation: false
 backends:
   sqlite:
     type: sqlite
@@ -856,6 +866,8 @@ func TestConflictJSONOutputCLI(t *testing.T) {
 //
 // This is the core architectural requirement documented in synchronization.md:
 // User → CLI → SQLite (instant) → sync_queue → Daemon → Remote
+// Updated for Issue #009: auto_sync_after_operation now defaults to true, so explicitly disable
+// to test the queuing behavior.
 func TestSyncArchitectureCLIUsesSQLiteNotRemote(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
@@ -866,6 +878,8 @@ func TestSyncArchitectureCLIUsesSQLiteNotRemote(t *testing.T) {
 	// - sync.enabled: true
 	// - offline_mode: auto (default) - this is where the bug manifests
 	// - A reachable remote backend
+	// - auto_sync_after_operation: false to test the queuing behavior
+	//   (default is now true per Issue #009)
 	// The BUG: with offline_mode: auto, if remote is reachable, CLI uses remote directly
 	// EXPECTED: CLI always uses SQLite cache, regardless of remote availability
 	configContent := `
@@ -874,6 +888,7 @@ sync:
   local_backend: sqlite
   conflict_resolution: server_wins
   offline_mode: auto
+  auto_sync_after_operation: false
 backends:
   sqlite:
     type: sqlite
@@ -1235,15 +1250,17 @@ default_backend: sqlite-remote
 	}
 }
 
-// TestAutoSyncDisabledQueuesOnly verifies that with auto_sync_after_operation: false (default),
+// TestAutoSyncDisabledQueuesOnly verifies that with auto_sync_after_operation: false,
 // operations only queue but don't sync until manual `todoat sync` is run.
+// Note: The default is now true when sync is enabled (Issue #009), so we must explicitly set false.
 func TestAutoSyncDisabledQueuesOnly(t *testing.T) {
 	cli, tmpDir := newSyncTestCLI(t)
 
 	// Set up path for "remote" SQLite database
 	remoteDBPath := filepath.Join(tmpDir, "remote.db")
 
-	// Create a config WITHOUT auto_sync_after_operation (defaults to false)
+	// Create a config with auto_sync_after_operation explicitly disabled
+	// (default is now true when sync.enabled is true, per Issue #009)
 	// Use offline_mode: auto (default) - CLI uses local cache, sync pushes to remote
 	configContent := `
 sync:
@@ -1251,6 +1268,7 @@ sync:
   local_backend: sqlite
   conflict_resolution: server_wins
   offline_mode: auto
+  auto_sync_after_operation: false
 backends:
   sqlite:
     type: sqlite

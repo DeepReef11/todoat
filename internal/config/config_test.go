@@ -830,3 +830,83 @@ func TestExpandPathEmpty(t *testing.T) {
 		t.Errorf("ExpandPath(\"\") = %q, want empty string", got)
 	}
 }
+
+// =============================================================================
+// Tests for Issue 009: Auto-Sync Default When Sync Enabled
+// =============================================================================
+
+// TestAutoSyncDefaultsToTrueWhenSyncEnabled verifies that when sync.enabled: true
+// and auto_sync_after_operation is not explicitly set, auto-sync should default to true.
+// This is Issue #009: Auto-Sync Not Triggering After Task Operations
+func TestAutoSyncDefaultsToTrueWhenSyncEnabled(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	tests := []struct {
+		name                    string
+		config                  *Config
+		expectedAutoSyncAfterOp bool
+	}{
+		{
+			name: "sync enabled, auto_sync not set - should default to true",
+			config: &Config{
+				Sync: SyncConfig{
+					Enabled:                true,
+					AutoSyncAfterOperation: nil, // not set
+				},
+			},
+			expectedAutoSyncAfterOp: true,
+		},
+		{
+			name: "sync enabled, auto_sync explicitly true",
+			config: &Config{
+				Sync: SyncConfig{
+					Enabled:                true,
+					AutoSyncAfterOperation: &trueVal,
+				},
+			},
+			expectedAutoSyncAfterOp: true,
+		},
+		{
+			name: "sync enabled, auto_sync explicitly false",
+			config: &Config{
+				Sync: SyncConfig{
+					Enabled:                true,
+					AutoSyncAfterOperation: &falseVal,
+				},
+			},
+			// When explicitly set to false, should remain false
+			expectedAutoSyncAfterOp: false,
+		},
+		{
+			name: "sync disabled, auto_sync not set - should be false",
+			config: &Config{
+				Sync: SyncConfig{
+					Enabled:                false,
+					AutoSyncAfterOperation: nil,
+				},
+			},
+			expectedAutoSyncAfterOp: false,
+		},
+		{
+			name: "sync disabled, auto_sync explicitly true - should still be false",
+			config: &Config{
+				Sync: SyncConfig{
+					Enabled:                false,
+					AutoSyncAfterOperation: &trueVal,
+				},
+			},
+			// When sync is disabled, auto-sync should be disabled regardless
+			expectedAutoSyncAfterOp: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.IsAutoSyncAfterOperationEnabled()
+			if got != tt.expectedAutoSyncAfterOp {
+				t.Errorf("IsAutoSyncAfterOperationEnabled() = %v, want %v", got, tt.expectedAutoSyncAfterOp)
+			}
+		})
+	}
+}
