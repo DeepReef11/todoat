@@ -2989,8 +2989,15 @@ func (b *syncAwareBackend) triggerAutoSync() {
 		// Wait for the running sync to finish - we need to sync our changes
 		b.syncMutex.Unlock()
 		// Spin wait with small sleep (sync typically completes quickly)
+		// Timeout after 30 seconds to avoid indefinite blocking if sync gets stuck
+		const syncWaitTimeout = 30 * time.Second
+		startWait := time.Now()
 		for {
 			time.Sleep(50 * time.Millisecond)
+			if time.Since(startWait) > syncWaitTimeout {
+				utils.Debugf("Timeout waiting for running sync to complete after %v, skipping auto-sync", syncWaitTimeout)
+				return
+			}
 			b.syncMutex.Lock()
 			if !b.syncRunning {
 				break

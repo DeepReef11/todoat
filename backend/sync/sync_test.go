@@ -600,6 +600,9 @@ default_backend: remote-sqlite
 	if !strings.Contains(stdout2, "Remote task from server") {
 		t.Errorf("expected remote task to appear after background sync on read.\nFirst read:\n%s\nSecond read:\n%s", stdout1, stdout2)
 	}
+
+	// Wait for any remaining background goroutines to complete before cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 // TestBackgroundPullSyncCooldownCLI tests that background pull sync respects a cooldown period
@@ -704,11 +707,11 @@ default_backend: remote-sqlite
 
 	// Read from local (via sync architecture) - should NOT have the task
 	// since auto_sync_after_operation is disabled, no background sync occurs on read
-	stdout := cli.MustExecute("-y", "Work")
+	_ = cli.MustExecute("-y", "Work")
 	time.Sleep(300 * time.Millisecond)
 
 	// The task should NOT appear (no background sync on read when disabled)
-	stdout = cli.MustExecute("-y", "Work")
+	stdout := cli.MustExecute("-y", "Work")
 	if strings.Contains(stdout, "Remote only task") {
 		t.Errorf("task should not appear when auto_sync_after_operation is disabled.\nOutput:\n%s", stdout)
 	}
