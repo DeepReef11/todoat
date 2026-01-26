@@ -137,8 +137,19 @@ todoat MyList -s TODO      # Filtered task listing
 The background sync:
 - Runs in the background without blocking the command
 - Only pulls changes from remote (never pushes local changes)
-- Has a 30-second cooldown to prevent excessive network requests
+- Has a configurable cooldown (default: 30 seconds) to prevent excessive network requests
 - Ensures you see fresh data from remote backends
+
+#### Configuring the Cooldown
+
+The background pull cooldown can be adjusted via configuration:
+
+```yaml
+sync:
+  background_pull_cooldown: "30s"  # default, minimum: 5s
+```
+
+Use shorter values (e.g., `"10s"`) for faster connections, or longer values (e.g., `"2m"`) for metered connections.
 
 This means your task list automatically stays up-to-date as you use the CLI, without needing to manually run `todoat sync` before each read.
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -52,6 +53,7 @@ type SyncConfig struct {
 	OfflineMode            string `yaml:"offline_mode"`              // auto, online, offline
 	ConnectivityTimeout    string `yaml:"connectivity_timeout"`      // e.g., "5s"
 	AutoSyncAfterOperation *bool  `yaml:"auto_sync_after_operation"` // sync immediately after operations (default: true when sync enabled)
+	BackgroundPullCooldown string `yaml:"background_pull_cooldown"`  // cooldown between background pull syncs (default: "30s", minimum: "5s")
 }
 
 // BackendsConfig holds configuration for all backends
@@ -184,6 +186,17 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Validate background_pull_cooldown if specified
+	if c.Sync.BackgroundPullCooldown != "" {
+		duration, err := time.ParseDuration(c.Sync.BackgroundPullCooldown)
+		if err != nil {
+			return fmt.Errorf("invalid duration for sync.background_pull_cooldown: %q", c.Sync.BackgroundPullCooldown)
+		}
+		if duration < 5*time.Second {
+			return fmt.Errorf("sync.background_pull_cooldown must be at least 5s, got %q", c.Sync.BackgroundPullCooldown)
+		}
+	}
+
 	return nil
 }
 
@@ -225,6 +238,27 @@ func (c *Config) GetConnectivityTimeout() string {
 		return "5s"
 	}
 	return timeout
+}
+
+// GetBackgroundPullCooldown returns the background pull sync cooldown setting.
+// Returns "30s" as default if not configured.
+func (c *Config) GetBackgroundPullCooldown() string {
+	cooldown := c.Sync.BackgroundPullCooldown
+	if cooldown == "" {
+		return "30s"
+	}
+	return cooldown
+}
+
+// GetBackgroundPullCooldownDuration returns the background pull sync cooldown as a time.Duration.
+// Returns 30 seconds as default if not configured or if parsing fails.
+func (c *Config) GetBackgroundPullCooldownDuration() time.Duration {
+	cooldownStr := c.GetBackgroundPullCooldown()
+	duration, err := time.ParseDuration(cooldownStr)
+	if err != nil {
+		return 30 * time.Second // Default fallback
+	}
+	return duration
 }
 
 // IsAutoSyncAfterOperationEnabled returns true if auto-sync after operation is enabled.

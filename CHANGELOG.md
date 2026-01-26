@@ -19,4 +19,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Issue tracking for config key and value validation bugs
 - Integration tests for credential manager keyring flow (#010)
 - Documentation for background pull sync on read operations
-- Roadmap issue for configurable background pull cooldown (#082)
+- Configurable `sync.background_pull_cooldown` option to control cooldown between background pull syncs (default: 30s, minimum: 5s) (#082)

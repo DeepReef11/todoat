@@ -134,6 +134,7 @@ Restores the default configuration. Requires confirmation.
 | `sync.conflict_resolution` | string | `server_wins`, `local_wins`, `merge`, or `keep_both` |
 | `sync.connectivity_timeout` | string | Network timeout for connectivity checks (default: `5s`) |
 | `sync.auto_sync_after_operation` | bool | Auto-sync after add/update/delete operations (default: `true` when sync enabled) |
+| `sync.background_pull_cooldown` | string | Cooldown between background pull syncs (default: `30s`, minimum: `5s`) |
 | `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `false`) |
 | `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |

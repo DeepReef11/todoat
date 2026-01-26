@@ -910,3 +910,237 @@ func TestAutoSyncDefaultsToTrueWhenSyncEnabled(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// Tests for Issue 082: Background Pull Sync Cooldown Configuration
+// =============================================================================
+
+// TestBackgroundPullCooldownConfig verifies that the config value is parsed and applied correctly
+func TestBackgroundPullCooldownConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name     string
+		config   string
+		expected string
+	}{
+		{
+			name: "30 seconds",
+			config: `
+sync:
+  enabled: true
+  background_pull_cooldown: "30s"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: "30s",
+		},
+		{
+			name: "1 minute",
+			config: `
+sync:
+  enabled: true
+  background_pull_cooldown: "1m"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: "1m",
+		},
+		{
+			name: "5 seconds (minimum valid)",
+			config: `
+sync:
+  enabled: true
+  background_pull_cooldown: "5s"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: "5s",
+		},
+		{
+			name: "2 minutes",
+			config: `
+sync:
+  enabled: true
+  background_pull_cooldown: "2m"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: "2m",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(tmpDir, tt.name+"-config.yaml")
+			if err := os.WriteFile(configPath, []byte(tt.config), 0644); err != nil {
+				t.Fatalf("failed to write config: %v", err)
+			}
+
+			cfg, err := Load(configPath)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			got := cfg.GetBackgroundPullCooldown()
+			if got != tt.expected {
+				t.Errorf("GetBackgroundPullCooldown() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestBackgroundPullCooldownDefault verifies default value is 30 seconds when not specified
+func TestBackgroundPullCooldownDefault(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *Config
+		expected string
+	}{
+		{
+			name:     "nil config sync - returns default 30s",
+			config:   &Config{},
+			expected: "30s",
+		},
+		{
+			name: "sync enabled but cooldown not set - returns default 30s",
+			config: &Config{
+				Sync: SyncConfig{
+					Enabled: true,
+				},
+			},
+			expected: "30s",
+		},
+		{
+			name: "sync disabled and cooldown not set - returns default 30s",
+			config: &Config{
+				Sync: SyncConfig{
+					Enabled: false,
+				},
+			},
+			expected: "30s",
+		},
+		{
+			name: "empty string cooldown - returns default 30s",
+			config: &Config{
+				Sync: SyncConfig{
+					Enabled:                true,
+					BackgroundPullCooldown: "",
+				},
+			},
+			expected: "30s",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.GetBackgroundPullCooldown()
+			if got != tt.expected {
+				t.Errorf("GetBackgroundPullCooldown() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestBackgroundPullCooldownValidation verifies invalid values are rejected
+func TestBackgroundPullCooldownValidation(t *testing.T) {
+	tests := []struct {
+		name      string
+		cooldown  string
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name:     "valid 30s",
+			cooldown: "30s",
+			wantErr:  false,
+		},
+		{
+			name:     "valid 1m",
+			cooldown: "1m",
+			wantErr:  false,
+		},
+		{
+			name:     "valid 5s (minimum)",
+			cooldown: "5s",
+			wantErr:  false,
+		},
+		{
+			name:      "invalid - 4s (below minimum)",
+			cooldown:  "4s",
+			wantErr:   true,
+			errSubstr: "at least 5s",
+		},
+		{
+			name:      "invalid - negative",
+			cooldown:  "-10s",
+			wantErr:   true,
+			errSubstr: "at least 5s",
+		},
+		{
+			name:      "invalid - zero",
+			cooldown:  "0s",
+			wantErr:   true,
+			errSubstr: "at least 5s",
+		},
+		{
+			name:      "invalid - not a duration",
+			cooldown:  "notaduration",
+			wantErr:   true,
+			errSubstr: "invalid duration",
+		},
+		{
+			name:     "valid empty string (uses default)",
+			cooldown: "",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Backends: BackendsConfig{
+					SQLite: SQLiteConfig{
+						Enabled: true,
+						Path:    "/path/to/db",
+					},
+				},
+				DefaultBackend: "sqlite",
+				OutputFormat:   "text",
+				Sync: SyncConfig{
+					Enabled:                true,
+					BackgroundPullCooldown: tt.cooldown,
+				},
+			}
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error for cooldown %q, got nil", tt.cooldown)
+				} else if tt.errSubstr != "" && !containsSubstring(err.Error(), tt.errSubstr) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errSubstr)
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error for cooldown %q: %v", tt.cooldown, err)
+			}
+		})
+	}
+}
+
+// containsSubstring checks if s contains substr
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

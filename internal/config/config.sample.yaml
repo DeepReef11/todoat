@@ -70,6 +70,7 @@ sync:
   # offline_mode: auto                       # Options: auto | online | offline
   # connectivity_timeout: "5s"               # Timeout for connectivity checks
   # auto_sync_after_operation: false         # Auto-sync after add/update/delete operations
+  # background_pull_cooldown: "30s"          # Cooldown between background pull syncs (default: 30s, minimum: 5s)
 
 # =============================================================================
 # User Interface Settings

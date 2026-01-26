@@ -2917,13 +2917,10 @@ type syncAwareBackend struct {
 	syncRunning        bool       // true if a sync operation is currently running
 }
 
-// backgroundSyncCooldown is the minimum time between background sync operations
-const backgroundSyncCooldown = 30 * time.Second
-
 // triggerBackgroundPullSync triggers a background pull-only sync for read operations.
 // It implements issue #7: auto-sync should pull before read operations.
 // The sync runs in the background so read operations return immediately.
-// A cooldown period prevents excessive syncing.
+// A cooldown period (configurable via sync.background_pull_cooldown) prevents excessive syncing.
 //
 // IMPORTANT: This uses doPullOnlySync instead of doSync to avoid:
 // 1. Processing pending push operations (those are handled by triggerAutoSync)
@@ -2945,6 +2942,9 @@ func (b *syncAwareBackend) triggerBackgroundPullSync() {
 		return // Don't auto-sync in explicit offline mode
 	}
 
+	// Get the cooldown duration from config (default: 30s, minimum: 5s)
+	cooldown := appConfig.GetBackgroundPullCooldownDuration()
+
 	// Check cooldown and running status to avoid concurrent/excessive syncing
 	b.syncMutex.Lock()
 	if b.syncRunning {
@@ -2953,9 +2953,9 @@ func (b *syncAwareBackend) triggerBackgroundPullSync() {
 		return
 	}
 	timeSinceLastSync := time.Since(b.lastBackgroundSync)
-	if timeSinceLastSync < backgroundSyncCooldown {
+	if timeSinceLastSync < cooldown {
 		b.syncMutex.Unlock()
-		utils.Debugf("Background sync skipped (cooldown: %v since last sync)", timeSinceLastSync)
+		utils.Debugf("Background sync skipped (cooldown: %v since last sync, configured cooldown: %v)", timeSinceLastSync, cooldown)
 		return
 	}
 	b.lastBackgroundSync = time.Now()
@@ -9987,6 +9987,17 @@ func setConfigValue(c *config.Config, key, value string) error {
 				return fmt.Errorf("invalid value for sync.auto_sync_after_operation: %s (valid: true, false, yes, no, 1, 0)", value)
 			}
 			c.Sync.AutoSyncAfterOperation = &boolVal
+			return nil
+		case "background_pull_cooldown":
+			// Validate duration format and minimum value
+			duration, err := time.ParseDuration(value)
+			if err != nil {
+				return fmt.Errorf("invalid duration for sync.background_pull_cooldown: %s (use format like 30s, 1m, 2m30s)", value)
+			}
+			if duration < 5*time.Second {
+				return fmt.Errorf("sync.background_pull_cooldown must be at least 5s, got %s", value)
+			}
+			c.Sync.BackgroundPullCooldown = value
 			return nil
 		}
 	case "trash":

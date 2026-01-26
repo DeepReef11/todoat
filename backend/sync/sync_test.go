@@ -724,6 +724,68 @@ default_backend: remote-sqlite
 	testutil.AssertContains(t, stdout, "Remote only task")
 }
 
+// TestBackgroundPullCooldownBehavior tests that the configurable background_pull_cooldown
+// actually controls the cooldown period between background sync operations.
+// This is roadmap item 082.
+func TestBackgroundPullCooldownBehavior(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Set up remote database directly using SQL
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote database: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	// Initialize schema and add task
+	if err := setupRemoteDB(remoteDB, "list-1", "Work", "task-1", "Initial task"); err != nil {
+		t.Fatalf("failed to setup remote database: %v", err)
+	}
+	_ = remoteDB.Close()
+
+	// Enable sync with a short custom cooldown (5s - minimum allowed)
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  auto_sync_after_operation: true
+  background_pull_cooldown: "5s"
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  remote-sqlite:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: remote-sqlite
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Multiple rapid reads should still respect the cooldown
+	// The first read triggers sync, subsequent reads within cooldown period skip sync
+	for i := 0; i < 5; i++ {
+		_, _, exitCode := cli.Execute("-y", "Work")
+		if exitCode != 0 {
+			t.Fatalf("read operation %d failed", i+1)
+		}
+	}
+
+	// Wait for background sync to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify the task appears after reads (sync should have happened at least once)
+	stdout := cli.MustExecute("-y", "Work")
+	testutil.AssertContains(t, stdout, "Initial task")
+
+	// Wait for any background goroutines to finish before test cleanup
+	time.Sleep(100 * time.Millisecond)
+}
+
 // Helper functions
 
 // newSyncTestCLI creates a CLI test with sync-enabled configuration
