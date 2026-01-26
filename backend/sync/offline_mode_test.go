@@ -237,6 +237,7 @@ sync:
   local_backend: sqlite
   offline_mode: ` + mode + `
   connectivity_timeout: ` + timeout + `
+  auto_sync_after_operation: false
 backends:
   sqlite:
     type: sqlite
