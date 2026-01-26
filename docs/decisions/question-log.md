@@ -11,6 +11,7 @@ For current design decisions, see `docs/explanation/`.
 | ARCH-002 | 2026-01-26 | How should conflict resolution strategies be fully implemented? | Full implementation - implement all four strategies with proper task data manipulation |
 | COMPAT-005 | 2026-01-26 | Should sync.auto_sync_after_operation documentation be updated to reflect new default? | Yes - update docs to reflect default is now true when sync enabled |
 | ARCH-006 | 2026-01-26 | Should the background pull sync cooldown (30s) be configurable? | Yes - add sync.background_pull_cooldown config option |
+| UX-004 | 2026-01-26 | What should the default behavior be for bulk destructive operations? | Require confirmation - always prompt on bulk delete/update affecting >1 task |
 
 ---
 
@@ -85,5 +86,24 @@ For current design decisions, see `docs/explanation/`.
 - [x] Option B - Make configurable: Add `sync.background_pull_cooldown` config option (default: 30s). Power users with fast connections might want lower values; metered connections might want higher.
 
 **Impact**: Affects sync behavior, network usage, and data freshness for users with auto_sync enabled.
+
+**Status**: answered
+
+---
+
+### [UX-004] What should the default behavior be for bulk destructive operations?
+
+**Asked**: 2026-01-26
+**Answered**: 2026-01-26
+**Documented in**: `docs/explanation/cli-interface.md`
+
+**Context**: The unreviewed idea `docs/ideas/unreviewed/007-bulk-operations-cli.md` proposes bulk operations like `todoat Work delete --all --filter-status DONE`. The safety default for destructive bulk operations needs to be decided.
+
+**Options**:
+- [x] Option A - Require confirmation: Always prompt for confirmation on bulk delete/update affecting >1 task. Use `--force` and no-prompt `-y`to skip.
+- [ ] Option B - Require dry-run first: Bulk destructive operations fail unless `--force` is passed OR user ran `--dry-run` in the same session within last 5 minutes showing the affected tasks.
+- [ ] Option C - Trust the user: No special confirmation needed. Users are expected to use `--dry-run` voluntarily. CLI tools should be fast and scriptable.
+
+**Impact**: Affects user safety vs. scripting convenience trade-off. Important for users who automate task management.
 
 **Status**: answered

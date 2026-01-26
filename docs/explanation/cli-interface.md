@@ -1282,6 +1282,25 @@ rootCmd.PersistentFlags().BoolP("no-prompt", "y", false, "Disable interactive pr
 - [Task Search and Selection](task-management.md#task-search-and-selection) - Affected by no-prompt mode
 - [Interactive List Selection](#interactive-list-selection) - Bypassed in no-prompt mode
 
+### Design Decision: Bulk Operation Confirmation
+
+**Decision**: Always prompt for confirmation on bulk delete/update operations affecting more than one task. Use `--force` or `-y` to skip.
+
+**Context**: Bulk operations like `todoat Work delete --all --filter-status DONE` can affect many tasks at once. The safety default for destructive bulk operations balances user protection against accidental data loss with scripting convenience.
+
+**Rationale**: Requiring confirmation by default protects users from unintended bulk deletions while maintaining scriptability:
+- Users are shown the count and list of affected tasks before confirming
+- The `--force` flag and existing `-y`/`--no-prompt` flags allow skipping confirmation for scripting
+- This follows the principle of least surprise: destructive operations require explicit confirmation
+
+**Alternatives Considered**:
+- Requiring `--dry-run` first: More safety but adds friction to legitimate workflows
+- Trusting the user completely: Faster for power users but risks accidental data loss
+
+**User Impact**: Users performing bulk destructive operations (delete, update) will see a confirmation prompt listing affected tasks. Scripts can use `--force` or `-y` to maintain non-interactive behavior.
+
+**Related**: [UX-004] - See `docs/decisions/question-log.md` for full discussion
+
 ---
 
 ## JSON Output Mode
