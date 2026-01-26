@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -2900,8 +2901,68 @@ func loadSyncConfigFromAppConfig(cfg *Config, appConfig *config.Config) {
 // syncAwareBackend wraps a TaskManager to queue sync operations
 type syncAwareBackend struct {
 	backend.TaskManager
-	syncMgr *SyncManager
-	cfg     *Config // stored for auto-sync support
+	syncMgr            *SyncManager
+	cfg                *Config    // stored for auto-sync support
+	lastBackgroundSync time.Time  // last time a background sync was triggered (cooldown)
+	syncMutex          sync.Mutex // mutex for thread-safe access to lastBackgroundSync and syncRunning
+	syncRunning        bool       // true if a sync operation is currently running
+}
+
+// backgroundSyncCooldown is the minimum time between background sync operations
+const backgroundSyncCooldown = 30 * time.Second
+
+// triggerBackgroundPullSync triggers a background pull-only sync for read operations.
+// It implements issue #7: auto-sync should pull before read operations.
+// The sync runs in the background so read operations return immediately.
+// A cooldown period prevents excessive syncing.
+//
+// IMPORTANT: This uses doPullOnlySync instead of doSync to avoid:
+// 1. Processing pending push operations (those are handled by triggerAutoSync)
+// 2. Deleting local items that don't exist on remote (we only want to ADD/UPDATE from remote)
+func (b *syncAwareBackend) triggerBackgroundPullSync() {
+	if b.cfg == nil {
+		return
+	}
+
+	// Load config to check auto_sync_after_operation setting
+	appConfig, _, _ := config.LoadWithRaw(b.cfg.ConfigPath)
+	if appConfig == nil || !appConfig.IsAutoSyncAfterOperationEnabled() {
+		return
+	}
+
+	// Check if we're in a mode where sync is possible (online or auto)
+	offlineMode := appConfig.GetOfflineMode()
+	if offlineMode == "offline" {
+		return // Don't auto-sync in explicit offline mode
+	}
+
+	// Check cooldown and running status to avoid concurrent/excessive syncing
+	b.syncMutex.Lock()
+	if b.syncRunning {
+		b.syncMutex.Unlock()
+		utils.Debugf("Background sync skipped (another sync is running)")
+		return
+	}
+	timeSinceLastSync := time.Since(b.lastBackgroundSync)
+	if timeSinceLastSync < backgroundSyncCooldown {
+		b.syncMutex.Unlock()
+		utils.Debugf("Background sync skipped (cooldown: %v since last sync)", timeSinceLastSync)
+		return
+	}
+	b.lastBackgroundSync = time.Now()
+	b.syncRunning = true
+	b.syncMutex.Unlock()
+
+	// Trigger pull-only sync in background goroutine
+	go func() {
+		defer func() {
+			b.syncMutex.Lock()
+			b.syncRunning = false
+			b.syncMutex.Unlock()
+		}()
+		utils.Debugf("Background pull sync triggered")
+		_ = doPullOnlySync(b.cfg)
+	}()
 }
 
 // triggerAutoSync triggers an automatic sync if auto_sync_after_operation is enabled
@@ -2921,6 +2982,31 @@ func (b *syncAwareBackend) triggerAutoSync() {
 	if offlineMode == "offline" {
 		return // Don't auto-sync in explicit offline mode
 	}
+
+	// Check if another sync is running (including background sync)
+	b.syncMutex.Lock()
+	if b.syncRunning {
+		// Wait for the running sync to finish - we need to sync our changes
+		b.syncMutex.Unlock()
+		// Spin wait with small sleep (sync typically completes quickly)
+		for {
+			time.Sleep(50 * time.Millisecond)
+			b.syncMutex.Lock()
+			if !b.syncRunning {
+				break
+			}
+			b.syncMutex.Unlock()
+		}
+	}
+	b.lastBackgroundSync = time.Now()
+	b.syncRunning = true
+	b.syncMutex.Unlock()
+
+	defer func() {
+		b.syncMutex.Lock()
+		b.syncRunning = false
+		b.syncMutex.Unlock()
+	}()
 
 	// Trigger sync (using doSync internally)
 	// Use a null writer for stderr to suppress sync output during auto-sync
@@ -2986,6 +3072,27 @@ func (b *syncAwareBackend) DeleteTask(ctx context.Context, listID, taskID string
 func (b *syncAwareBackend) Close() error {
 	_ = b.syncMgr.Close()
 	return b.TaskManager.Close()
+}
+
+// GetTasks returns tasks from the local cache and triggers a background pull sync.
+// This implements issue #7: auto-sync should pull before read operations.
+// The sync runs in the background so the read returns immediately with current local data.
+func (b *syncAwareBackend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
+	// Trigger background pull sync (non-blocking)
+	b.triggerBackgroundPullSync()
+
+	// Return current local data immediately
+	return b.TaskManager.GetTasks(ctx, listID)
+}
+
+// GetLists returns lists from the local cache and triggers a background pull sync.
+// This implements issue #7: auto-sync should pull before read operations.
+func (b *syncAwareBackend) GetLists(ctx context.Context) ([]backend.List, error) {
+	// Trigger background pull sync (non-blocking)
+	b.triggerBackgroundPullSync()
+
+	// Return current local data immediately
+	return b.TaskManager.GetLists(ctx)
 }
 
 // GetTaskByLocalID delegates to the underlying backend if it supports LocalIDBackend
@@ -5900,6 +6007,53 @@ func newSyncStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	return cmd
 }
 
+// doPullOnlySync performs a pull-only synchronization with remote backends.
+// Unlike doSync, this does NOT:
+// 1. Push pending local changes to remote
+// 2. Delete local items that don't exist on remote
+// This is used for background sync on read operations (Issue #7).
+func doPullOnlySync(cfg *Config) error {
+	// Load config to check for remote backend
+	appConfig, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
+
+	// Determine the remote backend to sync with
+	remoteBackendName := ""
+	if cfg.Backend != "" && cfg.Backend != "sqlite" {
+		remoteBackendName = cfg.Backend
+	} else if appConfig != nil && appConfig.DefaultBackend != "" && appConfig.DefaultBackend != "sqlite" {
+		remoteBackendName = appConfig.DefaultBackend
+	}
+
+	// If no remote backend configured, nothing to pull
+	if remoteBackendName == "" {
+		return nil
+	}
+
+	dbPath := cfg.DBPath
+	if dbPath == "" {
+		dbPath = getDefaultDBPath()
+	}
+
+	// Create the remote backend
+	remoteBE, err := createBackendByName(remoteBackendName, dbPath, rawConfig)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = remoteBE.Close() }()
+
+	// Get local SQLite backend using remote backend name for isolation
+	localBE, err := sqlite.NewWithBackendID(dbPath, remoteBackendName)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = localBE.Close() }()
+
+	// Perform pull-only sync (no deletes)
+	ctx := context.Background()
+	_, _, _, pullErr := syncPullOnlyFromRemote(ctx, localBE, remoteBE)
+	return pullErr
+}
+
 // doSync performs synchronization with remote backends
 func doSync(cfg *Config, stdout, stderr io.Writer) error {
 	// Load config to check for remote backend
@@ -6163,6 +6317,95 @@ func syncDeleteOperation(ctx context.Context, remoteBE backend.TaskManager, op S
 	}
 
 	return nil
+}
+
+// syncPullOnlyFromRemote pulls tasks from remote backend to local without deleting local items.
+// This is used for background sync on read operations (Issue #7).
+// Unlike syncPullFromRemote, this ONLY adds new items and updates existing items - it never deletes.
+func syncPullOnlyFromRemote(ctx context.Context, localBE, remoteBE backend.TaskManager) (newCount, updatedCount, skippedCount int, err error) {
+	// Get all lists from remote
+	remoteLists, err := remoteBE.GetLists(ctx)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to get lists from remote: %w", err)
+	}
+
+	// Get all lists from local for comparison
+	localLists, err := localBE.GetLists(ctx)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to get lists from local: %w", err)
+	}
+
+	// Build map of local lists by name for quick lookup
+	localListByName := make(map[string]*backend.List)
+	for i := range localLists {
+		localListByName[localLists[i].Name] = &localLists[i]
+	}
+
+	// Process each remote list
+	for _, remoteList := range remoteLists {
+		// Get or create local list with same name
+		localList := localListByName[remoteList.Name]
+		if localList == nil {
+			// Create list locally
+			newList, createErr := localBE.CreateList(ctx, remoteList.Name)
+			if createErr != nil {
+				skippedCount++
+				continue
+			}
+			localList = newList
+			localListByName[remoteList.Name] = localList
+		}
+
+		// Get tasks from remote list
+		remoteTasks, getErr := remoteBE.GetTasks(ctx, remoteList.ID)
+		if getErr != nil {
+			skippedCount++
+			continue
+		}
+
+		// Get tasks from local list
+		localTasks, getErr := localBE.GetTasks(ctx, localList.ID)
+		if getErr != nil {
+			skippedCount++
+			continue
+		}
+
+		// Build map of local tasks by ID
+		localTaskByID := make(map[string]*backend.Task)
+		for i := range localTasks {
+			localTaskByID[localTasks[i].ID] = &localTasks[i]
+		}
+
+		// Sync remote tasks to local (add/update only, no deletes)
+		for _, remoteTask := range remoteTasks {
+			localTask := localTaskByID[remoteTask.ID]
+			if localTask == nil {
+				// Create task locally
+				_, createErr := localBE.CreateTask(ctx, localList.ID, &remoteTask)
+				if createErr != nil {
+					skippedCount++
+					continue
+				}
+				newCount++
+			} else {
+				// Check if remote is newer (compare modified times)
+				if remoteTask.Modified.After(localTask.Modified) {
+					// Update local task with remote data
+					_, updateErr := localBE.UpdateTask(ctx, localList.ID, &remoteTask)
+					if updateErr != nil {
+						skippedCount++
+						continue
+					}
+					updatedCount++
+				}
+			}
+		}
+		// NOTE: We deliberately do NOT delete local tasks that don't exist on remote
+		// This is the key difference from syncPullFromRemote
+	}
+	// NOTE: We deliberately do NOT delete local lists that don't exist on remote
+
+	return newCount, updatedCount, skippedCount, nil
 }
 
 // syncPullFromRemote pulls tasks from remote backend to local

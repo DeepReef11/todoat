@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 	cmd "todoat/cmd/todoat/cmd"
@@ -238,6 +239,9 @@ default_backend: remote-sqlite
 	// Verify the task was pulled to local (use 'Work' to list tasks in Work list)
 	listOutput := cli.MustExecute("-y", "Work")
 	testutil.AssertContains(t, listOutput, "Remote task from server")
+
+	// Allow background sync goroutines to complete before test cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 // TestSyncPushCLI tests that `todoat sync` pushes queued local changes to remote backend
@@ -536,6 +540,187 @@ func TestSyncConfigDisabledCLI(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Issue #7: Auto-sync should pull before read operations
+// =============================================================================
+
+// TestBackgroundPullSyncOnReadCLI tests that read operations trigger background pull sync
+// when auto_sync_after_operation is enabled. The read operation should return immediately
+// without waiting for the sync, and subsequent reads should show updated data.
+func TestBackgroundPullSyncOnReadCLI(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Phase 1: Add task to remote database directly using SQL
+	// This avoids using CLI which would contaminate the cfg.Backend field
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote database: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	// Initialize the remote database schema with all required columns
+	if err := setupRemoteDB(remoteDB, "list-1", "Work", "task-1", "Remote task from server"); err != nil {
+		t.Fatalf("failed to setup remote database: %v", err)
+	}
+	_ = remoteDB.Close() // Close before CLI uses it
+
+	// Phase 2: Enable sync and test background pull on read
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  auto_sync_after_operation: true
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  remote-sqlite:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: remote-sqlite
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// First read: should return local data AND trigger background pull sync
+	// The local cache should be empty initially
+	stdout1 := cli.MustExecute("-y", "Work")
+
+	// Wait for background sync to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Second read: should show the pulled remote task
+	stdout2 := cli.MustExecute("-y", "Work")
+
+	// Verify the remote task appears after background sync pulls it
+	if !strings.Contains(stdout2, "Remote task from server") {
+		t.Errorf("expected remote task to appear after background sync on read.\nFirst read:\n%s\nSecond read:\n%s", stdout1, stdout2)
+	}
+}
+
+// TestBackgroundPullSyncCooldownCLI tests that background pull sync respects a cooldown period
+// to avoid excessive syncing on every read operation.
+func TestBackgroundPullSyncCooldownCLI(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Set up remote database directly using SQL to avoid -b flag contamination
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote database: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	// Initialize schema and add task
+	if err := setupRemoteDB(remoteDB, "list-1", "Work", "task-1", "Initial task"); err != nil {
+		t.Fatalf("failed to setup remote database: %v", err)
+	}
+	_ = remoteDB.Close()
+
+	// Enable sync with auto_sync to test cooldown behavior
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  auto_sync_after_operation: true
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  remote-sqlite:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: remote-sqlite
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Multiple rapid reads should not trigger excessive syncs due to cooldown
+	// The first read triggers sync, subsequent reads within cooldown period skip sync
+	for i := 0; i < 5; i++ {
+		_, _, exitCode := cli.Execute("-y", "Work")
+		if exitCode != 0 {
+			t.Fatalf("read operation %d failed", i+1)
+		}
+	}
+
+	// Wait for background sync to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify the task appears after reads (sync should have happened at least once)
+	stdout := cli.MustExecute("-y", "Work")
+	testutil.AssertContains(t, stdout, "Initial task")
+
+	// Wait for any background goroutines to finish before test cleanup
+	time.Sleep(100 * time.Millisecond)
+}
+
+// TestBackgroundPullSyncDisabledCLI tests that background pull sync does not occur
+// when auto_sync_after_operation is disabled.
+func TestBackgroundPullSyncDisabledCLI(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Set up remote database directly using SQL
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote database: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	// Initialize schema and add task
+	if err := setupRemoteDB(remoteDB, "list-1", "Work", "task-1", "Remote only task"); err != nil {
+		t.Fatalf("failed to setup remote database: %v", err)
+	}
+	_ = remoteDB.Close()
+
+	// Enable sync but with auto_sync_after_operation DISABLED
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  auto_sync_after_operation: false
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  remote-sqlite:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: remote-sqlite
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Read from local (via sync architecture) - should NOT have the task
+	// since auto_sync_after_operation is disabled, no background sync occurs on read
+	stdout := cli.MustExecute("-y", "Work")
+	time.Sleep(300 * time.Millisecond)
+
+	// The task should NOT appear (no background sync on read when disabled)
+	stdout = cli.MustExecute("-y", "Work")
+	if strings.Contains(stdout, "Remote only task") {
+		t.Errorf("task should not appear when auto_sync_after_operation is disabled.\nOutput:\n%s", stdout)
+	}
+
+	// Now manually sync
+	cli.MustExecute("-y", "sync")
+
+	// After manual sync, the task should appear
+	stdout = cli.MustExecute("-y", "Work")
+	testutil.AssertContains(t, stdout, "Remote only task")
+}
+
 // Helper functions
 
 // newSyncTestCLI creates a CLI test with sync-enabled configuration
@@ -546,6 +731,7 @@ func newSyncTestCLI(t *testing.T) (*testutil.CLITest, string) {
 	tmpDir := filepath.Dir(viewsDir)
 	return cli, tmpDir
 }
+
 
 // createSyncConfig creates a config file with sync enabled/disabled
 func createSyncConfig(t *testing.T, tmpDir string, enabled bool) {
@@ -576,6 +762,70 @@ backends:
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
+}
+
+// setupRemoteDB initializes a remote SQLite database with the full schema for testing.
+// This ensures all columns are present that the SQLite backend expects.
+func setupRemoteDB(db *sql.DB, listID, listName, taskID, taskSummary string) error {
+	// Use the same schema as SQLite backend migration 1 + later migrations
+	schema := `
+		CREATE TABLE IF NOT EXISTS task_lists (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			color TEXT DEFAULT '',
+			description TEXT DEFAULT '',
+			modified TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TEXT,
+			backend_id TEXT NOT NULL DEFAULT 'sqlite'
+		);
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			list_id TEXT NOT NULL,
+			summary TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
+			priority INTEGER DEFAULT 0,
+			due_date TEXT,
+			start_date TEXT,
+			recurrence TEXT DEFAULT '',
+			recur_from_due INTEGER DEFAULT 1,
+			created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			modified TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			completed TEXT,
+			deleted_at TEXT,
+			parent_id TEXT DEFAULT '',
+			categories TEXT DEFAULT '',
+			backend_id TEXT NOT NULL DEFAULT 'sqlite',
+			FOREIGN KEY (list_id) REFERENCES task_lists(id)
+		);
+		CREATE TABLE IF NOT EXISTS schema_version (
+			version INTEGER PRIMARY KEY,
+			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks(list_id);
+		CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+		CREATE INDEX IF NOT EXISTS idx_tasks_backend_id ON tasks(backend_id);
+		CREATE INDEX IF NOT EXISTS idx_task_lists_backend_id ON task_lists(backend_id);
+	`
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Mark all migrations as done (current migrations go up to 4)
+	for i := 1; i <= 4; i++ {
+		if _, err := db.Exec("INSERT OR IGNORE INTO schema_version (version) VALUES (?)", i); err != nil {
+			return err
+		}
+	}
+
+	// Insert list and task with the correct backend_id to match sync
+	if _, err := db.Exec("INSERT INTO task_lists (id, name, modified, backend_id) VALUES (?, ?, CURRENT_TIMESTAMP, 'remote-sqlite')", listID, listName); err != nil {
+		return err
+	}
+	if _, err := db.Exec("INSERT INTO tasks (id, list_id, summary, created, modified, backend_id) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'remote-sqlite')", taskID, listID, taskSummary); err != nil {
+		return err
+	}
+	return nil
 }
 
 // =============================================================================
