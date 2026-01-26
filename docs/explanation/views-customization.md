@@ -982,60 +982,6 @@ todoat view create myview
 
 **Naming:** View name matches filename (e.g., `urgent.yaml` → view name is "urgent")
 
-### Views Folder Setup
-
-On first use, if the `views/` folder does not exist, todoat will prompt you to create it:
-
-```
-Views folder not found. Create with default views? [Y/n]
-```
-
-**What happens when you confirm:**
-1. Creates `~/.config/todoat/views/` directory
-2. Copies `default.yaml` with the built-in default view configuration
-3. Copies `all.yaml` with the built-in all view configuration
-
-**With `-y` flag:** The folder is created silently without prompting.
-
-**If folder exists (even if empty):** No prompt is shown. The application uses built-in views as fallback.
-
-### Overriding Built-in Views
-
-You can customize the built-in `default` and `all` views by creating your own versions:
-
-**To customize the default view:**
-```bash
-# Create or edit ~/.config/todoat/views/default.yaml
-nano ~/.config/todoat/views/default.yaml
-```
-
-**Example: Default view that shows completed tasks:**
-```yaml
-name: default
-description: My custom default view (shows all tasks including completed)
-fields:
-  - name: status
-    width: 12
-  - name: summary
-    width: 50
-  - name: priority
-    width: 10
-# No filters - shows all tasks including DONE
-```
-
-**View Loading Priority:**
-1. Check `~/.config/todoat/views/{name}.yaml` first
-2. If not found, fall back to built-in view
-
-This means your custom `default.yaml` or `all.yaml` will override the built-in versions.
-
-**To restore built-in behavior:**
-```bash
-# Delete your custom override
-rm ~/.config/todoat/views/default.yaml
-# Built-in default view will be used again
-```
-
 ### View Listing
 
 **Command:**
@@ -1069,7 +1015,7 @@ rm ~/.config/todoat/views/urgent.yaml
 
 **Effect:** View no longer appears in `view list`, cannot be used with `-v` flag
 
-**Note:** Built-in views (default, all) are hard-coded in the application and always available as fallback. However, you can override them by creating your own `default.yaml` or `all.yaml` files (see [Overriding Built-in Views](#overriding-built-in-views)).
+**Note:** Built-in views (default, all) are hard-coded in the application and cannot be overridden. Custom views must use different names.
 
 ### View Editing
 
