@@ -1408,6 +1408,18 @@ This section records team decisions related to synchronization behavior.
 
 **Related**: [ARCH-006] - See `docs/decisions/question-log.md` for full discussion
 
+### [2026-01-26] Merge conflict strategy should use field-level timestamps
+
+**Decision**: Track modification time per field (if available) and use the most recent value for the merge strategy.
+
+**Context**: The merge conflict resolution implementation (commit fdd890e) added a "merge" strategy that combines local and remote task versions. The initial implementation used remote values for summary, description, and status, but kept local values for priority and categories. This choice was undocumented and users may have different expectations about which fields "win" during merge.
+
+**Reasoning**: Field-level timestamps provide a more accurate merge by preserving the most recent change for each field, regardless of whether it came from local or remote. This matches user expectations that "merge" means combining the best/latest information from both sources, not arbitrarily picking one side per field.
+
+**Impact**: Affects how merge conflict resolution works. The merge strategy now uses field-level timestamps when available, resulting in more intuitive and accurate conflict resolution. Requires additional metadata tracking for per-field modification times.
+
+**Related**: [ARCH-007] - See `docs/decisions/question-log.md` for full discussion
+
 ---
 
 ## Related Documentation

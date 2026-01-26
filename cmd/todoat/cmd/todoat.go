@@ -3367,9 +3367,21 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		return err
 	}
 
-	// Load and apply view if specified
+	// Load and apply view if explicitly specified
 	if viewName != "" {
 		return doGetWithView(ctx, be, tasks, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, pagination, cfg, stdout, jsonOutput)
+	}
+
+	// Apply default view filter: exclude DONE/completed tasks unless explicitly filtered
+	// This matches the documented behavior for the default view
+	if statusFilter == "" {
+		var activeTasks []backend.Task
+		for _, t := range tasks {
+			if t.Status != backend.StatusCompleted {
+				activeTasks = append(activeTasks, t)
+			}
+		}
+		tasks = activeTasks
 	}
 
 	// Filter by status if specified (supports comma-separated values)

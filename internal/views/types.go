@@ -76,6 +76,9 @@ func DefaultView() *View {
 			{Name: "summary", Width: 40},
 			{Name: "priority", Width: 10},
 		},
+		Filters: []Filter{
+			{Field: "status", Operator: "ne", Value: "DONE"},
+		},
 	}
 }
 

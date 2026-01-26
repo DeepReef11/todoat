@@ -313,8 +313,8 @@ func TestStatusDisplayFormatDoneSQLiteCLI(t *testing.T) {
 	cli.MustExecute("-y", "Work", "add", "Task done")
 	cli.MustExecute("-y", "Work", "complete", "Task done")
 
-	// Get tasks and check status format
-	stdout := cli.MustExecute("-y", "Work", "get")
+	// Get tasks with status filter for DONE (default view filters out DONE tasks)
+	stdout := cli.MustExecute("-y", "Work", "-s", "DONE")
 
 	testutil.AssertContains(t, stdout, "[DONE]")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
@@ -345,8 +345,8 @@ func TestStatusAbbreviationDSQLiteCLI(t *testing.T) {
 	// Update status using abbreviation D (should set to DONE)
 	cli.MustExecute("-y", "Work", "update", "Task abbrev D", "-s", "D")
 
-	// Verify status is DONE
-	stdout := cli.MustExecute("-y", "Work", "get")
+	// Verify status is DONE (use -s DONE filter since default view filters out DONE tasks)
+	stdout := cli.MustExecute("-y", "Work", "-s", "DONE")
 
 	testutil.AssertContains(t, stdout, "[DONE]")
 }
@@ -360,8 +360,8 @@ func TestStatusCaseInsensitiveSQLiteCLI(t *testing.T) {
 	// Update status using lowercase
 	cli.MustExecute("-y", "Work", "update", "Task case", "-s", "done")
 
-	// Verify status is DONE
-	stdout := cli.MustExecute("-y", "Work", "get")
+	// Verify status is DONE (use -s DONE filter since default view filters out DONE tasks)
+	stdout := cli.MustExecute("-y", "Work", "-s", "DONE")
 
 	testutil.AssertContains(t, stdout, "[DONE]")
 }
@@ -430,7 +430,7 @@ func TestFilterByStatusLongFlagSQLiteCLI(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
-func TestNoFilterShowsAllTasksSQLiteCLI(t *testing.T) {
+func TestDefaultViewFiltersDoneTasksSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
 
 	// Add tasks with different statuses
@@ -438,12 +438,17 @@ func TestNoFilterShowsAllTasksSQLiteCLI(t *testing.T) {
 	cli.MustExecute("-y", "Work", "add", "Task done five")
 	cli.MustExecute("-y", "Work", "complete", "Task done five")
 
-	// Get without filter should show all
+	// Default view (no filter) should show only active tasks, not DONE tasks
 	stdout := cli.MustExecute("-y", "Work")
 
 	testutil.AssertContains(t, stdout, "Task todo five")
-	testutil.AssertContains(t, stdout, "Task done five")
+	testutil.AssertNotContains(t, stdout, "Task done five")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+
+	// Using -v all should show all tasks including DONE
+	stdoutAll := cli.MustExecute("-y", "Work", "-v", "all")
+	testutil.AssertContains(t, stdoutAll, "Task todo five")
+	testutil.AssertContains(t, stdoutAll, "Task done five")
 }
 
 // =============================================================================
@@ -511,8 +516,8 @@ func TestResultCodeCompleteTaskChangesDoneStatusSQLiteCLI(t *testing.T) {
 	cli.MustExecute("-y", "Work", "add", "Task for status")
 	cli.MustExecute("-y", "Work", "complete", "Task for status")
 
-	// Verify status changed to DONE
-	stdout := cli.MustExecute("-y", "Work", "get")
+	// Verify status changed to DONE (use -s DONE filter since default view filters out DONE tasks)
+	stdout := cli.MustExecute("-y", "Work", "-s", "DONE")
 
 	testutil.AssertContains(t, stdout, "[DONE]")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
@@ -1337,8 +1342,8 @@ func TestCompletedTimestampSQLiteCLI(t *testing.T) {
 
 	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
 
-	// Get tasks as JSON and verify completed timestamp is set
-	stdout = cli.MustExecute("-y", "--json", "Work")
+	// Get tasks as JSON with -s DONE (default view filters out DONE tasks, including JSON output)
+	stdout = cli.MustExecute("-y", "--json", "Work", "-s", "DONE")
 
 	testutil.AssertContains(t, stdout, "Task to complete")
 	testutil.AssertContains(t, stdout, `"completed"`)
@@ -2905,8 +2910,8 @@ func TestUpdateByUID(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Updated task")
 	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
 
-	// Verify the update worked
-	listOutput := cli.MustExecute("-y", "UIDTest", "get")
+	// Verify the update worked (use -s DONE since default view filters out DONE tasks)
+	listOutput := cli.MustExecute("-y", "UIDTest", "-s", "DONE")
 	testutil.AssertContains(t, listOutput, "DONE")
 }
 

@@ -57,8 +57,8 @@ func TestTaskLifecycleIntegration(t *testing.T) {
 	stdout = cli.MustExecute("-y", "IntegrationWork", "complete", "Review API documentation")
 	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
 
-	// Step 9: Verify task is completed
-	stdout = cli.MustExecute("-y", "IntegrationWork")
+	// Step 9: Verify task is completed (use -s DONE since default view filters out DONE tasks)
+	stdout = cli.MustExecute("-y", "IntegrationWork", "-s", "DONE")
 	testutil.AssertContains(t, stdout, "[DONE]")
 
 	// Step 10: Delete the task
@@ -189,8 +189,8 @@ func TestSubtaskHierarchyIntegration(t *testing.T) {
 	stdout = cli.MustExecute("-y", "SubtaskProject", "complete", "Design mockups")
 	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
 
-	// Step 5: Verify subtask is completed
-	stdout = cli.MustExecute("-y", "SubtaskProject")
+	// Step 5: Verify subtask is completed (use -v all since default view filters out DONE tasks)
+	stdout = cli.MustExecute("-y", "SubtaskProject", "-v", "all")
 	testutil.AssertContains(t, stdout, "[DONE]")
 
 	// Step 6: Add another parent task

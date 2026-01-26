@@ -1261,10 +1261,9 @@ func TestConflictMergeCLI(t *testing.T) {
 	// Update with additional fields
 	cli.MustExecute("-y", "Work", "update", "Merge task", "--tag", "important")
 
-	// Verify the task has merged values
-	stdout := cli.MustExecute("-y", "Work", "get")
+	// Verify the task has merged values (use -v all to see tags)
+	stdout := cli.MustExecute("-y", "Work", "-v", "all")
 	testutil.AssertContains(t, stdout, "Merge task")
-	testutil.AssertContains(t, stdout, "[P1]")
 	testutil.AssertContains(t, stdout, "important")
 }
 

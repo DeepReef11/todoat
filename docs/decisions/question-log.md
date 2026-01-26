@@ -12,6 +12,7 @@ For current design decisions, see `docs/explanation/`.
 | COMPAT-005 | 2026-01-26 | Should sync.auto_sync_after_operation documentation be updated to reflect new default? | Yes - update docs to reflect default is now true when sync enabled |
 | ARCH-006 | 2026-01-26 | Should the background pull sync cooldown (30s) be configurable? | Yes - add sync.background_pull_cooldown config option |
 | UX-004 | 2026-01-26 | What should the default behavior be for bulk destructive operations? | Require confirmation - always prompt on bulk delete/update affecting >1 task |
+| ARCH-007 | 2026-01-26 | Is the merge conflict strategy field prioritization correct? | Field-level timestamps - track modification time per field and use most recent |
 
 ---
 
@@ -105,5 +106,22 @@ For current design decisions, see `docs/explanation/`.
 - [ ] Option C - Trust the user: No special confirmation needed. Users are expected to use `--dry-run` voluntarily. CLI tools should be fast and scriptable.
 
 **Impact**: Affects user safety vs. scripting convenience trade-off. Important for users who automate task management.
+
+**Status**: answered
+
+---
+
+### [ARCH-007] Is the merge conflict strategy field prioritization correct?
+
+**Asked**: 2026-01-26
+**Answered**: 2026-01-26
+**Documented in**: `docs/explanation/synchronization.md`
+
+**Context**: The recent conflict resolution implementation (commit fdd890e) added a "merge" strategy that combines local and remote task versions. The current implementation uses remote values for summary, description, and status, but keeps local values for priority and categories. This choice is undocumented and users may have different expectations about which fields "win" during merge.
+
+**Options**:
+- [x] Option B - Field-level timestamps: Track modification time per field (if available) and use the most recent value. More accurate but requires additional metadata tracking.
+
+**Impact**: Affects how merge conflict resolution works. Users who use "merge" strategy may not get expected results if their mental model differs from implementation.
 
 **Status**: answered
