@@ -6621,10 +6621,49 @@ func doSyncConflictResolve(cfg *Config, stdout io.Writer, taskUID string, strate
 		return fmt.Errorf("invalid strategy: %s (valid: server_wins, local_wins, merge, keep_both)", strategy)
 	}
 
-	// Try to resolve the conflict
-	err := syncMgr.ResolveConflict(taskUID, strategy)
+	// Get the conflict record to access local and remote versions
+	conflict, err := syncMgr.GetConflictByUID(taskUID)
 	if err != nil {
-		_, _ = fmt.Fprintf(stdout, "Failed to resolve conflict: %v\n", err)
+		_, _ = fmt.Fprintf(stdout, "Failed to get conflict: %v\n", err)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return err
+	}
+
+	// Get the SQLite backend directly to apply the resolution strategy
+	// We use SQLite directly (not syncAwareBackend) because:
+	// 1. Conflict resolution is a local operation on the cached data
+	// 2. We don't want to queue additional sync operations during resolution
+	dbPath := cfg.DBPath
+	if dbPath == "" {
+		home, _ := os.UserHomeDir()
+		dbPath = filepath.Join(home, ".todoat", "todoat.db")
+	}
+	be, err := sqlite.New(dbPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(stdout, "Failed to open database: %v\n", err)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return err
+	}
+	defer func() { _ = be.Close() }()
+
+	// Apply the resolution strategy
+	err = applyConflictResolutionStrategy(be, syncMgr, conflict, strategy)
+	if err != nil {
+		_, _ = fmt.Fprintf(stdout, "Failed to apply resolution strategy: %v\n", err)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return err
+	}
+
+	// Mark the conflict as resolved
+	err = syncMgr.ResolveConflict(taskUID, strategy)
+	if err != nil {
+		_, _ = fmt.Fprintf(stdout, "Failed to mark conflict resolved: %v\n", err)
 		if cfg != nil && cfg.NoPrompt {
 			_, _ = fmt.Fprintln(stdout, ResultError)
 		}
@@ -6636,6 +6675,131 @@ func doSyncConflictResolve(cfg *Config, stdout io.Writer, taskUID string, strate
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
 	return nil
+}
+
+// conflictTaskVersion represents the JSON-serialized task version stored in conflict records
+type conflictTaskVersion struct {
+	ID          string  `json:"id"`
+	Summary     string  `json:"summary"`
+	Description string  `json:"description,omitempty"`
+	Priority    int     `json:"priority"`
+	Status      string  `json:"status,omitempty"`
+	Categories  string  `json:"categories,omitempty"`
+	DueDate     *string `json:"due_date,omitempty"`
+}
+
+// applyConflictResolutionStrategy applies the given strategy to resolve a conflict
+func applyConflictResolutionStrategy(be backend.TaskManager, syncMgr *SyncManager, conflict *SyncConflict, strategy string) error {
+	ctx := context.Background()
+
+	// Parse the local and remote versions
+	var localTask, remoteTask conflictTaskVersion
+	if conflict.LocalVersion != "" {
+		if err := json.Unmarshal([]byte(conflict.LocalVersion), &localTask); err != nil {
+			return fmt.Errorf("failed to parse local version: %w", err)
+		}
+	}
+	if conflict.RemoteVersion != "" {
+		if err := json.Unmarshal([]byte(conflict.RemoteVersion), &remoteTask); err != nil {
+			return fmt.Errorf("failed to parse remote version: %w", err)
+		}
+	}
+
+	// Get the actual task from the database to find the real list_id
+	// (sync_conflicts.list_id is stored as INTEGER but actual list_ids are UUIDs)
+	lists, err := be.GetLists(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get lists: %w", err)
+	}
+
+	// Find the list containing the task
+	var listID string
+	for _, list := range lists {
+		task, err := be.GetTask(ctx, list.ID, conflict.TaskUID)
+		if err == nil && task != nil {
+			listID = list.ID
+			break
+		}
+	}
+
+	if listID == "" {
+		return fmt.Errorf("task %s not found in any list", conflict.TaskUID)
+	}
+
+	switch strategy {
+	case "server_wins":
+		// Replace local task with remote version
+		task := &backend.Task{
+			ID:          conflict.TaskUID,
+			Summary:     remoteTask.Summary,
+			Description: remoteTask.Description,
+			Priority:    remoteTask.Priority,
+			Categories:  remoteTask.Categories,
+		}
+		if remoteTask.Status != "" {
+			task.Status = backend.TaskStatus(remoteTask.Status)
+		}
+		_, err := be.UpdateTask(ctx, listID, task)
+		return err
+
+	case "local_wins":
+		// Keep local version and queue an update operation to push it to remote
+		// The local task is already correct, just queue the sync operation
+		err := syncMgr.QueueOperationByStringID(conflict.TaskUID, localTask.Summary, listID, "update")
+		return err
+
+	case "merge":
+		// Merge non-conflicting fields: prefer remote for most fields but keep local modifications
+		// Strategy: use remote as base, but preserve local priority and categories if they differ
+		task := &backend.Task{
+			ID:          conflict.TaskUID,
+			Summary:     remoteTask.Summary, // Use remote summary
+			Description: remoteTask.Description,
+			Priority:    localTask.Priority,  // Keep local priority
+			Categories:  localTask.Categories, // Keep local categories
+		}
+		if remoteTask.Status != "" {
+			task.Status = backend.TaskStatus(remoteTask.Status)
+		}
+		_, err := be.UpdateTask(ctx, listID, task)
+		return err
+
+	case "keep_both":
+		// Update original task to remote version
+		remoteTaskObj := &backend.Task{
+			ID:          conflict.TaskUID,
+			Summary:     remoteTask.Summary,
+			Description: remoteTask.Description,
+			Priority:    remoteTask.Priority,
+			Categories:  remoteTask.Categories,
+		}
+		if remoteTask.Status != "" {
+			remoteTaskObj.Status = backend.TaskStatus(remoteTask.Status)
+		}
+		_, err := be.UpdateTask(ctx, listID, remoteTaskObj)
+		if err != nil {
+			return fmt.Errorf("failed to update task with remote version: %w", err)
+		}
+
+		// Create a duplicate with local values and "(local)" suffix
+		localTaskObj := &backend.Task{
+			Summary:     localTask.Summary + " (local)",
+			Description: localTask.Description,
+			Priority:    localTask.Priority,
+			Categories:  localTask.Categories,
+		}
+		if localTask.Status != "" {
+			localTaskObj.Status = backend.TaskStatus(localTask.Status)
+		}
+		_, err = be.CreateTask(ctx, listID, localTaskObj)
+		if err != nil {
+			return fmt.Errorf("failed to create local duplicate: %w", err)
+		}
+		return nil
+
+	default:
+		return fmt.Errorf("unknown strategy: %s", strategy)
+	}
 }
 
 // getSyncManager returns a SyncManager for the current configuration

@@ -3,6 +3,7 @@ package sync_test
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -852,6 +853,282 @@ func TestConflictJSONOutputCLI(t *testing.T) {
 	// Empty conflicts list should be [] or {"conflicts": []}
 	if !strings.Contains(stdout, "[") && !strings.Contains(stdout, "{") {
 		t.Errorf("expected JSON output, got: %s", stdout)
+	}
+}
+
+// =============================================================================
+// Issue 008: ResolveConflict Strategy Parameter Ignored
+// =============================================================================
+
+// TestConflictResolveServerWinsApplied tests that server_wins strategy actually replaces
+// the local task with the remote version. This is Issue #008.
+func TestConflictResolveServerWinsApplied(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Add a task locally (this will be our "local version")
+	stdout := cli.MustExecute("-y", "Work", "add", "Local Task", "-p", "5")
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Get the task UID by listing in JSON
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+
+	// Parse the JSON to get the task UID
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task, got none")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	// Get the database path from the test config
+	dbPath := cli.Config().DBPath
+
+	// First, ensure the sync_conflicts table exists by running a sync command
+	// This will initialize the sync manager and create the table if needed
+	cli.MustExecute("-y", "sync", "status")
+
+	// Insert a conflict record with different local and remote versions
+	// Local version: priority 5, summary "Local Task"
+	// Remote version: priority 1, summary "Remote Task"
+	// Note: list_id is stored as INTEGER (0 is a placeholder - actual list is looked up from task)
+	localVersion := `{"id":"` + taskUID + `","summary":"Local Task","priority":5}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Remote Task","priority":1}`
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, 'Local Task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending')
+	`, taskUID, localVersion, remoteVersion)
+	if err != nil {
+		t.Fatalf("failed to insert conflict: %v", err)
+	}
+
+	// Verify conflict was inserted
+	stdout = cli.MustExecute("-y", "sync", "conflicts")
+	testutil.AssertContains(t, stdout, "Local Task")
+
+	// Resolve with server_wins strategy - this SHOULD update the local task with remote values
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", taskUID, "--strategy", "server_wins")
+	if exitCode != 0 {
+		t.Fatalf("resolve failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "resolved")
+
+	// CRITICAL ASSERTION: The task should now have the REMOTE values
+	// server_wins means: replace local with remote
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON after resolve: %v", err)
+	}
+
+	var foundTask bool
+	for _, task := range tasksOutput.Tasks {
+		if task.UID == taskUID {
+			foundTask = true
+			// With server_wins, the task should have remote values
+			if task.Summary != "Remote Task" {
+				t.Errorf("ISSUE #008: server_wins strategy not applied. Expected summary='Remote Task', got '%s'", task.Summary)
+			}
+			if task.Priority != 1 {
+				t.Errorf("ISSUE #008: server_wins strategy not applied. Expected priority=1, got %d", task.Priority)
+			}
+			break
+		}
+	}
+
+	if !foundTask {
+		t.Errorf("task %s not found after resolve", taskUID)
+	}
+}
+
+// TestConflictResolveLocalWinsQueuesUpdate tests that local_wins strategy keeps local version
+// and queues an update operation to push the local version to remote. This is Issue #008.
+func TestConflictResolveLocalWinsQueuesUpdate(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Add a task locally
+	stdout := cli.MustExecute("-y", "Work", "add", "Local Priority Task", "-p", "1")
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Get the task UID
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	// Get the database path from the test config
+	dbPath := cli.Config().DBPath
+
+	// First ensure sync_conflicts table exists
+	cli.MustExecute("-y", "sync", "status")
+
+	// Insert a conflict record
+	localVersion := `{"id":"` + taskUID + `","summary":"Local Priority Task","priority":1}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Remote Priority Task","priority":5}`
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, 'Local Priority Task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending')
+	`, taskUID, localVersion, remoteVersion)
+	if err != nil {
+		t.Fatalf("failed to insert conflict: %v", err)
+	}
+
+	// Clear the sync queue before resolving
+	cli.MustExecute("-y", "sync", "queue", "clear")
+
+	// Resolve with local_wins strategy - should keep local and queue update to push
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", taskUID, "--strategy", "local_wins")
+	if exitCode != 0 {
+		t.Fatalf("resolve failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	// CRITICAL ASSERTION: Task should keep local values (priority 1)
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+
+	for _, task := range tasksOutput.Tasks {
+		if task.UID == taskUID {
+			if task.Priority != 1 {
+				t.Errorf("ISSUE #008: local_wins should keep local priority=1, got %d", task.Priority)
+			}
+			if task.Summary != "Local Priority Task" {
+				t.Errorf("ISSUE #008: local_wins should keep local summary, got '%s'", task.Summary)
+			}
+			break
+		}
+	}
+
+	// CRITICAL ASSERTION: An update operation should be queued to push local to remote
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	if !strings.Contains(stdout, "update") {
+		t.Errorf("ISSUE #008: local_wins should queue update operation to push local version to remote.\nQueue: %s", stdout)
+	}
+}
+
+// TestConflictResolveKeepBothCreatesDuplicate tests that keep_both strategy keeps the remote
+// version and creates a duplicate with local values. This is Issue #008.
+func TestConflictResolveKeepBothCreatesDuplicate(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Add a task locally
+	cli.MustExecute("-y", "Work", "add", "Original Task", "-p", "5")
+
+	// Get the task UID
+	stdout := cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	// Get the database path from the test config
+	dbPath := cli.Config().DBPath
+
+	// First ensure sync_conflicts table exists
+	cli.MustExecute("-y", "sync", "status")
+
+	// Insert a conflict - local has "Original Task", remote has "Server Version"
+	localVersion := `{"id":"` + taskUID + `","summary":"Original Task","priority":5}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Server Version","priority":1}`
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, 'Original Task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending')
+	`, taskUID, localVersion, remoteVersion)
+	if err != nil {
+		t.Fatalf("failed to insert conflict: %v", err)
+	}
+
+	// Count tasks before resolve
+	initialCount := len(tasksOutput.Tasks)
+
+	// Resolve with keep_both strategy
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", taskUID, "--strategy", "keep_both")
+	if exitCode != 0 {
+		t.Fatalf("resolve failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	// CRITICAL ASSERTION: Should now have 2 tasks - original updated to remote, plus duplicate with local
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+
+	if len(tasksOutput.Tasks) != initialCount+1 {
+		t.Errorf("ISSUE #008: keep_both should create duplicate. Expected %d tasks, got %d", initialCount+1, len(tasksOutput.Tasks))
+	}
+
+	// One task should have remote values, one should have local values with " (local)" suffix
+	var foundRemote, foundLocal bool
+	for _, task := range tasksOutput.Tasks {
+		if task.Summary == "Server Version" && task.Priority == 1 {
+			foundRemote = true
+		}
+		if strings.Contains(task.Summary, "Original Task") && strings.Contains(task.Summary, "(local)") && task.Priority == 5 {
+			foundLocal = true
+		}
+	}
+
+	if !foundRemote {
+		t.Errorf("ISSUE #008: keep_both should update original to remote version 'Server Version'")
+	}
+	if !foundLocal {
+		t.Errorf("ISSUE #008: keep_both should create duplicate with local values and '(local)' suffix")
 	}
 }
 
