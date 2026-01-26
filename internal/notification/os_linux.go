@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 // osNotificationChannel sends notifications via OS-native notification systems
@@ -79,14 +80,35 @@ func (c *osNotificationChannel) sendLinux(n Notification) error {
 	return c.executor.Execute("notify-send", n.Title, n.Message)
 }
 
+// escapeAppleScript escapes a string for safe use in AppleScript double-quoted strings.
+// It escapes backslashes and double quotes to prevent command injection.
+func escapeAppleScript(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
+}
+
 // sendDarwin sends notification using osascript
 func (c *osNotificationChannel) sendDarwin(n Notification) error {
-	script := fmt.Sprintf(`display notification "%s" with title "%s"`, n.Message, n.Title)
+	msg := escapeAppleScript(n.Message)
+	title := escapeAppleScript(n.Title)
+	script := fmt.Sprintf(`display notification "%s" with title "%s"`, msg, title)
 	return c.executor.Execute("osascript", "-e", script)
+}
+
+// escapePowerShell escapes a string for safe use in PowerShell double-quoted strings.
+// It escapes backticks and double quotes to prevent command injection.
+func escapePowerShell(s string) string {
+	// In PowerShell, backtick is the escape character
+	s = strings.ReplaceAll(s, "`", "``")
+	s = strings.ReplaceAll(s, `"`, "`\"")
+	return s
 }
 
 // sendWindows sends notification using PowerShell
 func (c *osNotificationChannel) sendWindows(n Notification) error {
+	title := escapePowerShell(n.Title)
+	msg := escapePowerShell(n.Message)
 	script := fmt.Sprintf(`
 Add-Type -AssemblyName System.Windows.Forms
 $notification = New-Object System.Windows.Forms.NotifyIcon
@@ -95,7 +117,7 @@ $notification.BalloonTipTitle = "%s"
 $notification.BalloonTipText = "%s"
 $notification.Visible = $true
 $notification.ShowBalloonTip(5000)
-`, n.Title, n.Message)
+`, title, msg)
 	return c.executor.Execute("powershell", "-Command", script)
 }
 

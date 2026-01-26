@@ -303,6 +303,164 @@ func TestNotificationDisabled(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Security Tests - Command Injection Prevention (Issue #021)
+// =============================================================================
+
+// TestDarwinNotificationEscapesQuotes tests that double quotes in notification
+// messages are properly escaped to prevent command injection via osascript
+func TestDarwinNotificationEscapesQuotes(t *testing.T) {
+	var executedArgs []string
+
+	mock := &notification.MockCommandExecutor{
+		ExecuteFunc: func(cmd string, args ...string) error {
+			executedArgs = args
+			return nil
+		},
+	}
+
+	channel := notification.NewOSNotificationChannel(
+		&notification.OSNotificationConfig{
+			Enabled:        true,
+			OnSyncComplete: true,
+			OnSyncError:    true,
+			OnConflict:     true,
+		},
+		notification.WithCommandExecutor(mock),
+		notification.WithPlatform("darwin"),
+	)
+
+	// Malicious payload attempting command injection
+	n := notification.Notification{
+		Type:      notification.NotifyTest,
+		Title:     `Test" & display dialog "pwned" & display notification "`,
+		Message:   `Message" & do something bad & "`,
+		Timestamp: time.Now(),
+	}
+
+	err := channel.Send(n)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// The script argument should have escaped quotes
+	script := executedArgs[1] // args[0] is "-e", args[1] is the script
+
+	// Verify escaped quotes are present
+	if !strings.Contains(script, `\"`) {
+		t.Errorf("expected script to contain escaped quotes, got: %s", script)
+	}
+
+	// The unescaped injection payload should NOT appear
+	// Original: `Test" & display dialog` should become `Test\" & display dialog`
+	// We check that an unescaped quote followed by & doesn't exist (without preceding backslash)
+	if strings.Contains(script, `pwned`) && !strings.Contains(script, `\"pwned\"`) {
+		t.Errorf("script contains unescaped injection - 'pwned' without escaped quotes: %s", script)
+	}
+
+	// The script should have properly escaped the quotes around the malicious parts
+	if strings.Contains(script, `display dialog "pwned"`) {
+		t.Errorf("script contains unescaped injection payload (dialog command): %s", script)
+	}
+}
+
+// TestWindowsNotificationEscapesQuotes tests that double quotes in notification
+// messages are properly escaped to prevent command injection via PowerShell
+func TestWindowsNotificationEscapesQuotes(t *testing.T) {
+	var executedArgs []string
+
+	mock := &notification.MockCommandExecutor{
+		ExecuteFunc: func(cmd string, args ...string) error {
+			executedArgs = args
+			return nil
+		},
+	}
+
+	channel := notification.NewOSNotificationChannel(
+		&notification.OSNotificationConfig{
+			Enabled:        true,
+			OnSyncComplete: true,
+			OnSyncError:    true,
+			OnConflict:     true,
+		},
+		notification.WithCommandExecutor(mock),
+		notification.WithPlatform("windows"),
+	)
+
+	// Malicious payload attempting command injection
+	n := notification.Notification{
+		Type:      notification.NotifyTest,
+		Title:     `"; Start-Process calc; $x="`,
+		Message:   `test"; Remove-Item -Recurse C:\; $y="`,
+		Timestamp: time.Now(),
+	}
+
+	err := channel.Send(n)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// The script argument should have escaped quotes
+	script := executedArgs[1] // args[0] is "-Command", args[1] is the script
+
+	// Verify the backtick-escaped quotes are present
+	if !strings.Contains(script, "`\"") {
+		t.Errorf("expected script to contain PowerShell-escaped quotes (`\"), got: %s", script)
+	}
+
+	// The unescaped injection payload should NOT appear - the semicolon after an unescaped quote
+	// would allow command injection. With proper escaping, `"; becomes `"`"; which is safe.
+	// Check that Start-Process is not in a position where it can execute
+	if strings.Contains(script, `""; Start-Process`) {
+		t.Errorf("script contains unescaped injection payload (Start-Process): %s", script)
+	}
+
+	// The escaped form should be present
+	if !strings.Contains(script, "`\"; Start-Process") {
+		t.Errorf("expected script to contain escaped injection pattern, got: %s", script)
+	}
+}
+
+// TestDarwinNotificationEscapesBackslashes tests that backslashes are also escaped
+func TestDarwinNotificationEscapesBackslashes(t *testing.T) {
+	var executedArgs []string
+
+	mock := &notification.MockCommandExecutor{
+		ExecuteFunc: func(cmd string, args ...string) error {
+			executedArgs = args
+			return nil
+		},
+	}
+
+	channel := notification.NewOSNotificationChannel(
+		&notification.OSNotificationConfig{
+			Enabled:        true,
+			OnSyncComplete: true,
+		},
+		notification.WithCommandExecutor(mock),
+		notification.WithPlatform("darwin"),
+	)
+
+	n := notification.Notification{
+		Type:      notification.NotifySyncComplete,
+		Title:     `Test\with\backslashes`,
+		Message:   `Path: C:\Users\test`,
+		Timestamp: time.Now(),
+	}
+
+	err := channel.Send(n)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	script := executedArgs[1]
+
+	// Backslashes should be doubled in AppleScript
+	if strings.Contains(script, `\w`) && !strings.Contains(script, `\\w`) {
+		t.Errorf("expected backslashes to be escaped, got: %s", script)
+	}
+}
+
 // TestNotificationTypeFiltering tests that notification types are filtered based on config
 func TestNotificationTypeFiltering(t *testing.T) {
 	var sentNotifications []notification.Notification
