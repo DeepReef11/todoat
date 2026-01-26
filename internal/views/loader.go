@@ -19,6 +19,32 @@ func NewLoader(viewsDir string) *Loader {
 	return &Loader{viewsDir: viewsDir}
 }
 
+// validateViewName checks if a view name is safe to use in file paths.
+// It rejects names containing path traversal sequences or invalid characters.
+func validateViewName(name string) error {
+	// Reject empty names
+	if name == "" {
+		return fmt.Errorf("view name cannot be empty")
+	}
+
+	// Reject names containing path separators
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("invalid view name '%s': contains path separator", name)
+	}
+
+	// Reject names containing ".." (path traversal)
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("invalid view name '%s': contains path traversal sequence", name)
+	}
+
+	// Reject names starting with "." (hidden files)
+	if strings.HasPrefix(name, ".") {
+		return fmt.Errorf("invalid view name '%s': cannot start with '.'", name)
+	}
+
+	return nil
+}
+
 // LoadView loads a view by name
 // First checks built-in views, then custom views from disk
 func (l *Loader) LoadView(name string) (*View, error) {
@@ -30,12 +56,32 @@ func (l *Loader) LoadView(name string) (*View, error) {
 		return AllView(), nil
 	}
 
+	// Validate view name to prevent path traversal
+	if err := validateViewName(name); err != nil {
+		return nil, err
+	}
+
 	// Try to load from disk
 	if l.viewsDir == "" {
 		return nil, fmt.Errorf("view '%s' not found: no views directory configured", name)
 	}
 
 	viewPath := filepath.Join(l.viewsDir, name+".yaml")
+
+	// Double-check that the resolved path is within the views directory
+	absViewsDir, err := filepath.Abs(l.viewsDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve views directory: %w", err)
+	}
+	absViewPath, err := filepath.Abs(viewPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve view path: %w", err)
+	}
+
+	// Ensure the view path is within the views directory
+	if !strings.HasPrefix(absViewPath, absViewsDir+string(filepath.Separator)) {
+		return nil, fmt.Errorf("invalid view name '%s': path traversal detected", name)
+	}
 	data, err := os.ReadFile(viewPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -127,13 +173,34 @@ func (l *Loader) ViewExists(name string) bool {
 		return true
 	}
 
+	// Validate view name to prevent path traversal
+	if err := validateViewName(name); err != nil {
+		return false
+	}
+
 	// Check if custom view file exists
 	if l.viewsDir == "" {
 		return false
 	}
 
 	viewPath := filepath.Join(l.viewsDir, name+".yaml")
-	_, err := os.Stat(viewPath)
+
+	// Double-check that the resolved path is within the views directory
+	absViewsDir, err := filepath.Abs(l.viewsDir)
+	if err != nil {
+		return false
+	}
+	absViewPath, err := filepath.Abs(viewPath)
+	if err != nil {
+		return false
+	}
+
+	// Ensure the view path is within the views directory
+	if !strings.HasPrefix(absViewPath, absViewsDir+string(filepath.Separator)) {
+		return false
+	}
+
+	_, err = os.Stat(viewPath)
 	return err == nil
 }
 
