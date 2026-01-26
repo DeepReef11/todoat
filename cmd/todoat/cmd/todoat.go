@@ -5296,11 +5296,22 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 
 	searchLower := strings.ToLower(searchTerm)
 
-	// First try exact match (case-insensitive)
+	// First try exact match (case-insensitive) - collect ALL exact matches
+	var exactMatches []backend.Task
 	for _, t := range tasks {
 		if strings.EqualFold(t.Summary, searchTerm) {
-			return &t, nil
+			exactMatches = append(exactMatches, t)
 		}
+	}
+
+	// If exactly one exact match, return it
+	if len(exactMatches) == 1 {
+		return &exactMatches[0], nil
+	}
+
+	// If multiple exact matches, handle ambiguity
+	if len(exactMatches) > 1 {
+		return nil, formatMultipleMatchesError(exactMatches, searchTerm)
 	}
 
 	// Then try partial match (case-insensitive)
@@ -5319,17 +5330,23 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 		return &matches[0], nil
 	}
 
-	// Multiple matches - error in no-prompt mode
-	if cfg != nil && cfg.NoPrompt {
-		var matchNames []string
-		for _, m := range matches {
-			matchNames = append(matchNames, fmt.Sprintf("  - %s", m.Summary))
-		}
-		return nil, fmt.Errorf("multiple tasks match '%s':\n%s", searchTerm, strings.Join(matchNames, "\n"))
-	}
+	// Multiple matches - show UIDs for disambiguation
+	return nil, formatMultipleMatchesError(matches, searchTerm)
+}
 
-	// In interactive mode, we would prompt - but for now return error
-	return nil, fmt.Errorf("multiple tasks match '%s' - please be more specific", searchTerm)
+// formatMultipleMatchesError creates a helpful error message when multiple tasks match,
+// showing task names and UIDs so users can use --uid to specify the exact task.
+func formatMultipleMatchesError(matches []backend.Task, searchTerm string) error {
+	var matchLines []string
+	for _, m := range matches {
+		// Format UID: show first 8 chars for brevity, with full UID in parentheses
+		shortUID := m.ID
+		if len(shortUID) > 8 {
+			shortUID = shortUID[:8]
+		}
+		matchLines = append(matchLines, fmt.Sprintf("  - %s (UID: %s...)", m.Summary, shortUID))
+	}
+	return fmt.Errorf("multiple tasks match '%s'. Use --uid to specify:\n%s", searchTerm, strings.Join(matchLines, "\n"))
 }
 
 // resolveTaskByID resolves a task by UID, local-id, or summary (falls back to findTask for summary-based search)

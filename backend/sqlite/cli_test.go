@@ -4841,3 +4841,67 @@ func TestIssue068SQLitePathConfigUsed(t *testing.T) {
 		t.Errorf("database should NOT be created at default path %q but file exists", defaultPath)
 	}
 }
+
+// =============================================================================
+// Issue #017: Delete command with duplicate names
+// =============================================================================
+
+// TestIssue017DeleteDuplicateNamesShowsUIDs verifies that when deleting a task by name
+// and multiple tasks have the same name, the error message shows UIDs for disambiguation.
+func TestIssue017DeleteDuplicateNamesShowsUIDs(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create two tasks with the same name
+	cli.MustExecute("-y", "list", "create", "DuplicateTest")
+	cli.MustExecute("-y", "DuplicateTest", "add", "Duplicate task")
+	cli.MustExecute("-y", "DuplicateTest", "add", "Duplicate task")
+
+	// Try to delete by name (in no-prompt mode)
+	_, stderr, exitCode := cli.Execute("-y", "DuplicateTest", "delete", "Duplicate task")
+
+	// Should fail because of duplicate names
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit code when deleting task with duplicate name")
+	}
+
+	// Error message should mention multiple tasks and show UIDs
+	combined := stderr
+	if !strings.Contains(combined, "multiple") && !strings.Contains(combined, "Multiple") {
+		t.Errorf("error should mention multiple tasks, got: %s", combined)
+	}
+
+	// Error should contain UID prefix or mention disambiguation
+	if !strings.Contains(combined, "UID") && !strings.Contains(combined, "uid") && !strings.Contains(combined, "--uid") {
+		t.Errorf("error should mention UID for disambiguation, got: %s", combined)
+	}
+}
+
+// TestIssue017DeleteDuplicateNamesRequiresUID verifies that when tasks have duplicate names,
+// user can delete using --uid flag to specify exactly which task.
+func TestIssue017DeleteDuplicateNamesRequiresUID(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create two tasks with the same name, using JSON to get their UIDs
+	cli.MustExecute("-y", "list", "create", "DuplicateUIDTest")
+	add1Output := cli.MustExecute("-y", "--json", "DuplicateUIDTest", "add", "Duplicate task")
+	add2Output := cli.MustExecute("-y", "--json", "DuplicateUIDTest", "add", "Duplicate task")
+
+	// Extract UIDs
+	uid1 := extractUID(t, add1Output)
+	uid2 := extractUID(t, add2Output)
+
+	// Verify we have two different UIDs
+	if uid1 == uid2 {
+		t.Fatalf("expected different UIDs for the two tasks, got same: %s", uid1)
+	}
+
+	// Delete the first task using UID
+	stdout := cli.MustExecute("-y", "DuplicateUIDTest", "delete", "--uid", uid1)
+	testutil.AssertContains(t, stdout, "Deleted task")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the other task still exists
+	listOutput := cli.MustExecute("-y", "--json", "DuplicateUIDTest", "get")
+	testutil.AssertContains(t, listOutput, uid2)
+	testutil.AssertNotContains(t, listOutput, uid1)
+}
