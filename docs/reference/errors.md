@@ -20,10 +20,10 @@ Todoat provides helpful error messages with actionable suggestions. When an erro
 
 **Example**:
 ```bash
-$ todoat complete "nonexistent task"
+$ todoat MyList complete "nonexistent task"
 Error: task not found: nonexistent task
 
-Suggestion: Check the search term or use 'todoat list' to see all tasks
+Suggestion: Check the search term or use 'todoat MyList get' to see all tasks
 ```
 
 ### List Not Found
@@ -62,7 +62,7 @@ Suggestion: Create the list with 'todoat list create work'
 
 **Example**:
 ```bash
-$ todoat add "task" -p 15
+$ todoat MyList add "task" -p 15
 Error: invalid priority: 15
 
 Suggestion: Priority must be between 0 and 9
@@ -78,7 +78,7 @@ Suggestion: Priority must be between 0 and 9
 
 **Example**:
 ```bash
-$ todoat add "task" --due-date "next week"
+$ todoat MyList add "task" --due-date "next week"
 Error: invalid date: next week
 
 Suggestion: Use date format YYYY-MM-DD (e.g., 2026-01-15)
@@ -94,7 +94,7 @@ Suggestion: Use date format YYYY-MM-DD (e.g., 2026-01-15)
 
 **Example**:
 ```bash
-$ todoat update "task" -s "pending"
+$ todoat MyList update "task" -s "pending"
 Error: invalid status: pending
 
 Suggestion: Valid options: TODO, IN-PROGRESS, DONE, CANCELLED

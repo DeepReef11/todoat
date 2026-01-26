@@ -123,6 +123,27 @@ sync:
 
 When `true`, remote backends are cached locally for offline access.
 
+### Background Pull Sync on Read Operations
+
+When `auto_sync_after_operation` is enabled, todoat automatically triggers a background pull sync whenever you perform read operations like listing tasks or lists:
+
+```bash
+# These commands trigger a background pull sync
+todoat MyList              # Lists tasks
+todoat list                # Lists all lists
+todoat MyList -s TODO      # Filtered task listing
+```
+
+The background sync:
+- Runs in the background without blocking the command
+- Only pulls changes from remote (never pushes local changes)
+- Has a 30-second cooldown to prevent excessive network requests
+- Ensures you see fresh data from remote backends
+
+This means your task list automatically stays up-to-date as you use the CLI, without needing to manually run `todoat sync` before each read.
+
+**Note**: Write operations (add, update, delete) trigger a full sync immediately when `auto_sync_after_operation` is enabled, not just a pull.
+
 ### auto_sync_after_operation
 
 ```yaml

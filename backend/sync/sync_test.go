@@ -735,7 +735,6 @@ func newSyncTestCLI(t *testing.T) (*testutil.CLITest, string) {
 	return cli, tmpDir
 }
 
-
 // createSyncConfig creates a config file with sync enabled/disabled
 func createSyncConfig(t *testing.T, tmpDir string, enabled bool) {
 	t.Helper()

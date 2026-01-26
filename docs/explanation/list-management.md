@@ -268,19 +268,9 @@ Command without list → Check cache → No-Prompt Mode?
 
 **Normal Mode:**
 ```
-User wants to add a task but forgets list name
+User wants to add a task to a specific list
 ↓
-$ todoat add "Buy milk"
-↓
-System detects missing list, shows menu:
-Select a task list:
-1. Work Tasks (12 tasks)
-2. Personal (5 tasks)
-3. Shopping (0 tasks)
-
-Enter number:
-↓
-User types: 2
+$ todoat Personal add "Buy milk"
 ↓
 Task added to "Personal" list
 ```

@@ -1,0 +1,60 @@
+# Example user configuration with multiple backends
+# This configuration was used in testing sessions that revealed several issues
+# Reference: issues/007-* through issues/011-*
+
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+    # path: "~/.local/share/todoat/tasks.db"  # Optional: custom database path
+
+  # Nextcloud backend - sync with Nextcloud Tasks via CalDAV
+  nextcloud:
+    type: nextcloud
+    enabled: true
+    host: "localhost:8080"
+    username: "admin"
+    allow_http: true              # Required for HTTP (non-HTTPS) servers
+    insecure_skip_verify: true    # Skip TLS certificate verification
+    suppress_ssl_warning: true
+
+  # Named backend instance - used for testing http:// URL handling
+  nextcloud-test:
+    type: nextcloud
+    enabled: true
+    host: "http://localhost:8080"  # Note: http:// prefix is stripped; use allow_http instead
+    username: "admin"
+    allow_http: true              # This is the correct way to enable HTTP
+    insecure_skip_verify: true
+    suppress_ssl_warning: true
+
+  # Todoist backend - sync with Todoist
+  todoist:
+    type: todoist
+    enabled: true
+    username: "token"  # Fixed value for Todoist authentication
+
+default_backend: nextcloud
+
+auto_detect_backend: false
+
+# Backend priority for selection when auto-detect is enabled
+# backend_priority:
+#   - git
+#   - sqlite
+
+sync:
+  enabled: false
+
+no_prompt: false
+output_format: text
+
+notification:
+  enabled: true
+  os_notification:
+    enabled: true
+    on_sync_error: true
+    on_conflict: true
+  log_notification:
+    enabled: true
+    path: "~/.local/share/todoat/notifications.log"

@@ -436,9 +436,9 @@ sqlite3 ~/.config/todoat/analytics.db "VACUUM;"
 #   enabled: true
 
 # Perform some operations
-todoat add "Test task" --priority 1
-todoat list
-todoat complete 1
+todoat MyList add "Test task" --priority 1
+todoat MyList get
+todoat MyList complete "Test task"
 todoat -b todoist sync
 
 # Query the database directly

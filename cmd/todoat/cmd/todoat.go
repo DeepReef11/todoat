@@ -7014,7 +7014,7 @@ func applyConflictResolutionStrategy(be backend.TaskManager, syncMgr *SyncManage
 			ID:          conflict.TaskUID,
 			Summary:     remoteTask.Summary, // Use remote summary
 			Description: remoteTask.Description,
-			Priority:    localTask.Priority,  // Keep local priority
+			Priority:    localTask.Priority,   // Keep local priority
 			Categories:  localTask.Categories, // Keep local categories
 		}
 		if remoteTask.Status != "" {

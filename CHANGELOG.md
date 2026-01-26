@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `config set analytics.enabled` and `config set analytics.retention_days` now work correctly (#078)
+- Documentation command syntax examples now use correct list-based format (#001)
 
 ### Changed
 - Documentation improvements for configuration and synchronization
@@ -16,3 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Tests for analytics configuration settings
 - Issue tracking for config key and value validation bugs
+- Integration tests for credential manager keyring flow (#010)
+- Documentation for background pull sync on read operations
+- Roadmap issue for configurable background pull cooldown (#082)
