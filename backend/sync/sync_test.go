@@ -892,6 +892,196 @@ func setupRemoteDB(db *sql.DB, listID, listName, taskID, taskSummary string) err
 	return nil
 }
 
+// setupRemoteDBWithBackendID initializes a remote SQLite database with a custom backend_id.
+func setupRemoteDBWithBackendID(db *sql.DB, listID, listName, taskID, taskSummary, backendID string) error {
+	// Use the same schema as SQLite backend migration 1 + later migrations
+	schema := `
+		CREATE TABLE IF NOT EXISTS task_lists (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			color TEXT DEFAULT '',
+			description TEXT DEFAULT '',
+			modified TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TEXT,
+			backend_id TEXT NOT NULL DEFAULT 'sqlite'
+		);
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			list_id TEXT NOT NULL,
+			summary TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
+			priority INTEGER DEFAULT 0,
+			due_date TEXT,
+			start_date TEXT,
+			recurrence TEXT DEFAULT '',
+			recur_from_due INTEGER DEFAULT 1,
+			created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			modified TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			completed TEXT,
+			deleted_at TEXT,
+			parent_id TEXT DEFAULT '',
+			categories TEXT DEFAULT '',
+			backend_id TEXT NOT NULL DEFAULT 'sqlite',
+			FOREIGN KEY (list_id) REFERENCES task_lists(id)
+		);
+		CREATE TABLE IF NOT EXISTS schema_version (
+			version INTEGER PRIMARY KEY,
+			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks(list_id);
+		CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+		CREATE INDEX IF NOT EXISTS idx_tasks_backend_id ON tasks(backend_id);
+		CREATE INDEX IF NOT EXISTS idx_task_lists_backend_id ON task_lists(backend_id);
+	`
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Mark all migrations as done (current migrations go up to 4)
+	for i := 1; i <= 4; i++ {
+		if _, err := db.Exec("INSERT OR IGNORE INTO schema_version (version) VALUES (?)", i); err != nil {
+			return err
+		}
+	}
+
+	// Insert list and task with the specified backend_id
+	if _, err := db.Exec("INSERT INTO task_lists (id, name, modified, backend_id) VALUES (?, ?, CURRENT_TIMESTAMP, ?)", listID, listName, backendID); err != nil {
+		return err
+	}
+	if _, err := db.Exec("INSERT INTO tasks (id, list_id, summary, created, modified, backend_id) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)", taskID, listID, taskSummary, backendID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// =============================================================================
+// Issue 015: Pull sync not working on get/list operations
+// =============================================================================
+
+// TestIssue015_PullSyncOnReadWithSameBackendName tests that tasks added by one client
+// (machine A) appear when another client (machine B) reads tasks, when BOTH use the
+// same backend name. This simulates the real-world scenario:
+//
+// Machine A: config has default_backend: nextcloud
+// Machine B: config has default_backend: nextcloud (same name!)
+// Both point to the same Nextcloud server.
+//
+// Note: Using DIFFERENT backend names (nextcloud-1, nextcloud-2) creates SEPARATE local
+// caches by design (Issue #011). This test uses the SAME name to verify sync works correctly.
+func TestIssue015_PullSyncOnReadWithSameBackendName(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Configure with a single backend name (remote-backend)
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  auto_sync_after_operation: true
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  remote-backend:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: remote-backend
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Step 1: "Machine A" adds a task (simulated by adding directly to remote DB)
+	// This is equivalent to another machine syncing a task to the shared backend
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote database: %v", err)
+	}
+	if err := setupRemoteDBWithBackendID(remoteDB, "list-1", "Work", "task-1", "Task from machine A", "remote-backend"); err != nil {
+		t.Fatalf("failed to setup remote database: %v", err)
+	}
+	_ = remoteDB.Close()
+
+	// Step 2: "Machine B" (this CLI) reads tasks - first read triggers background sync
+	stdout1, _, _ := cli.Execute("-y", "Work")
+
+	// Step 3: Wait for background sync to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Step 4: Second read should show the task from Machine A
+	stdout2 := cli.MustExecute("-y", "Work")
+
+	// Verify the task appears after background sync
+	if !strings.Contains(stdout2, "Task from machine A") {
+		t.Errorf("Issue #015: Task from machine A should appear in machine B after background sync.\nFirst read:\n%s\nSecond read:\n%s", stdout1, stdout2)
+	}
+
+	// Wait for background goroutines to complete
+	time.Sleep(100 * time.Millisecond)
+}
+
+// TestIssue015_PullSyncOnReadExternallyAddedTask tests that tasks added directly to the
+// backend (e.g., via Nextcloud web UI) appear when running todoat commands.
+// This is the "Alternative reproduction" case from Issue #15.
+func TestIssue015_PullSyncOnReadExternallyAddedTask(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Phase 1: Add task directly to remote database (simulating external addition)
+	// This is like adding a task via Nextcloud web UI
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote database: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	if err := setupRemoteDBWithBackendID(remoteDB, "list-1", "Work", "task-1", "Task added via web UI", "remote-backend"); err != nil {
+		t.Fatalf("failed to setup remote database: %v", err)
+	}
+	_ = remoteDB.Close()
+
+	// Phase 2: Configure sync with auto_sync enabled
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  auto_sync_after_operation: true
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  remote-backend:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: remote-backend
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Step 1: First read - should return empty local cache AND trigger background pull sync
+	stdout1, _, _ := cli.Execute("-y", "Work")
+
+	// Step 2: Wait for background sync to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Step 3: Second read - should show the externally added task
+	stdout2 := cli.MustExecute("-y", "Work")
+
+	// Verify the task appears after background sync
+	if !strings.Contains(stdout2, "Task added via web UI") {
+		t.Errorf("Issue #015: Externally added task should appear after background sync.\nFirst read:\n%s\nSecond read:\n%s", stdout1, stdout2)
+	}
+
+	// Wait for background goroutines to complete
+	time.Sleep(100 * time.Millisecond)
+}
+
 // =============================================================================
 // Issue 002: default_backend Ignored When Sync Enabled
 // =============================================================================
