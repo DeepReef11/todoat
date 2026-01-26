@@ -369,7 +369,7 @@ sync:
 | `conflict_resolution` | string | server_wins | Conflict strategy (server_wins, local_wins, merge, keep_both) |
 | `offline_mode` | string | auto | Offline behavior (auto, online, offline) |
 | `connectivity_timeout` | string | 5s | Timeout for connectivity checks |
-| `auto_sync_after_operation` | boolean | false | Auto-sync after add/update/delete operations |
+| `auto_sync_after_operation` | boolean | true (when sync enabled) | Auto-sync after add/update/delete operations |
 
 **Validation Rules**:
 - `local_backend` must be: sqlite, file, or git

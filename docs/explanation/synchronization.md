@@ -1380,6 +1380,36 @@ tx.Commit()  // Single disk write
 
 ---
 
+## Team Decisions
+
+This section records team decisions related to synchronization behavior.
+
+### [2026-01-26] Documentation update for auto_sync_after_operation default
+
+**Decision**: Update documentation to reflect that `auto_sync_after_operation` defaults to `true` when `sync.enabled: true`.
+
+**Context**: The recent fix (commit c0aee63) changed `auto_sync_after_operation` to default to `true` when sync is enabled. However, documentation in `docs/how-to/sync.md` still showed it as defaulting to `false`. The code and documentation were inconsistent.
+
+**Reasoning**: Team decision - documentation should accurately reflect current behavior.
+
+**Impact**: Documentation accuracy and user understanding of sync behavior.
+
+**Related**: [COMPAT-005] - See `docs/decisions/question-log.md` for full discussion
+
+### [2026-01-26] Background pull sync cooldown should be configurable
+
+**Decision**: Add `sync.background_pull_cooldown` config option (default: 30s) to allow power users to customize the cooldown period.
+
+**Context**: Commit 02e2b94 implemented background pull sync on read operations. When `auto_sync_after_operation` is enabled, read operations (GetLists, GetTasks) trigger a background pull-only sync to fetch fresh data from remote backends. There's a hardcoded 30-second cooldown (`backgroundSyncCooldown = 30 * time.Second` in `cmd/todoat/cmd/todoat.go:2912`) to prevent excessive syncing. This behavior was not documented and not configurable.
+
+**Reasoning**: Power users with fast connections might want lower values for fresher data; users on metered connections might want higher values to reduce network usage.
+
+**Impact**: Affects sync behavior, network usage, and data freshness for users with auto_sync enabled.
+
+**Related**: [ARCH-006] - See `docs/decisions/question-log.md` for full discussion
+
+---
+
 ## Related Documentation
 
 - [Backend System](backend-system.md) - Remote backend implementations
