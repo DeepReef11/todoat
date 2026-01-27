@@ -2421,6 +2421,9 @@ default_backend: sqlite-remote
 	// Verify that the task was created locally
 	stdout = cli.MustExecute("-y", "Work")
 	testutil.AssertContains(t, stdout, "Quick add task")
+
+	// Allow background sync goroutines to complete before test cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 // =============================================================================
