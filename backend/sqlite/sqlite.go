@@ -32,6 +32,29 @@ type Migration struct {
 	Up      func(db *sql.DB) error
 }
 
+// columnExists checks if a column exists in a table
+func columnExists(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue interface{}
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
 // migrations is the ordered list of all schema migrations
 var migrations = []Migration{
 	{
@@ -75,7 +98,16 @@ var migrations = []Migration{
 		Version: 2,
 		Name:    "add_list_description",
 		Up: func(db *sql.DB) error {
-			_, err := db.Exec("ALTER TABLE task_lists ADD COLUMN description TEXT DEFAULT ''")
+			// Check if column already exists to make migration idempotent
+			// This handles race conditions when multiple processes initialize the same DB
+			exists, err := columnExists(db, "task_lists", "description")
+			if err != nil {
+				return err
+			}
+			if exists {
+				return nil // Column already exists, skip
+			}
+			_, err = db.Exec("ALTER TABLE task_lists ADD COLUMN description TEXT DEFAULT ''")
 			return err
 		},
 	},
@@ -83,11 +115,27 @@ var migrations = []Migration{
 		Version: 3,
 		Name:    "add_recurrence_fields",
 		Up: func(db *sql.DB) error {
-			if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN recurrence TEXT DEFAULT ''"); err != nil {
+			// Check if columns already exist to make migration idempotent
+			exists, err := columnExists(db, "tasks", "recurrence")
+			if err != nil {
 				return err
 			}
-			_, err := db.Exec("ALTER TABLE tasks ADD COLUMN recur_from_due INTEGER DEFAULT 1")
-			return err
+			if !exists {
+				if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN recurrence TEXT DEFAULT ''"); err != nil {
+					return err
+				}
+			}
+
+			exists, err = columnExists(db, "tasks", "recur_from_due")
+			if err != nil {
+				return err
+			}
+			if !exists {
+				if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN recur_from_due INTEGER DEFAULT 1"); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	},
 	{
@@ -95,14 +143,29 @@ var migrations = []Migration{
 		Name:    "add_backend_id_for_isolation",
 		Up: func(db *sql.DB) error {
 			// Add backend_id column to tasks table with default 'sqlite' for existing data
-			if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN backend_id TEXT NOT NULL DEFAULT 'sqlite'"); err != nil {
+			// Check if column already exists to make migration idempotent
+			exists, err := columnExists(db, "tasks", "backend_id")
+			if err != nil {
 				return err
 			}
+			if !exists {
+				if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN backend_id TEXT NOT NULL DEFAULT 'sqlite'"); err != nil {
+					return err
+				}
+			}
+
 			// Add backend_id column to task_lists table with default 'sqlite' for existing data
-			if _, err := db.Exec("ALTER TABLE task_lists ADD COLUMN backend_id TEXT NOT NULL DEFAULT 'sqlite'"); err != nil {
+			exists, err = columnExists(db, "task_lists", "backend_id")
+			if err != nil {
 				return err
 			}
-			// Create indexes for efficient backend filtering
+			if !exists {
+				if _, err := db.Exec("ALTER TABLE task_lists ADD COLUMN backend_id TEXT NOT NULL DEFAULT 'sqlite'"); err != nil {
+					return err
+				}
+			}
+
+			// Create indexes for efficient backend filtering (IF NOT EXISTS makes these idempotent)
 			if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_backend_id ON tasks(backend_id)"); err != nil {
 				return err
 			}
