@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/csv"
@@ -274,11 +275,12 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:     "todoat [list] [action] [task]",
-		Short:   "A task management CLI",
-		Long:    "todoat is a command-line task manager supporting multiple backends.",
-		Version: Version,
-		Args:    cobra.MaximumNArgs(3),
+		Use:               "todoat [list] [action] [task]",
+		Short:             "A task management CLI",
+		Long:              "todoat is a command-line task manager supporting multiple backends.",
+		Version:           Version,
+		Args:              cobra.MaximumNArgs(3),
+		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Set verbose mode from flag
 			verbose, _ := cmd.Flags().GetBool("verbose")
@@ -440,6 +442,9 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 
 	// Add analytics subcommand
 	cmd.AddCommand(newAnalyticsCmd(stdout, cfg))
+
+	// Add our custom completion command (with install/uninstall support)
+	cmd.AddCommand(newCompletionCmd(stdout, cfg))
 
 	return cmd
 }
@@ -10732,4 +10737,420 @@ func newAnalyticsErrorsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	errorsCmd.Flags().Int("limit", 10, "Maximum number of errors to show")
 
 	return errorsCmd
+}
+
+// =============================================================================
+// Completion Commands
+// =============================================================================
+
+// newCompletionCmd creates the 'completion' command with install/uninstall support
+func newCompletionCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "completion [command]",
+		Short: "Generate shell completion scripts",
+		Long: `Generate the autocompletion script for todoat for the specified shell.
+See each sub-command's help for details on how to use the generated script.`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	// Add subcommands for each shell
+	cmd.AddCommand(newCompletionBashCmd(stdout))
+	cmd.AddCommand(newCompletionZshCmd(stdout))
+	cmd.AddCommand(newCompletionFishCmd(stdout))
+	cmd.AddCommand(newCompletionPowerShellCmd(stdout))
+
+	// Add install and uninstall subcommands
+	cmd.AddCommand(newCompletionInstallCmd(stdout, cfg))
+	cmd.AddCommand(newCompletionUninstallCmd(stdout, cfg))
+
+	return cmd
+}
+
+// newCompletionBashCmd creates the 'completion bash' subcommand
+func newCompletionBashCmd(stdout io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "bash",
+		Short: "Generate the autocompletion script for bash",
+		Long: `Generate the autocompletion script for the bash shell.
+
+This script depends on the 'bash-completion' package.
+If it is not installed already, you can install it via your OS's package manager.
+
+To load completions in your current shell session:
+
+	source <(todoat completion bash)
+
+To load completions for every new session, execute once:
+
+#### Linux:
+
+	todoat completion bash > /etc/bash_completion.d/todoat
+
+#### macOS:
+
+	todoat completion bash > $(brew --prefix)/etc/bash_completion.d/todoat
+
+You will need to start a new shell for this setup to take effect.
+`,
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noDescriptions, _ := cmd.Flags().GetBool("no-descriptions")
+			return cmd.Root().GenBashCompletionV2(stdout, !noDescriptions)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.Flags().Bool("no-descriptions", false, "disable completion descriptions")
+	return cmd
+}
+
+// newCompletionZshCmd creates the 'completion zsh' subcommand
+func newCompletionZshCmd(stdout io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "zsh",
+		Short: "Generate the autocompletion script for zsh",
+		Long: `Generate the autocompletion script for the zsh shell.
+
+If shell completion is not already enabled in your environment you will need
+to enable it.  You can execute the following once:
+
+	echo "autoload -U compinit; compinit" >> ~/.zshrc
+
+To load completions in your current shell session:
+
+	source <(todoat completion zsh)
+
+To load completions for every new session, execute once:
+
+#### Linux:
+
+	todoat completion zsh > "${fpath[1]}/_todoat"
+
+#### macOS:
+
+	todoat completion zsh > $(brew --prefix)/share/zsh/site-functions/_todoat
+
+You will need to start a new shell for this setup to take effect.
+`,
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noDescriptions, _ := cmd.Flags().GetBool("no-descriptions")
+			if noDescriptions {
+				return cmd.Root().GenZshCompletionNoDesc(stdout)
+			}
+			return cmd.Root().GenZshCompletion(stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.Flags().Bool("no-descriptions", false, "disable completion descriptions")
+	return cmd
+}
+
+// newCompletionFishCmd creates the 'completion fish' subcommand
+func newCompletionFishCmd(stdout io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fish",
+		Short: "Generate the autocompletion script for fish",
+		Long: `Generate the autocompletion script for the fish shell.
+
+To load completions in your current shell session:
+
+	todoat completion fish | source
+
+To load completions for every new session, execute once:
+
+	todoat completion fish > ~/.config/fish/completions/todoat.fish
+
+You will need to start a new shell for this setup to take effect.
+`,
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noDescriptions, _ := cmd.Flags().GetBool("no-descriptions")
+			return cmd.Root().GenFishCompletion(stdout, !noDescriptions)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.Flags().Bool("no-descriptions", false, "disable completion descriptions")
+	return cmd
+}
+
+// newCompletionPowerShellCmd creates the 'completion powershell' subcommand
+func newCompletionPowerShellCmd(stdout io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "powershell",
+		Short: "Generate the autocompletion script for powershell",
+		Long: `Generate the autocompletion script for powershell.
+
+To load completions in your current shell session:
+
+	todoat completion powershell | Out-String | Invoke-Expression
+
+To load completions for every new session, add the output of the above command
+to your powershell profile.
+`,
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noDescriptions, _ := cmd.Flags().GetBool("no-descriptions")
+			if noDescriptions {
+				return cmd.Root().GenPowerShellCompletion(stdout)
+			}
+			return cmd.Root().GenPowerShellCompletionWithDesc(stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.Flags().Bool("no-descriptions", false, "disable completion descriptions")
+	return cmd
+}
+
+// detectShell detects the user's shell from the $SHELL environment variable
+func detectShell() string {
+	shell := os.Getenv("SHELL")
+	if shell != "" {
+		return filepath.Base(shell)
+	}
+	// Fallback for Windows
+	if runtime.GOOS == "windows" {
+		if os.Getenv("PSModulePath") != "" {
+			return "powershell"
+		}
+	}
+	return "unknown"
+}
+
+// getCompletionFilename returns the appropriate filename for the shell
+func getCompletionFilename(shell string) string {
+	switch shell {
+	case "bash":
+		return "todoat"
+	case "zsh":
+		return "_todoat"
+	case "fish":
+		return "todoat.fish"
+	case "powershell":
+		return "todoat.ps1"
+	default:
+		return "todoat"
+	}
+}
+
+// getDefaultInstallPath returns the default installation path for completions
+func getDefaultInstallPath(shell string) string {
+	home, _ := os.UserHomeDir()
+	switch shell {
+	case "bash":
+		// User-writable location
+		return filepath.Join(home, ".local", "share", "bash-completion", "completions")
+	case "zsh":
+		// User-writable location
+		return filepath.Join(home, ".config", "todoat", "completions")
+	case "fish":
+		return filepath.Join(home, ".config", "fish", "completions")
+	case "powershell":
+		return filepath.Join(home, ".config", "todoat", "completions")
+	default:
+		return filepath.Join(home, ".config", "todoat", "completions")
+	}
+}
+
+// generateCompletionScript generates the completion script for the specified shell
+func generateCompletionScript(rootCmd *cobra.Command, shell string) (string, error) {
+	var buf bytes.Buffer
+	var err error
+
+	switch shell {
+	case "bash":
+		err = rootCmd.Root().GenBashCompletion(&buf)
+	case "zsh":
+		err = rootCmd.Root().GenZshCompletion(&buf)
+	case "fish":
+		err = rootCmd.Root().GenFishCompletion(&buf, true)
+	case "powershell":
+		err = rootCmd.Root().GenPowerShellCompletion(&buf)
+	default:
+		return "", fmt.Errorf("unsupported shell: %s", shell)
+	}
+
+	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// getPostInstallInstructions returns shell-specific post-installation instructions
+func getPostInstallInstructions(shell, installPath string) string {
+	switch shell {
+	case "bash":
+		return fmt.Sprintf(`
+This location should be auto-loaded if bash-completion is installed.
+If not working, add to ~/.bashrc:
+  source %s
+
+Then run: source ~/.bashrc`, installPath)
+	case "zsh":
+		dir := filepath.Dir(installPath)
+		return fmt.Sprintf(`
+Add to your ~/.zshrc:
+  fpath=(%s $fpath)
+  autoload -Uz compinit && compinit
+
+Then run: source ~/.zshrc`, dir)
+	case "fish":
+		return "\nFish will automatically load completions from this location."
+	case "powershell":
+		return fmt.Sprintf(`
+Add to your PowerShell profile:
+  . %s
+
+Or run: . %s`, installPath, installPath)
+	default:
+		return ""
+	}
+}
+
+// newCompletionInstallCmd creates the 'completion install' subcommand
+func newCompletionInstallCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install shell completion scripts",
+		Long: `Install shell completion scripts to the appropriate location.
+
+Auto-detects your shell from $SHELL, or specify explicitly with --shell.
+Uses a user-writable location by default.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			shell, _ := cmd.Flags().GetString("shell")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			targetDir, _ := cmd.Flags().GetString("target-dir")
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			// Auto-detect shell if not specified
+			if shell == "" {
+				shell = detectShell()
+				if shell == "unknown" {
+					return fmt.Errorf("could not detect shell; please specify with --shell (bash, zsh, fish, powershell)")
+				}
+			}
+
+			// Validate shell
+			validShells := map[string]bool{"bash": true, "zsh": true, "fish": true, "powershell": true}
+			if !validShells[shell] {
+				return fmt.Errorf("unsupported shell: %s (supported: bash, zsh, fish, powershell)", shell)
+			}
+
+			// Determine install path
+			var installDir string
+			if targetDir != "" {
+				installDir = targetDir
+			} else {
+				installDir = getDefaultInstallPath(shell)
+			}
+			filename := getCompletionFilename(shell)
+			installPath := filepath.Join(installDir, filename)
+
+			// Dry run - just show what would happen
+			if dryRun {
+				_, _ = fmt.Fprintf(stdout, "Would install %s completion to: %s\n", shell, installPath)
+				return nil
+			}
+
+			// Generate completion script
+			script, err := generateCompletionScript(cmd, shell)
+			if err != nil {
+				return fmt.Errorf("failed to generate completion script: %w", err)
+			}
+
+			// Create directory if needed
+			if err := os.MkdirAll(installDir, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", installDir, err)
+			}
+
+			// Write completion script
+			if err := os.WriteFile(installPath, []byte(script), 0644); err != nil {
+				return fmt.Errorf("failed to write completion script: %w", err)
+			}
+
+			_, _ = fmt.Fprintf(stdout, "Completion installed for %s at %s\n", shell, installPath)
+			_, _ = fmt.Fprint(stdout, getPostInstallInstructions(shell, installPath))
+			_, _ = fmt.Fprintln(stdout)
+
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().String("shell", "", "Shell to install completion for (bash, zsh, fish, powershell)")
+	cmd.Flags().Bool("dry-run", false, "Show where completion would be installed without installing")
+	cmd.Flags().String("target-dir", "", "Override install directory (for testing)")
+
+	return cmd
+}
+
+// newCompletionUninstallCmd creates the 'completion uninstall' subcommand
+func newCompletionUninstallCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove installed shell completion scripts",
+		Long:  `Remove shell completion scripts that were installed by 'completion install'.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			shell, _ := cmd.Flags().GetString("shell")
+			targetDir, _ := cmd.Flags().GetString("target-dir")
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			// Auto-detect shell if not specified
+			if shell == "" {
+				shell = detectShell()
+				if shell == "unknown" {
+					return fmt.Errorf("could not detect shell; please specify with --shell (bash, zsh, fish, powershell)")
+				}
+			}
+
+			// Validate shell
+			validShells := map[string]bool{"bash": true, "zsh": true, "fish": true, "powershell": true}
+			if !validShells[shell] {
+				return fmt.Errorf("unsupported shell: %s (supported: bash, zsh, fish, powershell)", shell)
+			}
+
+			// Determine install path
+			var installDir string
+			if targetDir != "" {
+				installDir = targetDir
+			} else {
+				installDir = getDefaultInstallPath(shell)
+			}
+			filename := getCompletionFilename(shell)
+			installPath := filepath.Join(installDir, filename)
+
+			// Check if file exists
+			if _, err := os.Stat(installPath); os.IsNotExist(err) {
+				_, _ = fmt.Fprintf(stdout, "No completion file found at %s\n", installPath)
+				return nil
+			}
+
+			// Remove the file
+			if err := os.Remove(installPath); err != nil {
+				return fmt.Errorf("failed to remove completion file: %w", err)
+			}
+
+			_, _ = fmt.Fprintf(stdout, "Removed %s completion from %s\n", shell, installPath)
+
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.Flags().String("shell", "", "Shell to uninstall completion for (bash, zsh, fish, powershell)")
+	cmd.Flags().String("target-dir", "", "Override install directory (for testing)")
+
+	return cmd
 }

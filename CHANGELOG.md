@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarified that default view excludes completed tasks (use `-v all` to see them)
 
 ### Added
+- `completion install` command to auto-detect shell and install completion scripts (#035)
+- `completion uninstall` command to remove installed completion scripts
 - Tests for analytics configuration settings
 - Issue tracking for config key and value validation bugs
 - Integration tests for credential manager keyring flow (#010)

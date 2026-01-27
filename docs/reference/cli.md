@@ -867,12 +867,12 @@ Launches an interactive terminal interface for managing tasks with keyboard navi
 
 ## completion
 
-Generate shell completion scripts.
+Generate and install shell completion scripts.
 
 ### Synopsis
 
 ```bash
-todoat completion [shell]
+todoat completion [command]
 ```
 
 ### Subcommands
@@ -883,20 +883,64 @@ todoat completion [shell]
 | `zsh` | Generate zsh completion script |
 | `fish` | Generate fish completion script |
 | `powershell` | Generate PowerShell completion script |
+| `install` | Install shell completion scripts |
+| `uninstall` | Remove installed shell completion scripts |
+
+### completion install
+
+Automatically install shell completion to a user-writable location.
+
+```bash
+todoat completion install [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--shell` | string | Shell to install completion for (bash, zsh, fish, powershell) |
+| `--dry-run` | bool | Show where completion would be installed without installing |
+
+Auto-detects your shell from `$SHELL` if `--shell` is not specified.
+
+### completion uninstall
+
+Remove installed shell completion scripts.
+
+```bash
+todoat completion uninstall [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--shell` | string | Shell to uninstall completion for (bash, zsh, fish, powershell) |
 
 ### Examples
 
 ```bash
-# Zsh (add to .zshrc)
+# Auto-install for detected shell
+todoat completion install
+
+# Install for specific shell
+todoat completion install --shell bash
+
+# Preview install location
+todoat completion install --dry-run
+
+# Skip confirmation prompt
+todoat -y completion install
+
+# Uninstall completion
+todoat completion uninstall
+
+# Manual: Zsh (add to .zshrc)
 source <(todoat completion zsh)
 
-# Bash (add to .bashrc)
+# Manual: Bash (add to .bashrc)
 source <(todoat completion bash)
 
-# Fish
+# Manual: Fish
 todoat completion fish | source
 
-# PowerShell
+# Manual: PowerShell
 todoat completion powershell | Out-String | Invoke-Expression
 ```
 

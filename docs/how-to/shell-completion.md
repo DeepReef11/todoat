@@ -2,7 +2,40 @@
 
 todoat supports tab completion for Bash, Zsh, Fish, and PowerShell shells.
 
-## Setup
+## Quick Setup
+
+The easiest way to set up completion:
+
+```bash
+todoat completion install
+```
+
+This automatically detects your shell from `$SHELL` and installs completion to a user-writable location.
+
+### Options
+
+```bash
+# Preview where completion would be installed
+todoat completion install --dry-run
+
+# Install for a specific shell
+todoat completion install --shell bash
+
+# Skip confirmation prompt
+todoat -y completion install
+```
+
+### Uninstalling
+
+Remove installed completion scripts:
+
+```bash
+todoat completion uninstall
+```
+
+## Manual Setup
+
+If you prefer manual control, or the auto-install doesn't work for your setup:
 
 ### Zsh
 

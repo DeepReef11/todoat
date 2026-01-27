@@ -636,6 +636,350 @@ func min(a, b int) int {
 }
 
 // =============================================================================
+// Shell Completion Install/Uninstall Tests
+// These tests verify the completion install and uninstall subcommands.
+// =============================================================================
+
+// TestCompletionInstallAutoDetect verifies that `todoat completion install` auto-detects shell
+func TestCompletionInstallAutoDetect(t *testing.T) {
+	// Save and restore SHELL env var
+	origShell := os.Getenv("SHELL")
+	defer func() { _ = os.Setenv("SHELL", origShell) }()
+
+	tempHome := t.TempDir()
+
+	// Set SHELL to zsh for detection
+	_ = os.Setenv("SHELL", "/bin/zsh")
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true, // Skip confirmation
+	}
+
+	// Use --dry-run to avoid actually installing
+	exitCode := Execute([]string{"completion", "install", "--dry-run", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should mention zsh and would install
+	if !strings.Contains(output, "zsh") {
+		t.Errorf("expected output to mention detected shell 'zsh', got: %s", output)
+	}
+	if !strings.Contains(output, "Would install") {
+		t.Errorf("expected output to say 'Would install', got: %s", output)
+	}
+}
+
+// TestCompletionInstallExplicitShell verifies that `todoat completion install --shell bash` works
+func TestCompletionInstallExplicitShell(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	exitCode := Execute([]string{"completion", "install", "--shell", "bash", "--dry-run", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "bash") {
+		t.Errorf("expected output to mention 'bash', got: %s", output)
+	}
+}
+
+// TestCompletionInstallDryRun verifies that --dry-run shows location without installing
+func TestCompletionInstallDryRun(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	exitCode := Execute([]string{"completion", "install", "--shell", "zsh", "--dry-run", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should say "Would install" not "Completion installed"
+	if !strings.Contains(output, "Would install") {
+		t.Errorf("expected dry-run to say 'Would install', got: %s", output)
+	}
+
+	// Dry-run should not create the completion file
+	completionFile := filepath.Join(tempHome, "_todoat")
+	if _, err := os.Stat(completionFile); err == nil {
+		t.Errorf("dry-run should not create completion file, but found: %s", completionFile)
+	}
+}
+
+// TestCompletionInstallActuallyInstalls verifies that install creates the completion file
+func TestCompletionInstallActuallyInstalls(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	// Actually install (no --dry-run)
+	exitCode := Execute([]string{"completion", "install", "--shell", "zsh", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should confirm installation
+	if !strings.Contains(output, "Completion installed") {
+		t.Errorf("expected output to say 'Completion installed', got: %s", output)
+	}
+
+	// Verify file was created
+	completionFile := filepath.Join(tempHome, "_todoat")
+	if _, err := os.Stat(completionFile); os.IsNotExist(err) {
+		t.Errorf("expected completion file to be created at %s", completionFile)
+	}
+
+	// Verify file content is valid zsh completion
+	content, err := os.ReadFile(completionFile)
+	if err != nil {
+		t.Fatalf("failed to read completion file: %v", err)
+	}
+	if !strings.Contains(string(content), "#compdef") || !strings.Contains(string(content), "_todoat") {
+		t.Errorf("expected valid zsh completion script, got: %s", string(content)[:min(200, len(content))])
+	}
+}
+
+// TestCompletionInstallBash verifies bash completion installation
+func TestCompletionInstallBash(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	exitCode := Execute([]string{"completion", "install", "--shell", "bash", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Verify bash completion file created
+	completionFile := filepath.Join(tempHome, "todoat")
+	if _, err := os.Stat(completionFile); os.IsNotExist(err) {
+		t.Errorf("expected bash completion file at %s", completionFile)
+	}
+
+	// Verify content is bash completion
+	content, err := os.ReadFile(completionFile)
+	if err != nil {
+		t.Fatalf("failed to read completion file: %v", err)
+	}
+	if !strings.Contains(string(content), "complete") || !strings.Contains(string(content), "_todoat") {
+		t.Errorf("expected valid bash completion script")
+	}
+}
+
+// TestCompletionInstallFish verifies fish completion installation
+func TestCompletionInstallFish(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	exitCode := Execute([]string{"completion", "install", "--shell", "fish", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Verify fish completion file created
+	completionFile := filepath.Join(tempHome, "todoat.fish")
+	if _, err := os.Stat(completionFile); os.IsNotExist(err) {
+		t.Errorf("expected fish completion file at %s", completionFile)
+	}
+}
+
+// TestCompletionInstallPowerShell verifies powershell completion installation
+func TestCompletionInstallPowerShell(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	exitCode := Execute([]string{"completion", "install", "--shell", "powershell", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	// Verify powershell completion file created
+	completionFile := filepath.Join(tempHome, "todoat.ps1")
+	if _, err := os.Stat(completionFile); os.IsNotExist(err) {
+		t.Errorf("expected powershell completion file at %s", completionFile)
+	}
+}
+
+// TestCompletionUninstall verifies that uninstall removes the completion file
+func TestCompletionUninstall(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	// First install
+	exitCode := Execute([]string{"completion", "install", "--shell", "zsh", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("install failed: %s", stderr.String())
+	}
+
+	// Verify file exists
+	completionFile := filepath.Join(tempHome, "_todoat")
+	if _, err := os.Stat(completionFile); os.IsNotExist(err) {
+		t.Fatalf("completion file should exist after install")
+	}
+
+	// Now uninstall
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Execute([]string{"completion", "uninstall", "--shell", "zsh", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("uninstall failed with exit code %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Removed") {
+		t.Errorf("expected output to say 'Removed', got: %s", output)
+	}
+
+	// Verify file was removed
+	if _, err := os.Stat(completionFile); err == nil {
+		t.Errorf("completion file should be removed after uninstall")
+	}
+}
+
+// TestCompletionUninstallNotInstalled verifies uninstall handles missing file gracefully
+func TestCompletionUninstallNotInstalled(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	// Try to uninstall when nothing is installed
+	exitCode := Execute([]string{"completion", "uninstall", "--shell", "zsh", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	// Should succeed but indicate nothing to remove
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0 even when nothing to uninstall, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "not found") && !strings.Contains(output, "No completion") {
+		t.Errorf("expected output to indicate nothing to remove, got: %s", output)
+	}
+}
+
+// TestCompletionInstallInvalidShell verifies error handling for invalid shell
+func TestCompletionInstallInvalidShell(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	exitCode := Execute([]string{"completion", "install", "--shell", "invalid_shell", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode == 0 {
+		t.Fatalf("expected non-zero exit code for invalid shell")
+	}
+
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(combined, "unsupported") && !strings.Contains(combined, "invalid") && !strings.Contains(combined, "unknown") {
+		t.Errorf("expected error message about unsupported shell, got: %s", combined)
+	}
+}
+
+// TestCompletionInstallHelp verifies help text for install command
+func TestCompletionInstallHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"completion", "install", "--help"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should mention key flags
+	helpItems := []string{"shell", "dry-run"}
+	for _, item := range helpItems {
+		if !strings.Contains(output, item) {
+			t.Errorf("help should mention '%s', got: %s", item, output)
+		}
+	}
+}
+
+// TestCompletionUninstallHelp verifies help text for uninstall command
+func TestCompletionUninstallHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"completion", "uninstall", "--help"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "shell") {
+		t.Errorf("help should mention 'shell' flag, got: %s", output)
+	}
+}
+
+// TestCompletionInstallShowsPostInstallInstructions verifies post-install message
+func TestCompletionInstallShowsPostInstallInstructions(t *testing.T) {
+	tempHome := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		NoPrompt: true,
+	}
+
+	exitCode := Execute([]string{"completion", "install", "--shell", "zsh", "--target-dir", tempHome}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should provide instructions for enabling completion
+	// Zsh should mention fpath or source
+	if !strings.Contains(output, "fpath") && !strings.Contains(output, "source") && !strings.Contains(output, "restart") {
+		t.Errorf("expected post-install instructions for zsh, got: %s", output)
+	}
+}
+
+// =============================================================================
 // SQLite CLI Initialization Tests
 // These tests verify that the application correctly initializes on first run:
 // - Database creation at XDG path
