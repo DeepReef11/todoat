@@ -2063,6 +2063,9 @@ default_backend: sqlite-remote
 		t.Errorf("expected queue to be empty after sync, but got:\n%s", stdout)
 	}
 
+	// Allow background sync goroutines to complete before test cleanup
+	time.Sleep(100 * time.Millisecond)
+
 	// Verify the task actually exists in the remote SQLite database
 	remoteDB, err := sql.Open("sqlite", remoteDBPath)
 	if err != nil {
