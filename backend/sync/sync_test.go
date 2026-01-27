@@ -218,7 +218,7 @@ default_backend: remote-sqlite
 	if err != nil {
 		t.Fatalf("failed to open remote db: %v", err)
 	}
-	defer remoteDB.Close()
+	defer func() { _ = remoteDB.Close() }()
 
 	// Initialize schema on remote database
 	_, err = remoteDB.Exec(`
