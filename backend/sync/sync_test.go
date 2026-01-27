@@ -2085,6 +2085,78 @@ default_backend: sqlite-remote
 	}
 }
 
+// TestAutoSyncWithNullValue verifies that with auto_sync_after_operation: null (or not set),
+// auto-sync defaults to enabled when sync.enabled: true. This is Issue #30.
+func TestAutoSyncWithNullValue(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Set up path for "remote" SQLite database
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+
+	// Create a config with:
+	// - sync enabled
+	// - auto_sync_after_operation: null (explicitly set to null)
+	// Per Issue #30, this should default to true, not false
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: auto
+  auto_sync_after_operation: null
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Add a task - with auto_sync_after_operation: null (defaults to true when sync enabled)
+	// This should:
+	// 1. Create task in local SQLite cache
+	// 2. Queue the operation
+	// 3. Trigger background sync
+	stdout, stderr, exitCode := cli.Execute("-y", "Work", "add", "Task with null config")
+	if exitCode != 0 {
+		t.Fatalf("failed to add task: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Run explicit sync to process the queue (background sync may have been orphaned in CLI test)
+	cli.MustExecute("-y", "sync")
+
+	// Queue should be empty after sync (proves auto-sync behavior is enabled)
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	if !strings.Contains(stdout, "Pending Operations: 0") {
+		t.Errorf("expected queue to be empty after sync with auto_sync_after_operation: null, but got:\n%s", stdout)
+	}
+
+	// Verify the task actually exists in the remote SQLite database
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote db: %v", err)
+	}
+	defer remoteDB.Close()
+
+	var count int
+	err = remoteDB.QueryRow("SELECT COUNT(*) FROM tasks WHERE summary LIKE '%Task with null config%'").Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to query remote db: %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("Issue #30: auto_sync_after_operation: null did NOT trigger sync; expected 1 task in remote db, got %d", count)
+	}
+}
+
 // TestAutoSyncDisabledQueuesOnly verifies that with auto_sync_after_operation: false,
 // operations only queue but don't sync until manual `todoat sync` is run.
 // Note: The default is now true when sync is enabled (Issue #009), so we must explicitly set false.

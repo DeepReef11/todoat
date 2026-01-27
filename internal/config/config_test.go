@@ -922,6 +922,89 @@ func TestAutoSyncDefaultsToTrueWhenSyncEnabled(t *testing.T) {
 	}
 }
 
+// TestAutoSyncDefaultWithYAMLNull verifies that when config file has auto_sync_after_operation: null
+// (explicitly set to null), it is treated as "not set" and defaults to true when sync is enabled.
+// This is the end-to-end test for Issue #30.
+func TestAutoSyncDefaultWithYAMLNull(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name           string
+		configYAML     string
+		expectAutoSync bool
+	}{
+		{
+			name: "sync enabled, auto_sync_after_operation: null - should default to true",
+			configYAML: `
+sync:
+  enabled: true
+  auto_sync_after_operation: null
+backends:
+  sqlite:
+    path: test.db
+`,
+			expectAutoSync: true,
+		},
+		{
+			name: "sync enabled, auto_sync_after_operation not set - should default to true",
+			configYAML: `
+sync:
+  enabled: true
+backends:
+  sqlite:
+    path: test.db
+`,
+			expectAutoSync: true,
+		},
+		{
+			name: "sync enabled, auto_sync_after_operation: false - should be false",
+			configYAML: `
+sync:
+  enabled: true
+  auto_sync_after_operation: false
+backends:
+  sqlite:
+    path: test.db
+`,
+			expectAutoSync: false,
+		},
+		{
+			name: "sync disabled, auto_sync_after_operation: null - should be false",
+			configYAML: `
+sync:
+  enabled: false
+  auto_sync_after_operation: null
+backends:
+  sqlite:
+    path: test.db
+`,
+			expectAutoSync: false,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a unique config file for each test
+			configPath := filepath.Join(tmpDir, "config_"+string(rune('a'+i))+".yaml")
+			if err := os.WriteFile(configPath, []byte(tt.configYAML), 0644); err != nil {
+				t.Fatalf("Failed to write config file: %v", err)
+			}
+
+			// Load the config
+			cfg, _, err := LoadWithRaw(configPath)
+			if err != nil {
+				t.Fatalf("LoadWithRaw() error = %v", err)
+			}
+
+			// Check the result
+			got := cfg.IsAutoSyncAfterOperationEnabled()
+			if got != tt.expectAutoSync {
+				t.Errorf("IsAutoSyncAfterOperationEnabled() = %v, want %v", got, tt.expectAutoSync)
+			}
+		})
+	}
+}
+
 // =============================================================================
 // Tests for Issue 082: Background Pull Sync Cooldown Configuration
 // =============================================================================
