@@ -138,6 +138,10 @@ Restores the default configuration. Requires confirmation.
 | `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `true`) |
 | `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |
+| `reminder.enabled` | bool | Enable task reminder notifications (default: `true`) |
+| `reminder.intervals` | list | Time before due to send reminders (default: `["1d", "at due time"]`) |
+| `reminder.os_notification` | bool | Send reminders via OS notifications (default: `true`) |
+| `reminder.log_notification` | bool | Log reminders to notification log (default: `true`) |
 
 ## Analytics Configuration
 
@@ -199,6 +203,55 @@ todoat notification log
 # Clear notification log
 todoat notification log clear
 ```
+
+## Reminder Configuration
+
+Configure task due date reminders:
+
+```yaml
+reminder:
+  enabled: true
+  intervals:
+    - 1d              # 1 day before due
+    - 1h              # 1 hour before due
+    - at due time     # When task is due
+  os_notification: true
+  log_notification: true
+```
+
+### Reminder Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `enabled` | Enable reminder system | `true` |
+| `intervals` | Time before due to send reminders | `["1d", "at due time"]` |
+| `os_notification` | Send via OS desktop notifications | `true` |
+| `log_notification` | Log to notification log file | `true` |
+
+### Interval Format
+
+| Format | Meaning |
+|--------|---------|
+| `15m` | 15 minutes before |
+| `1h` | 1 hour before |
+| `1d` | 1 day before |
+| `7d` or `1w` | 1 week before |
+| `at due time` | When the task is due |
+
+### View Reminder Status
+
+```bash
+# Check reminder configuration and status
+todoat reminder status
+
+# List upcoming reminders
+todoat reminder list
+
+# Check for due reminders
+todoat reminder check
+```
+
+See [Reminders How-To](../how-to/reminders.md) for detailed usage.
 
 ## Trash Configuration
 

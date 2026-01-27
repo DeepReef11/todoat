@@ -116,6 +116,20 @@ analytics:
 #     path: "~/.local/share/todoat/notifications.log"
 
 # =============================================================================
+# Reminder Settings
+# =============================================================================
+
+# Task reminders notify you when tasks are approaching their due date
+# reminder:
+#   enabled: true                            # Enable reminder notifications
+#   intervals:                               # When to send reminders before due date
+#     - 1d                                   # 1 day before
+#     - 1h                                   # 1 hour before
+#     - at due time                          # When task is due
+#   os_notification: true                    # Send via OS desktop notifications
+#   log_notification: true                   # Log to notification log file
+
+# =============================================================================
 # Credentials
 # =============================================================================
 # todoat supports secure credential storage via system keyring.

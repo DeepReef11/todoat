@@ -30,3 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests for credential manager keyring flow (#010)
 - Documentation for background pull sync on read operations
 - Configurable `sync.background_pull_cooldown` option to control cooldown between background pull syncs (default: 30s, minimum: 5s) (#082)
+- Reminder configuration documentation in reference guide (#083)
+- Reminder configuration example in sample config (#083)
+- Acceptance criteria tests for task reminders (#083)

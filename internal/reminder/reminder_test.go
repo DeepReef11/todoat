@@ -736,6 +736,259 @@ func TestReminderServiceGetUpcoming(t *testing.T) {
 }
 
 // =============================================================================
+// Acceptance Criteria Tests (083-task-reminders)
+// =============================================================================
+
+// TestReminderCreation tests that creating a task with due date schedules reminder
+func TestReminderCreation(t *testing.T) {
+	cli := testutil.NewCLITestWithReminder(t)
+
+	cli.SetReminderConfig(&reminder.Config{
+		Enabled: true,
+		Intervals: []string{
+			"1 day",
+		},
+		OSNotification:  true,
+		LogNotification: true,
+	})
+
+	// Create a task with a due date (within reminder window)
+	dueDate := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	cli.MustExecute("-y", "Work", "add", "Scheduled task", "--due-date", dueDate)
+
+	// Check that reminder is scheduled (will trigger on check)
+	stdout := cli.MustExecute("-y", "reminder", "check")
+
+	// Verify the task's reminder was triggered
+	testutil.AssertContains(t, stdout, "Scheduled task")
+	testutil.AssertContains(t, stdout, "Triggered")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify notification log contains the reminder
+	notifLog := cli.GetNotificationLog()
+	if !strings.Contains(notifLog, "REMINDER") {
+		t.Errorf("expected notification log to contain REMINDER, got:\n%s", notifLog)
+	}
+	if !strings.Contains(notifLog, "Scheduled task") {
+		t.Errorf("expected notification log to contain task name, got:\n%s", notifLog)
+	}
+}
+
+// TestReminderSnooze tests that user can snooze/dismiss reminders
+func TestReminderSnooze(t *testing.T) {
+	t.Run("dismiss prevents reminder from triggering again", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"1 day",
+			},
+			OSNotification:  true,
+			LogNotification: true,
+		})
+
+		// Create a task due tomorrow
+		dueDate := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+		cli.MustExecute("-y", "Work", "add", "Snooze test task", "--due-date", dueDate)
+
+		// First check triggers the reminder
+		cli.MustExecute("-y", "reminder", "check")
+		notifLog1 := cli.GetNotificationLog()
+		if !strings.Contains(notifLog1, "Snooze test task") {
+			t.Errorf("expected first reminder to trigger, got:\n%s", notifLog1)
+		}
+
+		// Clear notification log
+		cli.ClearNotificationLog()
+
+		// Dismiss the reminder
+		stdout := cli.MustExecute("-y", "reminder", "dismiss", "Snooze test task")
+		testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+		// Second check should NOT trigger (dismissed/snoozed)
+		cli.MustExecute("-y", "reminder", "check")
+		notifLog2 := cli.GetNotificationLog()
+		if strings.Contains(notifLog2, "Snooze test task") {
+			t.Errorf("expected dismissed reminder NOT to trigger again, got:\n%s", notifLog2)
+		}
+	})
+
+	t.Run("disable prevents all reminders for a task", func(t *testing.T) {
+		cli := testutil.NewCLITestWithReminder(t)
+
+		cli.SetReminderConfig(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"1 day",
+			},
+			OSNotification:  true,
+			LogNotification: true,
+		})
+
+		// Create a task due tomorrow
+		dueDate := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+		cli.MustExecute("-y", "Work", "add", "Disable test task", "--due-date", dueDate)
+
+		// Disable reminders for this task before checking
+		stdout := cli.MustExecute("-y", "reminder", "disable", "Disable test task")
+		testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+		// Check reminders - should NOT trigger for disabled task
+		cli.MustExecute("-y", "reminder", "check")
+		notifLog := cli.GetNotificationLog()
+		if strings.Contains(notifLog, "Disable test task") {
+			t.Errorf("expected disabled task reminder NOT to appear in log, got:\n%s", notifLog)
+		}
+	})
+}
+
+// TestReminderPersistence tests that reminders survive application restart
+func TestReminderPersistence(t *testing.T) {
+	t.Run("dismissed reminders persist across service restart", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "reminder-persist.db")
+
+		cfg := &reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"1 day",
+			},
+			OSNotification:  true,
+			LogNotification: true,
+		}
+
+		// Create task due tomorrow
+		dueTime := time.Now().AddDate(0, 0, 1)
+		task := &backend.Task{
+			ID:      "persist-test-1",
+			Summary: "Persistent task",
+			DueDate: &dueTime,
+			Status:  backend.StatusNeedsAction,
+		}
+
+		// First service instance - dismiss the reminder
+		{
+			service1, err := reminder.NewService(cfg, dbPath)
+			if err != nil {
+				t.Fatalf("failed to create first service: %v", err)
+			}
+
+			// Dismiss the reminder
+			err = service1.DismissReminder(task.ID, "1 day")
+			if err != nil {
+				t.Fatalf("DismissReminder failed: %v", err)
+			}
+
+			// Close first service (simulates app shutdown)
+			_ = service1.Close()
+		}
+
+		// Second service instance - verify dismissed state persisted
+		{
+			service2, err := reminder.NewService(cfg, dbPath)
+			if err != nil {
+				t.Fatalf("failed to create second service: %v", err)
+			}
+			defer func() { _ = service2.Close() }()
+
+			var sentNotifications []notification.Notification
+			mockNotifier := &mockNotificationManager{
+				sendFunc: func(n notification.Notification) error {
+					sentNotifications = append(sentNotifications, n)
+					return nil
+				},
+			}
+			service2.SetNotifier(mockNotifier)
+
+			// Check reminders - should NOT trigger (dismissed in previous session)
+			triggered, err := service2.CheckReminders([]*backend.Task{task})
+			if err != nil {
+				t.Fatalf("CheckReminders failed: %v", err)
+			}
+
+			if len(triggered) != 0 {
+				t.Errorf("expected 0 triggered reminders (persisted dismiss), got %d", len(triggered))
+			}
+			if len(sentNotifications) != 0 {
+				t.Errorf("expected 0 notifications (persisted dismiss), got %d", len(sentNotifications))
+			}
+		}
+	})
+
+	t.Run("disabled task reminders persist across service restart", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "reminder-persist-disabled.db")
+
+		cfg := &reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"1 day",
+			},
+			OSNotification:  true,
+			LogNotification: true,
+		}
+
+		// Create task due tomorrow
+		dueTime := time.Now().AddDate(0, 0, 1)
+		task := &backend.Task{
+			ID:      "persist-test-2",
+			Summary: "Disabled persistent task",
+			DueDate: &dueTime,
+			Status:  backend.StatusNeedsAction,
+		}
+
+		// First service instance - disable reminders for task
+		{
+			service1, err := reminder.NewService(cfg, dbPath)
+			if err != nil {
+				t.Fatalf("failed to create first service: %v", err)
+			}
+
+			// Disable reminders for this task
+			err = service1.DisableReminder(task.ID)
+			if err != nil {
+				t.Fatalf("DisableReminder failed: %v", err)
+			}
+
+			// Close first service (simulates app shutdown)
+			_ = service1.Close()
+		}
+
+		// Second service instance - verify disabled state persisted
+		{
+			service2, err := reminder.NewService(cfg, dbPath)
+			if err != nil {
+				t.Fatalf("failed to create second service: %v", err)
+			}
+			defer func() { _ = service2.Close() }()
+
+			var sentNotifications []notification.Notification
+			mockNotifier := &mockNotificationManager{
+				sendFunc: func(n notification.Notification) error {
+					sentNotifications = append(sentNotifications, n)
+					return nil
+				},
+			}
+			service2.SetNotifier(mockNotifier)
+
+			// Check reminders - should NOT trigger (disabled in previous session)
+			triggered, err := service2.CheckReminders([]*backend.Task{task})
+			if err != nil {
+				t.Fatalf("CheckReminders failed: %v", err)
+			}
+
+			if len(triggered) != 0 {
+				t.Errorf("expected 0 triggered reminders (persisted disable), got %d", len(triggered))
+			}
+			if len(sentNotifications) != 0 {
+				t.Errorf("expected 0 notifications (persisted disable), got %d", len(sentNotifications))
+			}
+		}
+	})
+}
+
+// =============================================================================
 // Mock types for testing
 // =============================================================================
 
