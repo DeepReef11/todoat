@@ -587,7 +587,7 @@ func TestExportImportIntegration(t *testing.T) {
 
 	// Delete original list
 	cli.MustExecute("-y", "list", "delete", "ExportTest")
-	cli.MustExecute("-y", "list", "purge", "ExportTest")
+	cli.MustExecute("-y", "list", "trash", "purge", "ExportTest")
 
 	// Import from sqlite (file is positional argument)
 	stdout = cli.MustExecute("-y", "list", "import", exportPath)

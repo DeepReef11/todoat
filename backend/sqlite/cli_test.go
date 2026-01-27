@@ -2397,7 +2397,7 @@ func TestListImportCLI(t *testing.T) {
 
 	// Delete the original list
 	cli.MustExecute("-y", "list", "delete", "OriginalList")
-	cli.MustExecute("-y", "list", "purge", "OriginalList")
+	cli.MustExecute("-y", "list", "trash", "purge", "OriginalList")
 
 	// Import the list back
 	stdout := cli.MustExecute("-y", "list", "import", exportPath)
@@ -2461,7 +2461,7 @@ func TestListImportJSONModeCLI(t *testing.T) {
 
 	// Delete the original
 	cli.MustExecute("-y", "list", "delete", "ImportJSON")
-	cli.MustExecute("-y", "list", "purge", "ImportJSON")
+	cli.MustExecute("-y", "list", "trash", "purge", "ImportJSON")
 
 	// Import with --json flag
 	stdout := cli.MustExecute("-y", "--json", "list", "import", exportPath)
@@ -2498,7 +2498,7 @@ func TestListImportPreservesMetadataCLI(t *testing.T) {
 
 	// Delete and purge
 	cli.MustExecute("-y", "list", "delete", "MetadataTest")
-	cli.MustExecute("-y", "list", "purge", "MetadataTest")
+	cli.MustExecute("-y", "list", "trash", "purge", "MetadataTest")
 
 	// Import
 	cli.MustExecute("-y", "list", "import", exportPath)

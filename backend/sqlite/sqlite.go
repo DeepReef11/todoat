@@ -614,7 +614,11 @@ func scanTaskRow(row *sql.Row) (*backend.Task, error) {
 
 // CreateTask adds a new task to a list for this backend
 func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
-	id := uuid.New().String()
+	// Preserve existing ID if provided (important for sync to maintain UID consistency)
+	id := task.ID
+	if id == "" {
+		id = uuid.New().String()
+	}
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
 

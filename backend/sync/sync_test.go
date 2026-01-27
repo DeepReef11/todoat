@@ -212,15 +212,63 @@ default_backend: remote-sqlite
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	// Initialize the remote database using the same CLI with -b flag to point to remote
-	// This ensures the schema is properly created via migrations
-	remoteStdout, remoteStderr, exitCode := cli.Execute("-y", "-b", "remote-sqlite", "Work", "add", "Remote task from server")
-	if exitCode != 0 {
-		t.Fatalf("failed to add task to remote: stdout=%s stderr=%s", remoteStdout, remoteStderr)
+	// Create the remote database DIRECTLY (bypassing CLI sync architecture)
+	// This simulates a task that exists only on the remote server
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote db: %v", err)
+	}
+	defer remoteDB.Close()
+
+	// Initialize schema on remote database
+	_, err = remoteDB.Exec(`
+		CREATE TABLE IF NOT EXISTS task_lists (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			color TEXT DEFAULT '',
+			modified TEXT NOT NULL,
+			deleted_at TEXT,
+			description TEXT DEFAULT '',
+			backend_id TEXT NOT NULL DEFAULT 'sqlite'
+		);
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			list_id TEXT NOT NULL,
+			summary TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'NEEDS-ACTION',
+			priority INTEGER DEFAULT 0,
+			due_date TEXT,
+			start_date TEXT,
+			completed TEXT,
+			created TEXT NOT NULL,
+			modified TEXT NOT NULL,
+			parent_id TEXT DEFAULT '',
+			categories TEXT DEFAULT '',
+			recurrence TEXT DEFAULT '',
+			recur_from_due INTEGER DEFAULT 1,
+			backend_id TEXT NOT NULL DEFAULT 'sqlite',
+			FOREIGN KEY (list_id) REFERENCES task_lists(id) ON DELETE CASCADE
+		);
+	`)
+	if err != nil {
+		t.Fatalf("failed to create remote schema: %v", err)
 	}
 
-	// Verify the task exists on remote but NOT on local
-	// Local should be empty since we only added to remote
+	// Create list and task directly on remote
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = remoteDB.Exec(`INSERT INTO task_lists (id, name, modified, backend_id) VALUES (?, ?, ?, ?)`,
+		"remote-work-list-id", "Work", now, "remote-sqlite")
+	if err != nil {
+		t.Fatalf("failed to create remote list: %v", err)
+	}
+	_, err = remoteDB.Exec(`INSERT INTO tasks (id, list_id, summary, status, created, modified, backend_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		"remote-task-id-123", "remote-work-list-id", "Remote task from server", "NEEDS-ACTION", now, now, "remote-sqlite")
+	if err != nil {
+		t.Fatalf("failed to create remote task: %v", err)
+	}
+
+	// Verify the task does NOT exist on local before sync
 	localOutput := cli.MustExecute("-y", "list")
 	if strings.Contains(localOutput, "Remote task from server") {
 		t.Fatalf("task should not exist on local before sync: %s", localOutput)
