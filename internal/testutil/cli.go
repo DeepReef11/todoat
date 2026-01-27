@@ -129,6 +129,27 @@ func NewCLITestWithViewsAndTmpDir(t *testing.T) (*CLITest, string, string) {
 	}, viewsDir, tmpDir
 }
 
+// NewCLITestWithViewsPath creates a new CLI test helper with custom paths.
+// This is used for testing views folder setup behavior.
+// The views directory is NOT created - the test can control whether it exists.
+func NewCLITestWithViewsPath(t *testing.T, dbPath, viewsDir, configPath, cachePath string) *CLITest {
+	t.Helper()
+
+	cfg := &cmd.Config{
+		NoPrompt:   true,
+		DBPath:     dbPath,
+		ViewsPath:  viewsDir,
+		CachePath:  cachePath,
+		ConfigPath: configPath,
+	}
+
+	return &CLITest{
+		t:      t,
+		cfg:    cfg,
+		tmpDir: filepath.Dir(dbPath),
+	}
+}
+
 // NewCLITestWithConfig creates a new CLI test helper with config file support.
 // This is used for testing configuration CLI commands.
 func NewCLITestWithConfig(t *testing.T) *CLITest {

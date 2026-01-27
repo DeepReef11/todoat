@@ -26,19 +26,16 @@ func NewRenderer(view *View, writer io.Writer) *Renderer {
 }
 
 // Render renders tasks according to the view configuration
+// NOTE: Filtering and sorting are expected to be done BEFORE calling Render().
+// The renderer only handles visual formatting and hierarchy display.
+// This allows callers to modify or bypass view filters (e.g., when CLI filters override view filters).
 func (r *Renderer) Render(tasks []backend.Task) {
 	if len(tasks) == 0 {
 		return
 	}
 
-	// Apply filters
-	filteredTasks := FilterTasks(tasks, r.view.Filters)
-
-	// Apply sorting
-	sortedTasks := SortTasks(filteredTasks, r.view.Sort)
-
-	// Render with hierarchy
-	r.renderWithHierarchy(sortedTasks)
+	// Render with hierarchy - filtering and sorting is done by the caller
+	r.renderWithHierarchy(tasks)
 }
 
 // renderWithHierarchy renders tasks preserving parent-child relationships
@@ -163,6 +160,10 @@ func (r *Renderer) formatField(t *backend.Task, field Field) string {
 			value = t.ID
 		case "parent":
 			value = t.ParentID
+		case "recurrence":
+			if t.Recurrence != "" {
+				value = "[R]"
+			}
 		}
 	}
 
@@ -226,11 +227,12 @@ func formatDate(t *time.Time, format string) string {
 		return ""
 	}
 	if format == "" {
-		// Use date-only format unless time component is present
+		// Use user-friendly format (matches old default behavior)
+		// Shows time if present, otherwise date only
 		if hasTimeComponent(*t) {
 			format = "Jan 02 15:04"
 		} else {
-			format = DefaultDateFormat
+			format = "Jan 02"
 		}
 	}
 	return t.Format(format)

@@ -982,6 +982,16 @@ todoat view create myview
 
 **Naming:** View name matches filename (e.g., `urgent.yaml` → view name is "urgent")
 
+### First-Run Behavior
+
+On first run, if the `views/` folder doesn't exist:
+
+1. **Without `-y` flag**: todoat uses built-in views. No views folder is created.
+
+2. **With `-y` flag (or `no_prompt: true` in config)**: The `views/` folder is automatically created with copies of built-in view files (`default.yaml`, `all.yaml`).
+
+To initialize the views folder for customization, run any todoat command with the `-y` flag (e.g., `todoat MyList -y`). This creates the views folder with default files that you can then edit.
+
 ### View Listing
 
 **Command:**
@@ -1015,7 +1025,7 @@ rm ~/.config/todoat/views/urgent.yaml
 
 **Effect:** View no longer appears in `view list`, cannot be used with `-v` flag
 
-**Note:** Built-in views (default, all) are hard-coded in the application and cannot be overridden. Custom views must use different names.
+**Note (Decision COMPAT-012):** Built-in views (`default`, `all`) **can be overridden** by creating files named `default.yaml` or `all.yaml` in your views folder (`~/.config/todoat/views/`). User files take precedence over built-in views. On first launch, if the `views/` folder doesn't exist, todoat creates it and copies the built-in view files so you can customize them. See [View Storage and Management](#view-storage-and-management) for details.
 
 ### View Editing
 

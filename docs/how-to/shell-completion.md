@@ -2,7 +2,7 @@
 
 todoat supports tab completion for Bash, Zsh, Fish, and PowerShell shells.
 
-## Quick Setup
+## Setup
 
 ### Zsh
 

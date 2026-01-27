@@ -64,6 +64,7 @@ var AvailableFields = []string{
 	"tags",
 	"uid",
 	"parent",
+	"recurrence",
 }
 
 // DefaultView returns the built-in default view
@@ -75,6 +76,9 @@ func DefaultView() *View {
 			{Name: "status", Width: 12},
 			{Name: "summary", Width: 40},
 			{Name: "priority", Width: 10},
+			{Name: "due_date", Width: 12},
+			{Name: "tags", Width: 20},
+			{Name: "recurrence", Width: 5},
 		},
 		Filters: []Filter{
 			{Field: "status", Operator: "ne", Value: "DONE"},
@@ -100,6 +104,7 @@ func AllView() *View {
 			{Name: "tags"},
 			{Name: "uid"},
 			{Name: "parent"},
+			{Name: "recurrence"},
 		},
 	}
 }

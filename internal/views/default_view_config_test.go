@@ -45,7 +45,7 @@ fields:
 	testutil.AssertContains(t, stdout, "Task with due date")
 	// The due date should appear ONLY if the custom view from config is used
 	// Default tree output does NOT show due dates
-	testutil.AssertContains(t, stdout, "2026-03-15")
+	testutil.AssertContains(t, stdout, "Mar 15")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
@@ -111,8 +111,8 @@ fields:
 	// First, verify WITHOUT -v flag that config's default_view (view1) is used
 	stdout1, _, exitCode1 := cli.Execute("-y", "OverrideViewTest")
 	testutil.AssertExitCode(t, exitCode1, 0)
-	testutil.AssertContains(t, stdout1, "2026-03-20")    // due_date from view1
-	testutil.AssertNotContains(t, stdout1, "2026-03-10") // start_date NOT in view1
+	testutil.AssertContains(t, stdout1, "Mar 20")    // due_date from view1
+	testutil.AssertNotContains(t, stdout1, "Mar 10") // start_date NOT in view1
 
 	// Now test -v flag override - use view2 which shows start_date instead of due_date
 	stdout2, _, exitCode2 := cli.Execute("-y", "OverrideViewTest", "-v", "view2")
@@ -120,8 +120,8 @@ fields:
 	testutil.AssertExitCode(t, exitCode2, 0)
 	testutil.AssertContains(t, stdout2, "Task with dates")
 	// view2 shows start_date, NOT due_date
-	testutil.AssertContains(t, stdout2, "2026-03-10")    // start_date from view2
-	testutil.AssertNotContains(t, stdout2, "2026-03-20") // due_date NOT in view2
+	testutil.AssertContains(t, stdout2, "Mar 10")    // start_date from view2
+	testutil.AssertNotContains(t, stdout2, "Mar 20") // due_date NOT in view2
 	testutil.AssertResultCode(t, stdout2, testutil.ResultInfoOnly)
 }
 
@@ -142,7 +142,7 @@ func TestDefaultViewBuiltin(t *testing.T) {
 	testutil.AssertExitCode(t, exitCode, 0)
 	testutil.AssertContains(t, stdout, "Full task")
 	// "all" view should show due date
-	testutil.AssertContains(t, stdout, "2026-01-31")
+	testutil.AssertContains(t, stdout, "Jan 31")
 	// "all" view should show tags
 	testutil.AssertContains(t, stdout, "work")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
@@ -177,7 +177,7 @@ fields:
 	testutil.AssertExitCode(t, exitCode, 0)
 	testutil.AssertContains(t, stdout, "Task with start")
 	// start_date should be visible (only if custom view is used; default tree output doesn't show it)
-	testutil.AssertContains(t, stdout, "2026-04-01")
+	testutil.AssertContains(t, stdout, "Apr 01")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 

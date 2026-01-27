@@ -6,7 +6,7 @@ Local SQLite-based analytics to track command usage, success rates, and backend 
 
 **Key Characteristics**:
 - **Privacy-First**: All data stored locally, never transmitted
-- **Opt-In**: Disabled by default, user must explicitly enable
+- **Enabled by Default**: Analytics is enabled by default for new installations with clear notice on first run
 - **Lightweight**: Minimal overhead on command execution
 - **Useful**: Provides insights into usage patterns and backend reliability
 
@@ -366,9 +366,13 @@ ORDER BY avg_ms DESC;
 
 ```yaml
 analytics:
-  enabled: true           # default
+  enabled: true            # enabled by default for new installations
   retention_days: 365      # Auto-cleanup after this many days
 ```
+
+**Note on Default Behavior** (Decision FEAT-008):
+
+Analytics is **enabled by default** for new installations. This provides better insights for users about their usage patterns, while respecting privacy (all data is local-only and never transmitted). Users who want to disable analytics can set `enabled: false` in their config. On first run, a clear notice is displayed: "Analytics enabled - tracking local command usage for insights. Disable with `analytics.enabled: false`"
 
 ### Environment Variable Override
 

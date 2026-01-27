@@ -258,7 +258,7 @@ See [Notification Manager](notification-manager.md) for configuration details.
 | Feature | Description | Status | Documentation |
 |---------|-------------|--------|---------------|
 | **Cobra Framework** | Robust command structure with subcommands | ✅ Stable | [CLI Interface](cli-interface.md#cobra-framework) |
-| **Shell Completion** | Tab completion for Bash, Zsh, Fish, PowerShell | ✅ Stable | [CLI Interface](cli-interface.md#shell-completion) |
+| **Shell Completion** | Tab completion for Bash, Zsh, Fish, PowerShell with auto-install | ✅ Stable | [CLI Interface](cli-interface.md#shell-completion) |
 | **Interactive List Selection** | Choose from menu when list name not specified | ✅ Stable | [CLI Interface](cli-interface.md#interactive-list-selection) |
 | **Intelligent Task Matching** | Exact → partial → multiple match resolution | ✅ Stable | [CLI Interface](cli-interface.md#intelligent-task-matching) |
 | **Terminal Width Detection** | Dynamic formatting based on terminal size | ✅ Stable | [CLI Interface](cli-interface.md#terminal-width-detection) |
@@ -337,7 +337,7 @@ See [Notification Manager](notification-manager.md) for configuration details.
 | **Time Filtering** | Filter analytics by time range (7d, 30d, 1y) | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
 | **JSON Output** | Machine-parseable analytics output | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
 | **Privacy-First** | All data stored locally, never transmitted | ✅ Stable | [Analytics](analytics.md#privacy-considerations) |
-| **Opt-In** | Disabled by default, requires explicit enabling | ✅ Stable | [Analytics](analytics.md#configuration) |
+| **Enabled by Default** | Analytics enabled by default with clear notice; can be disabled in config | ✅ Stable | [Analytics](analytics.md#configuration) |
 
 **Key Use Cases**:
 - Understanding command usage patterns

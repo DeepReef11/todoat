@@ -1961,8 +1961,8 @@ func TestAllViewSQLiteCLI(t *testing.T) {
 
 	// All view should show more fields than default
 	testutil.AssertContains(t, stdout, "Full metadata task")
-	// Should show due date
-	testutil.AssertContains(t, stdout, "2026-01-31")
+	// Should show due date (in user-friendly format)
+	testutil.AssertContains(t, stdout, "Jan 31")
 	// Should show tags
 	if !strings.Contains(stdout, "work") || !strings.Contains(stdout, "urgent") {
 		t.Errorf("expected tags in 'all' view, got:\n%s", stdout)

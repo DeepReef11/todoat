@@ -533,7 +533,7 @@ func TestFormatDate(t *testing.T) {
 		want   string
 	}{
 		{"nil", nil, "", ""},
-		{"date only default format", &date, "", "2024-06-15"},
+		{"date only default format", &date, "", "Jun 15"},
 		{"date with time default format", &dateWithTime, "", "Jun 15 14:30"},
 		{"custom format", &date, "02/01/2006", "15/06/2024"},
 	}

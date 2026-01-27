@@ -3367,114 +3367,12 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 		return err
 	}
 
-	// Load and apply view if explicitly specified
-	if viewName != "" {
-		return doGetWithView(ctx, be, tasks, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, pagination, cfg, stdout, jsonOutput)
+	// Always use view-based rendering. If no view specified, use "default".
+	// This allows user-defined default.yaml to override built-in default view.
+	if viewName == "" {
+		viewName = "default"
 	}
-
-	// Apply default view filter: exclude DONE/completed tasks unless explicitly filtered
-	// This matches the documented behavior for the default view
-	if statusFilter == "" {
-		var activeTasks []backend.Task
-		for _, t := range tasks {
-			if t.Status != backend.StatusCompleted {
-				activeTasks = append(activeTasks, t)
-			}
-		}
-		tasks = activeTasks
-	}
-
-	// Filter by status if specified (supports comma-separated values)
-	if statusFilter != "" {
-		filterStatuses, err := parseStatusFilter(statusFilter)
-		if err != nil {
-			return err
-		}
-		var filteredTasks []backend.Task
-		for _, t := range tasks {
-			if matchesStatusFilter(t.Status, filterStatuses) {
-				filteredTasks = append(filteredTasks, t)
-			}
-		}
-		tasks = filteredTasks
-	}
-
-	// Filter by priority if specified
-	if len(priorityFilter) > 0 {
-		var filteredTasks []backend.Task
-		for _, t := range tasks {
-			if matchesPriorityFilter(t.Priority, priorityFilter) {
-				filteredTasks = append(filteredTasks, t)
-			}
-		}
-		tasks = filteredTasks
-	}
-
-	// Filter by tags if specified (OR logic - match any tag)
-	if len(tagFilter) > 0 {
-		var filteredTasks []backend.Task
-		for _, t := range tasks {
-			if matchesTagFilter(t.Categories, tagFilter) {
-				filteredTasks = append(filteredTasks, t)
-			}
-		}
-		tasks = filteredTasks
-	}
-
-	// Filter by date if specified (AND logic - must match all date criteria)
-	if !dateFilter.IsEmpty() {
-		var filteredTasks []backend.Task
-		for _, t := range tasks {
-			if matchesDateFilter(t, dateFilter) {
-				filteredTasks = append(filteredTasks, t)
-			}
-		}
-		tasks = filteredTasks
-	}
-
-	// Store total count before pagination
-	totalCount := len(tasks)
-
-	// Apply pagination if specified
-	offset := pagination.GetEffectiveOffset()
-	limit := pagination.GetEffectiveLimit()
-	var paginatedTasks []backend.Task
-	if pagination.HasPagination() {
-		if offset >= len(tasks) {
-			paginatedTasks = []backend.Task{}
-		} else {
-			end := offset + limit
-			if limit == 0 || end > len(tasks) {
-				end = len(tasks)
-			}
-			paginatedTasks = tasks[offset:end]
-		}
-	} else {
-		paginatedTasks = tasks
-	}
-
-	if jsonOutput {
-		return outputTaskListJSONWithPagination(ctx, be, paginatedTasks, list, totalCount, pagination, cfg, stdout)
-	}
-
-	if len(paginatedTasks) == 0 {
-		_, _ = fmt.Fprintf(stdout, "No tasks in list '%s'\n", list.Name)
-	} else {
-		_, _ = fmt.Fprintf(stdout, "Tasks in '%s':\n", list.Name)
-		printTaskTree(paginatedTasks, stdout)
-		// Show pagination info if pagination is active
-		if pagination.HasPagination() && totalCount > 0 {
-			start := offset + 1
-			end := offset + len(paginatedTasks)
-			_, _ = fmt.Fprintf(stdout, "Showing %d-%d of %d tasks\n", start, end, totalCount)
-		}
-	}
-
-	// Emit INFO_ONLY result code in no-prompt mode
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
-	return nil
+	return doGetWithView(ctx, be, tasks, list, statusFilter, priorityFilter, tagFilter, dateFilter, viewName, pagination, cfg, stdout, jsonOutput)
 }
 
 // doGetWithView lists tasks using a view configuration
@@ -3482,17 +3380,34 @@ func doGet(ctx context.Context, be backend.TaskManager, list *backend.List, stat
 func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.Task, list *backend.List, statusFilter string, priorityFilter []int, tagFilter []string, dateFilter DateFilter, viewName string, pagination PaginationOptions, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Load view
 	viewsDir := getViewsDir(cfg)
+
+	// Auto-setup views folder if it doesn't exist and NoPrompt is true
+	if viewsDir != "" && cfg != nil && cfg.NoPrompt {
+		if _, err := os.Stat(viewsDir); os.IsNotExist(err) {
+			_, _ = views.SetupViewsFolder(viewsDir)
+		}
+	}
+
 	loader := views.NewLoader(viewsDir)
 	view, err := loader.LoadView(viewName)
 	if err != nil {
 		return err
 	}
 
-	// Apply view filters first
-	filteredTasks := views.FilterTasks(tasks, view.Filters)
+	// Apply view filters first, but skip status filters if CLI status filter is specified
+	// (CLI status filter overrides view's status filter, not combines with it)
+	var viewFilters []views.Filter
+	for _, f := range view.Filters {
+		if f.Field == "status" && statusFilter != "" {
+			// Skip view's status filter when CLI status filter is provided
+			continue
+		}
+		viewFilters = append(viewFilters, f)
+	}
+	filteredTasks := views.FilterTasks(tasks, viewFilters)
 
-	// Apply CLI filters on top of view filters (combining them with AND logic)
-	// Filter by status if specified
+	// Apply CLI filters on top of view filters
+	// Filter by status if specified (this replaces view's status filter)
 	if statusFilter != "" {
 		filterStatuses, err := parseStatusFilter(statusFilter)
 		if err != nil {
@@ -3687,9 +3602,13 @@ func doViewList(cfg *Config, stdout io.Writer) error {
 
 	_, _ = fmt.Fprintln(stdout, "Available views:")
 	for _, v := range viewList {
-		viewType := "custom"
+		var viewType string
 		if v.BuiltIn {
 			viewType = "built-in"
+		} else if v.Overrides {
+			viewType = "user-defined, overrides built-in"
+		} else {
+			viewType = "user-defined"
 		}
 		_, _ = fmt.Fprintf(stdout, "  - %s (%s)\n", v.Name, viewType)
 	}
@@ -3908,117 +3827,6 @@ func parsePriorityFilterForView(priority string) []views.Filter {
 		}
 	}
 	return nil
-}
-
-// taskNode represents a task with its children for tree building
-type taskNode struct {
-	task     backend.Task
-	children []*taskNode
-}
-
-// printTaskTree prints tasks in a tree structure with box-drawing characters
-func printTaskTree(tasks []backend.Task, stdout io.Writer) {
-	// Build a map from task ID to task
-	taskMap := make(map[string]*backend.Task)
-	for i := range tasks {
-		taskMap[tasks[i].ID] = &tasks[i]
-	}
-
-	// Build tree nodes
-	nodeMap := make(map[string]*taskNode)
-	var rootNodes []*taskNode
-
-	// First pass: create nodes for all tasks
-	for i := range tasks {
-		nodeMap[tasks[i].ID] = &taskNode{task: tasks[i]}
-	}
-
-	// Second pass: build parent-child relationships
-	for i := range tasks {
-		node := nodeMap[tasks[i].ID]
-		if tasks[i].ParentID == "" {
-			// Root-level task
-			rootNodes = append(rootNodes, node)
-		} else if parentNode, ok := nodeMap[tasks[i].ParentID]; ok {
-			// Has valid parent
-			parentNode.children = append(parentNode.children, node)
-		} else {
-			// Orphan task (parent not in list) - show at root level
-			rootNodes = append(rootNodes, node)
-		}
-	}
-
-	// Print the tree recursively
-	for i, node := range rootNodes {
-		isLast := i == len(rootNodes)-1
-		printTaskNode(node, "", isLast, stdout)
-	}
-}
-
-// formatDateDisplay formats a date for text display.
-// Shows time if present, otherwise date only.
-func formatDateDisplay(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	// Check if time has a non-midnight time component
-	if t.Hour() != 0 || t.Minute() != 0 || t.Second() != 0 {
-		return t.Format("Jan 02 15:04")
-	}
-	return t.Format("Jan 02")
-}
-
-// printTaskNode recursively prints a task node with tree visualization
-func printTaskNode(node *taskNode, prefix string, isLast bool, stdout io.Writer) {
-	t := node.task
-
-	// Build the display line
-	statusIcon := getStatusIcon(t.Status)
-	priorityStr := ""
-	if t.Priority > 0 {
-		priorityStr = fmt.Sprintf(" [P%d]", t.Priority)
-	}
-	tagsStr := ""
-	if t.Categories != "" {
-		tagsStr = fmt.Sprintf(" {%s}", t.Categories)
-	}
-	dateStr := ""
-	if t.DueDate != nil {
-		dateStr = fmt.Sprintf(" (%s)", formatDateDisplay(t.DueDate))
-	}
-	recurStr := ""
-	if t.Recurrence != "" {
-		recurStr = " [R]"
-	}
-
-	// Choose the appropriate tree character
-	var treeChar string
-	if prefix == "" {
-		// Root level - no tree character
-		treeChar = "  "
-	} else if isLast {
-		treeChar = "└─ "
-	} else {
-		treeChar = "├─ "
-	}
-
-	_, _ = fmt.Fprintf(stdout, "%s%s%s %s%s%s%s%s\n", prefix, treeChar, statusIcon, t.Summary, priorityStr, dateStr, tagsStr, recurStr)
-
-	// Build the prefix for children
-	var childPrefix string
-	if prefix == "" {
-		childPrefix = "  "
-	} else if isLast {
-		childPrefix = prefix + "   "
-	} else {
-		childPrefix = prefix + "│  "
-	}
-
-	// Print children
-	for i, child := range node.children {
-		isChildLast := i == len(node.children)-1
-		printTaskNode(child, childPrefix, isChildLast, stdout)
-	}
 }
 
 // matchesTagFilter checks if a task's categories match any of the filter tags (OR logic)
@@ -4460,20 +4268,6 @@ func matchesDateFilter(task backend.Task, filter DateFilter) bool {
 	}
 
 	return true
-}
-
-// getStatusIcon returns a visual indicator for task status
-func getStatusIcon(status backend.TaskStatus) string {
-	switch status {
-	case backend.StatusCompleted:
-		return "[DONE]"
-	case backend.StatusInProgress:
-		return "[IN-PROGRESS]"
-	case backend.StatusCancelled:
-		return "[CANCELLED]"
-	default:
-		return "[TODO]"
-	}
 }
 
 // doAdd creates a new task

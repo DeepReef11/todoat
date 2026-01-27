@@ -51,8 +51,8 @@ func TestAllViewViewsCLI(t *testing.T) {
 	testutil.AssertExitCode(t, exitCode, 0)
 	// All view should show more fields than default
 	testutil.AssertContains(t, stdout, "Full metadata task")
-	// Should show due date
-	testutil.AssertContains(t, stdout, "2026-01-31")
+	// Should show due date (Jan 31 format for display)
+	testutil.AssertContains(t, stdout, "Jan 31")
 	// Should show tags
 	if !strings.Contains(stdout, "work") || !strings.Contains(stdout, "urgent") {
 		t.Errorf("expected tags in 'all' view, got:\n%s", stdout)

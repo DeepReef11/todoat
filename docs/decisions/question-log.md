@@ -13,6 +13,10 @@ For current design decisions, see `docs/explanation/`.
 | ARCH-006 | 2026-01-26 | Should the background pull sync cooldown (30s) be configurable? | Yes - add sync.background_pull_cooldown config option |
 | UX-004 | 2026-01-26 | What should the default behavior be for bulk destructive operations? | Require confirmation - always prompt on bulk delete/update affecting >1 task |
 | ARCH-007 | 2026-01-26 | Is the merge conflict strategy field prioritization correct? | Field-level timestamps - track modification time per field and use most recent |
+| FEAT-008 | 2026-01-26 | Should analytics be enabled by default for new installations? | Enable by default with clear notice |
+| FEAT-011 | 2026-01-26 | Should child tasks of DONE parents be auto-hidden in default view? | Configurable - add views.cascade_parent_status_filter option (default true) |
+| COMPAT-012 | 2026-01-26 | Should documentation be updated to reflect that built-in views CAN be overridden? | Update documentation - views folder copied on first launch |
+| UX-013 | 2026-01-26 | Should views folder creation prompt user when -y flag is NOT provided? | Silent fallback - use built-in views without prompt; use -y flag to create views folder |
 
 ---
 
@@ -123,5 +127,73 @@ For current design decisions, see `docs/explanation/`.
 - [x] Option B - Field-level timestamps: Track modification time per field (if available) and use the most recent value. More accurate but requires additional metadata tracking.
 
 **Impact**: Affects how merge conflict resolution works. Users who use "merge" strategy may not get expected results if their mental model differs from implementation.
+
+**Status**: answered
+
+---
+
+### [FEAT-008] Should analytics be enabled by default for new installations?
+
+**Asked**: 2026-01-26
+**Answered**: 2026-01-26
+**Documented in**: `docs/explanation/analytics.md`
+
+**Context**: The analytics system (docs/explanation/analytics.md) is documented as "opt-in" and "disabled by default". However, the documentation also states `enabled: true # default` in the config example section. The sample config at internal/config/config.sample.yaml shows analytics as commented out. This inconsistency could confuse users.
+
+**Options**:
+- [x] Enable by default with clear notice - Better insights for users, but more intrusive
+
+**Impact**: Affects new user onboarding experience and privacy expectations. Analytics data is local-only and never transmitted.
+
+**Status**: answered
+
+---
+
+### [FEAT-011] Should child tasks of DONE parents be auto-hidden in default view?
+
+**Asked**: 2026-01-26
+**Answered**: 2026-01-26
+**Documented in**: `docs/explanation/subtasks-hierarchy.md`
+
+**Context**: The docs/explanation/subtasks-hierarchy.md states: "Child with parent status DONE are considered like DONE. For instance, if DONE tasks are filtered out, childs of DONE tasks will also be filtered out." However, commit 3fc5620 recently changed the default view to filter DONE tasks. It's unclear if this cascades to children of DONE parents correctly.
+
+**Options**:
+- [x] Configurable - Add config option `views.cascade_parent_status_filter: true/false` default true (filter children of parent)
+
+**Impact**: Affects how users see task hierarchies in the default view. May cause confusion if children of completed parents still show as TODO.
+
+**Status**: answered
+
+---
+
+### [COMPAT-012] Should documentation be updated to reflect that built-in views CAN be overridden?
+
+**Asked**: 2026-01-26
+**Answered**: 2026-01-26
+**Documented in**: `docs/explanation/views-customization.md`
+
+**Context**: The documentation at `docs/explanation/views-customization.md` (line 1018) states: "Built-in views (default, all) are hard-coded in the application and cannot be overridden. Custom views must use different names." However, the staged changes in `internal/views/loader.go` implement exactly the opposite behavior - the code now checks disk first for user overrides before falling back to built-in views. This change was part of roadmap item 034 (views-folder-setup.md) which explicitly requires "User view overrides built-in" functionality.
+
+**Options**:
+- [x] Update documentation - Change the note to explain that users CAN override built-in views by editing `default.yaml` or `all.yaml` in their views folder. The views/ folder with builtin views should be copied if views/ folder doesn't exist at config path on first app launch (like config.yaml).
+
+**Impact**: Documentation accuracy and user expectations. If docs say "cannot be overridden" but code allows it, users may not discover this useful customization option.
+
+**Status**: answered
+
+---
+
+### [UX-013] Should views folder creation prompt user when -y flag is NOT provided?
+
+**Asked**: 2026-01-26
+**Answered**: 2026-01-26
+**Documented in**: `docs/explanation/views-customization.md`
+
+**Context**: Roadmap item 034 specifies: "When views/ folder doesn't exist and -y not used, should prompt: 'Views folder not found. Create with default views? [Y/n]'". However, the current implementation in `cmd/todoat/cmd/todoat.go:3387` only auto-creates the views folder when `cfg.NoPrompt` (i.e., `-y` flag) is true. Without `-y`, the folder is never created and no prompt is shown - the user silently gets built-in views.
+
+**Options**:
+- [x] Silent fallback - Use built-in views without prompt when views folder doesn't exist; users can run any command with `-y` flag to create the views folder
+
+**Impact**: Affects first-run user experience. Silent fallback is simpler. Users who want to customize views can use the `-y` flag to initialize the views folder.
 
 **Status**: answered
