@@ -21,7 +21,7 @@ todoat MyList
 
 ### Default View
 
-Shows: status, summary, priority
+Shows: status, summary, priority (excludes completed tasks)
 
 ```bash
 todoat MyList
@@ -31,8 +31,9 @@ Output:
 ```
 TODO         Buy groceries                              1 (High)
 IN-PROGRESS  Write documentation                        5 (Medium)
-DONE         Review pull request                        9 (Low)
 ```
+
+Note: The default view filters out DONE tasks. Use `-v all` to see completed tasks.
 
 ### All View
 

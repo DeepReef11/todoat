@@ -12,7 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation command syntax examples now use correct list-based format (#001)
 
 ### Changed
+- Default value for `analytics.enabled` changed from `false` to `true`
 - Documentation improvements for configuration and synchronization
+- Clarified that default view excludes completed tasks (use `-v all` to see them)
 
 ### Added
 - Tests for analytics configuration settings
