@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default value for `analytics.enabled` changed from `false` to `true`
 - Documentation improvements for configuration and synchronization
 - Clarified that default view excludes completed tasks (use `-v all` to see them)
+- Simplified feature documentation tables by removing redundant status column (all features are stable)
+- Updated getting-started tutorial with `completion install` quick setup
 
 ### Added
 - `completion install` command to auto-detect shell and install completion scripts (#035)

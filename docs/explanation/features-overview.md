@@ -23,21 +23,21 @@ This document provides a high-level summary of all features in todoat, organized
 
 **Status System**: todoat uses internal status values (TODO, DONE, IN-PROGRESS, CANCELLED) for all operations. These are automatically translated to/from backend-specific status formats (e.g., CalDAV uses NEEDS-ACTION, COMPLETED, IN-PROCESS).
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Add Tasks** | Create new tasks with metadata (priority, dates, descriptions, tags) | ✅ Stable | [Task Management](task-management.md#add-tasks) |
-| **View Tasks** | Display tasks from a list with filtering and custom views | ✅ Stable | [Task Management](task-management.md#view-tasks) |
-| **Update Tasks** | Modify task properties (summary, status, priority, dates, etc.) | ✅ Stable | [Task Management](task-management.md#update-tasks) |
-| **Complete Tasks** | Mark tasks as done with automatic completion timestamp | ✅ Stable | [Task Management](task-management.md#complete-tasks) |
-| **Delete Tasks** | Remove tasks from a list (immediate deletion) | ✅ Stable | [Task Management](task-management.md#delete-tasks) |
-| **Filter by Status** | Show only tasks with specific statuses (TODO, DONE, IN-PROGRESS, CANCELLED) | ✅ Stable | [Task Management](task-management.md#filter-by-status) |
-| **Filter by Priority** | Display tasks matching priority levels (0-9) | ✅ Stable | [Task Management](task-management.md#filter-by-priority) |
-| **Filter by Dates** | Filter tasks by due date, start date, or date ranges | ✅ Stable | [Task Management](task-management.md#filter-by-dates) |
-| **Filter by Tags** | Show tasks with specific categories/tags | ✅ Stable | [Task Management](task-management.md#filter-by-tags) |
-| **Interactive Task Selection** | Fuzzy matching and selection when multiple tasks match query | ✅ Stable | [Task Management](task-management.md#interactive-task-selection) |
-| **Task Search** | Intelligent search with exact, partial, and multi-match support | ✅ Stable | [Task Management](task-management.md#task-search) |
-| **Bulk Operations** | Operate on multiple tasks using filters | ✅ Stable | [Task Management](task-management.md#bulk-operations) |
-| **Pagination** | Control output size with limit, offset, and page flags for large task lists | ✅ Stable | [Task Management](../how-to/task-management.md#pagination) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Add Tasks** | Create new tasks with metadata (priority, dates, descriptions, tags) | [Task Management](task-management.md#add-tasks) |
+| **View Tasks** | Display tasks from a list with filtering and custom views | [Task Management](task-management.md#view-tasks) |
+| **Update Tasks** | Modify task properties (summary, status, priority, dates, etc.) | [Task Management](task-management.md#update-tasks) |
+| **Complete Tasks** | Mark tasks as done with automatic completion timestamp | [Task Management](task-management.md#complete-tasks) |
+| **Delete Tasks** | Remove tasks from a list (immediate deletion) | [Task Management](task-management.md#delete-tasks) |
+| **Filter by Status** | Show only tasks with specific statuses (TODO, DONE, IN-PROGRESS, CANCELLED) | [Task Management](task-management.md#filter-by-status) |
+| **Filter by Priority** | Display tasks matching priority levels (0-9) | [Task Management](task-management.md#filter-by-priority) |
+| **Filter by Dates** | Filter tasks by due date, start date, or date ranges | [Task Management](task-management.md#filter-by-dates) |
+| **Filter by Tags** | Show tasks with specific categories/tags | [Task Management](task-management.md#filter-by-tags) |
+| **Interactive Task Selection** | Fuzzy matching and selection when multiple tasks match query | [Task Management](task-management.md#interactive-task-selection) |
+| **Task Search** | Intelligent search with exact, partial, and multi-match support | [Task Management](task-management.md#task-search) |
+| **Bulk Operations** | Operate on multiple tasks using filters | [Task Management](task-management.md#bulk-operations) |
+| **Pagination** | Control output size with limit, offset, and page flags for large task lists | [Task Management](../how-to/task-management.md#pagination) |
 
 **Key Use Cases**:
 - Daily task management (adding todos, marking complete)
@@ -53,19 +53,19 @@ This document provides a high-level summary of all features in todoat, organized
 
 **Purpose**: Organize tasks into separate lists (calendars) with distinct properties and management capabilities.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Create Lists** | Create new task lists with names, descriptions, and colors | ✅ Stable | [List Management](list-management.md#create-lists) |
-| **View Lists** | Display all available task lists with metadata | ✅ Stable | [List Management](list-management.md#view-lists) |
-| **Rename Lists** | Change list display names | ✅ Stable | [List Management](list-management.md#rename-lists) |
-| **Delete Lists** | Soft-delete lists (move to trash) | ✅ Stable | [List Management](list-management.md#delete-lists) |
-| **Trash Management** | View deleted lists in trash | ✅ Stable | [List Management](list-management.md#trash-management) |
-| **Restore Lists** | Recover lists from trash | ✅ Stable | [List Management](list-management.md#restore-lists) |
-| **Purge Lists** | Permanently delete lists from trash | ✅ Stable | [List Management](list-management.md#purge-lists) |
-| **List Information** | Show detailed list metadata (ID, color, description, task count) | ✅ Stable | [List Management](list-management.md#list-information) |
-| **List Caching** | Local cache of lists for faster access | ✅ Stable | [List Management](list-management.md#list-caching) |
-| **Interactive List Selection** | Choose list from menu when not specified | ✅ Stable | [List Management](list-management.md#interactive-list-selection) |
-| **List Color Coding** | Assign hex colors to lists for visual distinction | ✅ Stable | [List Management](list-management.md#list-color-coding) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Create Lists** | Create new task lists with names, descriptions, and colors | [List Management](list-management.md#create-lists) |
+| **View Lists** | Display all available task lists with metadata | [List Management](list-management.md#view-lists) |
+| **Rename Lists** | Change list display names | [List Management](list-management.md#rename-lists) |
+| **Delete Lists** | Soft-delete lists (move to trash) | [List Management](list-management.md#delete-lists) |
+| **Trash Management** | View deleted lists in trash | [List Management](list-management.md#trash-management) |
+| **Restore Lists** | Recover lists from trash | [List Management](list-management.md#restore-lists) |
+| **Purge Lists** | Permanently delete lists from trash | [List Management](list-management.md#purge-lists) |
+| **List Information** | Show detailed list metadata (ID, color, description, task count) | [List Management](list-management.md#list-information) |
+| **List Caching** | Local cache of lists for faster access | [List Management](list-management.md#list-caching) |
+| **Interactive List Selection** | Choose list from menu when not specified | [List Management](list-management.md#interactive-list-selection) |
+| **List Color Coding** | Assign hex colors to lists for visual distinction | [List Management](list-management.md#list-color-coding) |
 
 **Key Use Cases**:
 - Organizing tasks by project, context, or area of responsibility
@@ -81,16 +81,16 @@ This document provides a high-level summary of all features in todoat, organized
 
 **Purpose**: Create hierarchical task structures with parent-child relationships for complex projects.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Create Subtasks** | Add child tasks under parent tasks using `-P` flag | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#1-parent-child-relationships) |
-| **Path-Based Creation** | Auto-create hierarchy using path notation (`parent/child/grandchild`) | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#2-path-based-task-creation) |
-| **Tree Visualization** | Display hierarchical structure with box-drawing characters (├─, └─, │) | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#3-hierarchical-display-and-navigation) |
-| **Multi-Level Hierarchy** | Support unlimited nesting depth | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#1-parent-child-relationships) |
-| **Parent Path Resolution** | Reference parents by path or name | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#2-path-based-task-creation) |
-| **Hierarchical Filtering** | Show subtasks when parent matches filter | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#integration-with-other-features) |
-| **Orphan Detection** | Identify subtasks with missing parents | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#4-subtask-operations-and-management) |
-| **Indented Display** | Visual indentation to show task depth | ✅ Stable | [Subtasks & Hierarchy](subtasks-hierarchy.md#3-hierarchical-display-and-navigation) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Create Subtasks** | Add child tasks under parent tasks using `-P` flag | [Subtasks & Hierarchy](subtasks-hierarchy.md#1-parent-child-relationships) |
+| **Path-Based Creation** | Auto-create hierarchy using path notation (`parent/child/grandchild`) | [Subtasks & Hierarchy](subtasks-hierarchy.md#2-path-based-task-creation) |
+| **Tree Visualization** | Display hierarchical structure with box-drawing characters (├─, └─, │) | [Subtasks & Hierarchy](subtasks-hierarchy.md#3-hierarchical-display-and-navigation) |
+| **Multi-Level Hierarchy** | Support unlimited nesting depth | [Subtasks & Hierarchy](subtasks-hierarchy.md#1-parent-child-relationships) |
+| **Parent Path Resolution** | Reference parents by path or name | [Subtasks & Hierarchy](subtasks-hierarchy.md#2-path-based-task-creation) |
+| **Hierarchical Filtering** | Show subtasks when parent matches filter | [Subtasks & Hierarchy](subtasks-hierarchy.md#integration-with-other-features) |
+| **Orphan Detection** | Identify subtasks with missing parents | [Subtasks & Hierarchy](subtasks-hierarchy.md#4-subtask-operations-and-management) |
+| **Indented Display** | Visual indentation to show task depth | [Subtasks & Hierarchy](subtasks-hierarchy.md#3-hierarchical-display-and-navigation) |
 
 **Key Use Cases**:
 - Breaking down complex projects into manageable subtasks
@@ -106,21 +106,21 @@ This document provides a high-level summary of all features in todoat, organized
 
 **Purpose**: Connect to multiple task storage backends with a unified interface.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Nextcloud CalDAV Backend** | Sync with Nextcloud Tasks using CalDAV protocol | ✅ Stable | [Backend System](backend-system.md#1-nextcloud-backend-remote-caldav) |
-| **Todoist Backend** | Integrate with Todoist using REST API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
-| **Google Tasks Backend** | Integrate with Google Tasks using REST API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
-| **Microsoft To Do Backend** | Integrate with Microsoft To Do using Graph API | ✅ Stable | [Backend System](backend-system.md#available-backends) |
-| **SQLite Backend** | Local database storage with full CRUD operations | ✅ Stable | [Backend System](backend-system.md#2-sqlite-backend-local-database) |
-| **Git/Markdown Backend** | Store tasks as markdown files in Git repositories | ✅ Stable | [Backend System](backend-system.md#3-git-backend-markdown-in-repositories) |
-| **File Backend** | Plain text file storage | ✅ Stable | [Backend System](backend-system.md#4-file-backend-plain-text-storage) |
-| **Backend Auto-Detection** | Automatically detect and configure backends | ✅ Stable | [Backend System](backend-system.md#auto-detection-interface) |
-| **Backend Selection Priority** | Configurable priority order for backend selection | ✅ Stable | [Backend System](backend-system.md#selection-priority) |
-| **Pluggable Architecture** | TaskManager interface for adding new backends | ✅ Stable | [Backend System](backend-system.md#1-taskmanager-interface) |
-| **List Backends Command** | Display all configured backends and their status | ✅ Stable | [Backend System](backend-system.md#backend-display-information) |
-| **Backend-Specific Options** | Per-backend configuration and behavior | ✅ Stable | [Backend System](backend-system.md#backend-configuration-formats) |
-| **Multi-Backend Support** | Use multiple backends simultaneously | ✅ Stable | [Backend System](backend-system.md#2-backend-registry) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Nextcloud CalDAV Backend** | Sync with Nextcloud Tasks using CalDAV protocol | [Backend System](backend-system.md#1-nextcloud-backend-remote-caldav) |
+| **Todoist Backend** | Integrate with Todoist using REST API | [Backend System](backend-system.md#available-backends) |
+| **Google Tasks Backend** | Integrate with Google Tasks using REST API | [Backend System](backend-system.md#available-backends) |
+| **Microsoft To Do Backend** | Integrate with Microsoft To Do using Graph API | [Backend System](backend-system.md#available-backends) |
+| **SQLite Backend** | Local database storage with full CRUD operations | [Backend System](backend-system.md#2-sqlite-backend-local-database) |
+| **Git/Markdown Backend** | Store tasks as markdown files in Git repositories | [Backend System](backend-system.md#3-git-backend-markdown-in-repositories) |
+| **File Backend** | Plain text file storage | [Backend System](backend-system.md#4-file-backend-plain-text-storage) |
+| **Backend Auto-Detection** | Automatically detect and configure backends | [Backend System](backend-system.md#auto-detection-interface) |
+| **Backend Selection Priority** | Configurable priority order for backend selection | [Backend System](backend-system.md#selection-priority) |
+| **Pluggable Architecture** | TaskManager interface for adding new backends | [Backend System](backend-system.md#1-taskmanager-interface) |
+| **List Backends Command** | Display all configured backends and their status | [Backend System](backend-system.md#backend-display-information) |
+| **Backend-Specific Options** | Per-backend configuration and behavior | [Backend System](backend-system.md#backend-configuration-formats) |
+| **Multi-Backend Support** | Use multiple backends simultaneously | [Backend System](backend-system.md#2-backend-registry) |
 
 **Key Use Cases**:
 - Syncing tasks with Nextcloud tasks
@@ -141,26 +141,26 @@ This document provides a high-level summary of all features in todoat, organized
 
 **Architecture**: When sync is enabled, the Sync Manager coordinates all operations between CLI commands, local cache (SQLite), and remote backends. All CRUD operations are routed through the Sync Manager to ensure consistency.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Bidirectional Sync** | Sync local and remote changes in both directions | ✅ Stable | [Synchronization](synchronization.md#bidirectional-sync) |
-| **Automatic Caching** | Each remote backend gets its own SQLite cache database | ✅ Stable | [Synchronization](synchronization.md#automatic-caching) |
-| **Offline Mode** | Queue operations when remote backend unavailable | ✅ Stable | [Synchronization](synchronization.md#offline-mode) |
-| **Manual Sync** | Trigger sync with `todoat sync` command | ✅ Stable | [Synchronization](synchronization.md#manual-sync) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Bidirectional Sync** | Sync local and remote changes in both directions | [Synchronization](synchronization.md#bidirectional-sync) |
+| **Automatic Caching** | Each remote backend gets its own SQLite cache database | [Synchronization](synchronization.md#automatic-caching) |
+| **Offline Mode** | Queue operations when remote backend unavailable | [Synchronization](synchronization.md#offline-mode) |
+| **Manual Sync** | Trigger sync with `todoat sync` command | [Synchronization](synchronization.md#manual-sync) |
 | **Auto-Sync Daemon** | Background process for automatic syncing | 🚧 Being Redesigned | [Synchronization](synchronization.md#auto-sync-daemon) |
-| **Conflict Resolution** | Handle conflicts with configurable strategies | ✅ Stable | [Synchronization](synchronization.md#conflict-resolution) |
-| **Server Wins Strategy** | Remote changes override local changes (default) | ✅ Stable | [Synchronization](synchronization.md#server-wins-strategy) |
-| **Local Wins Strategy** | Local changes override remote changes | ✅ Stable | [Synchronization](synchronization.md#local-wins-strategy) |
-| **Merge Strategy** | Combine local and remote changes intelligently | ✅ Stable | [Synchronization](synchronization.md#merge-strategy) |
-| **Keep Both Strategy** | Create duplicate tasks to preserve both versions | ✅ Stable | [Synchronization](synchronization.md#keep-both-strategy) |
-| **Sync Status** | View sync state and pending operations | ✅ Stable | [Synchronization](synchronization.md#sync-status) |
-| **Sync Queue** | Persistent queue of pending operations | ✅ Stable | [Synchronization](synchronization.md#sync-queue) |
-| **Retry Logic** | Exponential backoff for failed sync operations | ✅ Stable | [Synchronization](synchronization.md#retry-logic) |
-| **ETag Support** | Use ETags for efficient change detection | ✅ Stable | [Synchronization](synchronization.md#etag-support) |
-| **CTag Support** | Collection tags for list-level change detection | ✅ Stable | [Synchronization](synchronization.md#ctag-support) |
-| **Hierarchical Sync** | Sync parent tasks before children (FK preservation) | ✅ Stable | [Synchronization](synchronization.md#hierarchical-sync) |
-| **Sync Metadata Tracking** | Track sync state per task and list | ✅ Stable | [Synchronization](synchronization.md#sync-metadata-tracking) |
-| **Per-Backend Sync Config** | Enable/disable sync for individual backends | ✅ Stable | [Synchronization](synchronization.md#per-backend-sync-config) |
+| **Conflict Resolution** | Handle conflicts with configurable strategies | [Synchronization](synchronization.md#conflict-resolution) |
+| **Server Wins Strategy** | Remote changes override local changes (default) | [Synchronization](synchronization.md#server-wins-strategy) |
+| **Local Wins Strategy** | Local changes override remote changes | [Synchronization](synchronization.md#local-wins-strategy) |
+| **Merge Strategy** | Combine local and remote changes intelligently | [Synchronization](synchronization.md#merge-strategy) |
+| **Keep Both Strategy** | Create duplicate tasks to preserve both versions | [Synchronization](synchronization.md#keep-both-strategy) |
+| **Sync Status** | View sync state and pending operations | [Synchronization](synchronization.md#sync-status) |
+| **Sync Queue** | Persistent queue of pending operations | [Synchronization](synchronization.md#sync-queue) |
+| **Retry Logic** | Exponential backoff for failed sync operations | [Synchronization](synchronization.md#retry-logic) |
+| **ETag Support** | Use ETags for efficient change detection | [Synchronization](synchronization.md#etag-support) |
+| **CTag Support** | Collection tags for list-level change detection | [Synchronization](synchronization.md#ctag-support) |
+| **Hierarchical Sync** | Sync parent tasks before children (FK preservation) | [Synchronization](synchronization.md#hierarchical-sync) |
+| **Sync Metadata Tracking** | Track sync state per task and list | [Synchronization](synchronization.md#sync-metadata-tracking) |
+| **Per-Backend Sync Config** | Enable/disable sync for individual backends | [Synchronization](synchronization.md#per-backend-sync-config) |
 
 **Key Use Cases**:
 - Working offline on flights or without internet
@@ -189,21 +189,21 @@ See [Notification Manager](notification-manager.md) for configuration details.
 
 **Purpose**: Securely store and manage backend authentication credentials.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Keyring Storage** | Store passwords in OS-native keyring (most secure) | ✅ Stable | [Credential Management](credential-management.md#keyring-storage) |
-| **macOS Keychain Integration** | Use macOS Keychain for credential storage | ✅ Stable | [Credential Management](credential-management.md#macos-keychain-integration) |
-| **Windows Credential Manager** | Use Windows Credential Manager for storage | ✅ Stable | [Credential Management](credential-management.md#windows-credential-manager) |
-| **Linux Secret Service** | Use freedesktop.org Secret Service API (GNOME Keyring, KWallet) | ✅ Stable | [Credential Management](credential-management.md#linux-secret-service) |
-| **Environment Variables** | Load credentials from environment variables (good for CI/CD) | ✅ Stable | [Credential Management](credential-management.md#environment-variables) |
-| **Config URL Support** | Legacy support for credentials in config URLs | ✅ Stable | [Credential Management](credential-management.md#config-url-support) |
-| **Credential Priority** | Resolve credentials from keyring → env vars → config URL | ✅ Stable | [Credential Management](credential-management.md#credential-priority) |
-| **Set Credentials** | Store credentials securely with `credentials set` command | ✅ Stable | [Credential Management](credential-management.md#set-credentials) |
-| **Get Credentials** | Retrieve and verify credentials with `credentials get` | ✅ Stable | [Credential Management](credential-management.md#get-credentials) |
-| **Delete Credentials** | Remove credentials from keyring | ✅ Stable | [Credential Management](credential-management.md#delete-credentials) |
-| **Per-Backend Credentials** | Separate credential management for each backend | ✅ Stable | [Credential Management](credential-management.md#per-backend-credentials) |
-| **Password Prompt** | Interactive password input with hidden entry | ✅ Stable | [Credential Management](credential-management.md#password-prompt) |
-| **Credential Verification** | Test credentials before saving | ✅ Stable | [Credential Management](credential-management.md#credential-verification) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Keyring Storage** | Store passwords in OS-native keyring (most secure) | [Credential Management](credential-management.md#keyring-storage) |
+| **macOS Keychain Integration** | Use macOS Keychain for credential storage | [Credential Management](credential-management.md#macos-keychain-integration) |
+| **Windows Credential Manager** | Use Windows Credential Manager for storage | [Credential Management](credential-management.md#windows-credential-manager) |
+| **Linux Secret Service** | Use freedesktop.org Secret Service API (GNOME Keyring, KWallet) | [Credential Management](credential-management.md#linux-secret-service) |
+| **Environment Variables** | Load credentials from environment variables (good for CI/CD) | [Credential Management](credential-management.md#environment-variables) |
+| **Config URL Support** | Legacy support for credentials in config URLs | [Credential Management](credential-management.md#config-url-support) |
+| **Credential Priority** | Resolve credentials from keyring → env vars → config URL | [Credential Management](credential-management.md#credential-priority) |
+| **Set Credentials** | Store credentials securely with `credentials set` command | [Credential Management](credential-management.md#set-credentials) |
+| **Get Credentials** | Retrieve and verify credentials with `credentials get` | [Credential Management](credential-management.md#get-credentials) |
+| **Delete Credentials** | Remove credentials from keyring | [Credential Management](credential-management.md#delete-credentials) |
+| **Per-Backend Credentials** | Separate credential management for each backend | [Credential Management](credential-management.md#per-backend-credentials) |
+| **Password Prompt** | Interactive password input with hidden entry | [Credential Management](credential-management.md#password-prompt) |
+| **Credential Verification** | Test credentials before saving | [Credential Management](credential-management.md#credential-verification) |
 
 **Key Use Cases**:
 - Storing Nextcloud CalDAV credentials securely
@@ -220,25 +220,25 @@ See [Notification Manager](notification-manager.md) for configuration details.
 
 **Purpose**: Customize how tasks are displayed with flexible views, formatters, and filters.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Built-in Views** | Pre-configured views (`default`, `all`) | ✅ Stable | [Views & Customization](views-customization.md#built-in-views) |
-| **Custom Views** | User-defined views with custom field selection | ✅ Stable | [Views & Customization](views-customization.md#custom-views) |
-| **Field Selection** | Choose which task fields to display | ✅ Stable | [Views & Customization](views-customization.md#field-selection) |
-| **Field Ordering** | Control the order of displayed fields | ✅ Stable | [Views & Customization](views-customization.md#field-ordering) |
-| **View Filters** | Filter tasks by status, priority, tags, dates within views | ✅ Stable | [Views & Customization](views-customization.md#view-filters) |
-| **View Sorting** | Sort tasks by any field (ascending/descending) | ✅ Stable | [Views & Customization](views-customization.md#view-sorting) |
-| **Plugin Formatters** | External scripts for custom field formatting | ✅ Stable | [Views & Customization](views-customization.md#plugin-formatters) |
-| **Date Formatters** | Format date fields with custom patterns | ✅ Stable | [Views & Customization](views-customization.md#date-formatters) |
-| **Priority Formatters** | Customize priority display (numbers, emojis, colors) | ✅ Stable | [Views & Customization](views-customization.md#priority-formatters) |
-| **Status Formatters** | Customize status display with emojis or text | ✅ Stable | [Views & Customization](views-customization.md#status-formatters) |
-| **Interactive View Builder** | TUI for creating views without editing YAML | ✅ Stable | [Views & Customization](views-customization.md#interactive-view-builder) |
-| **View Storage** | YAML-based view definitions in `~/.config/todoat/views/` | ✅ Stable | [Views & Customization](views-customization.md#view-storage) |
-| **List Views** | Display all available views | ✅ Stable | [Views & Customization](views-customization.md#list-views) |
-| **Show View Definition** | Display view YAML configuration | ✅ Stable | [Views & Customization](views-customization.md#show-view-definition) |
-| **Plugin Script Support** | Bash, Python, Ruby, and other language support for plugins | ✅ Stable | [Views & Customization](views-customization.md#plugin-script-support) |
-| **Plugin Timeout Management** | Prevent hanging formatters with timeout enforcement | ✅ Stable | [Views & Customization](views-customization.md#plugin-timeout-management) |
-| **Hierarchical View Support** | Views respect task tree structures | ✅ Stable | [Views & Customization](views-customization.md#hierarchical-view-support) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Built-in Views** | Pre-configured views (`default`, `all`) | [Views & Customization](views-customization.md#built-in-views) |
+| **Custom Views** | User-defined views with custom field selection | [Views & Customization](views-customization.md#custom-views) |
+| **Field Selection** | Choose which task fields to display | [Views & Customization](views-customization.md#field-selection) |
+| **Field Ordering** | Control the order of displayed fields | [Views & Customization](views-customization.md#field-ordering) |
+| **View Filters** | Filter tasks by status, priority, tags, dates within views | [Views & Customization](views-customization.md#view-filters) |
+| **View Sorting** | Sort tasks by any field (ascending/descending) | [Views & Customization](views-customization.md#view-sorting) |
+| **Plugin Formatters** | External scripts for custom field formatting | [Views & Customization](views-customization.md#plugin-formatters) |
+| **Date Formatters** | Format date fields with custom patterns | [Views & Customization](views-customization.md#date-formatters) |
+| **Priority Formatters** | Customize priority display (numbers, emojis, colors) | [Views & Customization](views-customization.md#priority-formatters) |
+| **Status Formatters** | Customize status display with emojis or text | [Views & Customization](views-customization.md#status-formatters) |
+| **Interactive View Builder** | TUI for creating views without editing YAML | [Views & Customization](views-customization.md#interactive-view-builder) |
+| **View Storage** | YAML-based view definitions in `~/.config/todoat/views/` | [Views & Customization](views-customization.md#view-storage) |
+| **List Views** | Display all available views | [Views & Customization](views-customization.md#list-views) |
+| **Show View Definition** | Display view YAML configuration | [Views & Customization](views-customization.md#show-view-definition) |
+| **Plugin Script Support** | Bash, Python, Ruby, and other language support for plugins | [Views & Customization](views-customization.md#plugin-script-support) |
+| **Plugin Timeout Management** | Prevent hanging formatters with timeout enforcement | [Views & Customization](views-customization.md#plugin-timeout-management) |
+| **Hierarchical View Support** | Views respect task tree structures | [Views & Customization](views-customization.md#hierarchical-view-support) |
 
 **Key Use Cases**:
 - Creating minimal views for daily standup meetings
@@ -255,27 +255,27 @@ See [Notification Manager](notification-manager.md) for configuration details.
 
 **Purpose**: Provide a powerful, user-friendly command-line interface with intelligent defaults.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Cobra Framework** | Robust command structure with subcommands | ✅ Stable | [CLI Interface](cli-interface.md#cobra-framework) |
-| **Shell Completion** | Tab completion for Bash, Zsh, Fish, PowerShell with auto-install | ✅ Stable | [CLI Interface](cli-interface.md#shell-completion) |
-| **Interactive List Selection** | Choose from menu when list name not specified | ✅ Stable | [CLI Interface](cli-interface.md#interactive-list-selection) |
-| **Intelligent Task Matching** | Exact → partial → multiple match resolution | ✅ Stable | [CLI Interface](cli-interface.md#intelligent-task-matching) |
-| **Terminal Width Detection** | Dynamic formatting based on terminal size | ✅ Stable | [CLI Interface](cli-interface.md#terminal-width-detection) |
-| **Verbose Output** | Detailed logging with `-v` or `--verbose` flag | ✅ Stable | [CLI Interface](cli-interface.md#verbose-output) |
-| **Debug Mode** | Extended diagnostic output for troubleshooting | ✅ Stable | [CLI Interface](cli-interface.md#debug-mode) |
-| **Action Abbreviations** | Short aliases (a=add, u=update, c=complete, d=delete, g=get) | ✅ Stable | [CLI Interface](cli-interface.md#action-abbreviations) |
-| **Flag Shortcuts** | Short flags (`-s` for status, `-p` for priority, etc.) | ✅ Stable | [CLI Interface](cli-interface.md#flag-shortcuts) |
-| **Help System** | Contextual help with `--help` on all commands | ✅ Stable | [CLI Interface](cli-interface.md#help-system) |
-| **Error Messages** | Clear, actionable error reporting | ✅ Stable | [CLI Interface](cli-interface.md#error-messages) |
-| **Confirmation Prompts** | User confirmation for destructive operations | ✅ Stable | [CLI Interface](cli-interface.md#confirmation-prompts) |
-| **Colored Output** | Color-coded display for better readability | ✅ Stable | [CLI Interface](cli-interface.md#colored-output) |
-| **Table Display** | Formatted table output for list views | ✅ Stable | [CLI Interface](cli-interface.md#table-display) |
-| **Version Command** | Display version and build information | ✅ Stable | [CLI Interface](cli-interface.md#version-command) |
-| **No-Prompt Mode** | Non-interactive mode for scripting (`-y`, `--no-prompt`) | ✅ Stable | [CLI Interface](cli-interface.md#no-prompt-mode) |
-| **JSON Output** | Machine-parseable JSON output (`--json`) | ✅ Stable | [CLI Interface](cli-interface.md#json-output-mode) |
-| **Result Codes** | Standardized operation outcome indicators | ✅ Stable | [CLI Interface](cli-interface.md#result-codes) |
-| **UID Selection** | Direct task selection by UID (`--uid`) | ✅ Stable | [CLI Interface](cli-interface.md#action-flags) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Cobra Framework** | Robust command structure with subcommands | [CLI Interface](cli-interface.md#cobra-framework) |
+| **Shell Completion** | Tab completion for Bash, Zsh, Fish, PowerShell with auto-install | [CLI Interface](cli-interface.md#shell-completion) |
+| **Interactive List Selection** | Choose from menu when list name not specified | [CLI Interface](cli-interface.md#interactive-list-selection) |
+| **Intelligent Task Matching** | Exact → partial → multiple match resolution | [CLI Interface](cli-interface.md#intelligent-task-matching) |
+| **Terminal Width Detection** | Dynamic formatting based on terminal size | [CLI Interface](cli-interface.md#terminal-width-detection) |
+| **Verbose Output** | Detailed logging with `-v` or `--verbose` flag | [CLI Interface](cli-interface.md#verbose-output) |
+| **Debug Mode** | Extended diagnostic output for troubleshooting | [CLI Interface](cli-interface.md#debug-mode) |
+| **Action Abbreviations** | Short aliases (a=add, u=update, c=complete, d=delete, g=get) | [CLI Interface](cli-interface.md#action-abbreviations) |
+| **Flag Shortcuts** | Short flags (`-s` for status, `-p` for priority, etc.) | [CLI Interface](cli-interface.md#flag-shortcuts) |
+| **Help System** | Contextual help with `--help` on all commands | [CLI Interface](cli-interface.md#help-system) |
+| **Error Messages** | Clear, actionable error reporting | [CLI Interface](cli-interface.md#error-messages) |
+| **Confirmation Prompts** | User confirmation for destructive operations | [CLI Interface](cli-interface.md#confirmation-prompts) |
+| **Colored Output** | Color-coded display for better readability | [CLI Interface](cli-interface.md#colored-output) |
+| **Table Display** | Formatted table output for list views | [CLI Interface](cli-interface.md#table-display) |
+| **Version Command** | Display version and build information | [CLI Interface](cli-interface.md#version-command) |
+| **No-Prompt Mode** | Non-interactive mode for scripting (`-y`, `--no-prompt`) | [CLI Interface](cli-interface.md#no-prompt-mode) |
+| **JSON Output** | Machine-parseable JSON output (`--json`) | [CLI Interface](cli-interface.md#json-output-mode) |
+| **Result Codes** | Standardized operation outcome indicators | [CLI Interface](cli-interface.md#result-codes) |
+| **UID Selection** | Direct task selection by UID (`--uid`) | [CLI Interface](cli-interface.md#action-flags) |
 
 **Key Use Cases**:
 - Rapid task entry from terminal
@@ -294,23 +294,23 @@ See [Notification Manager](notification-manager.md) for configuration details.
 
 **Purpose**: Flexible, standards-compliant configuration system for customizing behavior.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **YAML Configuration** | Human-readable YAML format for all settings | ✅ Stable | [Configuration](configuration.md#yaml-configuration) |
-| **XDG Compliance** | Follows XDG Base Directory Specification | ✅ Stable | [Configuration](configuration.md#xdg-compliance) |
-| **Multi-Backend Config** | Configure multiple backends in single file | ✅ Stable | [Configuration](configuration.md#multi-backend-config) |
-| **Sync Configuration** | Global and per-backend sync settings | ✅ Stable | [Configuration](configuration.md#sync-configuration) |
-| **Path Expansion** | Expand `~`, `$HOME`, and environment variables in paths | ✅ Stable | [Configuration](configuration.md#path-expansion) |
-| **Auto-Initialization** | Create config from embedded sample on first run | ✅ Stable | [Configuration](configuration.md#auto-initialization) |
-| **Config Validation** | Verify configuration on load with helpful errors | ✅ Stable | [Configuration](configuration.md#config-validation) |
-| **Default Backend** | Set preferred backend when multiple configured | ✅ Stable | [Configuration](configuration.md#default-backend) |
-| **Backend Priority** | Ordered list for backend selection | ✅ Stable | [Configuration](configuration.md#backend-priority) |
-| **Conflict Resolution Config** | Configure sync conflict strategies | ✅ Stable | [Configuration](configuration.md#conflict-resolution-config) |
-| **View Defaults** | Set default view for task display | ✅ Stable | [Configuration](configuration.md#view-defaults) |
-| **Cache Configuration** | Configure cache paths and behavior | ✅ Stable | [Configuration](configuration.md#cache-configuration) |
-| **No-Prompt Mode Config** | Configure non-interactive mode default | ✅ Stable | [Configuration](configuration.md#no-prompt-mode-configuration) |
-| **Output Format Config** | Configure default output format (text/json) | ✅ Stable | [Configuration](configuration.md#output-format-configuration) |
-| **Singleton Pattern** | Ensure single config instance across application | ✅ Stable | [Configuration](configuration.md#singleton-pattern) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **YAML Configuration** | Human-readable YAML format for all settings | [Configuration](configuration.md#yaml-configuration) |
+| **XDG Compliance** | Follows XDG Base Directory Specification | [Configuration](configuration.md#xdg-compliance) |
+| **Multi-Backend Config** | Configure multiple backends in single file | [Configuration](configuration.md#multi-backend-config) |
+| **Sync Configuration** | Global and per-backend sync settings | [Configuration](configuration.md#sync-configuration) |
+| **Path Expansion** | Expand `~`, `$HOME`, and environment variables in paths | [Configuration](configuration.md#path-expansion) |
+| **Auto-Initialization** | Create config from embedded sample on first run | [Configuration](configuration.md#auto-initialization) |
+| **Config Validation** | Verify configuration on load with helpful errors | [Configuration](configuration.md#config-validation) |
+| **Default Backend** | Set preferred backend when multiple configured | [Configuration](configuration.md#default-backend) |
+| **Backend Priority** | Ordered list for backend selection | [Configuration](configuration.md#backend-priority) |
+| **Conflict Resolution Config** | Configure sync conflict strategies | [Configuration](configuration.md#conflict-resolution-config) |
+| **View Defaults** | Set default view for task display | [Configuration](configuration.md#view-defaults) |
+| **Cache Configuration** | Configure cache paths and behavior | [Configuration](configuration.md#cache-configuration) |
+| **No-Prompt Mode Config** | Configure non-interactive mode default | [Configuration](configuration.md#no-prompt-mode-configuration) |
+| **Output Format Config** | Configure default output format (text/json) | [Configuration](configuration.md#output-format-configuration) |
+| **Singleton Pattern** | Ensure single config instance across application | [Configuration](configuration.md#singleton-pattern) |
 
 **Key Use Cases**:
 - Setting up multiple backends (work and personal)
@@ -329,15 +329,15 @@ See [Notification Manager](notification-manager.md) for configuration details.
 
 **Purpose**: Track command usage, backend performance, and errors locally for insights into usage patterns.
 
-| Feature | Description | Status | Documentation |
-|---------|-------------|--------|---------------|
-| **Command Statistics** | View usage counts and success rates by command | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
-| **Backend Performance** | Track performance metrics for each backend | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
-| **Error Tracking** | View most common errors grouped by command | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
-| **Time Filtering** | Filter analytics by time range (7d, 30d, 1y) | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
-| **JSON Output** | Machine-parseable analytics output | ✅ Stable | [Analytics](analytics.md#viewing-analytics-data) |
-| **Privacy-First** | All data stored locally, never transmitted | ✅ Stable | [Analytics](analytics.md#privacy-considerations) |
-| **Enabled by Default** | Analytics enabled by default with clear notice; can be disabled in config | ✅ Stable | [Analytics](analytics.md#configuration) |
+| Feature | Description | Documentation |
+|---------|-------------|---------------|
+| **Command Statistics** | View usage counts and success rates by command | [Analytics](analytics.md#viewing-analytics-data) |
+| **Backend Performance** | Track performance metrics for each backend | [Analytics](analytics.md#viewing-analytics-data) |
+| **Error Tracking** | View most common errors grouped by command | [Analytics](analytics.md#viewing-analytics-data) |
+| **Time Filtering** | Filter analytics by time range (7d, 30d, 1y) | [Analytics](analytics.md#viewing-analytics-data) |
+| **JSON Output** | Machine-parseable analytics output | [Analytics](analytics.md#viewing-analytics-data) |
+| **Privacy-First** | All data stored locally, never transmitted | [Analytics](analytics.md#privacy-considerations) |
+| **Enabled by Default** | Analytics enabled by default with clear notice; can be disabled in config | [Analytics](analytics.md#configuration) |
 
 **Key Use Cases**:
 - Understanding command usage patterns
@@ -385,27 +385,7 @@ This diagram shows how major features interact with each other:
 
 ---
 
-## Feature Statistics
-
-| Category | Total Features | Stable | In Development | Planned |
-|----------|----------------|--------|----------------|---------|
-| Task Management | 12 | 12 | 0 | 0 |
-| List Management | 11 | 11 | 0 | 0 |
-| Subtasks & Hierarchy | 8 | 8 | 0 | 0 |
-| Backend System | 12 | 12 | 0 | 0 |
-| Synchronization | 18 | 17 | 1 | 0 |
-| Credential Management | 13 | 13 | 0 | 0 |
-| Views & Customization | 17 | 17 | 0 | 0 |
-| CLI Interface | 19 | 19 | 0 | 0 |
-| Configuration | 18 | 18 | 0 | 0 |
-| Analytics | 7 | 7 | 0 | 0 |
-| **TOTAL** | **136** | **134** | **2** | **0** |
-
----
-
 ## Quick Feature Lookup
-
-### By User Goal
 
 **I want to...**
 
@@ -420,29 +400,6 @@ This diagram shows how major features interact with each other:
 - **Automate task management**: Use [No-Prompt Mode](cli-interface.md#no-prompt-mode) with [JSON Output](cli-interface.md#json-output-mode) and [UID Selection](cli-interface.md#action-flags)
 - **Integrate with CI/CD**: Enable [No-Prompt Mode](configuration.md#no-prompt-mode-configuration) in config for non-interactive operation
 - **View usage statistics**: Use [Analytics Commands](analytics.md#viewing-analytics-data) to see command usage and backend performance
-
-### By Maturity Level
-
-**Stable Production Features** (✅):
-- All task CRUD operations
-- All list management operations
-- All subtask/hierarchy features
-- Nextcloud, Todoist, Google Tasks, and Microsoft To Do backends
-- Git/Markdown and File backends
-- SQLite backend and sync
-- All credential management
-- All view customization
-- All CLI interface features
-- All configuration features
-- Cross-backend task migration
-- TUI interface
-- Analytics and usage statistics
-
-**In Development** (🔧):
-- Auto-sync daemon (redesign in progress)
-
-**Future Roadmap** (📋):
-- No features currently planned
 
 ---
 

@@ -55,14 +55,6 @@ todoat is a command-line task management tool that allows you to:
 | **Shell Integration** | Tab completion for all shells | `completion bash/zsh/fish/powershell` |
 | **Analytics** | Usage statistics and backend performance | `analytics stats`, `analytics backends`, `analytics errors` |
 
-## Feature Maturity
-
-| Status | Features |
-|--------|----------|
-| ✅ **Stable** | Task CRUD, List management, Nextcloud backend, Todoist backend, Google Tasks backend, Microsoft To Do backend, Git backend, File backend, SQLite sync, Credential management, Custom views, Subtasks, Shell completion, Cross-backend migration, TUI interface |
-| 🚧 **In Development** | Auto-sync daemon (being redesigned) |
-| 📋 **Planned** | No features currently planned |
-
 ## Getting Started
 
 For detailed sync documentation, see [Synchronization](synchronization.md).

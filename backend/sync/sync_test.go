@@ -2144,7 +2144,11 @@ default_backend: sqlite-remote
 	if err != nil {
 		t.Fatalf("failed to open remote db: %v", err)
 	}
-	defer remoteDB.Close()
+	defer func() {
+		if err := remoteDB.Close(); err != nil {
+			t.Errorf("failed to close remote db: %v", err)
+		}
+	}()
 
 	var count int
 	err = remoteDB.QueryRow("SELECT COUNT(*) FROM tasks WHERE summary LIKE '%Task with null config%'").Scan(&count)

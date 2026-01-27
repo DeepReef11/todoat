@@ -205,7 +205,21 @@ todoat list create "Work" --description "Work tasks" --color "#0066cc"
 
 ## Shell Completion
 
-Enable tab completion for faster command entry:
+Enable tab completion for faster command entry.
+
+### Quick Setup
+
+The easiest way to set up completion:
+
+```bash
+todoat completion install
+```
+
+This automatically detects your shell from `$SHELL` and installs completion to a user-writable location.
+
+### Manual Setup
+
+If you prefer manual control:
 
 ```bash
 # Zsh (add to .zshrc)
@@ -218,7 +232,7 @@ source <(todoat completion bash)
 todoat completion fish | source
 ```
 
-See [Shell Completion](../how-to/shell-completion.md) for permanent setup and troubleshooting.
+See [Shell Completion](../how-to/shell-completion.md) for more options and troubleshooting.
 
 ## Getting Help
 
