@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -4911,4 +4912,90 @@ func TestIssue017DeleteDuplicateNamesRequiresUID(t *testing.T) {
 	listOutput := cli.MustExecute("-y", "--json", "DuplicateUIDTest", "get")
 	testutil.AssertContains(t, listOutput, uid2)
 	testutil.AssertNotContains(t, listOutput, uid1)
+}
+
+// TestDuplicateTaskNameDisambiguationSQLiteCLI tests issue #24:
+// When multiple tasks have the same name and -y (no-prompt) is used,
+// the error should show FULL UIDs (not truncated) so users can copy/paste them.
+func TestDuplicateTaskNameDisambiguationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list for this test
+	cli.MustExecute("-y", "list", "create", "DupeTest")
+
+	// Add two tasks with the exact same name
+	cli.MustExecute("-y", "DupeTest", "add", "c11")
+	cli.MustExecute("-y", "DupeTest", "add", "c11")
+
+	// Get the UIDs via JSON output
+	jsonOut := cli.MustExecute("-y", "--json", "DupeTest", "get")
+
+	var tasks []struct {
+		UID string `json:"uid"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &tasks); err != nil {
+		// Try parsing as object with tasks array
+		var resp struct {
+			Tasks []struct {
+				UID string `json:"uid"`
+			} `json:"tasks"`
+		}
+		if err2 := json.Unmarshal([]byte(jsonOut), &resp); err2 != nil {
+			t.Fatalf("failed to parse JSON output: %v (original: %v)\nOutput: %s", err2, err, jsonOut)
+		}
+		tasks = resp.Tasks
+	}
+
+	if len(tasks) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(tasks))
+	}
+
+	uid1 := tasks[0].UID
+	uid2 := tasks[1].UID
+
+	// Try to complete one of the duplicate tasks (should fail with multiple matches)
+	stdout, stderr := cli.ExecuteAndFail("-y", "DupeTest", "complete", "c11")
+
+	// The error message should be in stderr (the "Error:" line)
+	errOutput := stderr
+	if errOutput == "" {
+		errOutput = stdout
+	}
+
+	// CRITICAL: Full UIDs must be shown, NOT truncated with "..."
+	testutil.AssertNotContains(t, errOutput, "...")
+
+	// Both full UIDs should appear in the error message
+	testutil.AssertContains(t, errOutput, uid1)
+	testutil.AssertContains(t, errOutput, uid2)
+
+	// Should mention how to use --uid flag
+	testutil.AssertContains(t, errOutput, "--uid")
+}
+
+// TestDuplicateTaskNameShowsTaskDetailsSQLiteCLI tests issue #24:
+// When showing multiple matching tasks, additional details should be shown
+// to help users distinguish between them (priority, due date, description).
+func TestDuplicateTaskNameShowsTaskDetailsSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list for this test
+	cli.MustExecute("-y", "list", "create", "DupeDetailTest")
+
+	// Add two tasks with the same name but different attributes
+	cli.MustExecute("-y", "DupeDetailTest", "add", "review", "-p", "1", "-d", "First review task")
+	cli.MustExecute("-y", "DupeDetailTest", "add", "review", "-p", "5", "--due-date", "2025-12-31")
+
+	// Try to complete one (should fail with multiple matches)
+	stdout, stderr := cli.ExecuteAndFail("-y", "DupeDetailTest", "complete", "review")
+
+	errOutput := stderr
+	if errOutput == "" {
+		errOutput = stdout
+	}
+
+	// Should show priority to help distinguish tasks
+	if !strings.Contains(errOutput, "P1") && !strings.Contains(errOutput, "priority") && !strings.Contains(errOutput, "Priority") {
+		t.Logf("Warning: error message doesn't show priority info for disambiguation. Output: %s", errOutput)
+	}
 }

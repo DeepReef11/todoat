@@ -5141,16 +5141,39 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 }
 
 // formatMultipleMatchesError creates a helpful error message when multiple tasks match,
-// showing task names and UIDs so users can use --uid to specify the exact task.
+// showing task names and full UIDs so users can use --uid to specify the exact task.
+// Also includes additional details (priority, due date, description snippet) to help distinguish tasks.
 func formatMultipleMatchesError(matches []backend.Task, searchTerm string) error {
 	var matchLines []string
 	for _, m := range matches {
-		// Format UID: show first 8 chars for brevity, with full UID in parentheses
-		shortUID := m.ID
-		if len(shortUID) > 8 {
-			shortUID = shortUID[:8]
+		// Build details string with distinguishing info
+		var details []string
+
+		// Priority
+		if m.Priority > 0 {
+			details = append(details, fmt.Sprintf("P%d", m.Priority))
 		}
-		matchLines = append(matchLines, fmt.Sprintf("  - %s (UID: %s...)", m.Summary, shortUID))
+
+		// Due date
+		if m.DueDate != nil {
+			details = append(details, fmt.Sprintf("due: %s", m.DueDate.Format("2006-01-02")))
+		}
+
+		// Description snippet (first 30 chars)
+		if m.Description != "" {
+			desc := m.Description
+			if len(desc) > 30 {
+				desc = desc[:30] + "..."
+			}
+			details = append(details, fmt.Sprintf("desc: %q", desc))
+		}
+
+		// Format the line with full UID (not truncated)
+		if len(details) > 0 {
+			matchLines = append(matchLines, fmt.Sprintf("  - %s [%s] (UID: %s)", m.Summary, strings.Join(details, ", "), m.ID))
+		} else {
+			matchLines = append(matchLines, fmt.Sprintf("  - %s (UID: %s)", m.Summary, m.ID))
+		}
 	}
 	return fmt.Errorf("multiple tasks match '%s'. Use --uid to specify:\n%s", searchTerm, strings.Join(matchLines, "\n"))
 }
