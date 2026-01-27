@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Nextcloud/CalDAV backend now parses and generates RELATED-TO property for parent-child task relationships (subtask support) (#29)
+- `--parent` flag now accepts task UID directly when multiple tasks have the same name (#28)
+
 ### Fixed
 - `config set analytics.enabled` and `config set analytics.retention_days` now work correctly (#078)
 - Documentation command syntax examples now use correct list-based format (#001)

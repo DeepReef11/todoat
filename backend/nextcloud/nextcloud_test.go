@@ -98,6 +98,28 @@ END:VCALENDAR`, uid, summary, status, priority)
 	}
 }
 
+// AddTaskWithParent adds a task with a parent relationship (subtask) to a calendar
+func (m *mockCalDAVServer) AddTaskWithParent(calendarName, uid, summary, status string, priority int, parentUID string) {
+	if cal, ok := m.calendars[calendarName]; ok {
+		vtodo := fmt.Sprintf(`BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//todoat//test//EN
+BEGIN:VTODO
+UID:%s
+SUMMARY:%s
+STATUS:%s
+PRIORITY:%d
+RELATED-TO;RELTYPE=PARENT:%s
+DTSTAMP:20260118T120000Z
+CREATED:20260118T120000Z
+LAST-MODIFIED:20260118T120000Z
+END:VTODO
+END:VCALENDAR`, uid, summary, status, priority, parentUID)
+		cal.tasks[uid] = vtodo
+		cal.ctag = fmt.Sprintf("ctag-%d", time.Now().UnixNano())
+	}
+}
+
 func (m *mockCalDAVServer) handler(w http.ResponseWriter, r *http.Request) {
 	// Check auth
 	if m.username != "" {
@@ -1380,5 +1402,77 @@ func TestIssue001FilterVTODOCalendars(t *testing.T) {
 	}
 	if names["Events Only"] {
 		t.Error("Calendar 'Events Only' should be filtered out (no VTODO support)")
+	}
+}
+
+// TestIssue029SyncPreservesParentChildRelationships tests that parent-child relationships
+// are preserved when syncing from a remote CalDAV server. The RELATED-TO property with
+// RELTYPE=PARENT should be parsed and stored in the ParentID field.
+// Issue #29: Sync doesn't preserve parent-child relationships from server
+func TestIssue029SyncPreservesParentChildRelationships(t *testing.T) {
+	server := newMockCalDAVServer("testuser", "testpass")
+	defer server.Close()
+
+	server.AddCalendar("Tasks")
+
+	// Add a parent task
+	server.AddTask("Tasks", "parent-task-uid", "Parent task", "NEEDS-ACTION", 0)
+
+	// Add a child task that references the parent via RELATED-TO property
+	server.AddTaskWithParent("Tasks", "child-task-uid", "Child task", "NEEDS-ACTION", 0, "parent-task-uid")
+
+	be, err := New(Config{
+		Host:      strings.TrimPrefix(server.URL(), "http://"),
+		Username:  "testuser",
+		Password:  "testpass",
+		AllowHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create backend: %v", err)
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+
+	// Get the calendar ID
+	lists, err := be.GetLists(ctx)
+	if err != nil {
+		t.Fatalf("GetLists failed: %v", err)
+	}
+
+	var calendarID string
+	for _, l := range lists {
+		if l.Name == "Tasks" {
+			calendarID = l.ID
+			break
+		}
+	}
+
+	// Get tasks from the calendar
+	tasks, err := be.GetTasks(ctx, calendarID)
+	if err != nil {
+		t.Fatalf("GetTasks failed: %v", err)
+	}
+
+	if len(tasks) != 2 {
+		t.Fatalf("Expected 2 tasks, got %d", len(tasks))
+	}
+
+	// Find the child task and verify its ParentID
+	var childTask *backend.Task
+	for i := range tasks {
+		if tasks[i].ID == "child-task-uid" {
+			childTask = &tasks[i]
+			break
+		}
+	}
+
+	if childTask == nil {
+		t.Fatal("Child task not found")
+	}
+
+	// Critical assertion: ParentID should be set from RELATED-TO property
+	if childTask.ParentID != "parent-task-uid" {
+		t.Errorf("Expected child task ParentID to be 'parent-task-uid', got '%s'", childTask.ParentID)
 	}
 }

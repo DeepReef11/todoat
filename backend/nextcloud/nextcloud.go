@@ -472,6 +472,12 @@ func parseVTODO(vtodo string) (*backend.Task, error) {
 		}
 	}
 
+	// Extract RELATED-TO (parent relationship)
+	// iCalendar standard uses RELATED-TO;RELTYPE=PARENT:<parent-uid>
+	if parentUID := extractRelatedToParent(vtodo); parentUID != "" {
+		task.ParentID = parentUID
+	}
+
 	return task, nil
 }
 
@@ -483,6 +489,29 @@ func extractProperty(content, property string) string {
 	if len(matches) >= 2 {
 		return strings.TrimSpace(matches[1])
 	}
+	return ""
+}
+
+// extractRelatedToParent extracts the parent UID from RELATED-TO property with RELTYPE=PARENT.
+// iCalendar format: RELATED-TO;RELTYPE=PARENT:<parent-uid>
+// Also handles implicit PARENT type (when RELTYPE is not specified, PARENT is the default).
+func extractRelatedToParent(content string) string {
+	// Match RELATED-TO with explicit RELTYPE=PARENT parameter
+	// The parameter can appear before or after other parameters
+	explicitPattern := regexp.MustCompile(`(?m)^RELATED-TO;[^:]*RELTYPE=PARENT[^:]*:(.*)$`)
+	matches := explicitPattern.FindStringSubmatch(content)
+	if len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+
+	// Match RELATED-TO without RELTYPE (defaults to PARENT per RFC 5545)
+	// Only match if there's no RELTYPE specified at all
+	implicitPattern := regexp.MustCompile(`(?m)^RELATED-TO:(.*)$`)
+	matches = implicitPattern.FindStringSubmatch(content)
+	if len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+
 	return ""
 }
 
@@ -557,6 +586,11 @@ func generateVTODO(task *backend.Task) string {
 
 	if task.Completed != nil {
 		lines = append(lines, fmt.Sprintf("COMPLETED:%s", task.Completed.UTC().Format(iCalendarDateFormat)))
+	}
+
+	// Add RELATED-TO for parent relationship (subtask support)
+	if task.ParentID != "" {
+		lines = append(lines, fmt.Sprintf("RELATED-TO;RELTYPE=PARENT:%s", task.ParentID))
 	}
 
 	lines = append(lines, "END:VTODO")

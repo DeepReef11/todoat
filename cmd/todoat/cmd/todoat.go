@@ -5105,6 +5105,17 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 		return nil, err
 	}
 
+	// Check if searchTerm looks like a UUID (e.g., "32541474-f2ee-4abc-a1c1-d08526e6c145")
+	// and if so, try to find task by ID first
+	if looksLikeUUID(searchTerm) {
+		for i := range tasks {
+			if tasks[i].ID == searchTerm {
+				return &tasks[i], nil
+			}
+		}
+		// If no exact ID match, fall through to name matching
+	}
+
 	searchLower := strings.ToLower(searchTerm)
 
 	// First try exact match (case-insensitive) - collect ALL exact matches
@@ -5143,6 +5154,33 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 
 	// Multiple matches - show UIDs for disambiguation
 	return nil, formatMultipleMatchesError(matches, searchTerm)
+}
+
+// looksLikeUUID checks if a string appears to be a UUID format.
+// This is a simple heuristic check - it looks for the UUID pattern
+// (8-4-4-4-12 hexadecimal characters with hyphens).
+func looksLikeUUID(s string) bool {
+	// UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars total)
+	if len(s) != 36 {
+		return false
+	}
+	// Check hyphen positions
+	if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+		return false
+	}
+	// Check that all other characters are hex digits
+	for i, c := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			continue // skip hyphens
+		}
+		isDigit := c >= '0' && c <= '9'
+		isLowerHex := c >= 'a' && c <= 'f'
+		isUpperHex := c >= 'A' && c <= 'F'
+		if !isDigit && !isLowerHex && !isUpperHex {
+			return false
+		}
+	}
+	return true
 }
 
 // formatMultipleMatchesError creates a helpful error message when multiple tasks match,

@@ -4999,3 +4999,36 @@ func TestDuplicateTaskNameShowsTaskDetailsSQLiteCLI(t *testing.T) {
 		t.Logf("Warning: error message doesn't show priority info for disambiguation. Output: %s", errOutput)
 	}
 }
+
+// TestIssue028ParentFlagAcceptsUIDSQLiteCLI tests issue #28:
+// When multiple tasks have the same name, --parent should accept UID directly.
+func TestIssue028ParentFlagAcceptsUIDSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with two tasks having the same name
+	cli.MustExecute("-y", "list", "create", "ParentUIDTest")
+	add1Output := cli.MustExecute("-y", "--json", "ParentUIDTest", "add", "SameName")
+	add2Output := cli.MustExecute("-y", "--json", "ParentUIDTest", "add", "SameName")
+
+	// Extract UIDs
+	uid1 := extractUID(t, add1Output)
+	uid2 := extractUID(t, add2Output)
+
+	if uid1 == uid2 {
+		t.Fatalf("expected different UIDs, got same: %s", uid1)
+	}
+
+	// Using --parent with just the name should fail due to ambiguity
+	_, stderr := cli.ExecuteAndFail("-y", "ParentUIDTest", "add", "ChildTask", "-P", "SameName")
+	testutil.AssertContains(t, stderr, "multiple tasks match")
+
+	// Using --parent with the UID should work
+	stdout := cli.MustExecute("-y", "ParentUIDTest", "add", "ChildTask", "-P", uid1)
+	testutil.AssertContains(t, stdout, "ChildTask")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the child was created under the correct parent
+	jsonOut := cli.MustExecute("-y", "--json", "ParentUIDTest", "get")
+	testutil.AssertContains(t, jsonOut, "ChildTask")
+	testutil.AssertContains(t, jsonOut, uid1) // parent UID should still exist
+}
