@@ -7512,6 +7512,7 @@ func getDefaultNotificationLogPath() string {
 
 // daemonState holds the in-process daemon state for testing
 type daemonState struct {
+	mu          sync.RWMutex // protects syncCount and lastSync
 	running     bool
 	pid         int
 	syncCount   int
@@ -7721,23 +7722,26 @@ func daemonSyncLoop(daemon *daemonState, logPath string) {
 			_ = appendToLogFile(logPath, logEntry)
 			return
 		case <-ticker.C:
+			daemon.mu.Lock()
 			daemon.syncCount++
 			daemon.lastSync = time.Now()
+			currentCount := daemon.syncCount
+			daemon.mu.Unlock()
 
 			// Perform sync
 			var syncErr error
 			if daemon.offlineMode {
 				// Simulated offline - just log it
-				logEntry := fmt.Sprintf("[%s] Sync attempt %d (offline mode)\n", time.Now().Format(time.RFC3339), daemon.syncCount)
+				logEntry := fmt.Sprintf("[%s] Sync attempt %d (offline mode)\n", time.Now().Format(time.RFC3339), currentCount)
 				_ = appendToLogFile(logPath, logEntry)
 			} else {
 				// Actually call doSync to perform real synchronization
 				syncErr = doSync(daemon.cfg, io.Discard, io.Discard)
 				if syncErr != nil {
-					logEntry := fmt.Sprintf("[%s] Sync error (count: %d): %v\n", time.Now().Format(time.RFC3339), daemon.syncCount, syncErr)
+					logEntry := fmt.Sprintf("[%s] Sync error (count: %d): %v\n", time.Now().Format(time.RFC3339), currentCount, syncErr)
 					_ = appendToLogFile(logPath, logEntry)
 				} else {
-					logEntry := fmt.Sprintf("[%s] Sync completed (count: %d)\n", time.Now().Format(time.RFC3339), daemon.syncCount)
+					logEntry := fmt.Sprintf("[%s] Sync completed (count: %d)\n", time.Now().Format(time.RFC3339), currentCount)
 					_ = appendToLogFile(logPath, logEntry)
 				}
 			}
@@ -7747,7 +7751,7 @@ func daemonSyncLoop(daemon *daemonState, logPath string) {
 				notif := notification.Notification{
 					Type:      notification.NotifySyncComplete,
 					Title:     "todoat sync",
-					Message:   fmt.Sprintf("Sync completed (count: %d)", daemon.syncCount),
+					Message:   fmt.Sprintf("Sync completed (count: %d)", currentCount),
 					Timestamp: time.Now(),
 				}
 				if syncErr != nil {
@@ -7825,9 +7829,11 @@ func doDaemonStatus(cfg *Config, stdout io.Writer) error {
 
 	if cfg.DaemonTestMode && testDaemon != nil {
 		pid = testDaemon.pid
+		testDaemon.mu.RLock()
 		syncCount = testDaemon.syncCount
-		interval = testDaemon.interval
 		lastSync = testDaemon.lastSync
+		testDaemon.mu.RUnlock()
+		interval = testDaemon.interval
 	} else {
 		// Read PID from file
 		data, err := os.ReadFile(pidPath)
