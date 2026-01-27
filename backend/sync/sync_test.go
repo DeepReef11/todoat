@@ -190,10 +190,13 @@ func TestSyncPullCLI(t *testing.T) {
 	remoteDBPath := filepath.Join(tmpDir, "remote.db")
 
 	// Create config that points to the remote sqlite backend
+	// Disable auto_sync_after_operation to prevent race condition between
+	// the add operation triggering auto-sync and the explicit sync command
 	configContent := `
 sync:
   enabled: true
   local_backend: sqlite
+  auto_sync_after_operation: false
 backends:
   sqlite:
     type: sqlite

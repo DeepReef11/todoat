@@ -4747,8 +4747,9 @@ func TestRecurringFromCompletionSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
 
 	// Set a due date for yesterday (task is overdue)
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	// Use UTC to match the backend's storage format
+	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
 
 	cli.MustExecute("-y", "Work", "add", "Check logs", "--recur", "daily", "--recur-from-completion", "--due-date", yesterday)
 
@@ -4759,6 +4760,7 @@ func TestRecurringFromCompletionSQLiteCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "--json", "Work")
 
 	// The new pending task should have tomorrow as due date (completion date + 1 day)
+	// Due dates are stored in UTC, so we compare with UTC-based tomorrow
 	testutil.AssertContains(t, stdout, tomorrow)
 }
 
