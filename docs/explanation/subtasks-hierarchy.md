@@ -668,21 +668,7 @@ When subtasks modified offline (see [Synchronization](synchronization.md#offline
 - Child task status is **independent** of parent status
 - Parent can be `DONE` with `TODO` children (not recommended but allowed)
 - No automatic status propagation
-- Child with parent status `DONE` are considered like `DONE`. For instance, if `DONE` tasks are filtered out, children of `DONE` tasks will also be filtered out by default.
-
-**Configurable Parent Status Cascade (Decision FEAT-011):**
-
-The behavior of filtering children based on parent status is configurable:
-
-```yaml
-views:
-  cascade_parent_status_filter: true  # default: true
-```
-
-- `true` (default): Children of DONE parents are auto-hidden when DONE tasks are filtered
-- `false`: Children are shown regardless of parent status (users decide explicitly)
-
-This setting affects the default view and any view with status filters.
+- Children are filtered individually based on their own status, not their parent's status
 
 **Best Practices:**
 - Complete children before completing parent

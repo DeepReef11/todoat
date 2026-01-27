@@ -14,7 +14,7 @@ For current design decisions, see `docs/explanation/`.
 | UX-004 | 2026-01-26 | What should the default behavior be for bulk destructive operations? | Require confirmation - always prompt on bulk delete/update affecting >1 task |
 | ARCH-007 | 2026-01-26 | Is the merge conflict strategy field prioritization correct? | Field-level timestamps - track modification time per field and use most recent |
 | FEAT-008 | 2026-01-26 | Should analytics be enabled by default for new installations? | Enable by default with clear notice |
-| FEAT-011 | 2026-01-26 | Should child tasks of DONE parents be auto-hidden in default view? | Configurable - add views.cascade_parent_status_filter option (default true) |
+| FEAT-011 | 2026-01-26 | Should child tasks of DONE parents be auto-hidden in default view? | NOT IMPLEMENTED - Feature was documented but never implemented. Decision reversed: children are filtered individually based on their own status |
 | COMPAT-012 | 2026-01-26 | Should documentation be updated to reflect that built-in views CAN be overridden? | Update documentation - views folder copied on first launch |
 | UX-013 | 2026-01-26 | Should views folder creation prompt user when -y flag is NOT provided? | Silent fallback - use built-in views without prompt; use -y flag to create views folder |
 
@@ -162,7 +162,7 @@ For current design decisions, see `docs/explanation/`.
 
 **Impact**: Affects how users see task hierarchies in the default view. May cause confusion if children of completed parents still show as TODO.
 
-**Status**: answered
+**Status**: NOT IMPLEMENTED - The config option was documented but never implemented in code. Decision reversed in issue #26: children are now filtered individually based on their own status, not their parent's status. Documentation updated to reflect actual behavior.
 
 ---
 
