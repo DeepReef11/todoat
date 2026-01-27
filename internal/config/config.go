@@ -91,6 +91,9 @@ func DefaultConfig() *Config {
 		DefaultBackend: "sqlite",
 		NoPrompt:       false,
 		OutputFormat:   "text",
+		Analytics: AnalyticsConfig{
+			Enabled: true, // Enabled by default per FEAT-008
+		},
 	}
 }
 

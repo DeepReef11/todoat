@@ -398,7 +398,7 @@ export TODOAT_ANALYTICS_ENABLED=false
 - All data stored locally in `~/.config/todoat/analytics.db`
 - No network transmission of analytics data
 - User can delete the database file at any time: `rm ~/.config/todoat/analytics.db`
-- Disabled by default - requires explicit opt-in
+- Enabled by default for new installations with clear notice; disable with `analytics.enabled: false`
 
 ---
 

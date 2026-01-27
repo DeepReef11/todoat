@@ -409,6 +409,17 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
+// TestAnalyticsEnabledByDefault verifies that analytics is enabled by default for new installations
+// as per decision FEAT-008 in docs/decisions/question-log.md
+func TestAnalyticsEnabledByDefault(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// Per FEAT-008: Analytics should be enabled by default with clear notice
+	if !cfg.Analytics.Enabled {
+		t.Error("Analytics.Enabled should be true by default (FEAT-008)")
+	}
+}
+
 // =============================================================================
 // Tests for Issue 007: Additional Coverage
 // =============================================================================

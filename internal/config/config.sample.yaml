@@ -93,6 +93,15 @@ output_format: text  # Options: text | json
 #   retention_days: 30                       # Days to keep deleted tasks (0 = keep forever)
 
 # =============================================================================
+# Analytics Settings
+# =============================================================================
+
+# Local analytics tracking (privacy-first, never transmitted)
+analytics:
+  enabled: true                              # Enabled by default for usage insights
+  # retention_days: 365                      # Days to keep analytics data
+
+# =============================================================================
 # Notification Settings
 # =============================================================================
 
