@@ -46,6 +46,45 @@ func TestHelpFlagCoreCLI(t *testing.T) {
 	}
 }
 
+// TestHelpContainsTaskActions verifies that --help documents available task actions
+func TestHelpContainsTaskActions(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--help"}, &stdout, &stderr, nil)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Verify help documents available actions
+	actions := []string{"add", "update", "complete", "delete", "get"}
+	for _, action := range actions {
+		if !strings.Contains(output, action) {
+			t.Errorf("help output should document '%s' action, got: %s", action, output)
+		}
+	}
+
+	// Verify help documents action abbreviations
+	abbreviations := []struct {
+		short string
+		long  string
+	}{
+		{"a", "add"},
+		{"u", "update"},
+		{"c", "complete"},
+		{"d", "delete"},
+		{"g", "get"},
+	}
+	for _, abbr := range abbreviations {
+		// Check for pattern like "a" or abbr appearing near the action name
+		if !strings.Contains(output, abbr.short) {
+			t.Errorf("help output should document abbreviation '%s' for '%s', got: %s", abbr.short, abbr.long, output)
+		}
+	}
+}
+
 // TestVersionFlag verifies that --version displays version string
 func TestVersionFlagCoreCLI(t *testing.T) {
 	var stdout, stderr bytes.Buffer

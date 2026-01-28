@@ -12,3 +12,4 @@ todoat_test
 TestList.csv
 coverage*.out
 tasks.txt
+test-output.md

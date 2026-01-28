@@ -275,9 +275,22 @@ func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:               "todoat [list] [action] [task]",
-		Short:             "A task management CLI",
-		Long:              "todoat is a command-line task manager supporting multiple backends.",
+		Use:   "todoat [list] [action] [task]",
+		Short: "A task management CLI",
+		Long: `todoat is a command-line task manager supporting multiple backends.
+
+Task Actions:
+  get, g       List/view tasks (default if no action specified)
+  add, a       Add a new task
+  update, u    Update an existing task
+  complete, c  Mark a task as complete
+  delete, d    Delete a task
+
+Examples:
+  todoat MyList              List all tasks in MyList
+  todoat MyList add "Task"   Add a task to MyList
+  todoat MyList a "Task"     Same as above (using abbreviation)
+  todoat MyList c "Task"     Complete a task in MyList`,
 		Version:           Version,
 		Args:              cobra.MaximumNArgs(3),
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},

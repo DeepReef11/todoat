@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Enhanced CLI help text with task action documentation and usage examples
+
 ### Added
 - Nextcloud/CalDAV backend now parses and generates RELATED-TO property for parent-child task relationships (subtask support) (#29)
 - `--parent` flag now accepts task UID directly when multiple tasks have the same name (#28)
