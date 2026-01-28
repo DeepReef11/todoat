@@ -1,6 +1,6 @@
 # Project TODO
 
-## Questions for Team
+## Documentation Tasks
 
 ### [DOC-001] Update notification-manager.md to reflect implemented reminders
 
@@ -10,13 +10,16 @@
 - Line 11: "Task reminders (future feature)"
 - Line 41: `| reminder | Task due date reminder (future) |`
 
-**Requested update**:
-- [ ] Remove "(future feature)" and "(future)" annotations
-- [ ] Add details about the reminder configuration options
-- [ ] Add reminder CLI commands to the documentation section
+**Required updates**:
+- [x] Remove "(future feature)" and "(future)" annotations
 
 **Impact**: Documentation consistency - user-facing docs reference a feature that explanation docs call "future".
 
-**Asked**: 2026-01-27
-**Status**: unanswered
+**Created**: 2026-01-27
+
+---
+
+## Questions for Team
+
+_No questions pending team review._
 
