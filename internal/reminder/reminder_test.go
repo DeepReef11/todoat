@@ -1014,3 +1014,43 @@ func (m *mockNotificationManager) Close() error {
 func (m *mockNotificationManager) ChannelCount() int {
 	return 1
 }
+
+// =============================================================================
+// Issue #34: Reminder configuration not loaded from config.yaml
+// =============================================================================
+
+// TestReminderConfigFromYAML tests that reminder settings are loaded from config.yaml
+// This test reproduces issue #34 where custom intervals in config.yaml were ignored.
+func TestReminderConfigFromYAML(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	// Set up a config.yaml with custom reminder settings
+	// This matches the user's config format from the issue
+	configYAML := `backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+
+default_backend: sqlite
+
+reminder:
+  enabled: true
+  intervals:
+    - "1 day"
+    - "2 hours"
+    - "at due time"
+  os_notification: true
+  log_notification: true
+`
+	cli.SetFullConfig(configYAML)
+
+	// Check reminder status - should show custom intervals from config.yaml
+	stdout := cli.MustExecute("-y", "reminder", "status")
+
+	// Verify custom interval "2 hours" is loaded (not just defaults)
+	testutil.AssertContains(t, stdout, "2 hours")
+	// Also verify other intervals are present
+	testutil.AssertContains(t, stdout, "1 day")
+	testutil.AssertContains(t, stdout, "at due time")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}

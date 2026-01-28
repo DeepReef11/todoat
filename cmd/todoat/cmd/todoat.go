@@ -9343,7 +9343,7 @@ func doReminderDismiss(cfg *Config, taskSummary string, stdout io.Writer) error 
 
 // loadReminderConfig loads the reminder configuration
 func loadReminderConfig(cfg *Config) (*reminder.Config, error) {
-	// Check for test config path
+	// Check for test config path (used in tests with JSON format)
 	if cfg.ReminderConfigPath != "" {
 		data, err := os.ReadFile(cfg.ReminderConfigPath)
 		if err != nil {
@@ -9360,7 +9360,26 @@ func loadReminderConfig(cfg *Config) (*reminder.Config, error) {
 		return &reminderCfg, nil
 	}
 
-	// Return default config
+	// Load reminder config from main config.yaml file
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+	}
+
+	appConfig, err := config.LoadFromPath(configPath)
+	if err == nil && appConfig != nil {
+		// Check if reminder section has any configured values
+		if len(appConfig.Reminder.Intervals) > 0 || appConfig.Reminder.Enabled {
+			return &reminder.Config{
+				Enabled:         appConfig.Reminder.Enabled,
+				Intervals:       appConfig.Reminder.Intervals,
+				OSNotification:  appConfig.Reminder.OSNotification,
+				LogNotification: appConfig.Reminder.LogNotification,
+			}, nil
+		}
+	}
+
+	// Return default config if no config file or no reminder section
 	return &reminder.Config{
 		Enabled:         true,
 		Intervals:       []string{"1 day", "at due time"},

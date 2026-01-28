@@ -32,6 +32,15 @@ type Config struct {
 	AutoDetectBackend bool            `yaml:"auto_detect_backend"`
 	Trash             TrashConfig     `yaml:"trash"`
 	Analytics         AnalyticsConfig `yaml:"analytics"`
+	Reminder          ReminderConfig  `yaml:"reminder"`
+}
+
+// ReminderConfig holds reminder settings
+type ReminderConfig struct {
+	Enabled         bool     `yaml:"enabled"`
+	Intervals       []string `yaml:"intervals"`
+	OSNotification  bool     `yaml:"os_notification"`
+	LogNotification bool     `yaml:"log_notification"`
 }
 
 // AnalyticsConfig holds analytics settings

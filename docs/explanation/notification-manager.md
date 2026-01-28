@@ -8,7 +8,7 @@ When todoat runs background sync, the user no longer sees CLI output. The notifi
 - Sync completion (success/failure)
 - Sync conflicts requiring attention
 - Connection errors
-- Task reminders (future feature)
+- Task reminders
 
 ## Configuration
 
@@ -38,7 +38,7 @@ notification:
 | `sync_complete` | Background sync finished successfully | OS: off, Log: on |
 | `sync_error` | Sync failed (connection, auth, etc.) | OS: on, Log: on |
 | `conflict` | Sync conflict detected | OS: on, Log: on |
-| `reminder` | Task due date reminder (future) | OS: on, Log: on |
+| `reminder` | Task due date reminder | OS: on, Log: on |
 
 ## OS Notification Backends
 
