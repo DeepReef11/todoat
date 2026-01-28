@@ -58,8 +58,11 @@ Configure reminders in `~/.config/todoat/config.yaml`:
 reminder:
   enabled: true
   intervals:
-    - 1d    # 1 day before due
-    - 1h    # 1 hour before due
+    - 1d           # 1 day before due
+    - 1h           # 1 hour before due
+    - at due time  # When task is due
+  os_notification: true   # Send via OS desktop notifications
+  log_notification: true  # Log to notification log file
 ```
 
 ### Configuration Options
@@ -67,7 +70,22 @@ reminder:
 | Option | Description | Default |
 |--------|-------------|---------|
 | `enabled` | Enable reminder system | `true` |
-| `intervals` | Time before due to send reminders | `["1d", "1h"]` |
+| `intervals` | Time before due to send reminders | `["1d", "at due time"]` |
+| `os_notification` | Send reminders via OS desktop notifications | `true` |
+| `log_notification` | Log reminders to notification log file | `true` |
+
+### Notification Delivery
+
+Reminders can be delivered through two channels:
+
+- **OS Notifications**: Desktop notifications using your system's notification service (notify-send on Linux, osascript on macOS)
+- **Log File**: Written to the notification log at `~/.local/share/todoat/notifications.log`
+
+View the notification log:
+
+```bash
+todoat notification log
+```
 
 ### Interval Format
 
@@ -77,6 +95,7 @@ reminder:
 | `1h` | 1 hour before |
 | `1d` | 1 day before |
 | `1w` | 1 week before |
+| `at due time` | When the task is due |
 
 ## Automated Reminder Checks
 

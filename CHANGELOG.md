@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--parent` flag now accepts task UID directly when multiple tasks have the same name (#28)
 
 ### Fixed
+- Background sync now completes before program exit, ensuring auto-sync operations fully sync to remote (#032)
+- Custom-named backends are now recognized when defined at config top-level for backwards compatibility (#031)
 - `config set analytics.enabled` and `config set analytics.retention_days` now work correctly (#078)
 - Documentation command syntax examples now use correct list-based format (#001)
 

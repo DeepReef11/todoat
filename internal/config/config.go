@@ -422,13 +422,24 @@ func LoadRaw(data []byte) (*Config, map[string]interface{}, error) {
 // It returns the backend configuration map, the backend type, and any error.
 // If the backend has no explicit "type" field, the name is used as the type
 // for backward compatibility (e.g., "sqlite" backend defaults to type "sqlite").
+//
+// This function looks for the backend in two locations:
+// 1. Under the "backends:" section (preferred format)
+// 2. At the top level of the config (for backwards compatibility)
 func GetBackendConfig(raw map[string]interface{}, name string) (map[string]interface{}, string, error) {
-	backends, ok := raw["backends"].(map[string]interface{})
-	if !ok {
-		return nil, "", fmt.Errorf("backends configuration not found")
+	var backendCfg map[string]interface{}
+	var ok bool
+
+	// First, try to find the backend under the "backends:" section
+	if backends, backendsOk := raw["backends"].(map[string]interface{}); backendsOk {
+		backendCfg, ok = backends[name].(map[string]interface{})
 	}
 
-	backendCfg, ok := backends[name].(map[string]interface{})
+	// If not found under backends, check top-level for backwards compatibility
+	if !ok {
+		backendCfg, ok = raw[name].(map[string]interface{})
+	}
+
 	if !ok {
 		return nil, "", fmt.Errorf("backend '%s' not found in configuration", name)
 	}
@@ -445,12 +456,16 @@ func GetBackendConfig(raw map[string]interface{}, name string) (map[string]inter
 }
 
 // IsBackendConfigured checks if a backend with the given name exists in the configuration.
+// This function checks both the "backends:" section and top-level for backwards compatibility.
 func IsBackendConfigured(raw map[string]interface{}, name string) bool {
-	backends, ok := raw["backends"].(map[string]interface{})
-	if !ok {
-		return false
+	// Check under backends: section first
+	if backends, ok := raw["backends"].(map[string]interface{}); ok {
+		if _, ok := backends[name].(map[string]interface{}); ok {
+			return true
+		}
 	}
-	_, ok = backends[name].(map[string]interface{})
+	// Check top-level for backwards compatibility
+	_, ok := raw[name].(map[string]interface{})
 	return ok
 }
 

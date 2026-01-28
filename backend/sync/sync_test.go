@@ -2570,3 +2570,85 @@ default_backend: sqlite-remote
 		t.Errorf("expected Work task to be synced; found %d tasks in remote", count)
 	}
 }
+
+// =============================================================================
+// Issue 032: Auto-sync Not Working After Operations
+// =============================================================================
+
+// TestBackgroundSyncCompletesBeforeExit verifies that with auto_sync_after_operation enabled,
+// the background sync actually completes and syncs the task to the remote backend WITHOUT
+// requiring an explicit sync command or manual wait.
+// This is Issue #032: Auto-sync not working after operations
+func TestBackgroundSyncCompletesBeforeExit(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Set up path for "remote" SQLite database
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+
+	// Create a config with:
+	// - sync enabled with auto_sync_after_operation: true
+	// - a "remote" SQLite backend
+	// - high background_pull_cooldown to prevent pull sync from interfering with push sync
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: auto
+  auto_sync_after_operation: true
+  background_pull_cooldown: 3600
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Add a task - with auto_sync_after_operation: true, this should:
+	// 1. Create task in local SQLite cache
+	// 2. Queue the operation
+	// 3. Trigger background sync that COMPLETES before the CLI returns
+	stdout, stderr, exitCode := cli.Execute("-y", "Work", "add", "Background-sync task")
+	if exitCode != 0 {
+		t.Fatalf("failed to add task: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// IMPORTANT: We do NOT run explicit sync here. The background sync should have
+	// completed before the add command returned. This tests Issue #032.
+
+	// Small sleep to ensure any OS-level file writes are flushed
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify the task actually exists in the remote SQLite database
+	// This should pass if background sync completed before program exit
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote db: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	var count int
+	err = remoteDB.QueryRow(`
+		SELECT COUNT(*) FROM tasks t
+		JOIN task_lists l ON t.list_id = l.id
+		WHERE t.summary = 'Background-sync task' AND l.name = 'Work'
+	`).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to query remote db: %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("Issue #032: Background sync did NOT complete before program exit. "+
+			"Expected 1 task in remote db, got %d. "+
+			"The background sync goroutine was orphaned when the CLI exited.", count)
+	}
+}

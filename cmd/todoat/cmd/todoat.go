@@ -50,6 +50,10 @@ var (
 	BuildDate = "unknown"
 )
 
+// backgroundSyncWG tracks all background sync goroutines to ensure they complete
+// before the program exits. This fixes Issue #032: Auto-sync not working.
+var backgroundSyncWG sync.WaitGroup
+
 // Result codes for CLI output (used in no-prompt mode)
 const (
 	ResultActionCompleted = "ACTION_COMPLETED"
@@ -130,6 +134,9 @@ func Execute(args []string, stdout, stderr io.Writer, cfg *Config) int {
 	if cfg == nil {
 		cfg = &Config{}
 	}
+
+	// Wait for background sync operations to complete before returning (Issue #032)
+	defer backgroundSyncWG.Wait()
 
 	// Initialize analytics tracker if enabled
 	tracker := initAnalyticsTracker(cfg)
@@ -2931,8 +2938,9 @@ type syncAwareBackend struct {
 	syncMgr            *SyncManager
 	cfg                *Config    // stored for auto-sync support
 	lastBackgroundSync time.Time  // last time a background sync was triggered (cooldown)
-	syncMutex          sync.Mutex // mutex for thread-safe access to lastBackgroundSync and syncRunning
-	syncRunning        bool       // true if a sync operation is currently running
+	syncMutex          sync.Mutex // mutex for thread-safe access to sync state
+	pullSyncRunning    bool       // true if a pull sync operation is currently running
+	pushSyncRunning    bool       // true if a push sync operation is currently running
 }
 
 // triggerBackgroundPullSync triggers a background pull-only sync for read operations.
@@ -2965,26 +2973,29 @@ func (b *syncAwareBackend) triggerBackgroundPullSync() {
 
 	// Check cooldown and running status to avoid concurrent/excessive syncing
 	b.syncMutex.Lock()
-	if b.syncRunning {
+	if b.pullSyncRunning {
 		b.syncMutex.Unlock()
-		utils.Debugf("Background sync skipped (another sync is running)")
+		utils.Debugf("Background pull sync skipped (another pull sync is running)")
 		return
 	}
 	timeSinceLastSync := time.Since(b.lastBackgroundSync)
 	if timeSinceLastSync < cooldown {
 		b.syncMutex.Unlock()
-		utils.Debugf("Background sync skipped (cooldown: %v since last sync, configured cooldown: %v)", timeSinceLastSync, cooldown)
+		utils.Debugf("Background pull sync skipped (cooldown: %v since last sync, configured cooldown: %v)", timeSinceLastSync, cooldown)
 		return
 	}
 	b.lastBackgroundSync = time.Now()
-	b.syncRunning = true
+	b.pullSyncRunning = true
 	b.syncMutex.Unlock()
 
 	// Trigger pull-only sync in background goroutine
+	// Use WaitGroup to ensure sync completes before program exit (Issue #032)
+	backgroundSyncWG.Add(1)
 	go func() {
+		defer backgroundSyncWG.Done()
 		defer func() {
 			b.syncMutex.Lock()
-			b.syncRunning = false
+			b.pullSyncRunning = false
 			b.syncMutex.Unlock()
 		}()
 		utils.Debugf("Background pull sync triggered")
@@ -2994,6 +3005,7 @@ func (b *syncAwareBackend) triggerBackgroundPullSync() {
 
 // triggerAutoSync triggers an automatic sync if auto_sync_after_operation is enabled.
 // The sync runs in the background so operations return immediately (Issue #014).
+// The WaitGroup ensures sync completes before program exit (Issue #032).
 func (b *syncAwareBackend) triggerAutoSync() {
 	if b.cfg == nil {
 		return
@@ -3011,22 +3023,24 @@ func (b *syncAwareBackend) triggerAutoSync() {
 		return // Don't auto-sync in explicit offline mode
 	}
 
-	// Check if another sync is running - if so, skip (will be picked up later)
+	// Check if another push sync is running - if so, skip (will be picked up later)
 	b.syncMutex.Lock()
-	if b.syncRunning {
+	if b.pushSyncRunning {
 		b.syncMutex.Unlock()
-		utils.Debugf("Auto-sync skipped (another sync is running)")
+		utils.Debugf("Auto-sync skipped (another push sync is running)")
 		return
 	}
-	b.lastBackgroundSync = time.Now()
-	b.syncRunning = true
+	b.pushSyncRunning = true
 	b.syncMutex.Unlock()
 
 	// Trigger sync in background goroutine (Issue #014)
+	// Use WaitGroup to ensure sync completes before program exit (Issue #032)
+	backgroundSyncWG.Add(1)
 	go func() {
+		defer backgroundSyncWG.Done()
 		defer func() {
 			b.syncMutex.Lock()
-			b.syncRunning = false
+			b.pushSyncRunning = false
 			b.syncMutex.Unlock()
 		}()
 		utils.Debugf("Background auto-sync triggered")
@@ -7019,6 +7033,17 @@ func (sm *SyncManager) initDB() error {
 		return err
 	}
 	sm.db = db
+
+	// Configure SQLite for concurrent access (Issue #032)
+	// Set busy timeout to 5 seconds (5000ms) to wait when database is locked
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		return err
+	}
+
+	// Enable WAL mode for better concurrent access
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		return err
+	}
 
 	schema := `
 		CREATE TABLE IF NOT EXISTS sync_queue (
