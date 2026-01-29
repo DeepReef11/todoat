@@ -41,11 +41,38 @@ type Message struct {
 
 // Response represents a daemon response to CLI.
 type Response struct {
-	Status    string `json:"status"` // "ok", "error"
-	Message   string `json:"message,omitempty"`
-	SyncCount int    `json:"sync_count,omitempty"`
-	LastSync  string `json:"last_sync,omitempty"`
-	Running   bool   `json:"running"`
+	Status        string                    `json:"status"` // "ok", "error"
+	Message       string                    `json:"message,omitempty"`
+	SyncCount     int                       `json:"sync_count,omitempty"`
+	LastSync      string                    `json:"last_sync,omitempty"`
+	Running       bool                      `json:"running"`
+	BackendStates map[string]*BackendStatus `json:"backend_states,omitempty"` // Per-backend status (Issue #40)
+}
+
+// BackendStatus represents the status of a backend for API responses.
+type BackendStatus struct {
+	SyncCount  int    `json:"sync_count"`
+	ErrorCount int    `json:"error_count"`
+	LastSync   string `json:"last_sync,omitempty"`
+	LastError  string `json:"last_error,omitempty"`
+	Healthy    bool   `json:"healthy"`
+}
+
+// BackendState holds the per-backend sync state (Issue #40).
+type BackendState struct {
+	Name       string    // Backend name
+	SyncCount  int       // Number of syncs performed
+	ErrorCount int       // Number of consecutive errors
+	LastSync   time.Time // Last successful sync time
+	LastError  string    // Last error message (if any)
+}
+
+// backendEntry holds a backend's sync function and configuration.
+type backendEntry struct {
+	name     string
+	syncFunc func() error
+	interval time.Duration // Per-backend interval (0 = use global interval)
+	lastSync time.Time     // When this backend was last synced
 }
 
 // Daemon represents a running daemon process.
@@ -56,20 +83,122 @@ type Daemon struct {
 	mu        sync.RWMutex
 	stopChan  chan struct{}
 	listener  net.Listener
-	syncFunc  func() error // Function to call for sync operations
+	syncFunc  func() error // Function to call for sync operations (legacy single-backend)
+
+	// Multi-backend support (Issue #40)
+	backends      []*backendEntry          // List of backends with their sync functions
+	backendStates map[string]*BackendState // Per-backend state tracking
+	backendsMu    sync.RWMutex             // Protects backends and backendStates
 }
 
 // New creates a new Daemon instance.
 func New(cfg *Config) *Daemon {
 	return &Daemon{
-		cfg:      cfg,
-		stopChan: make(chan struct{}),
+		cfg:           cfg,
+		stopChan:      make(chan struct{}),
+		backends:      make([]*backendEntry, 0),
+		backendStates: make(map[string]*BackendState),
 	}
 }
 
 // SetSyncFunc sets the function to call for sync operations.
+// This is the legacy single-backend API. For multi-backend support,
+// use AddBackendSyncFunc instead.
 func (d *Daemon) SetSyncFunc(f func() error) {
 	d.syncFunc = f
+}
+
+// AddBackendSyncFunc adds a backend sync function using the global interval.
+// This enables multi-backend sync support (Issue #40).
+func (d *Daemon) AddBackendSyncFunc(name string, syncFunc func() error) {
+	d.AddBackendSyncFuncWithInterval(name, 0, syncFunc)
+}
+
+// AddBackendSyncFuncWithInterval adds a backend sync function with a custom interval.
+// If interval is 0, the global daemon interval is used.
+func (d *Daemon) AddBackendSyncFuncWithInterval(name string, interval time.Duration, syncFunc func() error) {
+	d.backendsMu.Lock()
+	defer d.backendsMu.Unlock()
+
+	entry := &backendEntry{
+		name:     name,
+		syncFunc: syncFunc,
+		interval: interval,
+	}
+	d.backends = append(d.backends, entry)
+
+	// Initialize state for this backend
+	d.backendStates[name] = &BackendState{
+		Name: name,
+	}
+}
+
+// GetBackendState returns the state for a specific backend.
+// Returns nil if the backend is not registered.
+func (d *Daemon) GetBackendState(name string) *BackendState {
+	d.backendsMu.RLock()
+	defer d.backendsMu.RUnlock()
+	return d.backendStates[name]
+}
+
+// GetAllBackendStates returns a copy of all backend states.
+func (d *Daemon) GetAllBackendStates() map[string]*BackendState {
+	d.backendsMu.RLock()
+	defer d.backendsMu.RUnlock()
+
+	result := make(map[string]*BackendState, len(d.backendStates))
+	for k, v := range d.backendStates {
+		// Return a copy to avoid race conditions
+		stateCopy := *v
+		result[k] = &stateCopy
+	}
+	return result
+}
+
+// getMinTickInterval returns the minimum tick interval needed to support all backends.
+// This is the smallest of the global interval and any backend-specific intervals.
+func (d *Daemon) getMinTickInterval() time.Duration {
+	d.backendsMu.RLock()
+	defer d.backendsMu.RUnlock()
+
+	minInterval := d.cfg.Interval
+	if minInterval == 0 {
+		minInterval = 5 * time.Minute // Default global interval
+	}
+
+	for _, be := range d.backends {
+		if be.interval > 0 && be.interval < minInterval {
+			minInterval = be.interval
+		}
+	}
+
+	return minInterval
+}
+
+// getBackendStatuses returns the current status of all backends for API responses.
+func (d *Daemon) getBackendStatuses() map[string]*BackendStatus {
+	d.backendsMu.RLock()
+	defer d.backendsMu.RUnlock()
+
+	if len(d.backendStates) == 0 {
+		return nil
+	}
+
+	statuses := make(map[string]*BackendStatus, len(d.backendStates))
+	for name, state := range d.backendStates {
+		lastSync := ""
+		if !state.LastSync.IsZero() {
+			lastSync = state.LastSync.Format(time.RFC3339)
+		}
+		statuses[name] = &BackendStatus{
+			SyncCount:  state.SyncCount,
+			ErrorCount: state.ErrorCount,
+			LastSync:   lastSync,
+			LastError:  state.LastError,
+			Healthy:    state.ErrorCount == 0,
+		}
+	}
+	return statuses
 }
 
 // Start starts the daemon process. This should be called in the forked process.
@@ -109,8 +238,12 @@ func (d *Daemon) Start() error {
 	// Start IPC listener
 	go d.handleConnections()
 
+	// Determine the tick interval - use the minimum of global interval and any backend intervals
+	tickInterval := d.getMinTickInterval()
+	d.log("Using tick interval: %v (backends: %d)", tickInterval, len(d.backends))
+
 	// Start sync loop
-	ticker := time.NewTicker(d.cfg.Interval)
+	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
 	// Idle timer for auto-shutdown
@@ -210,6 +343,9 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 		}
 		d.mu.RUnlock()
 
+		// Add per-backend status (Issue #40)
+		resp.BackendStates = d.getBackendStatuses()
+
 	case "stop":
 		resp = Response{Status: "ok", Running: false}
 		_ = encoder.Encode(resp)
@@ -231,7 +367,16 @@ func (d *Daemon) performSync() {
 
 	d.log("Starting sync (count: %d)", count)
 
-	if d.syncFunc != nil {
+	// Check if we have multi-backend configuration
+	d.backendsMu.RLock()
+	hasBackends := len(d.backends) > 0
+	d.backendsMu.RUnlock()
+
+	if hasBackends {
+		// Multi-backend sync (Issue #40)
+		d.performMultiBackendSync(count)
+	} else if d.syncFunc != nil {
+		// Legacy single-backend sync
 		if err := d.syncFunc(); err != nil {
 			d.log("Sync error (count: %d): %v", count, err)
 		} else {
@@ -244,6 +389,62 @@ func (d *Daemon) performSync() {
 	d.mu.Unlock()
 }
 
+// performMultiBackendSync iterates through all backends and syncs each one.
+// Failure in one backend does not affect others (failure isolation).
+func (d *Daemon) performMultiBackendSync(globalCount int) {
+	d.backendsMu.Lock()
+	backends := make([]*backendEntry, len(d.backends))
+	copy(backends, d.backends)
+	d.backendsMu.Unlock()
+
+	now := time.Now()
+	globalInterval := d.cfg.Interval
+
+	for _, be := range backends {
+		// Check if this backend should sync based on its interval
+		interval := be.interval
+		if interval == 0 {
+			interval = globalInterval
+		}
+
+		// Check if enough time has passed since last sync
+		if !be.lastSync.IsZero() && now.Sub(be.lastSync) < interval {
+			continue // Skip this backend - not yet time to sync
+		}
+
+		d.log("Syncing backend: %s", be.name)
+
+		// Perform sync with failure isolation
+		err := be.syncFunc()
+
+		// Update backend state
+		d.backendsMu.Lock()
+		state := d.backendStates[be.name]
+		if state == nil {
+			state = &BackendState{Name: be.name}
+			d.backendStates[be.name] = state
+		}
+
+		if err != nil {
+			// Record error but continue with other backends (failure isolation)
+			state.ErrorCount++
+			state.LastError = err.Error()
+			d.log("Backend %s sync error: %v (error count: %d)", be.name, err, state.ErrorCount)
+		} else {
+			// Success - reset error count
+			state.SyncCount++
+			state.ErrorCount = 0
+			state.LastError = ""
+			state.LastSync = now
+			d.log("Backend %s sync completed (sync count: %d)", be.name, state.SyncCount)
+		}
+
+		// Update backend's last sync time (regardless of success/failure)
+		be.lastSync = now
+		d.backendsMu.Unlock()
+	}
+}
+
 func (d *Daemon) cleanup() {
 	if d.listener != nil {
 		_ = d.listener.Close()
@@ -251,6 +452,7 @@ func (d *Daemon) cleanup() {
 	_ = os.Remove(d.cfg.PIDPath)
 	_ = os.Remove(d.cfg.SocketPath)
 	d.log("Daemon stopped")
+	_ = os.Remove(d.cfg.LogPath)
 }
 
 func (d *Daemon) log(format string, args ...interface{}) {
