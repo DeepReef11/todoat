@@ -1477,6 +1477,96 @@ func TestIssue029SyncPreservesParentChildRelationships(t *testing.T) {
 	}
 }
 
+// TestIssue045CreateParentAndChildTasks tests that creating a parent task followed
+// by a child task (with ParentID) both persist on the Nextcloud server.
+// Issue #45: Only the parent was being created; the child subtask was lost.
+func TestIssue045CreateParentAndChildTasks(t *testing.T) {
+	server := newMockCalDAVServer("testuser", "testpass")
+	defer server.Close()
+	server.AddCalendar("tasks")
+
+	be, err := New(Config{
+		Host:      strings.TrimPrefix(server.URL(), "http://"),
+		Username:  "testuser",
+		Password:  "testpass",
+		AllowHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create backend: %v", err)
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+
+	// Step 1: Create parent task "t1" (simulates first iteration of doAddHierarchy)
+	parentTask := &backend.Task{
+		Summary: "t1",
+		Status:  backend.StatusNeedsAction,
+	}
+	createdParent, err := be.CreateTask(ctx, "tasks", parentTask)
+	if err != nil {
+		t.Fatalf("CreateTask for parent failed: %v", err)
+	}
+	if createdParent.ID == "" {
+		t.Fatal("Parent task ID should not be empty")
+	}
+
+	// Step 2: Create child task "ct1" with ParentID set to parent's ID
+	childTask := &backend.Task{
+		Summary:  "ct1",
+		Status:   backend.StatusNeedsAction,
+		ParentID: createdParent.ID,
+	}
+	createdChild, err := be.CreateTask(ctx, "tasks", childTask)
+	if err != nil {
+		t.Fatalf("CreateTask for child failed: %v", err)
+	}
+	if createdChild.ID == "" {
+		t.Fatal("Child task ID should not be empty")
+	}
+	if createdChild.ParentID != createdParent.ID {
+		t.Errorf("Child ParentID = %q, want %q", createdChild.ParentID, createdParent.ID)
+	}
+
+	// Step 3: Verify both tasks exist on the server via GetTasks
+	tasks, err := be.GetTasks(ctx, "tasks")
+	if err != nil {
+		t.Fatalf("GetTasks failed: %v", err)
+	}
+
+	if len(tasks) != 2 {
+		t.Fatalf("Expected 2 tasks on server, got %d", len(tasks))
+	}
+
+	// Find parent and child in returned tasks
+	var foundParent, foundChild *backend.Task
+	for i := range tasks {
+		switch tasks[i].Summary {
+		case "t1":
+			foundParent = &tasks[i]
+		case "ct1":
+			foundChild = &tasks[i]
+		}
+	}
+
+	if foundParent == nil {
+		t.Error("Parent task 't1' not found on server")
+	}
+	if foundChild == nil {
+		t.Error("Child task 'ct1' not found on server")
+	} else {
+		if foundChild.ParentID != createdParent.ID {
+			t.Errorf("Child task ParentID on server = %q, want %q", foundChild.ParentID, createdParent.ID)
+		}
+	}
+
+	// Verify the stored VTODO for the child contains RELATED-TO
+	storedChildVTODO := server.calendars["tasks"].tasks[createdChild.ID]
+	if !strings.Contains(storedChildVTODO, "RELATED-TO;RELTYPE=PARENT:"+createdParent.ID) {
+		t.Errorf("Child VTODO should contain RELATED-TO with parent ID, got:\n%s", storedChildVTODO)
+	}
+}
+
 // TestIssue037CreateTaskPreservesParentID tests that CreateTask properly includes
 // ParentID in the VTODO sent to the server (issue #37)
 func TestIssue037CreateTaskPreservesParentID(t *testing.T) {

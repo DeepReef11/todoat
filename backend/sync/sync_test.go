@@ -2652,3 +2652,178 @@ default_backend: sqlite-remote
 			"The background sync goroutine was orphaned when the CLI exited.", count)
 	}
 }
+
+// =============================================================================
+// Issue #045: Hierarchy sync - both parent and child must sync to remote
+// =============================================================================
+
+// TestIssue045HierarchySyncBothTasksSynced verifies that when creating a hierarchy
+// like "t1/ct1", both the parent and child tasks are synced to the remote backend.
+// Bug: ClearQueue() deleted ALL queue entries after processing, including operations
+// queued between GetPendingOperations() and ClearQueue(). This caused child tasks
+// in hierarchies to never sync because the parent's sync cleared the child's queue entry.
+func TestIssue045HierarchySyncBothTasksSynced(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	remoteDBPath := filepath.Join(tmpDir, "remote.db")
+
+	// Use auto_sync DISABLED so we can control when sync happens
+	// This tests the core ClearQueue bug without race condition timing
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: auto
+  auto_sync_after_operation: false
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Create a hierarchy task "t1/ct1" - should queue TWO create operations
+	stdout := cli.MustExecute("-y", "Work", "add", "t1/ct1")
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Verify 2 pending operations are queued (parent + child)
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	if !strings.Contains(stdout, "Pending Operations: 2") {
+		t.Fatalf("expected 2 pending operations for hierarchy, got:\n%s", stdout)
+	}
+
+	// Run sync - should process BOTH operations
+	cli.MustExecute("-y", "sync")
+
+	// Verify queue is empty after sync
+	stdout = cli.MustExecute("-y", "sync", "queue")
+	if !strings.Contains(stdout, "Pending Operations: 0") {
+		t.Errorf("expected queue to be empty after sync, got:\n%s", stdout)
+	}
+
+	// Verify BOTH tasks exist on the remote
+	remoteDB, err := sql.Open("sqlite", remoteDBPath)
+	if err != nil {
+		t.Fatalf("failed to open remote db: %v", err)
+	}
+	defer func() { _ = remoteDB.Close() }()
+
+	var parentCount int
+	err = remoteDB.QueryRow(`
+		SELECT COUNT(*) FROM tasks t
+		JOIN task_lists l ON t.list_id = l.id
+		WHERE t.summary = 't1' AND l.name = 'Work'
+	`).Scan(&parentCount)
+	if err != nil {
+		t.Fatalf("failed to query remote db for parent: %v", err)
+	}
+	if parentCount != 1 {
+		t.Errorf("Issue #045: Parent task 't1' NOT synced to remote. Expected 1, got %d", parentCount)
+	}
+
+	var childCount int
+	err = remoteDB.QueryRow(`
+		SELECT COUNT(*) FROM tasks t
+		JOIN task_lists l ON t.list_id = l.id
+		WHERE t.summary = 'ct1' AND l.name = 'Work'
+	`).Scan(&childCount)
+	if err != nil {
+		t.Fatalf("failed to query remote db for child: %v", err)
+	}
+	if childCount != 1 {
+		t.Errorf("Issue #045: Child task 'ct1' NOT synced to remote. Expected 1, got %d", childCount)
+	}
+
+	// Verify child has parent_id set on remote
+	var childParentID string
+	err = remoteDB.QueryRow(`
+		SELECT t.parent_id FROM tasks t
+		JOIN task_lists l ON t.list_id = l.id
+		WHERE t.summary = 'ct1' AND l.name = 'Work'
+	`).Scan(&childParentID)
+	if err != nil {
+		t.Fatalf("failed to query child parent_id: %v", err)
+	}
+	if childParentID == "" {
+		t.Errorf("Issue #045: Child task 'ct1' on remote has empty parent_id, should reference parent 't1'")
+	}
+}
+
+// TestIssue045ClearOperationsSelectiveDelete verifies that ClearOperations only
+// removes the specified operation IDs, leaving other queue entries intact.
+// This is the core fix for issue #45: ClearQueue was deleting ALL entries
+// including operations queued between GetPendingOperations and ClearQueue.
+func TestIssue045ClearOperationsSelectiveDelete(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Disable auto_sync so we control sync timing
+	configContent := `
+sync:
+  enabled: true
+  local_backend: sqlite
+  conflict_resolution: server_wins
+  offline_mode: auto
+  auto_sync_after_operation: false
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+default_backend: sqlite
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Add two tasks to create two pending operations
+	cli.MustExecute("-y", "Work", "add", "Task1")
+	cli.MustExecute("-y", "Work", "add", "Task2")
+
+	// Verify 2 pending operations
+	stdout := cli.MustExecute("-y", "sync", "queue")
+	if !strings.Contains(stdout, "Pending Operations: 2") {
+		t.Fatalf("expected 2 pending operations, got:\n%s", stdout)
+	}
+
+	// Get the pending operations to find their IDs
+	syncMgr := cmd.NewSyncManager(filepath.Join(tmpDir, "test.db"))
+	defer func() { _ = syncMgr.Close() }()
+
+	ops, err := syncMgr.GetPendingOperations()
+	if err != nil {
+		t.Fatalf("GetPendingOperations failed: %v", err)
+	}
+	if len(ops) != 2 {
+		t.Fatalf("expected 2 operations, got %d", len(ops))
+	}
+
+	// Clear ONLY the first operation
+	cleared, err := syncMgr.ClearOperations([]int64{ops[0].ID})
+	if err != nil {
+		t.Fatalf("ClearOperations failed: %v", err)
+	}
+	if cleared != 1 {
+		t.Errorf("expected 1 cleared, got %d", cleared)
+	}
+
+	// Verify only 1 operation remains
+	remaining, err := syncMgr.GetPendingOperations()
+	if err != nil {
+		t.Fatalf("GetPendingOperations after clear failed: %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Errorf("Issue #045: expected 1 remaining operation after selective clear, got %d", len(remaining))
+	}
+	if len(remaining) == 1 && remaining[0].ID != ops[1].ID {
+		t.Errorf("expected remaining operation to be ID %d, got %d", ops[1].ID, remaining[0].ID)
+	}
+}

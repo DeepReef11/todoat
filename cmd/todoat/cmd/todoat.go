@@ -6131,6 +6131,7 @@ func doSync(cfg *Config, stdout, stderr io.Writer) error {
 	successCount := 0
 	errorCount := 0
 	var lastError error
+	var processedIDs []int64
 
 	for _, op := range pendingOps {
 		var syncErr error
@@ -6152,14 +6153,16 @@ func doSync(cfg *Config, stdout, stderr io.Writer) error {
 			_, _ = fmt.Fprintf(stderr, "Sync error for task '%s': %v\n", op.TaskSummary, syncErr)
 		} else {
 			successCount++
+			processedIDs = append(processedIDs, op.ID)
 		}
 	}
 
-	// Clear successfully processed operations
-	// Note: In a production implementation, we would only clear successfully synced operations
-	// For now, we clear all if at least some succeeded
-	if successCount > 0 {
-		_, _ = syncMgr.ClearQueue()
+	// Clear only the operations that were actually processed (issue #45).
+	// Previously ClearQueue() deleted ALL entries, including operations queued
+	// between GetPendingOperations() and ClearQueue(). This caused subtasks
+	// created in hierarchies to never sync to the remote backend.
+	if len(processedIDs) > 0 {
+		_, _ = syncMgr.ClearOperations(processedIDs)
 	}
 
 	// If all operations failed, return the error
@@ -7291,6 +7294,33 @@ func (sm *SyncManager) ClearQueue() (int, error) {
 	}
 
 	result, err := sm.db.Exec("DELETE FROM sync_queue")
+	if err != nil {
+		return 0, err
+	}
+
+	count, _ := result.RowsAffected()
+	return int(count), nil
+}
+
+// ClearOperations removes specific sync operations by their IDs.
+// This is used by doSync to only clear operations that were actually processed,
+// avoiding deletion of operations queued between GetPendingOperations and ClearQueue.
+// Fixes issue #45: hierarchy subtasks lost due to ClearQueue deleting unprocessed entries.
+func (sm *SyncManager) ClearOperations(ids []int64) (int, error) {
+	if sm.db == nil || len(ids) == 0 {
+		return 0, nil
+	}
+
+	// Build placeholders for IN clause
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := "DELETE FROM sync_queue WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	result, err := sm.db.Exec(query, args...)
 	if err != nil {
 		return 0, err
 	}
