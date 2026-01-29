@@ -4036,3 +4036,46 @@ default_backend: sqlite
 		t.Errorf("expected warning about config parsing error in stderr, got: %q (exit code: %d)", stderrOutput, exitCode)
 	}
 }
+
+// TestExecuteDoesNotBlockOnBackgroundSync verifies that Execute() returns promptly
+// and does not wait for background sync goroutines to complete (Issue #46).
+// We simulate a slow sync by directly adding to the backgroundSyncWG before calling
+// Execute(), then verify Execute() returns without waiting for the WaitGroup.
+func TestExecuteDoesNotBlockOnBackgroundSync(t *testing.T) {
+	// Add a long-running "sync goroutine" to the WaitGroup.
+	// If Execute() calls backgroundSyncWG.Wait(), it will block until this completes.
+	backgroundSyncWG.Add(1)
+	defer backgroundSyncWG.Done() // clean up after test
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	// Execute a simple command (help). If Execute() has defer backgroundSyncWG.Wait(),
+	// it will block forever because our WaitGroup counter is 1.
+	deadline := 5 * time.Second
+	done := make(chan int, 1)
+	go func() {
+		var stdout, stderr bytes.Buffer
+		exitCode := Execute([]string{"--help"}, &stdout, &stderr, cfg)
+		done <- exitCode
+	}()
+
+	select {
+	case exitCode := <-done:
+		if exitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d", exitCode)
+		}
+		// Execute returned within deadline — it does not block on backgroundSyncWG
+	case <-time.After(deadline):
+		t.Fatalf("Execute() did not return within %v — backgroundSyncWG.Wait() is blocking CLI exit (Issue #46)", deadline)
+	}
+}

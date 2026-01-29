@@ -53,8 +53,8 @@ var (
 	BuildDate = "unknown"
 )
 
-// backgroundSyncWG tracks all background sync goroutines to ensure they complete
-// before the program exits. This fixes Issue #032: Auto-sync not working.
+// backgroundSyncWG tracks background sync goroutines. It is NOT waited on during
+// Execute() — background sync is fire-and-forget so the CLI returns immediately (Issue #46).
 var backgroundSyncWG sync.WaitGroup
 
 // Result codes for CLI output (used in no-prompt mode)
@@ -147,9 +147,6 @@ func Execute(args []string, stdout, stderr io.Writer, cfg *Config) int {
 		runDaemonMode(args, stderr)
 		return 0 // Never reached - runDaemonMode calls os.Exit
 	}
-
-	// Wait for background sync operations to complete before returning (Issue #032)
-	defer backgroundSyncWG.Wait()
 
 	// Initialize analytics tracker if enabled
 	tracker := initAnalyticsTracker(cfg)
@@ -6240,6 +6237,11 @@ func syncCreateOperation(ctx context.Context, localBE, remoteBE backend.TaskMana
 	// Create the task on the remote backend
 	_, err = remoteBE.CreateTask(ctx, remoteList.ID, localTask)
 	if err != nil {
+		// If the task already exists on remote (e.g., from a concurrent background sync),
+		// treat it as a success — sync create is idempotent (Issue #46).
+		if strings.Contains(err.Error(), "UNIQUE constraint") {
+			return nil
+		}
 		return fmt.Errorf("failed to create task on remote: %w", err)
 	}
 
