@@ -752,6 +752,7 @@ default_backend: sqlite
 
 	// Start daemon
 	cli.MustExecute("-y", "sync", "daemon", "start")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
 
 	// Verify daemon is running
 	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
@@ -760,9 +761,6 @@ default_backend: sqlite
 	// Idle timeout is not yet implemented in the daemon.
 	// Skip until the feature is available to avoid a tautological assertion.
 	t.Skip("idle timeout not yet implemented in daemon")
-
-	// Cleanup: try to stop the daemon (may already be stopped)
-	cli.MustExecute("-y", "sync", "daemon", "stop")
 }
 
 // TestDaemonIPCNotification verifies that CLI can notify daemon via IPC

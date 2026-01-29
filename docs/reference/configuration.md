@@ -135,6 +135,9 @@ Restores the default configuration. Requires confirmation.
 | `sync.connectivity_timeout` | string | Network timeout for connectivity checks (default: `5s`) |
 | `sync.auto_sync_after_operation` | bool | Auto-sync after add/update/delete operations (default: `true` when sync enabled) |
 | `sync.background_pull_cooldown` | string | Cooldown between background pull syncs (default: `30s`, minimum: `5s`) |
+| `sync.daemon.enabled` | bool | Enable background sync daemon (default: `false`) |
+| `sync.daemon.interval` | int | Daemon sync interval in seconds (default: `300`) |
+| `sync.daemon.idle_timeout` | int | Seconds of idle time before daemon exits (default: `300`) |
 | `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `true`) |
 | `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |
@@ -252,6 +255,47 @@ todoat reminder check
 ```
 
 See [Reminders How-To](../how-to/reminders.md) for detailed usage.
+
+## Daemon Configuration
+
+Configure the background sync daemon:
+
+```yaml
+sync:
+  daemon:
+    enabled: false        # Enable background sync daemon
+    interval: 300         # Sync interval in seconds (default: 5 minutes)
+    idle_timeout: 300     # Idle timeout in seconds before daemon exits (default: 5 minutes)
+```
+
+### Daemon Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `enabled` | Enable daemon process for background sync | `false` |
+| `interval` | Sync interval in seconds | `300` |
+| `idle_timeout` | Seconds before idle daemon exits | `300` |
+
+### Managing the Daemon
+
+```bash
+# Start daemon
+todoat sync daemon start
+
+# Start with custom interval
+todoat sync daemon start --interval 60
+
+# Check daemon status
+todoat sync daemon status
+
+# Stop daemon
+todoat sync daemon stop
+
+# Force kill if hung
+todoat sync daemon kill
+```
+
+See [Synchronization](../how-to/sync.md#background-sync-daemon) for detailed usage.
 
 ## Trash Configuration
 

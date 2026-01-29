@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- IPC notify support in daemon sync loop for immediate sync triggering via Unix socket
+- Documented daemon configuration options (`sync.daemon.enabled`, `interval`, `idle_timeout`)
+- Documented `sync status` command and `--version` global flag in CLI reference
+
+### Fixed
+- Daemon test cleanup now uses `defer` to ensure daemon is stopped even on test failure
+- Daemon sync loop refactored to extract `daemonPerformSync` and handle IPC notify signals
+
+### Security
+- PowerShell notification escaping now covers `$` to prevent subexpression injection (#44)
+
 ### Changed
 - JSON export now includes list metadata (list_name) in output structure
 - JSON import supports both new format (with list_name) and legacy format (array of tasks)

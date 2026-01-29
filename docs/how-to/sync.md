@@ -120,6 +120,20 @@ todoat sync daemon kill
 
 Force kills the daemon process. Use this for emergency termination if the daemon is hung and won't respond to the normal stop command.
 
+### Daemon Configuration
+
+Configure daemon behavior in `config.yaml`:
+
+```yaml
+sync:
+  daemon:
+    enabled: false        # Enable daemon process
+    interval: 300         # Sync interval in seconds (default: 5 minutes)
+    idle_timeout: 300     # Seconds before idle daemon exits (default: 5 minutes)
+```
+
+The `--interval` flag on `sync daemon start` overrides the `interval` config value for that session.
+
 ## Sync Configuration Options
 
 ### enabled

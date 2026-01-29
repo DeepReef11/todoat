@@ -97,11 +97,12 @@ func (c *osNotificationChannel) sendDarwin(n Notification) error {
 }
 
 // escapePowerShell escapes a string for safe use in PowerShell double-quoted strings.
-// It escapes backticks and double quotes to prevent command injection.
+// It escapes backticks, double quotes, and dollar signs to prevent command injection.
 func escapePowerShell(s string) string {
 	// In PowerShell, backtick is the escape character
 	s = strings.ReplaceAll(s, "`", "``")
 	s = strings.ReplaceAll(s, `"`, "`\"")
+	s = strings.ReplaceAll(s, "$", "`$") // Escape $ to prevent subexpression execution
 	return s
 }
 

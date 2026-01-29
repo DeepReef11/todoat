@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -7681,9 +7682,11 @@ type daemonState struct {
 	interval    time.Duration
 	stopChan    chan struct{}
 	doneChan    chan struct{} // signals when daemon goroutine has stopped
+	notifyChan  chan struct{} // receives IPC notify signals
 	offlineMode bool
 	cfg         *Config
 	notifyMgr   notification.NotificationManager
+	listener    net.Listener // Unix socket listener for IPC
 }
 
 // Global daemon instance for in-process testing
@@ -7983,6 +7986,7 @@ func startTestDaemon(cfg *Config, stdout io.Writer, pidPath, logPath string, int
 		interval:    interval,
 		stopChan:    make(chan struct{}),
 		doneChan:    make(chan struct{}),
+		notifyChan:  make(chan struct{}, 1),
 		offlineMode: cfg.DaemonOfflineMode,
 		cfg:         cfg,
 		notifyMgr:   notifyMgr,
@@ -7991,6 +7995,20 @@ func startTestDaemon(cfg *Config, stdout io.Writer, pidPath, logPath string, int
 	// Write PID file
 	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", testDaemon.pid)), 0644); err != nil {
 		return fmt.Errorf("failed to write PID file: %w", err)
+	}
+
+	// Start IPC socket listener so triggerAutoSync can notify the daemon
+	socketPath := getDaemonSocketPath(cfg)
+	if socketPath != "" {
+		// Remove stale socket file
+		_ = os.Remove(socketPath)
+		if err := os.MkdirAll(filepath.Dir(socketPath), 0755); err == nil {
+			listener, err := net.Listen("unix", socketPath)
+			if err == nil {
+				testDaemon.listener = listener
+				go testDaemonIPCListener(testDaemon, listener)
+			}
+		}
 	}
 
 	// Write initial log entry
@@ -8011,58 +8029,118 @@ func startTestDaemon(cfg *Config, stdout io.Writer, pidPath, logPath string, int
 }
 
 // daemonSyncLoop runs the periodic sync in the background
-func daemonSyncLoop(daemon *daemonState, logPath string) {
-	ticker := time.NewTicker(daemon.interval)
+func daemonSyncLoop(d *daemonState, logPath string) {
+	ticker := time.NewTicker(d.interval)
 	defer ticker.Stop()
-	defer close(daemon.doneChan) // Signal that the goroutine has stopped
+	defer close(d.doneChan) // Signal that the goroutine has stopped
 
 	for {
 		select {
-		case <-daemon.stopChan:
+		case <-d.stopChan:
 			logEntry := fmt.Sprintf("[%s] Daemon stopped\n", time.Now().Format(time.RFC3339))
 			_ = appendToLogFile(logPath, logEntry)
 			return
+		case <-d.notifyChan:
+			daemonPerformSync(d, logPath)
 		case <-ticker.C:
-			daemon.mu.Lock()
-			daemon.syncCount++
-			daemon.lastSync = time.Now()
-			currentCount := daemon.syncCount
-			daemon.mu.Unlock()
-
-			// Perform sync
-			var syncErr error
-			if daemon.offlineMode {
-				// Simulated offline - just log it
-				logEntry := fmt.Sprintf("[%s] Sync attempt %d (offline mode)\n", time.Now().Format(time.RFC3339), currentCount)
-				_ = appendToLogFile(logPath, logEntry)
-			} else {
-				// Actually call doSync to perform real synchronization
-				syncErr = doSync(daemon.cfg, io.Discard, io.Discard)
-				if syncErr != nil {
-					logEntry := fmt.Sprintf("[%s] Sync error (count: %d): %v\n", time.Now().Format(time.RFC3339), currentCount, syncErr)
-					_ = appendToLogFile(logPath, logEntry)
-				} else {
-					logEntry := fmt.Sprintf("[%s] Sync completed (count: %d)\n", time.Now().Format(time.RFC3339), currentCount)
-					_ = appendToLogFile(logPath, logEntry)
-				}
-			}
-
-			// Send notification
-			if daemon.notifyMgr != nil {
-				notif := notification.Notification{
-					Type:      notification.NotifySyncComplete,
-					Title:     "todoat sync",
-					Message:   fmt.Sprintf("Sync completed (count: %d)", currentCount),
-					Timestamp: time.Now(),
-				}
-				if syncErr != nil {
-					notif.Type = notification.NotifySyncError
-					notif.Message = fmt.Sprintf("Sync error: %v", syncErr)
-				}
-				daemon.notifyMgr.SendAsync(notif)
-			}
+			daemonPerformSync(d, logPath)
 		}
 	}
+}
+
+// daemonPerformSync executes a single sync cycle, updating sync count and sending notifications.
+func daemonPerformSync(d *daemonState, logPath string) {
+	d.mu.Lock()
+	d.syncCount++
+	d.lastSync = time.Now()
+	currentCount := d.syncCount
+	d.mu.Unlock()
+
+	// Perform sync
+	var syncErr error
+	if d.offlineMode {
+		// Simulated offline - just log it
+		logEntry := fmt.Sprintf("[%s] Sync attempt %d (offline mode)\n", time.Now().Format(time.RFC3339), currentCount)
+		_ = appendToLogFile(logPath, logEntry)
+	} else {
+		// Actually call doSync to perform real synchronization
+		syncErr = doSync(d.cfg, io.Discard, io.Discard)
+		if syncErr != nil {
+			logEntry := fmt.Sprintf("[%s] Sync error (count: %d): %v\n", time.Now().Format(time.RFC3339), currentCount, syncErr)
+			_ = appendToLogFile(logPath, logEntry)
+		} else {
+			logEntry := fmt.Sprintf("[%s] Sync completed (count: %d)\n", time.Now().Format(time.RFC3339), currentCount)
+			_ = appendToLogFile(logPath, logEntry)
+		}
+	}
+
+	// Send notification
+	if d.notifyMgr != nil {
+		notif := notification.Notification{
+			Type:      notification.NotifySyncComplete,
+			Title:     "todoat sync",
+			Message:   fmt.Sprintf("Sync completed (count: %d)", currentCount),
+			Timestamp: time.Now(),
+		}
+		if syncErr != nil {
+			notif.Type = notification.NotifySyncError
+			notif.Message = fmt.Sprintf("Sync error: %v", syncErr)
+		}
+		d.notifyMgr.SendAsync(notif)
+	}
+}
+
+// testDaemonIPCListener accepts IPC connections on the Unix socket and dispatches
+// "notify" messages to the daemon's notifyChan, and responds to "status" and "stop" messages.
+func testDaemonIPCListener(d *daemonState, listener net.Listener) {
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			return // listener closed
+		}
+		go testDaemonHandleConn(d, conn)
+	}
+}
+
+// testDaemonHandleConn handles a single IPC connection for the in-process test daemon.
+func testDaemonHandleConn(d *daemonState, conn net.Conn) {
+	defer func() { _ = conn.Close() }()
+
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var msg daemon.Message
+	if err := json.NewDecoder(conn).Decode(&msg); err != nil {
+		return
+	}
+
+	var resp daemon.Response
+	switch msg.Type {
+	case "notify":
+		// Signal the sync loop to perform an immediate sync
+		select {
+		case d.notifyChan <- struct{}{}:
+		default:
+			// Channel full - a notify is already pending
+		}
+		resp = daemon.Response{Status: "ok", Running: true}
+	case "status":
+		d.mu.RLock()
+		resp = daemon.Response{
+			Status:    "ok",
+			Running:   d.running,
+			SyncCount: d.syncCount,
+		}
+		if !d.lastSync.IsZero() {
+			resp.LastSync = d.lastSync.Format(time.RFC3339)
+		}
+		d.mu.RUnlock()
+	case "stop":
+		resp = daemon.Response{Status: "ok", Running: false}
+	default:
+		resp = daemon.Response{Status: "error", Message: "unknown message type"}
+	}
+
+	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	_ = json.NewEncoder(conn).Encode(resp)
 }
 
 // appendToLogFile appends a log entry to the daemon log file
@@ -8090,6 +8168,10 @@ func doDaemonStop(cfg *Config, stdout io.Writer) error {
 	}
 
 	if cfg != nil && cfg.DaemonTestMode && testDaemon != nil {
+		// Close the IPC socket listener first so no new connections are accepted
+		if testDaemon.listener != nil {
+			_ = testDaemon.listener.Close()
+		}
 		// Stop in-process daemon
 		close(testDaemon.stopChan)
 		// Wait for the daemon goroutine to finish

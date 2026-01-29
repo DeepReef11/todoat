@@ -20,6 +20,7 @@ These flags are available for all commands:
 | `--json` | Output in JSON format |
 | `-y, --no-prompt` | Disable interactive prompts |
 | `-V, --verbose` | Enable verbose/debug output |
+| `--version` | Display version information |
 | `-h, --help` | Help for the command |
 
 ## Task Commands
@@ -476,6 +477,18 @@ todoat sync [command]
 | `conflicts` | View and manage sync conflicts |
 | `daemon` | Manage the sync daemon |
 
+### sync status
+
+Show sync status including last sync time, pending operations, and connection status.
+
+```bash
+todoat sync status [flags]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--verbose` | Show detailed sync metadata |
+
 ### sync queue
 
 View and manage the sync queue.
@@ -534,7 +547,7 @@ todoat sync daemon start [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--interval` | int | 300 | Sync interval in seconds |
+| `--interval` | int | config or 300 | Sync interval in seconds |
 
 #### sync daemon kill
 
