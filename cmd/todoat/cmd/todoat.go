@@ -1414,7 +1414,7 @@ func doListExport(ctx context.Context, be backend.TaskManager, name, format, out
 	case "sqlite":
 		exportErr = exportSQLite(ctx, list, tasks, outputPath)
 	case "json":
-		exportErr = exportJSON(tasks, outputPath)
+		exportErr = exportJSON(list, tasks, outputPath)
 	case "csv":
 		exportErr = exportCSV(tasks, outputPath)
 	case "ical":
@@ -1534,8 +1534,8 @@ func exportSQLite(ctx context.Context, list *backend.List, tasks []backend.Task,
 	return nil
 }
 
-// exportJSON exports tasks to a JSON file
-func exportJSON(tasks []backend.Task, outputPath string) error {
+// exportJSON exports tasks to a JSON file with list metadata
+func exportJSON(list *backend.List, tasks []backend.Task, outputPath string) error {
 	type taskJSON struct {
 		ID          string     `json:"id"`
 		Summary     string     `json:"summary"`
@@ -1552,9 +1552,14 @@ func exportJSON(tasks []backend.Task, outputPath string) error {
 		Categories  string     `json:"categories,omitempty"`
 	}
 
-	output := make([]taskJSON, len(tasks))
+	type exportData struct {
+		ListName string     `json:"list_name"`
+		Tasks    []taskJSON `json:"tasks"`
+	}
+
+	taskList := make([]taskJSON, len(tasks))
 	for i, task := range tasks {
-		output[i] = taskJSON{
+		taskList[i] = taskJSON{
 			ID:          task.ID,
 			Summary:     task.Summary,
 			Description: task.Description,
@@ -1569,6 +1574,11 @@ func exportJSON(tasks []backend.Task, outputPath string) error {
 			ParentID:    task.ParentID,
 			Categories:  task.Categories,
 		}
+	}
+
+	output := exportData{
+		ListName: list.Name,
+		Tasks:    taskList,
 	}
 
 	data, err := json.MarshalIndent(output, "", "  ")
@@ -1792,6 +1802,7 @@ func doListImport(ctx context.Context, be backend.TaskManager, inputPath, format
 		newTask := task
 		newTask.ListID = newList.ID
 		oldID := task.ID
+		newTask.ID = ""       // Clear ID to generate new UUID (avoids conflict with soft-deleted tasks)
 		newTask.ParentID = "" // Clear parent, will set in second pass
 
 		created, err := be.CreateTask(ctx, newList.ID, &newTask)
@@ -1910,6 +1921,7 @@ func importSQLite(ctx context.Context, inputPath string) (*backend.List, []backe
 }
 
 // importJSON imports a list from a JSON file
+// Supports both new format (object with list_name and tasks) and legacy format (array of tasks)
 func importJSON(inputPath string) (*backend.List, []backend.Task, error) {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -1932,13 +1944,28 @@ func importJSON(inputPath string) (*backend.List, []backend.Task, error) {
 		Categories  string     `json:"categories"`
 	}
 
-	var taskList []taskJSON
-	if err := json.Unmarshal(data, &taskList); err != nil {
-		return nil, nil, err
+	type importData struct {
+		ListName string     `json:"list_name"`
+		Tasks    []taskJSON `json:"tasks"`
 	}
 
-	// Extract list name from filename
-	listName := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
+	var listName string
+	var taskList []taskJSON
+
+	// Try to parse as new format (object with list_name and tasks)
+	var newFormat importData
+	if err := json.Unmarshal(data, &newFormat); err == nil && newFormat.ListName != "" {
+		// New format with list metadata
+		listName = newFormat.ListName
+		taskList = newFormat.Tasks
+	} else {
+		// Try legacy format (array of tasks)
+		if err := json.Unmarshal(data, &taskList); err != nil {
+			return nil, nil, err
+		}
+		// Extract list name from filename for legacy format
+		listName = strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
+	}
 
 	tasks := make([]backend.Task, len(taskList))
 	for i, t := range taskList {
