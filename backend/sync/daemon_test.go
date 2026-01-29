@@ -757,13 +757,9 @@ default_backend: sqlite
 	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
 	testutil.AssertContains(t, statusOut, "running")
 
-	// Wait for daemon to auto-exit after idle timeout
-	// Note: In current implementation, daemon doesn't auto-exit on idle
-	// This test documents the expected behavior for when feature is implemented
-	testutil.WaitFor(t, 2*time.Second, func() bool {
-		statusOut, _, _ := cli.Execute("-y", "sync", "daemon", "status")
-		return strings.Contains(statusOut, "not running") || strings.Contains(statusOut, "running")
-	}, "daemon to handle idle timeout")
+	// Idle timeout is not yet implemented in the daemon.
+	// Skip until the feature is available to avoid a tautological assertion.
+	t.Skip("idle timeout not yet implemented in daemon")
 
 	// Cleanup: try to stop the daemon (may already be stopped)
 	cli.MustExecute("-y", "sync", "daemon", "stop")
@@ -1092,13 +1088,9 @@ default_backend: sqlite
 	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
 	testutil.AssertContains(t, statusOut, "running")
 
-	// Status should include heartbeat info
-	hasHeartbeatInfo := strings.Contains(statusOut, "heartbeat") ||
-		strings.Contains(statusOut, "Last heartbeat") ||
-		strings.Contains(statusOut, "healthy")
-	if !hasHeartbeatInfo {
-		t.Logf("Warning: Status output does not include heartbeat info. This may be expected if heartbeat display is not yet implemented. Output: %s", statusOut)
-	}
+	// Heartbeat display is not yet implemented.
+	// Skip until the feature is available to avoid a no-op assertion.
+	t.Skip("heartbeat display not yet implemented in daemon status")
 
 	// Cleanup
 	cli.MustExecute("-y", "sync", "daemon", "stop")
@@ -1369,12 +1361,8 @@ default_backend: sqlite
 	cli.MustExecute("-y", "Work", "add", "Task to test immediate return")
 	elapsed := time.Since(start)
 
-	// CLI should return quickly (under 100ms for local operation)
-	// Note: This is aspirational - current implementation may block
-	// This test documents expected behavior for when feature is implemented
+	// CLI should return quickly (under 1 second for local operation)
 	if elapsed > 1*time.Second {
-		t.Logf("CLI took %v to return (expected <100ms for local operation)", elapsed)
-		// Not failing the test since current implementation blocks
-		// TODO: Fail test when forked daemon is implemented
+		t.Errorf("CLI took %v to return, expected <1s for local operation", elapsed)
 	}
 }
