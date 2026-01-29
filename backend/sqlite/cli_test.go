@@ -2538,6 +2538,38 @@ func TestListImportDuplicateNameCLI(t *testing.T) {
 	}
 }
 
+// TestIssue43_ReimportAfterDeleteCLI verifies that importing tasks after deleting the list
+// succeeds even when the exported file contains UIDs that were soft-deleted.
+// Regression test for issue #43: Import fails with UNIQUE constraint when reimporting tasks.
+func TestIssue43_ReimportAfterDeleteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Step 1: Create a list with tasks
+	cli.MustExecute("-y", "list", "create", "DemoList")
+	cli.MustExecute("-y", "DemoList", "add", "Task 1")
+	cli.MustExecute("-y", "DemoList", "add", "Task 2")
+
+	// Step 2: Export the list
+	exportPath := cli.TmpDir() + "/export.json"
+	cli.MustExecute("-y", "list", "export", "DemoList", "--format", "json", "--output", exportPath)
+
+	// Step 3: Delete the list and its tasks (soft-delete)
+	cli.MustExecute("-y", "list", "delete", "DemoList")
+
+	// Step 4: Try to import the same file - should succeed, not fail with UNIQUE constraint
+	// The fix should generate new UIDs for imported tasks
+	stdout := cli.MustExecute("-y", "list", "import", exportPath)
+
+	// Verify import succeeded
+	testutil.AssertContains(t, stdout, "Imported")
+	testutil.AssertContains(t, stdout, "2") // 2 tasks
+
+	// Verify the tasks are actually visible
+	listOutput := cli.MustExecute("-y", "DemoList")
+	testutil.AssertContains(t, listOutput, "Task 1")
+	testutil.AssertContains(t, listOutput, "Task 2")
+}
+
 // =============================================================================
 // Database Maintenance Tests (039-database-maintenance)
 // =============================================================================

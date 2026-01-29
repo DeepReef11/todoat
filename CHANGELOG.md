@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Regression test for issue #43: reimport tasks after deleting list with soft-deleted UIDs
 - Background sync daemon with forked process architecture for async sync operations (#36, #39)
   - `todoat sync daemon start/stop/status/kill` commands
   - Daemon runs as separate process, CLI returns immediately after local operations
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `internal/daemon` package for background daemon process management
 
 ### Changed
+- Updated auto-sync daemon documentation status (feature now stable)
 - Enhanced CLI help text with task action documentation and usage examples
 - Sync operations can now be delegated to background daemon when enabled
 

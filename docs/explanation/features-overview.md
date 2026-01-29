@@ -147,7 +147,7 @@ This document provides a high-level summary of all features in todoat, organized
 | **Automatic Caching** | Each remote backend gets its own SQLite cache database | [Synchronization](synchronization.md#automatic-caching) |
 | **Offline Mode** | Queue operations when remote backend unavailable | [Synchronization](synchronization.md#offline-mode) |
 | **Manual Sync** | Trigger sync with `todoat sync` command | [Synchronization](synchronization.md#manual-sync) |
-| **Auto-Sync Daemon** | Background process for automatic syncing | 🚧 Being Redesigned | [Synchronization](synchronization.md#auto-sync-daemon) |
+| **Auto-Sync Daemon** | Background process for automatic syncing | [Synchronization](synchronization.md#auto-sync-daemon) |
 | **Conflict Resolution** | Handle conflicts with configurable strategies | [Synchronization](synchronization.md#conflict-resolution) |
 | **Server Wins Strategy** | Remote changes override local changes (default) | [Synchronization](synchronization.md#server-wins-strategy) |
 | **Local Wins Strategy** | Local changes override remote changes | [Synchronization](synchronization.md#local-wins-strategy) |
