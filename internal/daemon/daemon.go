@@ -299,13 +299,22 @@ func (d *Daemon) handleConnections() {
 	for {
 		conn, err := d.listener.Accept()
 		if err != nil {
-			// Check if listener was closed
+			// Check if listener was closed - use a non-blocking check first,
+			// then return on any error if stop was requested to avoid race
+			// conditions with cleanup() removing the log file
 			select {
 			case <-d.stopChan:
 				return
 			default:
+				// Double-check with a small timeout to handle race conditions
+				select {
+				case <-d.stopChan:
+					return
+				case <-time.After(1 * time.Millisecond):
+					// Not stopping, log the error
+					d.log("Accept error: %v", err)
+				}
 			}
-			d.log("Accept error: %v", err)
 			continue
 		}
 		go d.handleConnection(conn)
@@ -446,12 +455,29 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 }
 
 func (d *Daemon) cleanup() {
+	// Signal handleConnections to exit before closing the listener
+	// Use a non-blocking close to avoid panic if already closed
+	select {
+	case <-d.stopChan:
+		// Already closed
+	default:
+		close(d.stopChan)
+	}
+
 	if d.listener != nil {
 		_ = d.listener.Close()
 	}
+
+	// Log before removing any files to avoid race conditions where
+	// handleConnections() might recreate the log file after removal
+	d.log("Daemon stopped")
+
+	// Small delay to ensure handleConnections() has exited after listener.Close()
+	// This prevents the race where log() is called after files are removed
+	time.Sleep(10 * time.Millisecond)
+
 	_ = os.Remove(d.cfg.PIDPath)
 	_ = os.Remove(d.cfg.SocketPath)
-	d.log("Daemon stopped")
 	_ = os.Remove(d.cfg.LogPath)
 }
 
