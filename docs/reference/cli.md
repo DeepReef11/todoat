@@ -524,6 +524,7 @@ todoat sync daemon [command]
 | `start` | Start the sync daemon |
 | `status` | Show daemon status |
 | `stop` | Stop the sync daemon |
+| `kill` | Force kill the daemon (emergency) |
 
 #### sync daemon start
 
@@ -534,6 +535,14 @@ todoat sync daemon start [flags]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--interval` | int | 300 | Sync interval in seconds |
+
+#### sync daemon kill
+
+Force kill the sync daemon process. Use this for emergency termination if the daemon is hung.
+
+```bash
+todoat sync daemon kill
+```
 
 ### Examples
 
@@ -564,6 +573,9 @@ todoat sync daemon status
 
 # Stop background sync
 todoat sync daemon stop
+
+# Force kill if daemon is hung
+todoat sync daemon kill
 ```
 
 ## view

@@ -3991,3 +3991,48 @@ sync:
 		t.Errorf("tasks should NOT have backend_id='sqlite' when using named backends, but found: %v", tasks)
 	}
 }
+
+// TestConfigParsingErrorWarning verifies that invalid config files produce a warning
+// instead of silently falling back to defaults (Issue #38)
+func TestConfigParsingErrorWarning(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "data")
+	configDir := filepath.Join(tmpDir, "config")
+
+	// Create directories
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Create an invalid YAML config file
+	invalidConfig := `
+backends:
+  sqlite:
+    enabled: [invalid yaml structure
+default_backend: sqlite
+`
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(invalidConfig), 0644); err != nil {
+		t.Fatalf("failed to write invalid config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cfg := &Config{
+		DBPath:     filepath.Join(dataDir, "tasks.db"),
+		ConfigPath: configPath,
+		Stderr:     &stderr,
+	}
+
+	// Run a simple command that uses the config
+	exitCode := Execute([]string{"list", "show"}, &stdout, &stderr, cfg)
+
+	// Command should still work (fallback to defaults)
+	// but stderr should contain a warning about the invalid config
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Warning") || !strings.Contains(stderrOutput, "config") {
+		t.Errorf("expected warning about config parsing error in stderr, got: %q (exit code: %d)", stderrOutput, exitCode)
+	}
+}

@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -36,6 +37,7 @@ import (
 	"todoat/internal/cache"
 	"todoat/internal/config"
 	"todoat/internal/credentials"
+	"todoat/internal/daemon"
 	"todoat/internal/notification"
 	"todoat/internal/reminder"
 	"todoat/internal/tui"
@@ -74,10 +76,13 @@ type Config struct {
 	NotificationMock    bool   // Use mock executor for OS notifications (for testing)
 	// Daemon-related config fields (for testing)
 	DaemonPIDPath     string        // Path to daemon PID file
+	DaemonSocketPath  string        // Path to daemon Unix socket
 	DaemonLogPath     string        // Path to daemon log file
 	DaemonTestMode    bool          // Use in-process daemon for testing
 	DaemonInterval    time.Duration // Sync interval for daemon
 	DaemonOfflineMode bool          // Simulate offline mode for daemon
+	DaemonEnabled     bool          // Enable forked daemon (feature flag)
+	DaemonBinaryPath  string        // Path to binary for forked daemon (for testing)
 	// Migration-related config fields (for testing)
 	MigrateTargetDir      string // Directory for file-mock backend target
 	MigrateMockMode       bool   // Enable mock backends for testing
@@ -133,6 +138,13 @@ func validateAndNormalizeColor(color string) (string, error) {
 func Execute(args []string, stdout, stderr io.Writer, cfg *Config) int {
 	if cfg == nil {
 		cfg = &Config{}
+	}
+
+	// Handle daemon-mode: when invoked with --daemon-mode, run as forked daemon process
+	// This must be checked BEFORE any other initialization (Issue #39)
+	if isDaemonModeInvocation(args) {
+		runDaemonMode(args, stderr)
+		return 0 // Never reached - runDaemonMode calls os.Exit
 	}
 
 	// Wait for background sync operations to complete before returning (Issue #032)
@@ -2351,7 +2363,10 @@ func getDefaultDBPath() string {
 func getBackend(cfg *Config) (backend.TaskManager, error) {
 	// Load config (creates default if not exists) and check sync/auto-detect settings
 	// Use LoadWithRaw to get both structured config and raw map for custom backend support
-	appConfig, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
+	appConfig, rawConfig, configErr := config.LoadWithRaw(cfg.ConfigPath)
+	if configErr != nil {
+		warnConfigError(cfg, configErr)
+	}
 	loadSyncConfigFromAppConfig(cfg, appConfig)
 	loadAutoDetectConfig(cfg, appConfig)
 
@@ -2509,6 +2524,15 @@ func warnBackendFallback(cfg *Config, backendName string, reason string) {
 		stderr = os.Stderr
 	}
 	_, _ = fmt.Fprintf(stderr, "Warning: Default backend '%s' unavailable (%s). Using 'sqlite' instead.\n", backendName, reason)
+}
+
+// warnConfigError writes a warning message about config parsing errors to stderr
+func warnConfigError(cfg *Config, err error) {
+	stderr := cfg.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	_, _ = fmt.Fprintf(stderr, "Warning: Failed to parse config file (%v). Using default configuration.\n", err)
 }
 
 // createBackendWithSyncFallback implements the sync architecture for CLI operations.
@@ -2951,6 +2975,7 @@ type syncAwareBackend struct {
 // IMPORTANT: This uses doPullOnlySync instead of doSync to avoid:
 // 1. Processing pending push operations (those are handled by triggerAutoSync)
 // 2. Deleting local items that don't exist on remote (we only want to ADD/UPDATE from remote)
+// When daemon is enabled (Issue #36), sync is delegated to daemon via IPC.
 func (b *syncAwareBackend) triggerBackgroundPullSync() {
 	if b.cfg == nil {
 		return
@@ -2966,6 +2991,18 @@ func (b *syncAwareBackend) triggerBackgroundPullSync() {
 	offlineMode := appConfig.GetOfflineMode()
 	if offlineMode == "offline" {
 		return // Don't auto-sync in explicit offline mode
+	}
+
+	// Issue #36: If daemon is running, notify it to handle sync instead
+	pidPath := getDaemonPIDPath(b.cfg)
+	socketPath := getDaemonSocketPath(b.cfg)
+	if isDaemonFeatureEnabled(b.cfg) && daemon.IsRunning(pidPath, socketPath) {
+		client := daemon.NewClient(socketPath)
+		if err := client.Notify(); err == nil {
+			utils.Debugf("Notified daemon to sync (Issue #36)")
+			return // Daemon will handle sync
+		}
+		// If daemon notification failed, fall through to in-process sync
 	}
 
 	// Get the cooldown duration from config (default: 30s, minimum: 5s)
@@ -3006,6 +3043,7 @@ func (b *syncAwareBackend) triggerBackgroundPullSync() {
 // triggerAutoSync triggers an automatic sync if auto_sync_after_operation is enabled.
 // The sync runs in the background so operations return immediately (Issue #014).
 // The WaitGroup ensures sync completes before program exit (Issue #032).
+// When daemon is enabled (Issue #36), sync is delegated to daemon via IPC.
 func (b *syncAwareBackend) triggerAutoSync() {
 	if b.cfg == nil {
 		return
@@ -3021,6 +3059,18 @@ func (b *syncAwareBackend) triggerAutoSync() {
 	offlineMode := appConfig.GetOfflineMode()
 	if offlineMode == "offline" {
 		return // Don't auto-sync in explicit offline mode
+	}
+
+	// Issue #36: If daemon is running, notify it to handle sync instead
+	pidPath := getDaemonPIDPath(b.cfg)
+	socketPath := getDaemonSocketPath(b.cfg)
+	if isDaemonFeatureEnabled(b.cfg) && daemon.IsRunning(pidPath, socketPath) {
+		client := daemon.NewClient(socketPath)
+		if err := client.Notify(); err == nil {
+			utils.Debugf("Notified daemon to sync (Issue #36)")
+			return // Daemon will handle sync
+		}
+		// If daemon notification failed, fall through to in-process sync
 	}
 
 	// Check if another push sync is running - if so, skip (will be picked up later)
@@ -7625,6 +7675,7 @@ func newSyncDaemonCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	daemonCmd.AddCommand(newSyncDaemonStartCmd(stdout, stderr, cfg))
 	daemonCmd.AddCommand(newSyncDaemonStopCmd(stdout, stderr, cfg))
 	daemonCmd.AddCommand(newSyncDaemonStatusCmd(stdout, cfg))
+	daemonCmd.AddCommand(newSyncDaemonKillCmd(stdout, stderr, cfg))
 
 	return daemonCmd
 }
@@ -7695,9 +7746,103 @@ func newSyncDaemonStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	}
 }
 
+// newSyncDaemonKillCmd creates the 'sync daemon kill' subcommand
+func newSyncDaemonKillCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "kill",
+		Short: "Force kill the sync daemon",
+		Long:  "Force kill the sync daemon process. Use this for emergency termination if the daemon is hung.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			return doDaemonKill(cfg, stdout)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+}
+
+// doDaemonKill force kills the sync daemon
+func doDaemonKill(cfg *Config, stdout io.Writer) error {
+	pidPath := getDaemonPIDPath(cfg)
+	socketPath := getDaemonSocketPath(cfg)
+
+	// Read PID file
+	data, err := os.ReadFile(pidPath)
+	if err != nil {
+		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running (no PID file)")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
+		}
+		return nil
+	}
+
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		// Invalid PID file, clean up
+		_ = os.Remove(pidPath)
+		_ = os.Remove(socketPath)
+		_, _ = fmt.Fprintln(stdout, "Cleaned up invalid PID file")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+		}
+		return nil
+	}
+
+	// Find the process
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		// Process not found, clean up
+		_ = os.Remove(pidPath)
+		_ = os.Remove(socketPath)
+		_, _ = fmt.Fprintln(stdout, "Daemon process not found, cleaned up files")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+		}
+		return nil
+	}
+
+	// Try graceful shutdown first (SIGTERM)
+	if err := process.Signal(syscall.SIGTERM); err != nil {
+		// Process may already be dead, clean up
+		_ = os.Remove(pidPath)
+		_ = os.Remove(socketPath)
+		_, _ = fmt.Fprintln(stdout, "Daemon process already stopped, cleaned up files")
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+		}
+		return nil
+	}
+
+	// Wait briefly for graceful shutdown
+	time.Sleep(500 * time.Millisecond)
+
+	// Check if still alive, force kill with SIGKILL if needed
+	if err := process.Signal(syscall.Signal(0)); err == nil {
+		// Still alive, send SIGKILL
+		_ = process.Signal(syscall.SIGKILL)
+		_, _ = fmt.Fprintln(stdout, "Daemon forcefully terminated (SIGKILL)")
+	} else {
+		_, _ = fmt.Fprintln(stdout, "Daemon terminated gracefully")
+	}
+
+	// Clean up files
+	_ = os.Remove(pidPath)
+	_ = os.Remove(socketPath)
+
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
 // doDaemonStart starts the sync daemon
 func doDaemonStart(cfg *Config, stdout io.Writer) error {
 	pidPath := getDaemonPIDPath(cfg)
+	socketPath := getDaemonSocketPath(cfg)
 	logPath := getDaemonLogPath(cfg)
 
 	// Check if already running
@@ -7723,8 +7868,53 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 		return startTestDaemon(cfg, stdout, pidPath, logPath, interval)
 	}
 
-	// Real daemon would fork a background process here
-	// For now, we'll just write the PID file and report started
+	// Check if forked daemon is enabled via config
+	if isDaemonFeatureEnabled(cfg) {
+		// Get idle timeout from config or use default
+		idleTimeout := 5 * time.Minute // Default
+		if cfg.ConfigPath != "" {
+			appConfig, err := config.LoadFromPath(cfg.ConfigPath)
+			if err == nil && appConfig != nil {
+				idleTimeoutSec := appConfig.GetDaemonIdleTimeout()
+				if idleTimeoutSec > 0 {
+					idleTimeout = time.Duration(idleTimeoutSec) * time.Second
+				}
+			}
+		}
+
+		// Fork a real background daemon process
+		daemonCfg := &daemon.Config{
+			PIDPath:     pidPath,
+			SocketPath:  socketPath,
+			LogPath:     logPath,
+			Interval:    interval,
+			IdleTimeout: idleTimeout,
+			ConfigPath:  cfg.ConfigPath,
+			DBPath:      cfg.DBPath,
+			CachePath:   cfg.CachePath,
+			Executable:  cfg.DaemonBinaryPath, // For testing with pre-built binary
+		}
+
+		if err := daemon.Fork(daemonCfg); err != nil {
+			return fmt.Errorf("failed to start daemon: %w", err)
+		}
+
+		// Wait briefly for daemon to start
+		time.Sleep(100 * time.Millisecond)
+
+		// Verify daemon started
+		if !daemon.IsRunning(pidPath, socketPath) {
+			return fmt.Errorf("daemon failed to start")
+		}
+
+		_, _ = fmt.Fprintf(stdout, "Sync daemon started (interval: %v)\n", interval)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+		}
+		return nil
+	}
+
+	// Fallback to in-process daemon (legacy behavior)
 	return startTestDaemon(cfg, stdout, pidPath, logPath, interval)
 }
 
@@ -7859,6 +8049,7 @@ func appendToLogFile(logPath, entry string) error {
 // doDaemonStop stops the sync daemon
 func doDaemonStop(cfg *Config, stdout io.Writer) error {
 	pidPath := getDaemonPIDPath(cfg)
+	socketPath := getDaemonSocketPath(cfg)
 
 	if !isDaemonRunning(cfg, pidPath) {
 		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running")
@@ -7878,10 +8069,17 @@ func doDaemonStop(cfg *Config, stdout io.Writer) error {
 			_ = testDaemon.notifyMgr.Close()
 		}
 		testDaemon = nil
+	} else if isDaemonFeatureEnabled(cfg) {
+		// Stop forked daemon via IPC
+		client := daemon.NewClient(socketPath)
+		_ = client.Stop() // Ignore error: daemon may have already stopped or IPC failed
+		// Wait for daemon process to exit
+		time.Sleep(500 * time.Millisecond)
 	}
 
-	// Remove PID file
+	// Remove PID file and socket
 	_ = os.Remove(pidPath)
+	_ = os.Remove(socketPath)
 
 	_, _ = fmt.Fprintln(stdout, "Sync daemon stopped")
 	if cfg != nil && cfg.NoPrompt {
@@ -7893,6 +8091,7 @@ func doDaemonStop(cfg *Config, stdout io.Writer) error {
 // doDaemonStatus shows daemon status
 func doDaemonStatus(cfg *Config, stdout io.Writer) error {
 	pidPath := getDaemonPIDPath(cfg)
+	socketPath := getDaemonSocketPath(cfg)
 
 	if !isDaemonRunning(cfg, pidPath) {
 		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running")
@@ -7915,6 +8114,25 @@ func doDaemonStatus(cfg *Config, stdout io.Writer) error {
 		lastSync = testDaemon.lastSync
 		testDaemon.mu.RUnlock()
 		interval = testDaemon.interval
+	} else if isDaemonFeatureEnabled(cfg) {
+		// Get status via IPC
+		client := daemon.NewClient(socketPath)
+		resp, err := client.Status()
+		if err == nil && resp != nil {
+			syncCount = resp.SyncCount
+			if resp.LastSync != "" {
+				lastSync, _ = time.Parse(time.RFC3339, resp.LastSync)
+			}
+		}
+		// Read PID from file
+		data, err := os.ReadFile(pidPath)
+		if err == nil {
+			_, _ = fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &pid)
+		}
+		interval = getConfigDaemonInterval(cfg)
+		if interval == 0 {
+			interval = 5 * time.Minute
+		}
 	} else {
 		// Read PID from file
 		data, err := os.ReadFile(pidPath)
@@ -7967,6 +8185,136 @@ func getDaemonLogPath(cfg *Config) string {
 		dataDir = filepath.Join(homeDir, ".local", "share")
 	}
 	return filepath.Join(dataDir, "todoat", "daemon.log")
+}
+
+// getDaemonSocketPath returns the path to the daemon Unix socket
+func getDaemonSocketPath(cfg *Config) string {
+	if cfg.DaemonSocketPath != "" {
+		return cfg.DaemonSocketPath
+	}
+	return daemon.GetSocketPath()
+}
+
+// isDaemonModeInvocation checks if this invocation is the forked daemon process
+// This is detected by the presence of --daemon-mode flag in args
+func isDaemonModeInvocation(args []string) bool {
+	for _, arg := range args {
+		if arg == "--daemon-mode" {
+			return true
+		}
+	}
+	return false
+}
+
+// runDaemonMode runs the process as a background daemon
+// This function never returns - it calls os.Exit when done
+func runDaemonMode(args []string, stderr io.Writer) {
+	// Parse daemon-specific flags from args
+	var pidPath, socketPath, logPath, configPath, dbPath, cachePath string
+	var intervalSec, idleTimeoutSec int
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--daemon-pid-path":
+			if i+1 < len(args) {
+				pidPath = args[i+1]
+				i++
+			}
+		case "--daemon-socket-path":
+			if i+1 < len(args) {
+				socketPath = args[i+1]
+				i++
+			}
+		case "--daemon-log-path":
+			if i+1 < len(args) {
+				logPath = args[i+1]
+				i++
+			}
+		case "--config-path":
+			if i+1 < len(args) {
+				configPath = args[i+1]
+				i++
+			}
+		case "--db-path":
+			if i+1 < len(args) {
+				dbPath = args[i+1]
+				i++
+			}
+		case "--cache-path":
+			if i+1 < len(args) {
+				cachePath = args[i+1]
+				i++
+			}
+		case "--daemon-interval":
+			if i+1 < len(args) {
+				intervalSec, _ = strconv.Atoi(args[i+1])
+				i++
+			}
+		case "--daemon-idle-timeout":
+			if i+1 < len(args) {
+				idleTimeoutSec, _ = strconv.Atoi(args[i+1])
+				i++
+			}
+		}
+	}
+
+	// Set defaults
+	if intervalSec == 0 {
+		intervalSec = 300 // 5 minutes
+	}
+
+	// Create daemon config
+	daemonCfg := &daemon.Config{
+		PIDPath:           pidPath,
+		SocketPath:        socketPath,
+		LogPath:           logPath,
+		Interval:          time.Duration(intervalSec) * time.Second,
+		IdleTimeout:       time.Duration(idleTimeoutSec) * time.Second,
+		ConfigPath:        configPath,
+		DBPath:            dbPath,
+		CachePath:         cachePath,
+		HeartbeatInterval: 2 * time.Second, // Default heartbeat interval
+	}
+
+	// Create a config for doSync
+	syncCfg := &Config{
+		ConfigPath: configPath,
+		DBPath:     dbPath,
+		CachePath:  cachePath,
+	}
+
+	// Create sync function that calls doSync
+	syncFunc := func() error {
+		return doSync(syncCfg, io.Discard, io.Discard)
+	}
+
+	// Run the daemon (this blocks until daemon stops)
+	daemon.RunDaemonMode(context.Background(), daemonCfg, syncFunc)
+	// RunDaemonMode calls os.Exit, so we never reach here
+}
+
+// isDaemonFeatureEnabled checks if the forked daemon feature is enabled
+func isDaemonFeatureEnabled(cfg *Config) bool {
+	// Check cfg flag first
+	if cfg == nil {
+		return false
+	}
+	if cfg.DaemonEnabled {
+		return true
+	}
+
+	// Check config file for sync.daemon.enabled setting
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		return false
+	}
+
+	appConfig, err := config.LoadFromPath(configPath)
+	if err != nil || appConfig == nil {
+		return false
+	}
+
+	return appConfig.IsDaemonEnabled()
 }
 
 // isDaemonRunning checks if the daemon is currently running

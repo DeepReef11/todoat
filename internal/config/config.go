@@ -56,13 +56,21 @@ type TrashConfig struct {
 
 // SyncConfig holds synchronization settings
 type SyncConfig struct {
-	Enabled                bool   `yaml:"enabled"`
-	LocalBackend           string `yaml:"local_backend"`
-	ConflictResolution     string `yaml:"conflict_resolution"`
-	OfflineMode            string `yaml:"offline_mode"`              // auto, online, offline
-	ConnectivityTimeout    string `yaml:"connectivity_timeout"`      // e.g., "5s"
-	AutoSyncAfterOperation *bool  `yaml:"auto_sync_after_operation"` // sync immediately after operations (default: true when sync enabled)
-	BackgroundPullCooldown string `yaml:"background_pull_cooldown"`  // cooldown between background pull syncs (default: "30s", minimum: "5s")
+	Enabled                bool         `yaml:"enabled"`
+	LocalBackend           string       `yaml:"local_backend"`
+	ConflictResolution     string       `yaml:"conflict_resolution"`
+	OfflineMode            string       `yaml:"offline_mode"`              // auto, online, offline
+	ConnectivityTimeout    string       `yaml:"connectivity_timeout"`      // e.g., "5s"
+	AutoSyncAfterOperation *bool        `yaml:"auto_sync_after_operation"` // sync immediately after operations (default: true when sync enabled)
+	BackgroundPullCooldown string       `yaml:"background_pull_cooldown"`  // cooldown between background pull syncs (default: "30s", minimum: "5s")
+	Daemon                 DaemonConfig `yaml:"daemon"`
+}
+
+// DaemonConfig holds background daemon settings
+type DaemonConfig struct {
+	Enabled     bool `yaml:"enabled"`      // Enable forked daemon process (Issue #36)
+	Interval    int  `yaml:"interval"`     // Sync interval in seconds
+	IdleTimeout int  `yaml:"idle_timeout"` // Idle timeout in seconds before daemon exits
 }
 
 // BackendsConfig holds configuration for all backends
@@ -328,6 +336,30 @@ func (c *Config) GetAnalyticsRetentionDays() int {
 		return 365 // Default retention period
 	}
 	return c.Analytics.RetentionDays
+}
+
+// IsDaemonEnabled returns true if the forked daemon feature is enabled.
+// This enables the Issue #36 background daemon architecture.
+func (c *Config) IsDaemonEnabled() bool {
+	return c.Sync.Daemon.Enabled
+}
+
+// GetDaemonInterval returns the daemon sync interval in seconds.
+// Returns 300 (5 minutes) if not configured.
+func (c *Config) GetDaemonInterval() int {
+	if c.Sync.Daemon.Interval <= 0 {
+		return 300 // Default: 5 minutes
+	}
+	return c.Sync.Daemon.Interval
+}
+
+// GetDaemonIdleTimeout returns the daemon idle timeout in seconds.
+// Returns 300 (5 minutes) if not configured.
+func (c *Config) GetDaemonIdleTimeout() int {
+	if c.Sync.Daemon.IdleTimeout <= 0 {
+		return 300 // Default: 5 minutes
+	}
+	return c.Sync.Daemon.IdleTimeout
 }
 
 // LoadFromPath loads configuration from a specific path without creating defaults

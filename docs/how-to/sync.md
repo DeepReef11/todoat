@@ -112,6 +112,14 @@ todoat sync daemon stop
 
 Stops the background sync daemon.
 
+### Force Kill Daemon
+
+```bash
+todoat sync daemon kill
+```
+
+Force kills the daemon process. Use this for emergency termination if the daemon is hung and won't respond to the normal stop command.
+
 ## Sync Configuration Options
 
 ### enabled

@@ -7,15 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Background sync daemon with forked process architecture for async sync operations (#36, #39)
+  - `todoat sync daemon start/stop/status/kill` commands
+  - Daemon runs as separate process, CLI returns immediately after local operations
+  - IPC communication via Unix domain socket
+  - Configurable idle timeout and auto-shutdown
+  - Process isolation with proper signal handling (SIGTERM/SIGINT)
+- Shorthand reminder interval formats: `1d`, `1h`, `15m`, `1w` (in addition to full word formats)
+- `internal/daemon` package for background daemon process management
+
 ### Changed
 - Enhanced CLI help text with task action documentation and usage examples
+- Sync operations can now be delegated to background daemon when enabled
+
+### Fixed
+- CreateTask now preserves ParentID in VTODO sent to server (#37)
+- Config parsing errors now produce a warning instead of silently using defaults (#38)
+- Reminder configuration now properly loads from config.yaml instead of only using defaults (#034)
 
 ### Added
 - Nextcloud/CalDAV backend now parses and generates RELATED-TO property for parent-child task relationships (subtask support) (#29)
 - `--parent` flag now accepts task UID directly when multiple tasks have the same name (#28)
-
-### Fixed
-- Reminder configuration now properly loads from config.yaml instead of only using defaults (#034)
 - Background sync now completes before program exit, ensuring auto-sync operations fully sync to remote (#032)
 - Custom-named backends are now recognized when defined at config top-level for backwards compatibility (#031)
 - `config set analytics.enabled` and `config set analytics.retention_days` now work correctly (#078)

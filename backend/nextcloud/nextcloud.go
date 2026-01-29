@@ -301,6 +301,7 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 		ListID:      listID,
 		Created:     time.Now().UTC(),
 		Modified:    time.Now().UTC(),
+		ParentID:    task.ParentID,
 	}
 
 	if newTask.Status == "" {

@@ -306,6 +306,7 @@ func (s *Service) isTaskDisabled(taskID string) (bool, error) {
 // ParseInterval parses an interval string and returns the duration.
 // Returns (duration, isAtDueTime, error).
 // isAtDueTime is true for "at due time" which means trigger on the due date itself.
+// Supports both shorthand formats (1d, 1h, 15m, 1w) and full word formats (1 day, 1 hour, 15 minutes, 1 week).
 func ParseInterval(interval string) (time.Duration, bool, error) {
 	interval = strings.TrimSpace(strings.ToLower(interval))
 
@@ -313,8 +314,8 @@ func ParseInterval(interval string) (time.Duration, bool, error) {
 		return 0, true, nil
 	}
 
-	// Parse patterns like "1 day", "3 days", "1 hour", "2 hours", "1 week"
-	re := regexp.MustCompile(`^(\d+)\s*(day|days|hour|hours|week|weeks)$`)
+	// Parse patterns like "1d", "1h", "15m", "1w" (shorthand) and "1 day", "1 hour", "15 minutes", "1 week" (full word)
+	re := regexp.MustCompile(`^(\d+)\s*(d|day|days|h|hour|hours|m|min|minute|minutes|w|week|weeks)$`)
 	matches := re.FindStringSubmatch(interval)
 	if matches == nil {
 		return 0, false, fmt.Errorf("invalid interval format: %s", interval)
@@ -325,11 +326,13 @@ func ParseInterval(interval string) (time.Duration, bool, error) {
 
 	var duration time.Duration
 	switch unit {
-	case "day", "days":
+	case "d", "day", "days":
 		duration = time.Duration(num) * 24 * time.Hour
-	case "hour", "hours":
+	case "h", "hour", "hours":
 		duration = time.Duration(num) * time.Hour
-	case "week", "weeks":
+	case "m", "min", "minute", "minutes":
+		duration = time.Duration(num) * time.Minute
+	case "w", "week", "weeks":
 		duration = time.Duration(num) * 7 * 24 * time.Hour
 	default:
 		return 0, false, fmt.Errorf("unknown time unit: %s", unit)

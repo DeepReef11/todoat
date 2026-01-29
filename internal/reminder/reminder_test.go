@@ -663,11 +663,27 @@ func TestParseInterval(t *testing.T) {
 		isAtDue  bool
 		wantErr  bool
 	}{
+		// Full word formats
 		{"1 day", 24 * time.Hour, false, false},
 		{"3 days", 3 * 24 * time.Hour, false, false},
 		{"7 days", 7 * 24 * time.Hour, false, false},
 		{"1 week", 7 * 24 * time.Hour, false, false},
+		{"1 hour", time.Hour, false, false},
+		{"2 hours", 2 * time.Hour, false, false},
+		{"15 minutes", 15 * time.Minute, false, false},
+		{"30 minute", 30 * time.Minute, false, false},
+		// Shorthand formats (documented in docs/reference/configuration.md)
+		{"1d", 24 * time.Hour, false, false},
+		{"3d", 3 * 24 * time.Hour, false, false},
+		{"7d", 7 * 24 * time.Hour, false, false},
+		{"1w", 7 * 24 * time.Hour, false, false},
+		{"1h", time.Hour, false, false},
+		{"2h", 2 * time.Hour, false, false},
+		{"15m", 15 * time.Minute, false, false},
+		{"30m", 30 * time.Minute, false, false},
+		// At due time
 		{"at due time", 0, true, false},
+		// Invalid formats
 		{"invalid", 0, false, true},
 	}
 

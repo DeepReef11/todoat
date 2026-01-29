@@ -489,10 +489,12 @@ const (
 type DaemonCLITest struct {
 	*CLITest
 	pidFile        string
+	socketFile     string
 	logFile        string
 	configPath     string
 	daemonInterval time.Duration
 	offlineMode    bool
+	forkedMode     bool // True if testing forked daemon (not in-process)
 }
 
 // NewCLITestWithDaemon creates a new CLI test helper with daemon support.
@@ -503,6 +505,7 @@ func NewCLITestWithDaemon(t *testing.T) *DaemonCLITest {
 	dbPath := filepath.Join(tmpDir, "test.db")
 	notificationLogPath := filepath.Join(tmpDir, "notifications.log")
 	pidFile := filepath.Join(tmpDir, "daemon.pid")
+	socketFile := filepath.Join(tmpDir, "daemon.sock")
 	logFile := filepath.Join(tmpDir, "daemon.log")
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
@@ -519,6 +522,7 @@ func NewCLITestWithDaemon(t *testing.T) *DaemonCLITest {
 		NotificationLogPath: notificationLogPath,
 		NotificationMock:    true,
 		DaemonPIDPath:       pidFile,
+		DaemonSocketPath:    socketFile,
 		DaemonLogPath:       logFile,
 		DaemonTestMode:      true, // Use in-process daemon for testing
 		CachePath:           cachePath,
@@ -531,16 +535,107 @@ func NewCLITestWithDaemon(t *testing.T) *DaemonCLITest {
 			tmpDir: tmpDir,
 		},
 		pidFile:        pidFile,
+		socketFile:     socketFile,
 		logFile:        logFile,
 		configPath:     configPath,
 		daemonInterval: 5 * time.Minute,
 		offlineMode:    false,
+		forkedMode:     false,
+	}
+}
+
+// NewCLITestWithForkedDaemon creates a new CLI test helper for testing forked daemon.
+// Unlike NewCLITestWithDaemon, this does NOT use DaemonTestMode, so it tests the
+// actual forked process behavior.
+//
+// IMPORTANT: This test requires a pre-built todoat binary. If the binary is not
+// available, the test will be skipped. Set TODOAT_BINARY environment variable
+// to specify the binary path, or run `go build -o ./bin/todoat ./cmd/todoat` first.
+func NewCLITestWithForkedDaemon(t *testing.T) *DaemonCLITest {
+	t.Helper()
+
+	// Check for todoat binary - tests need a real binary to fork
+	binaryPath := os.Getenv("TODOAT_BINARY")
+	if binaryPath == "" {
+		// Try common locations
+		candidates := []string{
+			"./bin/todoat",
+			"./todoat",
+			"../bin/todoat",
+			"../../bin/todoat",
+		}
+		for _, candidate := range candidates {
+			if _, err := os.Stat(candidate); err == nil {
+				binaryPath = candidate
+				break
+			}
+		}
+	}
+
+	if binaryPath == "" {
+		t.Skip("Skipping forked daemon test: no todoat binary found. Build with: go build -o ./bin/todoat ./cmd/todoat")
+	}
+
+	// Convert to absolute path
+	absPath, err := filepath.Abs(binaryPath)
+	if err != nil {
+		t.Fatalf("failed to get absolute path for binary: %v", err)
+	}
+	binaryPath = absPath
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	notificationLogPath := filepath.Join(tmpDir, "notifications.log")
+	pidFile := filepath.Join(tmpDir, "daemon.pid")
+	socketFile := filepath.Join(tmpDir, "daemon.sock")
+	logFile := filepath.Join(tmpDir, "daemon.log")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	cachePath := filepath.Join(tmpDir, "cache", "lists.json")
+
+	// Write a minimal default config to ensure isolation
+	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	cfg := &cmd.Config{
+		NoPrompt:            true,
+		DBPath:              dbPath,
+		ConfigPath:          configPath,
+		NotificationLogPath: notificationLogPath,
+		NotificationMock:    true,
+		DaemonPIDPath:       pidFile,
+		DaemonSocketPath:    socketFile,
+		DaemonLogPath:       logFile,
+		DaemonTestMode:      false, // Use real forked daemon
+		DaemonEnabled:       true,  // Enable forked daemon feature
+		DaemonBinaryPath:    binaryPath,
+		CachePath:           cachePath,
+	}
+
+	return &DaemonCLITest{
+		CLITest: &CLITest{
+			t:      t,
+			cfg:    cfg,
+			tmpDir: tmpDir,
+		},
+		pidFile:        pidFile,
+		socketFile:     socketFile,
+		logFile:        logFile,
+		configPath:     configPath,
+		daemonInterval: 5 * time.Minute,
+		offlineMode:    false,
+		forkedMode:     true,
 	}
 }
 
 // PIDFilePath returns the path to the daemon PID file.
 func (d *DaemonCLITest) PIDFilePath() string {
 	return d.pidFile
+}
+
+// SocketPath returns the path to the daemon Unix socket file.
+func (d *DaemonCLITest) SocketPath() string {
+	return d.socketFile
 }
 
 // DaemonLogPath returns the path to the daemon log file.

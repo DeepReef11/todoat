@@ -1476,3 +1476,51 @@ func TestIssue029SyncPreservesParentChildRelationships(t *testing.T) {
 		t.Errorf("Expected child task ParentID to be 'parent-task-uid', got '%s'", childTask.ParentID)
 	}
 }
+
+// TestIssue037CreateTaskPreservesParentID tests that CreateTask properly includes
+// ParentID in the VTODO sent to the server (issue #37)
+func TestIssue037CreateTaskPreservesParentID(t *testing.T) {
+	server := newMockCalDAVServer("testuser", "testpass")
+	defer server.Close()
+	server.AddCalendar("tasks")
+
+	be, err := New(Config{
+		Host:      strings.TrimPrefix(server.URL(), "http://"),
+		Username:  "testuser",
+		Password:  "testpass",
+		AllowHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create backend: %v", err)
+	}
+	defer func() { _ = be.Close() }()
+
+	ctx := context.Background()
+
+	// Create a subtask with ParentID set
+	subtask := &backend.Task{
+		ID:       "subtask-uid-123",
+		Summary:  "This is a subtask",
+		Status:   backend.StatusNeedsAction,
+		ParentID: "parent-task-uid-456",
+	}
+
+	createdTask, err := be.CreateTask(ctx, "tasks", subtask)
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	// Verify the returned task has the ParentID preserved
+	if createdTask.ParentID != "parent-task-uid-456" {
+		t.Errorf("Expected returned task ParentID to be 'parent-task-uid-456', got '%s'", createdTask.ParentID)
+	}
+
+	// Check that the VTODO stored on the server contains RELATED-TO property
+	storedVTODO := server.calendars["tasks"].tasks["subtask-uid-123"]
+	if !strings.Contains(storedVTODO, "RELATED-TO") {
+		t.Errorf("VTODO should contain RELATED-TO property for subtask, got:\n%s", storedVTODO)
+	}
+	if !strings.Contains(storedVTODO, "parent-task-uid-456") {
+		t.Errorf("VTODO should contain parent UID 'parent-task-uid-456', got:\n%s", storedVTODO)
+	}
+}
