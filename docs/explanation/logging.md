@@ -60,6 +60,20 @@ utils.SetVerboseMode(true)
 | Warn | `Warn()` | `[WARN]` | Always |
 | Error | `Error()` | `[ERROR]` | Always |
 
+**Timestamp in Verbose Mode:**
+
+When verbose mode is enabled, all log lines are prefixed with the current local time in `HH:MM:SS` format. This helps correlate events and measure timing between operations (e.g., identifying sync latency).
+
+```
+14:48:39 [DEBUG] Verbose mode enabled
+14:48:39 [DEBUG] Sync enabled with default_backend: nextcloud-test
+14:48:39 [DEBUG] Background pull sync triggered
+14:48:41 [DEBUG] Using custom backend 'nextcloud-test' of type 'nextcloud'
+14:48:41 [DEBUG] Background auto-sync triggered
+```
+
+Non-verbose output (Info, Warn, Error) is not affected by this timestamp prefix — only `[DEBUG]` lines include the time.
+
 **Operation Logging:**
 ```go
 // Log operation start/end with automatic error handling
