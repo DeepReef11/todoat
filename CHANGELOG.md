@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - JSON reimport now generates new UUIDs to avoid conflicts with soft-deleted tasks (#43)
+- List restore now invalidates cache, ensuring restored list appears in `list` output (#42)
 
 ### Added
 - Regression test for issue #43: reimport tasks after deleting list with soft-deleted UIDs

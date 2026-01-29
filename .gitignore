@@ -6,7 +6,7 @@ bin/
 *.test
 todoat
 todoat_debug
-todoat_test
+todoat_test*
 .env
 *.json
 TestList.csv

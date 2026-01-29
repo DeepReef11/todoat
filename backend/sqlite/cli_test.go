@@ -1634,6 +1634,37 @@ func TestListRestoreSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "RestoreTest")
 }
 
+// TestListRestoreCacheInvalidation verifies that restoring a list invalidates the list cache (Issue #42)
+// This test ensures the list appears in `todoat list` output after restore.
+func TestListRestoreCacheInvalidationSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list
+	cli.MustExecute("-y", "list", "create", "CacheRestoreTest")
+	cli.MustExecute("-y", "CacheRestoreTest", "add", "Task 1")
+
+	// First list view - this populates the cache with the list
+	stdout := cli.MustExecute("-y", "list")
+	testutil.AssertContains(t, stdout, "CacheRestoreTest")
+
+	// Delete the list
+	cli.MustExecute("-y", "list", "delete", "CacheRestoreTest")
+
+	// Second list view - this updates the cache (list is now in trash, not visible)
+	stdout = cli.MustExecute("-y", "list")
+	testutil.AssertNotContains(t, stdout, "CacheRestoreTest")
+
+	// Restore the list from trash
+	stdout = cli.MustExecute("-y", "list", "trash", "restore", "CacheRestoreTest")
+	testutil.AssertContains(t, stdout, "CacheRestoreTest")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Third list view - without cache invalidation, this would show stale data
+	// The restored list MUST appear in the output
+	stdout = cli.MustExecute("-y", "list")
+	testutil.AssertContains(t, stdout, "CacheRestoreTest")
+}
+
 // TestListRestoreNotInTrash verifies that restoring an active list returns ERROR
 func TestListRestoreNotInTrashSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)

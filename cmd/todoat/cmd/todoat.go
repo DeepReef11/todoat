@@ -1281,6 +1281,9 @@ func doListRestore(ctx context.Context, be backend.TaskManager, name string, cfg
 		return err
 	}
 
+	// Invalidate cache after restoring a list (Issue #42)
+	invalidateListCache(cfg)
+
 	_, _ = fmt.Fprintf(stdout, "Restored list: %s\n", list.Name)
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
