@@ -254,6 +254,41 @@ func TestDaemonClientStatus(t *testing.T) {
 	time.Sleep(100 * time.Millisecond) // Wait for cleanup
 }
 
+// TestDaemonStatusReportsInterval verifies the daemon status response includes
+// the actual running interval, not a default (Issue #59).
+func TestDaemonStatusReportsInterval(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    120 * time.Second,
+		IdleTimeout: 0,
+	}
+
+	d := New(cfg)
+	d.SetSyncFunc(func() error { return nil })
+
+	go func() {
+		_ = d.Start()
+	}()
+	time.Sleep(100 * time.Millisecond) // Wait for daemon to start
+
+	client := NewClient(cfg.SocketPath)
+	resp, err := client.Status()
+	if err != nil {
+		t.Fatalf("status failed: %v", err)
+	}
+
+	if resp.IntervalSec != 120 {
+		t.Errorf("expected IntervalSec=120 in status response, got %d", resp.IntervalSec)
+	}
+
+	d.Stop()
+	time.Sleep(100 * time.Millisecond)
+}
+
 func TestDaemonIdleTimeout(t *testing.T) {
 	tmpDir := t.TempDir()
 

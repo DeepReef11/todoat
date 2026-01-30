@@ -8264,9 +8264,10 @@ func testDaemonHandleConn(d *daemonState, conn net.Conn) {
 	case "status":
 		d.mu.RLock()
 		resp = daemon.Response{
-			Status:    "ok",
-			Running:   d.running,
-			SyncCount: d.syncCount,
+			Status:      "ok",
+			Running:     d.running,
+			SyncCount:   d.syncCount,
+			IntervalSec: int(d.interval.Seconds()),
 		}
 		if !d.lastSync.IsZero() {
 			resp.LastSync = d.lastSync.Format(time.RFC3339)
@@ -8374,13 +8375,18 @@ func doDaemonStatus(cfg *Config, stdout io.Writer) error {
 			if resp.LastSync != "" {
 				lastSync, _ = time.Parse(time.RFC3339, resp.LastSync)
 			}
+			if resp.IntervalSec > 0 {
+				interval = time.Duration(resp.IntervalSec) * time.Second
+			}
 		}
 		// Read PID from file
 		data, err := os.ReadFile(pidPath)
 		if err == nil {
 			_, _ = fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &pid)
 		}
-		interval = getConfigDaemonInterval(cfg)
+		if interval == 0 {
+			interval = getConfigDaemonInterval(cfg)
+		}
 		if interval == 0 {
 			interval = 5 * time.Minute
 		}

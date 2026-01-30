@@ -46,6 +46,7 @@ type Response struct {
 	SyncCount     int                       `json:"sync_count,omitempty"`
 	LastSync      string                    `json:"last_sync,omitempty"`
 	Running       bool                      `json:"running"`
+	IntervalSec   int                       `json:"interval_sec,omitempty"`    // Actual running interval in seconds (Issue #59)
 	BackendStates map[string]*BackendStatus `json:"backend_states,omitempty"` // Per-backend status (Issue #40)
 }
 
@@ -346,10 +347,11 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 	case "status":
 		d.mu.RLock()
 		resp = Response{
-			Status:    "ok",
-			Running:   true,
-			SyncCount: d.syncCount,
-			LastSync:  d.lastSync.Format(time.RFC3339),
+			Status:      "ok",
+			Running:     true,
+			SyncCount:   d.syncCount,
+			LastSync:    d.lastSync.Format(time.RFC3339),
+			IntervalSec: int(d.cfg.Interval.Seconds()),
 		}
 		d.mu.RUnlock()
 
