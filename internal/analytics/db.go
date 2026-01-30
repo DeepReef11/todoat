@@ -44,6 +44,20 @@ func openDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open analytics database: %w", err)
 	}
 
+	// Use a single connection so pragmas apply consistently
+	db.SetMaxOpenConns(1)
+
+	// Enable WAL mode and busy timeout to prevent SQLITE_BUSY errors
+	// under concurrent read/write access
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set journal mode: %w", err)
+	}
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
+
 	// Initialize schema
 	if _, err := db.Exec(schema); err != nil {
 		_ = db.Close()

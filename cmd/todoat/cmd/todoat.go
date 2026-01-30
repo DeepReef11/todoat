@@ -11437,7 +11437,26 @@ func getAnalyticsDB(cfg *Config) (*sql.DB, error) {
 		return nil, fmt.Errorf("analytics database not found at %s (analytics may not be enabled)", dbPath)
 	}
 
-	return sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use a single connection so pragmas apply consistently
+	db.SetMaxOpenConns(1)
+
+	// Enable WAL mode and busy timeout to prevent SQLITE_BUSY errors
+	// under concurrent read/write access
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set journal mode: %w", err)
+	}
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
+
+	return db, nil
 }
 
 // parseSinceDuration parses a duration string like "7d", "30d", "1y" into seconds

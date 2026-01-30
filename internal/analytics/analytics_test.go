@@ -3,8 +3,10 @@ package analytics
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -305,6 +307,91 @@ func TestTracker_Subcommand(t *testing.T) {
 
 	if events[0].Subcommand != "view" {
 		t.Errorf("expected subcommand = 'view', got %q", events[0].Subcommand)
+	}
+}
+
+// TestTracker_ConcurrentReadWrite verifies no SQLITE_BUSY errors under concurrent access
+func TestTracker_ConcurrentReadWrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "analytics.db")
+
+	tracker, err := NewTracker(dbPath, true)
+	if err != nil {
+		t.Fatalf("NewTracker() error = %v", err)
+	}
+	defer func() { _ = tracker.Close() }()
+
+	// Seed some initial data
+	for i := 0; i < 10; i++ {
+		_, err := tracker.db.Exec(`
+			INSERT INTO events (timestamp, command, backend, success, duration_ms)
+			VALUES (?, 'seed', 'sqlite', 1, 100)
+		`, time.Now().Unix())
+		if err != nil {
+			t.Fatalf("failed to seed event: %v", err)
+		}
+	}
+
+	// Simulate concurrent writes (like TrackCommand goroutines) and reads (like analytics stats)
+	var wg sync.WaitGroup
+	errCh := make(chan error, 200)
+
+	// Spawn writers that simulate async analytics event logging
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				_, err := tracker.db.Exec(`
+					INSERT INTO events (timestamp, command, backend, success, duration_ms)
+					VALUES (?, ?, 'sqlite', 1, 50)
+				`, time.Now().Unix(), "write_cmd")
+				if err != nil {
+					errCh <- fmt.Errorf("write goroutine %d iter %d: %w", n, j, err)
+					return
+				}
+			}
+		}(i)
+	}
+
+	// Spawn readers that simulate analytics stats queries
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				rows, err := tracker.db.Query(`
+					SELECT command, COUNT(*) as total, SUM(success) as successful
+					FROM events
+					GROUP BY command
+					ORDER BY total DESC
+				`)
+				if err != nil {
+					errCh <- fmt.Errorf("read goroutine %d iter %d: %w", n, j, err)
+					return
+				}
+				_ = rows.Close()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	var errs []error
+	for err := range errCh {
+		errs = append(errs, err)
+	}
+
+	if len(errs) > 0 {
+		t.Errorf("concurrent read/write produced %d errors (expected 0):", len(errs))
+		for i, err := range errs {
+			if i >= 5 {
+				t.Errorf("  ... and %d more", len(errs)-5)
+				break
+			}
+			t.Errorf("  %v", err)
+		}
 	}
 }
 
