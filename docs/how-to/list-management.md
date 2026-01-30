@@ -160,14 +160,44 @@ todoat -y list delete "Temp List"
 ```bash
 # List all lists as JSON
 todoat --json list
+
+# List info as JSON
+todoat --json list info "Work Tasks"
+
+# View trash as JSON
+todoat --json list trash
 ```
 
+**List all lists:**
 ```json
 {
   "lists": [
     {"id": "abc-123", "name": "Work Tasks", "task_count": 12, "color": "#0066cc"},
     {"id": "def-456", "name": "Personal", "task_count": 5, "color": "#ff5733"}
   ],
+  "result": "INFO_ONLY"
+}
+```
+
+**List info:**
+```json
+{
+  "name": "Work Tasks",
+  "id": "abc-123",
+  "color": "#0066cc",
+  "description": "All work-related tasks",
+  "tasks": 12,
+  "result": "INFO_ONLY"
+}
+```
+
+**Trash:**
+```json
+{
+  "lists": [
+    {"name": "Old Project", "id": "xyz-789", "deleted_at": "2026-01-15T10:30:00Z"}
+  ],
+  "purged_count": 0,
   "result": "INFO_ONLY"
 }
 ```

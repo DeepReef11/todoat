@@ -137,6 +137,7 @@ fields:
 | `contains` | String contains | `summary contains meeting` |
 | `in` | Value in list | `tags in [work, urgent]` |
 | `not_in` | Not in list | `status not_in [DONE, CANCELLED]` |
+| `regex` | Regex pattern match | `summary regex ^Project` |
 
 ### Date Filters
 

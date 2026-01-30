@@ -114,7 +114,7 @@ export TODOAT_MSTODO_CLIENT_SECRET="xxx"
 export TODOAT_MSTODO_REFRESH_TOKEN="xxx"
 ```
 
-Environment variables take priority over the system keyring.
+Environment variables are used as a fallback when the system keyring has no matching entry.
 
 ## Credential Resolution Order
 

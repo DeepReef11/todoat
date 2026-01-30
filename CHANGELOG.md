@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- File watcher for real-time sync triggers with debouncing and smart timing (#41)
+  - `internal/watcher` package using `fsnotify` for file system monitoring
+  - Config fields: `sync.daemon.file_watcher`, `sync.daemon.smart_timing`, `sync.daemon.debounce_ms`
+  - Defers sync during active editing sessions (quiet period detection)
+- `regex` filter operator for views (e.g., `summary regex ^Project`)
+- JSON output support for `list info`, `list trash`, `sync status`, `reminder list`, `reminder status`
+- Documented `list info`, `list stats`, and `list vacuum` commands in CLI reference
 - How-to guide for analytics (viewing stats, backend performance, errors, configuration)
 - How-to guide for credential management (keyring, environment variables, rotation)
 - How-to guide for migration between backends (migrate commands, supported backends, safe migration steps)
@@ -16,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed broken relative link in backend testing setup doc (pointed to `backends.md` instead of `../explanation/backends.md`)
 
 ### Changed
+- Clarified credential resolution order: environment variables are used as fallback when keyring has no entry
 - Expanded sync daemon documentation with architecture details, IPC behavior, and state file locations
 - Updated notification configuration docs to reflect actual behavior (reminder-controlled, not separate config block)
 - Clarified trash retention default value (`30` days) in configuration reference

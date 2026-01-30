@@ -71,6 +71,9 @@ type DaemonConfig struct {
 	Enabled     bool `yaml:"enabled"`      // Enable forked daemon process (Issue #36)
 	Interval    int  `yaml:"interval"`     // Sync interval in seconds
 	IdleTimeout int  `yaml:"idle_timeout"` // Idle timeout in seconds before daemon exits
+	FileWatcher bool `yaml:"file_watcher"` // Enable file watcher for real-time sync triggers (Issue #41)
+	SmartTiming bool `yaml:"smart_timing"` // Enable smart timing to avoid sync during active editing (Issue #41)
+	DebounceMs  int  `yaml:"debounce_ms"`  // Debounce duration in milliseconds (Issue #41)
 }
 
 // BackendsConfig holds configuration for all backends
@@ -360,6 +363,25 @@ func (c *Config) GetDaemonIdleTimeout() int {
 		return 300 // Default: 5 minutes
 	}
 	return c.Sync.Daemon.IdleTimeout
+}
+
+// IsFileWatcherEnabled returns true if the file watcher is enabled for the daemon.
+func (c *Config) IsFileWatcherEnabled() bool {
+	return c.Sync.Daemon.FileWatcher
+}
+
+// IsSmartTimingEnabled returns true if smart timing is enabled for the daemon.
+func (c *Config) IsSmartTimingEnabled() bool {
+	return c.Sync.Daemon.SmartTiming
+}
+
+// GetDaemonDebounceMs returns the debounce duration in milliseconds.
+// Returns 1000 (1 second) if not configured.
+func (c *Config) GetDaemonDebounceMs() int {
+	if c.Sync.Daemon.DebounceMs <= 0 {
+		return 1000 // Default: 1 second
+	}
+	return c.Sync.Daemon.DebounceMs
 }
 
 // LoadFromPath loads configuration from a specific path without creating defaults

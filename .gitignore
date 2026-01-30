@@ -10,6 +10,7 @@ todoat_test*
 .env
 *.json
 TestList.csv
+Work Tasks.*
 coverage*.out
 tasks.txt
 test-output.md

@@ -50,6 +50,40 @@ todoat reminder status
 
 Shows the current reminder configuration and status.
 
+### JSON Output
+
+All reminder query commands support `--json` output:
+
+```bash
+# Upcoming reminders as JSON
+todoat --json reminder list
+
+# Reminder status as JSON
+todoat --json reminder status
+```
+
+**Reminder list:**
+```json
+{
+  "reminders": [
+    {"summary": "Submit report", "due_date": "2026-01-31"},
+    {"summary": "Team meeting", "due_date": "2026-02-01"}
+  ],
+  "result": "INFO_ONLY"
+}
+```
+
+**Reminder status:**
+```json
+{
+  "enabled": true,
+  "intervals": ["1d", "at due time"],
+  "os_notification": true,
+  "log_notification": true,
+  "result": "INFO_ONLY"
+}
+```
+
 ## Configuration
 
 Configure reminders in `~/.config/todoat/config.yaml`:

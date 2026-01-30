@@ -43,6 +43,27 @@ Shows:
 - Pending operations count
 - Current sync state per backend
 
+For JSON output:
+
+```bash
+todoat --json sync status
+```
+
+```json
+{
+  "offline_mode": "auto",
+  "backends": [
+    {
+      "name": "nextcloud",
+      "last_sync": "2026-01-30 10:15:00",
+      "pending_operations": 2,
+      "status": "Configured"
+    }
+  ],
+  "result": "INFO_ONLY"
+}
+```
+
 ### View Sync Queue
 
 ```bash

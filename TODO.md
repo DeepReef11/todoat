@@ -276,3 +276,17 @@ The entire "Current Implementation Status", "Current Background Sync Patterns", 
 
 **Asked**: 2026-01-30
 **Status**: unanswered
+
+### [FEAT-018] What is the design intent for the file watcher daemon feature?
+
+**Context**: File watcher feature exists in code (`internal/watcher/watcher.go`, config fields `sync.daemon.file_watcher`, `sync.daemon.smart_timing`, `sync.daemon.debounce_ms` in `internal/config/config.go`) but is not documented in `docs/explanation/`. The explanation doc `docs/explanation/synchronization.md` only mentions "File watcher for real-time sync triggers" as a bullet point under "Future Auto-Sync Plans". The feature adds `fsnotify`-based file watching to trigger sync when local cache files change, with smart timing to avoid syncing during active editing and configurable debounce. Need to understand the design rationale before creating user-facing documentation.
+
+**Options**:
+- [ ] Add file watcher section to docs/explanation/synchronization.md - Feature is part of sync, update the "Future Plans" section to reflect implementation
+- [ ] Create separate docs/explanation/file-watcher.md - Feature is complex enough to warrant its own explanation doc
+- [ ] Wait until committed - Feature code is currently uncommitted, document after merge
+
+**Impact**: Blocks user-facing documentation for file watcher config options and daemon behavior. Currently the config fields `file_watcher`, `smart_timing`, `debounce_ms` exist but are undocumented.
+
+**Asked**: 2026-01-30
+**Status**: unanswered

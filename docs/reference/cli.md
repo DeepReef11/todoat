@@ -288,6 +288,16 @@ todoat list import [file] [flags]
 |------|------|-------------|
 | `--format` | string | Import format (auto-detect from extension if not specified) |
 
+### list info
+
+Display detailed information about a task list.
+
+```bash
+todoat list info [name] [flags]
+```
+
+Shows list name, description, color, task count, and creation date.
+
 ### list trash
 
 View and manage deleted lists.
@@ -300,6 +310,26 @@ todoat list trash [command]
 |------------|-------------|
 | `restore` | Restore a list from trash |
 | `purge` | Permanently delete a list from trash |
+
+### list stats
+
+Show database statistics.
+
+```bash
+todoat list stats [name] [flags]
+```
+
+Displays task counts, status breakdown, and storage usage. Optionally specify a list name to show stats for that list only.
+
+### list vacuum
+
+Compact the database.
+
+```bash
+todoat list vacuum [flags]
+```
+
+Runs SQLite VACUUM to reclaim space from deleted data and optimize the database file.
 
 ### Examples
 
@@ -333,6 +363,10 @@ todoat list export MyList --format ical --output tasks.ics
 
 # Import from file
 todoat list import tasks.json
+
+# JSON output for list info and trash
+todoat --json list info "Work"
+todoat --json list trash
 ```
 
 ## analytics
@@ -566,6 +600,9 @@ todoat sync
 # Show sync status
 todoat sync status
 
+# Show sync status as JSON
+todoat --json sync status
+
 # View pending operations
 todoat sync queue
 
@@ -664,8 +701,8 @@ todoat credentials [command]
 | `list` | List all backends with credential status |
 | `get <backend> <username>` | Retrieve credentials and show source |
 | `set <backend> <username>` | Store credentials in system keyring |
-| `update <backend> <username>` | Update existing credentials |
-| `delete <backend> <username>` | Remove credentials from keyring |
+| `update <backend> <username>` | Update existing credentials in system keyring |
+| `delete <backend> <username>` | Remove credentials from system keyring |
 
 ### credentials set
 
@@ -806,6 +843,16 @@ todoat reminder check
 
 # Dismiss a reminder
 todoat reminder dismiss "Meeting prep"
+
+# Disable reminders for a task
+todoat reminder disable "Daily standup"
+
+# Check reminder configuration
+todoat reminder status
+
+# JSON output for reminder list and status
+todoat --json reminder list
+todoat --json reminder status
 ```
 
 ## notification
