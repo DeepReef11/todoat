@@ -160,3 +160,51 @@ _No documentation tasks pending._
 **Asked**: 2026-01-29
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
 
+### [FEAT-011] docs/explanation/background-deamon.md is critically outdated and needs rewrite
+
+**Context**: The "Current todoat Implementation Status" table (lines 42-49) and subsequent sections in `docs/explanation/background-deamon.md` describe the daemon as having:
+- "In-process goroutine only" (Daemon process)
+- "None - single process" (IPC/Socket)
+- "CLI-driven background goroutines" (Sync mechanism)
+- "Single backend sync only" (Multi-backend)
+
+However, the actual code in `internal/daemon/daemon.go` has a fully implemented:
+- **Forked process** via `Fork()` using `exec.Command` with `Setsid: true`
+- **Unix domain socket IPC** with JSON message protocol (notify, status, stop)
+- **Daemon-driven sync loop** with `time.NewTicker`
+- **Multi-backend support** with per-backend intervals and failure isolation
+- **Client library** (`daemon.Client`) with `Notify()`, `Status()`, `Stop()` methods
+
+Additionally, line 373 states "There is no `todoat daemon start` command" but `todoat sync daemon start` exists and works.
+
+The entire "Current Implementation Status", "Current Background Sync Patterns", "No Unix Socket Infrastructure", and "Conflicts with Existing Implementation" sections describe a pre-implementation state that no longer exists.
+
+**Options**:
+- [ ] Rewrite the explanation doc to match current implementation - Remove outdated status table, update all code examples and descriptions to reflect real forked process + IPC architecture
+- [ ] Keep as historical context with clear "OUTDATED" markers - Preserve the design evolution but clearly mark which sections are superseded
+
+**Impact**: The outdated explanation doc blocks accurate user-facing documentation. The how-to/sync.md has been updated with correct daemon behavior, but the explanation doc still contradicts the actual implementation.
+
+**Asked**: 2026-01-29
+**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+
+### [UX-012] Should notification configuration be user-configurable via config.yaml?
+
+**Context**: The explanation doc `docs/explanation/notification-manager.md` describes a `notification:` YAML config block with options like `os_notification.enabled`, `os_notification.on_sync_error`, `log_notification.path`, `log_notification.max_size_mb`, etc. However, the main `Config` struct in `internal/config/config.go` has no `Notification` field. The notification system's config is hardcoded in `cmd/todoat/cmd/todoat.go` (lines 7556-7570) with all channels always enabled. Users cannot currently configure notification behavior through config.yaml — only reminder delivery channels are configurable via `reminder.os_notification` and `reminder.log_notification`.
+
+**Current documentation says**: "Configure desktop and log notifications" with a `notification:` YAML block.
+
+**Missing details**:
+- [x] Config file options (`notification:` block not in Config struct)
+- [ ] CLI flags/commands (notification commands work correctly)
+
+**Options**:
+- [ ] Add `notification` config to Config struct - Implement the config described in explanation doc
+- [ ] Update explanation doc - Remove the `notification:` config block, document that notification channels are always enabled and controlled only through reminder config
+- [ ] Keep as internal - Notification config is internal, reminder config controls user-facing notification preferences
+
+**Impact**: Blocks accurate documentation of notification configuration. Users may try to add `notification:` to config.yaml based on explanation doc.
+
+**Asked**: 2026-01-29
+**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+

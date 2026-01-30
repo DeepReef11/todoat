@@ -138,7 +138,7 @@ Restores the default configuration. Requires confirmation.
 | `sync.daemon.enabled` | bool | Enable background sync daemon (default: `false`) |
 | `sync.daemon.interval` | int | Daemon sync interval in seconds (default: `300`) |
 | `sync.daemon.idle_timeout` | int | Seconds of idle time before daemon exits (default: `300`) |
-| `trash.retention_days` | int | Days to keep deleted items (0 = forever) |
+| `trash.retention_days` | int | Days to keep deleted items (default: `30`, 0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `true`) |
 | `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |
 | `reminder.enabled` | bool | Enable task reminder notifications (default: `true`) |
@@ -158,6 +158,15 @@ analytics:
 
 Analytics data is stored locally at `~/.config/todoat/analytics.db` and is never transmitted. See [Analytics](../explanation/analytics.md) for details.
 
+### Environment Variable Override
+
+Override the config file setting with the `TODOAT_ANALYTICS_ENABLED` environment variable:
+
+```bash
+# Disable analytics regardless of config file
+export TODOAT_ANALYTICS_ENABLED=false
+```
+
 ### View Analytics Data
 
 ```bash
@@ -174,21 +183,9 @@ todoat analytics backends
 todoat analytics errors
 ```
 
-## Notification Configuration
+## Notification Commands
 
-Configure desktop and log notifications for sync events:
-
-```yaml
-notification:
-  enabled: true
-  os_notification:
-    enabled: true
-    on_sync_error: true     # Notify on sync failures
-    on_conflict: true       # Notify on sync conflicts
-  log_notification:
-    enabled: true
-    path: "~/.local/share/todoat/notifications.log"
-```
+todoat provides notification commands for managing the notification log and testing the notification system. Notification behavior is controlled by the reminder configuration (see [Reminder Configuration](#reminder-configuration) above).
 
 ### Test Notifications
 
@@ -206,6 +203,8 @@ todoat notification log
 # Clear notification log
 todoat notification log clear
 ```
+
+The notification log is stored at `~/.local/share/todoat/notifications.log`.
 
 ## Reminder Configuration
 

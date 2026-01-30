@@ -184,7 +184,6 @@ Suggestion: Run 'todoat credentials set todoist token --prompt' to configure cre
 ```yaml
 sync:
   enabled: true
-  interval: 5m
 ```
 
 ## Debugging

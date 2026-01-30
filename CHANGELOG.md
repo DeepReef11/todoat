@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Expanded sync daemon documentation with architecture details, IPC behavior, and state file locations
+- Updated notification configuration docs to reflect actual behavior (reminder-controlled, not separate config block)
+- Clarified trash retention default value (`30` days) in configuration reference
+- Removed outdated `ui: cli` config entries from getting-started tutorial examples
+- Removed incorrect `interval: 5m` from sync config example in error reference
+
 ### Added
 - IPC notify support in daemon sync loop for immediate sync triggering via Unix socket
 - Documented daemon configuration options (`sync.daemon.enabled`, `interval`, `idle_timeout`)

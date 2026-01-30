@@ -79,7 +79,18 @@ Manually resolve a specific conflict using the specified strategy.
 
 ## Background Sync Daemon
 
-Run sync automatically in the background:
+The sync daemon runs as a separate background process that periodically synchronizes tasks with remote backends. It uses a forked process architecture with Unix socket IPC, so the daemon continues running independently of the CLI.
+
+### How the Daemon Works
+
+When you start the daemon:
+1. A new process is forked and detached from the terminal
+2. The daemon creates a PID file and Unix domain socket for communication
+3. It periodically syncs all configured remote backends at the configured interval
+4. Normal CLI operations (add, update, delete) send an IPC notification to the daemon, triggering an immediate sync
+5. If idle for the configured timeout period, the daemon exits automatically
+
+The daemon syncs all configured remote backends with per-backend failure isolation, so a problem with one backend does not block syncing of others.
 
 ### Start Daemon
 
@@ -102,7 +113,7 @@ todoat sync daemon start --interval 60
 todoat sync daemon status
 ```
 
-Shows if daemon is running and last sync time.
+Shows if the daemon is running, the number of syncs performed, and the last sync time.
 
 ### Stop Daemon
 
@@ -110,7 +121,7 @@ Shows if daemon is running and last sync time.
 todoat sync daemon stop
 ```
 
-Stops the background sync daemon.
+Sends a stop request to the daemon via IPC. The daemon finishes any in-progress sync and exits gracefully.
 
 ### Force Kill Daemon
 
@@ -118,7 +129,7 @@ Stops the background sync daemon.
 todoat sync daemon kill
 ```
 
-Force kills the daemon process. Use this for emergency termination if the daemon is hung and won't respond to the normal stop command.
+Force kills the daemon process. Use this for emergency termination if the daemon is hung and won't respond to the normal stop command. This sends SIGTERM, waits briefly, then sends SIGKILL if needed, and cleans up the PID file and socket.
 
 ### Daemon Configuration
 
@@ -133,6 +144,10 @@ sync:
 ```
 
 The `--interval` flag on `sync daemon start` overrides the `interval` config value for that session.
+
+The daemon stores its state files at:
+- **PID file**: `$XDG_RUNTIME_DIR/todoat/daemon.pid` (or `/tmp/todoat-daemon.pid`)
+- **Socket**: `$XDG_RUNTIME_DIR/todoat/daemon.sock` (or `/tmp/todoat-daemon.sock`)
 
 ## Sync Configuration Options
 

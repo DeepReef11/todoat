@@ -47,7 +47,6 @@ backends:
     path: ""  # Uses default location
 
 default_backend: sqlite
-ui: cli
 ```
 
 ### Nextcloud Configuration
@@ -63,7 +62,6 @@ backends:
     username: "myuser"
 
 default_backend: nextcloud
-ui: cli
 ```
 
 Store your password securely:
@@ -84,7 +82,6 @@ backends:
     username: "token"
 
 default_backend: todoist
-ui: cli
 ```
 
 Store your API token:
