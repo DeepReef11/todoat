@@ -1,13 +1,12 @@
 # internal/utils Package Documentation
 
-The `internal/utils` package provides common utility functions used throughout the gosynctasks application, including logging, output formatting, error handling, input validation, and user interaction.
+The `internal/utils` package provides common utility functions used throughout the todoat application, including logging, error handling, input validation, and user interaction.
 
 ## Overview
 
 | File | Purpose |
 |------|---------|
 | `logger.go` | Leveled logging with verbose mode and background logging |
-| `output.go` | JSON/YAML marshaling and output |
 | `errors.go` | Error types with user-friendly suggestions |
 | `validation.go` | Input validation (priority, dates) |
 | `inputs.go` | User input handling and interactive prompts |
@@ -60,33 +59,6 @@ utils.SetVerboseMode(true)
 | Warn | `Warn()` | `[WARN]` | Always |
 | Error | `Error()` | `[ERROR]` | Always |
 
-**Timestamp in Verbose Mode:**
-
-When verbose mode is enabled, all log lines are prefixed with the current local time in `HH:MM:SS` format. This helps correlate events and measure timing between operations (e.g., identifying sync latency).
-
-```
-14:48:39 [DEBUG] Verbose mode enabled
-14:48:39 [DEBUG] Sync enabled with default_backend: nextcloud-test
-14:48:39 [DEBUG] Background pull sync triggered
-14:48:41 [DEBUG] Using custom backend 'nextcloud-test' of type 'nextcloud'
-14:48:41 [DEBUG] Background auto-sync triggered
-```
-
-Non-verbose output (Info, Warn, Error) is not affected by this timestamp prefix — only `[DEBUG]` lines include the time.
-
-**Operation Logging:**
-```go
-// Log operation start/end with automatic error handling
-err := utils.LogOperation("fetching tasks", func() error {
-    return backend.GetTasks()
-})
-
-// With formatted message
-err := utils.LogOperationf("syncing list %s", func() error {
-    return syncList(listName)
-}, listName)
-```
-
 ### BackgroundLogger (Background Process Logger)
 
 Specialized logger for background sync processes that writes to a PID-specific temp file.
@@ -107,7 +79,7 @@ type BackgroundLogger struct {
 const ENABLE_BACKGROUND_LOGGING = true
 ```
 
-**Log File Location:** `/tmp/gosynctasks-_internal_background_sync-{PID}.log`
+**Log File Location:** `/tmp/todoat-{PID}.log`
 
 **Usage:**
 ```go
@@ -139,40 +111,6 @@ if bl.IsEnabled() {
 | `Close()` | Close log file |
 | `GetLogPath()` | Return log file path |
 | `IsEnabled()` | Check if logging is enabled |
-
----
-
-## output.go - Output Formatting
-
-Functions for marshaling and outputting data in JSON/YAML formats.
-
-**Functions:**
-```go
-// Output to stdout
-utils.OutputJSON(data)  // Prints indented JSON
-utils.OutputYAML(data)  // Prints YAML
-
-// Get bytes (for further processing)
-jsonBytes, err := utils.MarshalJSON(data)
-yamlBytes, err := utils.MarshalYAML(data)
-```
-
-**Example:**
-```go
-tasks := []Task{{Summary: "Task 1"}, {Summary: "Task 2"}}
-
-// Output as JSON
-utils.OutputJSON(tasks)
-// Output:
-// [
-//   {
-//     "summary": "Task 1"
-//   },
-//   {
-//     "summary": "Task 2"
-//   }
-// ]
-```
 
 ---
 
@@ -211,8 +149,6 @@ Suggestion: <helpful suggestion>
 | `ErrInvalidStatus(status, valid)` | Unknown status value |
 | `ErrCredentialsNotFound(backend, user)` | Keyring/env credentials missing |
 | `ErrAuthenticationFailed(backend)` | Auth rejected by server |
-| `ErrConfigFileNotFound(path)` | Config file missing |
-| `ErrInvalidConfig(field, reason)` | Config validation failed |
 
 **Usage:**
 ```go
@@ -223,7 +159,7 @@ if task == nil {
 
 // Wrap existing error with suggestion
 if err != nil {
-    return utils.WrapWithSuggestion(err, "Try running 'gosynctasks sync' first")
+    return utils.WrapWithSuggestion(err, "Try running 'todoat sync' first")
 }
 ```
 
@@ -320,7 +256,6 @@ if confirmed {
 
 Each file has corresponding tests:
 - `logger_test.go`
-- `output_test.go`
 - `errors_test.go`
 - `validation_test.go`
 - `inputs_test.go`
