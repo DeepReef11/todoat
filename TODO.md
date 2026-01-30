@@ -263,3 +263,16 @@ The entire "Current Implementation Status", "Current Background Sync Patterns", 
 
 **Asked**: 2026-01-30
 **Status**: unanswered
+
+### [FEAT-017] What is the design intent for time-of-day support in task dates?
+
+**Context**: Time-of-day support exists in code (`--due-date "2026-01-20T14:30"`, `--due-date "tomorrow 09:00"`, timezone handling) and is documented in user-facing docs (`docs/how-to/task-management.md`, `docs/reference/cli.md`), but `docs/explanation/task-management.md` only documents "YYYY-MM-DD (date only)" as the user input format. The explanation doc needs updating to cover ISO 8601 datetime input, relative dates with time (`tomorrow 14:30`, `+7d 09:00`), timezone offset support, and how time-of-day is stored and displayed. This was implemented in roadmap item 058.
+
+**Options**:
+- [ ] Update docs/explanation/task-management.md date section - Add time-of-day input formats, timezone handling, and display behavior
+- [ ] Already covered sufficiently - The user-facing docs are adequate and explanation doc update is low priority
+
+**Impact**: Ensures explanation doc accurately reflects the implemented date/time handling. User-facing docs are already correct.
+
+**Asked**: 2026-01-30
+**Status**: unanswered
