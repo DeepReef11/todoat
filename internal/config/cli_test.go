@@ -9,6 +9,63 @@ import (
 	"todoat/internal/testutil"
 )
 
+// TestConfigSetPreservesComments verifies that 'config set' preserves YAML comments in the config file (issue #57)
+func TestConfigSetPreservesComments(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	configWithComments := `backends:
+  # SQLite backend - local database storage (recommended default)
+  sqlite:
+    type: sqlite
+    enabled: true
+    # path: "~/.local/share/todoat/tasks.db"  # Optional: custom database path
+
+  # Nextcloud backend - sync with Nextcloud Tasks via CalDAV
+  # nextcloud:
+  #   type: nextcloud
+  #   enabled: false
+
+# Default backend when multiple are enabled
+default_backend: sqlite
+
+# Disable interactive prompts (for scripting)
+no_prompt: false
+
+sync:
+  enabled: false
+  # offline_mode: auto  # Options: auto | online | offline
+`
+	cli.SetFullConfig(configWithComments)
+
+	// Run config set
+	stdout := cli.MustExecute("-y", "config", "set", "default_backend", "sqlite")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Read the config file after set
+	content, err := os.ReadFile(cli.ConfigPath())
+	if err != nil {
+		t.Fatalf("failed to read config file: %v", err)
+	}
+	result := string(content)
+
+	// Comments must be preserved
+	if !strings.Contains(result, "# SQLite backend - local database storage (recommended default)") {
+		t.Errorf("config set destroyed SQLite backend comment.\nFile contents after set:\n%s", result)
+	}
+	if !strings.Contains(result, "# Nextcloud backend - sync with Nextcloud Tasks via CalDAV") {
+		t.Errorf("config set destroyed Nextcloud backend comment.\nFile contents after set:\n%s", result)
+	}
+	if !strings.Contains(result, "# Default backend when multiple are enabled") {
+		t.Errorf("config set destroyed default_backend comment.\nFile contents after set:\n%s", result)
+	}
+	if !strings.Contains(result, "# Disable interactive prompts (for scripting)") {
+		t.Errorf("config set destroyed no_prompt comment.\nFile contents after set:\n%s", result)
+	}
+	if !strings.Contains(result, "# offline_mode: auto") {
+		t.Errorf("config set destroyed commented-out offline_mode sample.\nFile contents after set:\n%s", result)
+	}
+}
+
 // =============================================================================
 // Config CLI Command Tests (049-config-cli-commands)
 // =============================================================================

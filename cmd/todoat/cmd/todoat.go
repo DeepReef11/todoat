@@ -10531,25 +10531,175 @@ func doConfigSet(stdout, stderr io.Writer, cfg *Config, key, value string) error
 		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
 	}
 
-	// Load the configuration
+	// Load the configuration to validate key/value
 	appConfig, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Set the value
+	// Validate the key and value (also updates struct for fallback)
 	if err := setConfigValue(appConfig, key, value); err != nil {
 		return err
 	}
 
-	// Save the configuration
-	if err := saveConfig(configPath, appConfig); err != nil {
-		return err
+	// Try to update the config file in-place, preserving comments
+	rawContent, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	updated, ok := updateYAMLValue(string(rawContent), key, value)
+	if ok {
+		if err := writeConfigAtomic(configPath, updated); err != nil {
+			return err
+		}
+	} else {
+		// Fallback: full rewrite if in-place update couldn't find the key
+		if err := saveConfig(configPath, appConfig); err != nil {
+			return err
+		}
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Set %s = %s\n", key, value)
 	if cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// updateYAMLValue performs targeted replacement of a single key's value in raw YAML text,
+// preserving all comments and formatting. Returns the updated content and true if the key
+// was found and replaced, or ("", false) if the key was not found.
+func updateYAMLValue(content, key, value string) (string, bool) {
+	key = strings.ToLower(key)
+	parts := strings.Split(key, ".")
+
+	// Build the expected YAML line pattern based on key depth
+	// e.g. "default_backend" → top-level: "default_backend: ..."
+	// e.g. "sync.enabled" → indent-2: "  enabled: ..." under "sync:"
+	// e.g. "backends.sqlite.enabled" → indent-4: "    enabled: ..." under "  sqlite:" under "backends:"
+	lines := strings.Split(content, "\n")
+	leafKey := parts[len(parts)-1]
+
+	// Determine indent level and parent section(s)
+	var targetIndent string
+	var parentSections []string
+	if len(parts) == 1 {
+		targetIndent = ""
+		parentSections = nil
+	} else {
+		parentSections = parts[:len(parts)-1]
+		targetIndent = strings.Repeat("  ", len(parts)-1)
+	}
+
+	// Format the replacement value for YAML
+	yamlValue := formatYAMLValue(value)
+
+	// Find the line to replace
+	inParentSection := len(parentSections) == 0 // true if top-level key
+	parentDepth := 0
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and pure comment lines
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		if !inParentSection {
+			// Check if we've entered the next parent section
+			expected := parentSections[parentDepth]
+			expectedIndent := strings.Repeat("  ", parentDepth)
+			if strings.HasPrefix(line, expectedIndent+expected+":") &&
+				!strings.HasPrefix(line, expectedIndent+"  ") {
+				parentDepth++
+				if parentDepth == len(parentSections) {
+					inParentSection = true
+				}
+			}
+			continue
+		}
+
+		// We're in the correct parent section (or at top level)
+		// Check if this line matches our target key at the right indent
+		prefix := targetIndent + leafKey + ":"
+		if strings.HasPrefix(line, prefix) {
+			// Found the key line. Preserve any inline comment.
+			rest := line[len(prefix):]
+
+			// Check for inline comment (after the value)
+			var inlineComment string
+			if idx := findInlineCommentIndex(rest); idx >= 0 {
+				inlineComment = rest[idx:]
+				// Keep the spacing before the comment
+			}
+
+			var newLine string
+			if inlineComment != "" {
+				newLine = prefix + " " + yamlValue + inlineComment
+			} else {
+				newLine = prefix + " " + yamlValue
+			}
+			lines[i] = newLine
+			return strings.Join(lines, "\n"), true
+		}
+
+		// If we're in a parent section but hit a line at equal or lesser indent
+		// (not a continuation of the section), the key isn't in this section
+		if inParentSection && len(parentSections) > 0 {
+			lineIndent := len(line) - len(strings.TrimLeft(line, " "))
+			requiredIndent := len(targetIndent)
+			if lineIndent < requiredIndent && !strings.HasPrefix(trimmed, "#") {
+				// We've exited the parent section without finding the key
+				break
+			}
+		}
+	}
+
+	return "", false
+}
+
+// findInlineCommentIndex finds the index of an inline comment in a YAML value string.
+// It looks for "  #" (two spaces followed by #) which is the YAML convention for inline comments.
+// Returns -1 if no inline comment is found.
+func findInlineCommentIndex(s string) int {
+	// Look for "  #" pattern (standard YAML inline comment with spacing)
+	idx := strings.Index(s, "  #")
+	if idx >= 0 {
+		return idx
+	}
+	return -1
+}
+
+// formatYAMLValue formats a value for YAML output.
+func formatYAMLValue(value string) string {
+	// Boolean and numeric values don't need quoting
+	switch strings.ToLower(value) {
+	case "true", "false", "yes", "no":
+		return value
+	}
+	// Check if it's a number
+	if _, err := strconv.ParseFloat(value, 64); err == nil {
+		return value
+	}
+	// Return as-is (the value is already validated by setConfigValue)
+	return value
+}
+
+// writeConfigAtomic writes content to a config file atomically using a temp file + rename.
+func writeConfigAtomic(configPath, content string) error {
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	tmpPath := configPath + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	if err := os.Rename(tmpPath, configPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename config file: %w", err)
 	}
 	return nil
 }
