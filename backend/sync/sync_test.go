@@ -2342,6 +2342,9 @@ default_backend: sqlite-remote
 		t.Fatalf("expected queue to be empty after add sync, but got:\n%s", stdout)
 	}
 
+	// Allow background sync goroutines from sync queue command to complete
+	time.Sleep(100 * time.Millisecond)
+
 	// Update the task (queues operation)
 	cli.MustExecute("-y", "Work", "update", "Task to update", "-p", "1")
 
