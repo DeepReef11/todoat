@@ -225,7 +225,7 @@ todoat list [command]
 
 | Command | Description |
 |---------|-------------|
-| `list` | View all lists (default) |
+| (default) | View all lists (no subcommand) |
 | `create` | Create a new list |
 | `delete` | Delete a list (move to trash) |
 | `update` | Update list properties |
@@ -984,6 +984,7 @@ todoat completion uninstall [flags]
 | Flag | Type | Description |
 |------|------|-------------|
 | `--shell` | string | Shell to uninstall completion for (bash, zsh, fish, powershell) |
+| `--target-dir` | string | Override install directory (for testing) |
 
 ### Examples
 
