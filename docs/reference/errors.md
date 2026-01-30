@@ -12,35 +12,27 @@ Todoat provides helpful error messages with actionable suggestions. When an erro
 
 ### Task Not Found
 
-**Message**: `task not found: <search term>`
+**Message**: `no task found matching '<search term>'`
 
 **Cause**: The specified task could not be found with the given search term.
-
-**Suggestion**: Check the search term or use `todoat list` to see all tasks.
 
 **Example**:
 ```bash
 $ todoat MyList complete "nonexistent task"
-Error: task not found: nonexistent task
-
-Suggestion: Check the search term or use 'todoat MyList get' to see all tasks
+Error: no task found matching 'nonexistent task'
 ```
 
 ### List Not Found
 
-**Message**: `list not found: <list name>`
-
-**Cause**: The specified list does not exist.
-
-**Suggestion**: Create the list with `todoat list create <name>`.
+**Note**: Accessing a non-existent list does not produce an error. The CLI treats it as an empty list and returns exit code 0.
 
 **Example**:
 ```bash
-$ todoat work get
-Error: list not found: work
-
-Suggestion: Create the list with 'todoat list create work'
+$ todoat work
+No tasks in list 'work'
 ```
+
+To create a named list explicitly, use `todoat list create <name>`.
 
 ### No Lists Available
 
@@ -104,19 +96,19 @@ Suggestion: Valid options: TODO, IN-PROGRESS, DONE, CANCELLED
 
 ### Backend Not Configured
 
-**Message**: `backend not configured: <backend name>`
+**Message**: `todoist backend '<backend name>' requires API token (use 'credentials set <backend> token' or set TODOAT_<BACKEND>_TOKEN)`
 
-**Cause**: The specified backend has not been set up in your configuration.
-
-**Suggestion**: Add the backend configuration to your config file.
+**Cause**: The specified backend has not been set up with the required credentials.
 
 **Example**:
 ```bash
 $ todoat -b todoist list
-Error: backend not configured: todoist
-
-Suggestion: Add todoist configuration to your config file
+Error: todoist backend 'todoist' requires API token (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)
 ```
+
+**Fix**: Set the API token using one of these methods:
+1. Run `todoat credentials set todoist token` to configure interactively
+2. Set the environment variable `TODOAT_TODOIST_TOKEN`
 
 ### Backend Offline
 
