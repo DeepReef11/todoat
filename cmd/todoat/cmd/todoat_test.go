@@ -2052,7 +2052,7 @@ func TestListInfoCommand(t *testing.T) {
 	}
 }
 
-// TestListInfoCommandJSON verifies the list info command outputs JSON correctly.
+// TestListInfoCommandJSON verifies the list info command outputs valid JSON with --json flag.
 func TestListInfoCommandJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -2085,10 +2085,178 @@ func TestListInfoCommandJSON(t *testing.T) {
 	}
 
 	output := stdout.String()
-	// The list info command outputs text format containing list details
-	// Verify it shows the list name
-	if !strings.Contains(output, "JSONInfoList") {
-		t.Errorf("list info --json should contain list name, got: %s", output)
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("list info --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"name", "id", "tasks", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+
+	// Check name value
+	if name, ok := result["name"].(string); !ok || name != "JSONInfoList" {
+		t.Errorf("expected name 'JSONInfoList', got: %v", result["name"])
+	}
+}
+
+// TestListTrashCommandJSON verifies the list trash command outputs valid JSON with --json flag.
+func TestListTrashCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Execute list trash with JSON flag (empty trash)
+	exitCode := Execute([]string{"--json", "list", "trash"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list trash --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("list trash --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"lists", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestSyncStatusCommandJSON verifies the sync status command outputs valid JSON with --json flag.
+func TestSyncStatusCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "sync", "status"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("sync status --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("sync status --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"offline_mode", "backends", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestReminderStatusCommandJSON verifies the reminder status command outputs valid JSON with --json flag.
+func TestReminderStatusCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := "default_backend: sqlite\nreminder:\n  enabled: false\n  intervals:\n    - 1h\n  os_notification: false\n  log_notification: true\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "reminder", "status"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("reminder status --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("reminder status --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"enabled", "intervals", "os_notification", "log_notification", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestReminderListCommandJSON verifies the reminder list command outputs valid JSON with --json flag.
+func TestReminderListCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := "default_backend: sqlite\nreminder:\n  enabled: true\n  intervals:\n    - 1h\n  os_notification: false\n  log_notification: true\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "reminder", "list"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("reminder list --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("reminder list --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"reminders", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
 	}
 }
 

@@ -1090,6 +1090,7 @@ func newListInfoCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
 			be, err := getBackend(cfg)
 			if err != nil {
@@ -1097,7 +1098,7 @@ func newListInfoCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			}
 			defer func() { _ = be.Close() }()
 
-			return doListInfo(context.Background(), be, args[0], cfg, stdout)
+			return doListInfo(context.Background(), be, args[0], cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -1105,7 +1106,7 @@ func newListInfoCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 }
 
 // doListInfo displays details about a list
-func doListInfo(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer) error {
+func doListInfo(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Find the list by name
 	list, err := be.GetListByName(ctx, name)
 	if err != nil {
@@ -1119,6 +1120,31 @@ func doListInfo(ctx context.Context, be backend.TaskManager, name string, cfg *C
 	tasks, err := be.GetTasks(ctx, list.ID)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		type listInfoJSON struct {
+			Name        string `json:"name"`
+			ID          string `json:"id"`
+			Color       string `json:"color,omitempty"`
+			Description string `json:"description,omitempty"`
+			Tasks       int    `json:"tasks"`
+			Result      string `json:"result"`
+		}
+		output := listInfoJSON{
+			Name:        list.Name,
+			ID:          list.ID,
+			Color:       list.Color,
+			Description: list.Description,
+			Tasks:       len(tasks),
+			Result:      ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Name:  %s\n", list.Name)
@@ -1148,6 +1174,7 @@ func newListTrashCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
 			be, err := getBackend(cfg)
 			if err != nil {
@@ -1155,7 +1182,7 @@ func newListTrashCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			}
 			defer func() { _ = be.Close() }()
 
-			return doListTrashView(context.Background(), be, cfg, stdout)
+			return doListTrashView(context.Background(), be, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -1168,7 +1195,7 @@ func newListTrashCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 }
 
 // doListTrashView displays deleted lists, auto-purging expired ones first
-func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout io.Writer) error {
+func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Get all deleted lists first
 	lists, err := be.GetDeletedLists(ctx)
 	if err != nil {
@@ -1195,6 +1222,41 @@ func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, s
 			}
 		}
 		lists = remainingLists
+	}
+
+	if jsonOutput {
+		type trashListJSON struct {
+			Name      string `json:"name"`
+			ID        string `json:"id"`
+			DeletedAt string `json:"deleted_at,omitempty"`
+		}
+		type trashJSON struct {
+			Lists       []trashListJSON `json:"lists"`
+			PurgedCount int             `json:"purged_count"`
+			Result      string          `json:"result"`
+		}
+		trashLists := make([]trashListJSON, 0, len(lists))
+		for _, l := range lists {
+			entry := trashListJSON{
+				Name: l.Name,
+				ID:   l.ID,
+			}
+			if l.DeletedAt != nil {
+				entry.DeletedAt = l.DeletedAt.Format(time.RFC3339)
+			}
+			trashLists = append(trashLists, entry)
+		}
+		output := trashJSON{
+			Lists:       trashLists,
+			PurgedCount: purgedCount,
+			Result:      ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	// Report purged lists if any
@@ -5999,8 +6061,9 @@ func newSyncStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 				cfg.NoPrompt = true
 			}
 			verbose, _ := cmd.Flags().GetBool("verbose")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			return doSyncStatus(cfg, stdout, verbose)
+			return doSyncStatus(cfg, stdout, verbose, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -6542,18 +6605,13 @@ func syncPullFromRemote(ctx context.Context, localBE, remoteBE backend.TaskManag
 }
 
 // doSyncStatus displays sync status for all backends
-func doSyncStatus(cfg *Config, stdout io.Writer, verbose bool) error {
+func doSyncStatus(cfg *Config, stdout io.Writer, verbose bool, jsonOutput bool) error {
 	// Get sync manager
 	syncMgr := getSyncManager(cfg)
 	defer func() { _ = syncMgr.Close() }()
 
-	_, _ = fmt.Fprintln(stdout, "Sync Status:")
-	_, _ = fmt.Fprintln(stdout, "")
-
 	// Get offline mode from config
 	offlineMode := getOfflineMode(cfg)
-	_, _ = fmt.Fprintf(stdout, "Offline Mode: %s\n", offlineMode)
-	_, _ = fmt.Fprintln(stdout, "")
 
 	// Get pending operations count
 	pendingCount, err := syncMgr.GetPendingCount()
@@ -6570,6 +6628,55 @@ func doSyncStatus(cfg *Config, stdout io.Writer, verbose bool) error {
 
 	// Load config to get configured backends
 	configBackends := getConfiguredBackends(cfg)
+
+	if jsonOutput {
+		type syncBackendJSON struct {
+			Name              string `json:"name"`
+			LastSync          string `json:"last_sync"`
+			PendingOperations int    `json:"pending_operations"`
+			Status            string `json:"status"`
+		}
+		type syncStatusJSON struct {
+			OfflineMode string            `json:"offline_mode"`
+			Backends    []syncBackendJSON `json:"backends"`
+			Result      string            `json:"result"`
+		}
+		var backends []syncBackendJSON
+		if len(configBackends) > 0 {
+			for _, backendName := range configBackends {
+				backends = append(backends, syncBackendJSON{
+					Name:              backendName,
+					LastSync:          lastSyncStr,
+					PendingOperations: pendingCount,
+					Status:            "Configured",
+				})
+			}
+		} else {
+			backends = append(backends, syncBackendJSON{
+				Name:              "sqlite",
+				LastSync:          lastSyncStr,
+				PendingOperations: pendingCount,
+				Status:            syncMgr.GetConnectionStatus(),
+			})
+		}
+		output := syncStatusJSON{
+			OfflineMode: offlineMode,
+			Backends:    backends,
+			Result:      ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintln(stdout, "Sync Status:")
+	_, _ = fmt.Fprintln(stdout, "")
+	_, _ = fmt.Fprintf(stdout, "Offline Mode: %s\n", offlineMode)
+	_, _ = fmt.Fprintln(stdout, "")
+
 	if len(configBackends) > 0 {
 		for _, backendName := range configBackends {
 			_, _ = fmt.Fprintf(stdout, "Backend: %s\n", backendName)
@@ -9472,8 +9579,9 @@ func newReminderStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			return doReminderStatus(cfg, stdout)
+			return doReminderStatus(cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -9481,10 +9589,33 @@ func newReminderStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 }
 
 // doReminderStatus displays the reminder configuration status
-func doReminderStatus(cfg *Config, stdout io.Writer) error {
+func doReminderStatus(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	reminderCfg, err := loadReminderConfig(cfg)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		type reminderStatusJSON struct {
+			Enabled         bool     `json:"enabled"`
+			Intervals       []string `json:"intervals"`
+			OSNotification  bool     `json:"os_notification"`
+			LogNotification bool     `json:"log_notification"`
+			Result          string   `json:"result"`
+		}
+		output := reminderStatusJSON{
+			Enabled:         reminderCfg.Enabled,
+			Intervals:       reminderCfg.Intervals,
+			OSNotification:  reminderCfg.OSNotification,
+			LogNotification: reminderCfg.LogNotification,
+			Result:          ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	_, _ = fmt.Fprintln(stdout, "Reminder Status:")
@@ -9606,8 +9737,9 @@ func newReminderListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			return doReminderList(cfg, stdout)
+			return doReminderList(cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -9615,7 +9747,7 @@ func newReminderListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 }
 
 // doReminderList lists upcoming reminders
-func doReminderList(cfg *Config, stdout io.Writer) error {
+func doReminderList(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	reminderCfg, err := loadReminderConfig(cfg)
 	if err != nil {
 		return err
@@ -9657,6 +9789,37 @@ func doReminderList(cfg *Config, stdout io.Writer) error {
 	upcoming, err := service.GetUpcomingReminders(taskPtrs)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		type reminderTaskJSON struct {
+			Summary string `json:"summary"`
+			DueDate string `json:"due_date,omitempty"`
+		}
+		type reminderListJSON struct {
+			Reminders []reminderTaskJSON `json:"reminders"`
+			Result    string             `json:"result"`
+		}
+		reminders := make([]reminderTaskJSON, 0, len(upcoming))
+		for _, task := range upcoming {
+			entry := reminderTaskJSON{
+				Summary: task.Summary,
+			}
+			if task.DueDate != nil {
+				entry.DueDate = task.DueDate.Format(views.DefaultDateFormat)
+			}
+			reminders = append(reminders, entry)
+		}
+		output := reminderListJSON{
+			Reminders: reminders,
+			Result:    ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	if len(upcoming) == 0 {
