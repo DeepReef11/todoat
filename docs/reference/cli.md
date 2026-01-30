@@ -970,6 +970,7 @@ todoat completion install [flags]
 |------|------|-------------|
 | `--shell` | string | Shell to install completion for (bash, zsh, fish, powershell) |
 | `--dry-run` | bool | Show where completion would be installed without installing |
+| `--target-dir` | string | Override install directory (for testing) |
 
 Auto-detects your shell from `$SHELL` if `--shell` is not specified.
 

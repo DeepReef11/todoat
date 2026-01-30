@@ -57,6 +57,18 @@ todoat config get sync.enabled
 
 # Get backend-specific setting
 todoat config get backends.nextcloud.host
+
+# Get all sync settings (including daemon)
+todoat config get sync
+
+# Get daemon settings
+todoat config get sync.daemon
+
+# Get reminder settings
+todoat config get reminder
+
+# Get background pull cooldown
+todoat config get sync.background_pull_cooldown
 ```
 
 ### JSON Output
@@ -80,6 +92,18 @@ todoat config set default_backend sqlite
 # Set nested values with dot notation
 todoat config set sync.enabled true
 todoat config set sync.offline_mode auto
+
+# Set daemon configuration
+todoat config set sync.daemon.enabled true
+todoat config set sync.daemon.interval 60
+
+# Set background pull cooldown
+todoat config set sync.background_pull_cooldown "1m"
+
+# Set reminder configuration
+todoat config set reminder.enabled true
+todoat config set reminder.os_notification false
+todoat config set reminder.intervals "1d,1h,at due time"
 ```
 
 ### Validation

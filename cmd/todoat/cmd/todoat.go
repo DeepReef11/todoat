@@ -10324,7 +10324,7 @@ func configToMap(c *config.Config) map[string]interface{} {
 			"daemon": map[string]interface{}{
 				"enabled":      c.Sync.Daemon.Enabled,
 				"interval":     c.Sync.Daemon.Interval,
-				"idle_timeout":  c.Sync.Daemon.IdleTimeout,
+				"idle_timeout": c.Sync.Daemon.IdleTimeout,
 				"file_watcher": c.Sync.Daemon.FileWatcher,
 				"smart_timing": c.Sync.Daemon.SmartTiming,
 				"debounce_ms":  c.Sync.Daemon.DebounceMs,
@@ -10412,7 +10412,7 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 				"daemon": map[string]interface{}{
 					"enabled":      c.Sync.Daemon.Enabled,
 					"interval":     c.Sync.Daemon.Interval,
-					"idle_timeout":  c.Sync.Daemon.IdleTimeout,
+					"idle_timeout": c.Sync.Daemon.IdleTimeout,
 					"file_watcher": c.Sync.Daemon.FileWatcher,
 					"smart_timing": c.Sync.Daemon.SmartTiming,
 					"debounce_ms":  c.Sync.Daemon.DebounceMs,
@@ -10439,7 +10439,7 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 				return map[string]interface{}{
 					"enabled":      c.Sync.Daemon.Enabled,
 					"interval":     c.Sync.Daemon.Interval,
-					"idle_timeout":  c.Sync.Daemon.IdleTimeout,
+					"idle_timeout": c.Sync.Daemon.IdleTimeout,
 					"file_watcher": c.Sync.Daemon.FileWatcher,
 					"smart_timing": c.Sync.Daemon.SmartTiming,
 					"debounce_ms":  c.Sync.Daemon.DebounceMs,
