@@ -34,7 +34,7 @@ This document provides a high-level summary of all features in todoat, organized
 | **Filter by Priority** | Display tasks matching priority levels (0-9) | [Task Management](task-management.md#filter-by-priority) |
 | **Filter by Dates** | Filter tasks by due date, start date, or date ranges | [Task Management](task-management.md#filter-by-dates) |
 | **Filter by Tags** | Show tasks with specific categories/tags | [Task Management](task-management.md#filter-by-tags) |
-| **Interactive Task Selection** | Fuzzy matching and selection when multiple tasks match query | [Task Management](task-management.md#interactive-task-selection) |
+| **Task Disambiguation** | Exact and partial matching with UID-based disambiguation when multiple tasks match | [Interactive UX](interactive-ux.md#task-disambiguation) |
 | **Task Search** | Intelligent search with exact, partial, and multi-match support | [Task Management](task-management.md#task-search) |
 | **Bulk Operations** | Operate on multiple tasks using filters | [Task Management](task-management.md#bulk-operations) |
 | **Pagination** | Control output size with limit, offset, and page flags for large task lists | [Task Management](../how-to/task-management.md#pagination) |
