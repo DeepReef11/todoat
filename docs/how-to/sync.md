@@ -134,7 +134,17 @@ todoat sync daemon start --interval 60
 todoat sync daemon status
 ```
 
-Shows if the daemon is running, the number of syncs performed, and the last sync time.
+Shows daemon status including PID, sync interval, sync count, and last sync time:
+
+```
+Sync daemon is running
+  PID: 12345
+  Interval: 60 seconds
+  Sync count: 5
+  Last sync: 2026-01-30T10:15:00Z
+```
+
+The interval shown is the actual running interval, which may differ from the config default if `--interval` was specified at start time.
 
 ### Stop Daemon
 

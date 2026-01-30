@@ -572,30 +572,36 @@ todoat MyList complete "groceries"
 
 ### Single Match
 
-When one task matches, todoat asks for confirmation:
+When exactly one task matches, todoat uses it directly:
 
-```
-Found: Buy groceries [TODO, Priority: 3]. Is this correct? (y/n)
+```bash
+todoat MyList complete "groceries"
+# Completes "Buy groceries" immediately
 ```
 
 ### Multiple Matches
 
-When multiple tasks match, you choose from a menu:
+When multiple tasks match, todoat shows an error with details and UIDs so you can select the exact task:
 
 ```
-Multiple tasks found matching "review":
-1. Review PR #456 (TODO, Priority: 2)
-2. Code review guidelines (DONE)
-3. Review meeting notes (IN-PROGRESS)
-Select task (1-3, or 'c' to cancel):
+Error: multiple tasks match 'review'. Use --uid to specify:
+  - Review PR #456 [P2, due: 2026-02-01] (UID: 550e8400-e29b-41d4-a716-446655440000)
+  - Code review guidelines [desc: "Guidelines for code reviews..."] (UID: 660f9500-f39c-52e5-b827-557766551111)
+  - Review meeting notes [P5] (UID: 770a0600-a40d-63f6-c938-668877662222)
+```
+
+Re-run the command with `--uid` to specify which task:
+
+```bash
+todoat MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
 ```
 
 ### Direct Selection by UID
 
-For scripts or unambiguous operations:
+For scripts or when you know the task ID:
 
 ```bash
-# Select by backend UID (for synced tasks)
+# Select by backend UID (bypasses summary search)
 todoat MyList complete --uid "550e8400-e29b-41d4-a716-446655440000"
 
 # Select by local ID (requires sync enabled)

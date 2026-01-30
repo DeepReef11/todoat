@@ -46,7 +46,7 @@ type Response struct {
 	SyncCount     int                       `json:"sync_count,omitempty"`
 	LastSync      string                    `json:"last_sync,omitempty"`
 	Running       bool                      `json:"running"`
-	IntervalSec   int                       `json:"interval_sec,omitempty"`    // Actual running interval in seconds (Issue #59)
+	IntervalSec   int                       `json:"interval_sec,omitempty"`   // Actual running interval in seconds (Issue #59)
 	BackendStates map[string]*BackendStatus `json:"backend_states,omitempty"` // Per-backend status (Issue #40)
 }
 

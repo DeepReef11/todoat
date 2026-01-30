@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Updated sync daemon status docs with example output showing PID, interval, sync count, and last sync time
+- Updated task matching docs: single match completes directly without confirmation prompt; multiple matches show error with UIDs instead of interactive menu
+
 ### Added
 - File watcher for real-time sync triggers with debouncing and smart timing (#41)
   - `internal/watcher` package using `fsnotify` for file system monitoring
