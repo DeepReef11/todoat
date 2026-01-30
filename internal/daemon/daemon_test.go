@@ -10,6 +10,106 @@ import (
 	"time"
 )
 
+// =============================================================================
+// Issue #53: Secure file permissions and predictable /tmp paths
+// =============================================================================
+
+func TestDaemonFilePermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:    filepath.Join(tmpDir, "subdir", "daemon.pid"),
+		SocketPath: filepath.Join(tmpDir, "sockdir", "daemon.sock"),
+		LogPath:    filepath.Join(tmpDir, "logdir", "daemon.log"),
+		Interval:   100 * time.Millisecond,
+	}
+
+	d := New(cfg)
+	d.SetSyncFunc(func() error { return nil })
+
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for daemon to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Check PID directory permissions (should be 0700)
+	pidDirInfo, err := os.Stat(filepath.Dir(cfg.PIDPath))
+	if err != nil {
+		t.Fatalf("PID directory should exist: %v", err)
+	}
+	if perm := pidDirInfo.Mode().Perm(); perm != 0700 {
+		t.Errorf("PID directory should have mode 0700, got %04o", perm)
+	}
+
+	// Check PID file permissions (should be 0600)
+	pidInfo, err := os.Stat(cfg.PIDPath)
+	if err != nil {
+		t.Fatalf("PID file should exist: %v", err)
+	}
+	if perm := pidInfo.Mode().Perm(); perm != 0600 {
+		t.Errorf("PID file should have mode 0600, got %04o", perm)
+	}
+
+	// Check socket directory permissions (should be 0700)
+	sockDirInfo, err := os.Stat(filepath.Dir(cfg.SocketPath))
+	if err != nil {
+		t.Fatalf("Socket directory should exist: %v", err)
+	}
+	if perm := sockDirInfo.Mode().Perm(); perm != 0700 {
+		t.Errorf("Socket directory should have mode 0700, got %04o", perm)
+	}
+
+	// Check log directory permissions (should be 0700)
+	logDirInfo, err := os.Stat(filepath.Dir(cfg.LogPath))
+	if err != nil {
+		t.Fatalf("Log directory should exist: %v", err)
+	}
+	if perm := logDirInfo.Mode().Perm(); perm != 0700 {
+		t.Errorf("Log directory should have mode 0700, got %04o", perm)
+	}
+
+	// Trigger a log write and check log file permissions (should be 0600)
+	time.Sleep(150 * time.Millisecond) // Let daemon write a log entry
+	logInfo, err := os.Stat(cfg.LogPath)
+	if err != nil {
+		t.Fatalf("Log file should exist: %v", err)
+	}
+	if perm := logInfo.Mode().Perm(); perm != 0600 {
+		t.Errorf("Log file should have mode 0600, got %04o", perm)
+	}
+
+	// Stop daemon
+	d.Stop()
+	<-done
+}
+
+func TestGetSocketPathIncludesUID(t *testing.T) {
+	// Test without XDG_RUNTIME_DIR - should include UID in /tmp path
+	origDir := os.Getenv("XDG_RUNTIME_DIR")
+	_ = os.Unsetenv("XDG_RUNTIME_DIR")
+	defer func() {
+		if origDir != "" {
+			_ = os.Setenv("XDG_RUNTIME_DIR", origDir)
+		}
+	}()
+
+	path := GetSocketPath()
+	uid := fmt.Sprintf("%d", os.Getuid())
+
+	// Path should contain the UID to prevent collisions on multi-user systems
+	if path == "/tmp/todoat-daemon.sock" {
+		t.Errorf("GetSocketPath should include UID in /tmp fallback path, got %q", path)
+	}
+	expectedPath := fmt.Sprintf("/tmp/todoat-daemon-%s.sock", uid)
+	if path != expectedPath {
+		t.Errorf("expected %q, got %q", expectedPath, path)
+	}
+}
+
 func TestDaemonStartStop(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -243,10 +343,10 @@ func TestGetSocketPath(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, path)
 	}
 
-	// Test without XDG_RUNTIME_DIR
+	// Test without XDG_RUNTIME_DIR - should include UID
 	_ = os.Unsetenv("XDG_RUNTIME_DIR")
 	path = GetSocketPath()
-	expected = "/tmp/todoat-daemon.sock"
+	expected = fmt.Sprintf("/tmp/todoat-daemon-%d.sock", os.Getuid())
 	if path != expected {
 		t.Errorf("expected %q, got %q", expected, path)
 	}

@@ -7986,12 +7986,12 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 // startTestDaemon starts an in-process daemon for testing
 func startTestDaemon(cfg *Config, stdout io.Writer, pidPath, logPath string, interval time.Duration) error {
 	// Create PID file directory
-	if err := os.MkdirAll(filepath.Dir(pidPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0700); err != nil {
 		return fmt.Errorf("failed to create PID directory: %w", err)
 	}
 
 	// Create log file directory
-	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(logPath), 0700); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
 
@@ -8025,7 +8025,7 @@ func startTestDaemon(cfg *Config, stdout io.Writer, pidPath, logPath string, int
 	}
 
 	// Write PID file
-	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", testDaemon.pid)), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", testDaemon.pid)), 0600); err != nil {
 		return fmt.Errorf("failed to write PID file: %w", err)
 	}
 
@@ -8034,7 +8034,7 @@ func startTestDaemon(cfg *Config, stdout io.Writer, pidPath, logPath string, int
 	if socketPath != "" {
 		// Remove stale socket file
 		_ = os.Remove(socketPath)
-		if err := os.MkdirAll(filepath.Dir(socketPath), 0755); err == nil {
+		if err := os.MkdirAll(filepath.Dir(socketPath), 0700); err == nil {
 			listener, err := net.Listen("unix", socketPath)
 			if err == nil {
 				testDaemon.listener = listener
@@ -8177,7 +8177,7 @@ func testDaemonHandleConn(d *daemonState, conn net.Conn) {
 
 // appendToLogFile appends a log entry to the daemon log file
 func appendToLogFile(logPath, entry string) error {
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -8314,7 +8314,7 @@ func getDaemonPIDPath(cfg *Config) string {
 	if runtimeDir != "" {
 		return filepath.Join(runtimeDir, "todoat", "daemon.pid")
 	}
-	return "/tmp/todoat-daemon.pid"
+	return fmt.Sprintf("/tmp/todoat-daemon-%d.pid", os.Getuid())
 }
 
 // getDaemonLogPath returns the path to the daemon log file

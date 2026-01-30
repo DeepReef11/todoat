@@ -205,15 +205,15 @@ func (d *Daemon) getBackendStatuses() map[string]*BackendStatus {
 // Start starts the daemon process. This should be called in the forked process.
 func (d *Daemon) Start() error {
 	// Write PID file
-	if err := os.MkdirAll(filepath.Dir(d.cfg.PIDPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(d.cfg.PIDPath), 0700); err != nil {
 		return fmt.Errorf("failed to create PID directory: %w", err)
 	}
-	if err := os.WriteFile(d.cfg.PIDPath, []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+	if err := os.WriteFile(d.cfg.PIDPath, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 		return fmt.Errorf("failed to write PID file: %w", err)
 	}
 
 	// Create Unix socket
-	if err := os.MkdirAll(filepath.Dir(d.cfg.SocketPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(d.cfg.SocketPath), 0700); err != nil {
 		return fmt.Errorf("failed to create socket directory: %w", err)
 	}
 	// Remove existing socket file if present
@@ -230,7 +230,7 @@ func (d *Daemon) Start() error {
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 
 	// Create log file directory
-	if err := os.MkdirAll(filepath.Dir(d.cfg.LogPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(d.cfg.LogPath), 0700); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
 
@@ -493,7 +493,7 @@ func (d *Daemon) cleanup() {
 
 func (d *Daemon) log(format string, args ...interface{}) {
 	entry := fmt.Sprintf("[%s] %s\n", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
-	f, err := os.OpenFile(d.cfg.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(d.cfg.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return
 	}
@@ -664,7 +664,7 @@ func GetSocketPath() string {
 	if runtimeDir != "" {
 		return filepath.Join(runtimeDir, "todoat", "daemon.sock")
 	}
-	return "/tmp/todoat-daemon.sock"
+	return fmt.Sprintf("/tmp/todoat-daemon-%d.sock", os.Getuid())
 }
 
 // RunDaemonMode is called when the executable is invoked with --daemon-mode.
