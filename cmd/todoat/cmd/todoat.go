@@ -8396,8 +8396,21 @@ func doDaemonStatus(cfg *Config, stdout io.Writer) error {
 		if err == nil {
 			_, _ = fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &pid)
 		}
-		// Get interval from config
-		interval = getConfigDaemonInterval(cfg)
+		// Try IPC to get actual running interval from daemon (Issue #59)
+		client := daemon.NewClient(socketPath)
+		resp, err := client.Status()
+		if err == nil && resp != nil {
+			syncCount = resp.SyncCount
+			if resp.LastSync != "" {
+				lastSync, _ = time.Parse(time.RFC3339, resp.LastSync)
+			}
+			if resp.IntervalSec > 0 {
+				interval = time.Duration(resp.IntervalSec) * time.Second
+			}
+		}
+		if interval == 0 {
+			interval = getConfigDaemonInterval(cfg)
+		}
 		if interval == 0 {
 			interval = 5 * time.Minute
 		}
