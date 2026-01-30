@@ -2421,6 +2421,9 @@ default_backend: sqlite-remote
 		t.Fatalf("expected queue to be empty after add sync, but got:\n%s", stdout)
 	}
 
+	// Allow background sync goroutines from sync queue command to complete
+	time.Sleep(100 * time.Millisecond)
+
 	// Delete the task (queues operation)
 	cli.MustExecute("-y", "Work", "delete", "Task to delete")
 
@@ -2433,6 +2436,9 @@ default_backend: sqlite-remote
 	if !strings.Contains(stdout, "Pending Operations: 0") {
 		t.Errorf("expected queue to be empty after delete sync, but got:\n%s", stdout)
 	}
+
+	// Allow background sync goroutines to complete before test cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 // =============================================================================
