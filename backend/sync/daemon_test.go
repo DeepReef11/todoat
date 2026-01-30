@@ -1326,6 +1326,50 @@ default_backend: sqlite
 	testutil.AssertContains(t, statusOut, "Interval")
 }
 
+// TestIssue59_DaemonStatusShowsActualInterval verifies that daemon status reports
+// the actual running interval passed via --interval flag, not the config default.
+// Regression test for Issue #59.
+func TestIssue59_DaemonStatusShowsActualInterval(t *testing.T) {
+	cli := testutil.NewCLITestWithForkedDaemon(t)
+	configPath := cli.ConfigPath()
+
+	// Configure WITHOUT daemon.enabled in config.
+	// The daemon can still be started manually with `daemon start --interval 120`.
+	// The status should show the actual interval from IPC, not fall back to config default.
+	configContent := `
+sync:
+  enabled: true
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Start daemon with custom interval (120 seconds, NOT the config default of 300)
+	startOut := cli.MustExecute("-y", "sync", "daemon", "start", "--interval", "120")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
+
+	// The start message should acknowledge the custom interval (Go formats 120s as "2m0s")
+	testutil.AssertContains(t, startOut, "2m0s")
+
+	// Wait for daemon to fully initialize
+	time.Sleep(500 * time.Millisecond)
+
+	// Check status - should show 120 seconds, NOT the config default of 300
+	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
+
+	// The status MUST show "120 seconds" (the actual running interval)
+	if strings.Contains(statusOut, "300 seconds") {
+		t.Errorf("Regression: daemon status shows config default (300 seconds) instead of actual interval (120 seconds).\nStatus output:\n%s", statusOut)
+	}
+	if !strings.Contains(statusOut, "120 seconds") {
+		t.Errorf("Expected daemon status to show '120 seconds' (actual running interval), got:\n%s", statusOut)
+	}
+}
+
 // TestCLIReturnsImmediately verifies that CLI returns immediately after local operations
 // instead of blocking on sync completion.
 // Issue #36: CLI should not hang waiting for sync
