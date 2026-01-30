@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- How-to guide for analytics (viewing stats, backend performance, errors, configuration)
+- How-to guide for credential management (keyring, environment variables, rotation)
+- How-to guide for migration between backends (migrate commands, supported backends, safe migration steps)
+
 ### Fixed
 - Fixed broken relative link in backend testing setup doc (pointed to `backends.md` instead of `../explanation/backends.md`)
 
