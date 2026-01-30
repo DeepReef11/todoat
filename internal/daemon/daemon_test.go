@@ -721,3 +721,27 @@ func TestDaemonPerBackendIntervals(t *testing.T) {
 		t.Errorf("expected slow_backend to sync 1-3 times, got %d", slow)
 	}
 }
+
+// =============================================================================
+// Issue #41: File Watcher for Real-Time Sync Triggers (Regression Test)
+// =============================================================================
+
+// TestIssue41_FileWatcherPackageExists verifies that the file watcher package
+// exists as claimed in issue #41's closing comment. The issue was closed as
+// "COMPLETED" claiming internal/watcher/ was implemented, but the package is missing.
+func TestIssue41_FileWatcherPackageExists(t *testing.T) {
+	// The file watcher implementation should exist at internal/watcher/watcher.go
+	// as stated in the issue #41 closing comment.
+	watcherDir := filepath.Join("..", "watcher")
+	if _, err := os.Stat(watcherDir); os.IsNotExist(err) {
+		t.Errorf("Regression #41: internal/watcher/ package does not exist. "+
+			"Issue #41 was closed as COMPLETED but the file watcher package is missing. "+
+			"Expected internal/watcher/ directory with watcher.go implementation")
+	}
+
+	watcherFile := filepath.Join("..", "watcher", "watcher.go")
+	if _, err := os.Stat(watcherFile); os.IsNotExist(err) {
+		t.Errorf("Regression #41: internal/watcher/watcher.go does not exist. "+
+			"File watcher implementation file is missing")
+	}
+}

@@ -230,6 +230,15 @@ todoat list export "Work Tasks" --output ~/backup/work.json
 | `ical` | .ics | iCalendar format |
 | `sqlite` | .db | SQLite database |
 
+JSON exports include list metadata (name) alongside tasks. This format supports both the current structure and older array-only exports:
+
+```json
+{
+  "list_name": "Work Tasks",
+  "tasks": [ ... ]
+}
+```
+
 ### Import a List
 
 Import tasks from a file:
@@ -241,6 +250,8 @@ todoat list import ~/backup/work.json
 # Specify format explicitly
 todoat list import ~/backup/tasks.txt --format csv
 ```
+
+Imported tasks receive new unique IDs, so you can safely reimport a previously exported list (e.g., after deleting and recreating it) without ID conflicts.
 
 ## Database Maintenance
 

@@ -2018,10 +2018,29 @@ func TestAutoSyncAfterOperation(t *testing.T) {
 	// Set up path for "remote" SQLite database
 	remoteDBPath := filepath.Join(tmpDir, "remote.db")
 
+	// Pre-initialize the remote database by running a command against it first
+	// This prevents migration race conditions when background sync starts
+	initConfigContent := `
+backends:
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(initConfigContent), 0644); err != nil {
+		t.Fatalf("failed to write init config: %v", err)
+	}
+	// Initialize the remote DB schema before enabling sync
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "add", "init-task")
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "delete", "init-task")
+
 	// Create a config with:
 	// - sync enabled with auto_sync_after_operation: true
 	// - a "remote" SQLite backend
 	// - auto mode (default) - CLI uses local cache, sync pushes to remote
+	// - high background_pull_cooldown to reduce interference
 	configContent := `
 sync:
   enabled: true
@@ -2029,6 +2048,7 @@ sync:
   conflict_resolution: server_wins
   offline_mode: auto
   auto_sync_after_operation: true
+  background_pull_cooldown: 3600
 backends:
   sqlite:
     type: sqlite
@@ -2039,7 +2059,6 @@ backends:
     path: "` + remoteDBPath + `"
 default_backend: sqlite-remote
 `
-	configPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -2072,6 +2091,10 @@ default_backend: sqlite-remote
 		t.Fatalf("failed to open remote db: %v", err)
 	}
 	defer func() { _ = remoteDB.Close() }()
+	// Set busy timeout to avoid SQLITE_BUSY errors from concurrent access
+	if _, err := remoteDB.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		t.Fatalf("failed to set busy_timeout: %v", err)
+	}
 
 	var count int
 	err = remoteDB.QueryRow(`
@@ -2096,10 +2119,29 @@ func TestAutoSyncWithNullValue(t *testing.T) {
 	// Set up path for "remote" SQLite database
 	remoteDBPath := filepath.Join(tmpDir, "remote.db")
 
+	// Pre-initialize the remote database by running a command against it first
+	// This prevents migration race conditions when background sync starts
+	initConfigContent := `
+backends:
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(initConfigContent), 0644); err != nil {
+		t.Fatalf("failed to write init config: %v", err)
+	}
+	// Initialize the remote DB schema before enabling sync
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "add", "init-task")
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "delete", "init-task")
+
 	// Create a config with:
 	// - sync enabled
 	// - auto_sync_after_operation: null (explicitly set to null)
 	// Per Issue #30, this should default to true, not false
+	// - high background_pull_cooldown to reduce interference
 	configContent := `
 sync:
   enabled: true
@@ -2107,6 +2149,7 @@ sync:
   conflict_resolution: server_wins
   offline_mode: auto
   auto_sync_after_operation: null
+  background_pull_cooldown: 3600
 backends:
   sqlite:
     type: sqlite
@@ -2117,7 +2160,6 @@ backends:
     path: "` + remoteDBPath + `"
 default_backend: sqlite-remote
 `
-	configPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -2152,6 +2194,10 @@ default_backend: sqlite-remote
 			t.Errorf("failed to close remote db: %v", err)
 		}
 	}()
+	// Set busy timeout to avoid SQLITE_BUSY errors from concurrent access
+	if _, err := remoteDB.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		t.Fatalf("failed to set busy_timeout: %v", err)
+	}
 
 	var count int
 	err = remoteDB.QueryRow("SELECT COUNT(*) FROM tasks WHERE summary LIKE '%Task with null config%'").Scan(&count)
@@ -2238,8 +2284,27 @@ func TestAutoSyncAfterUpdateOperation(t *testing.T) {
 	// Set up path for "remote" SQLite database
 	remoteDBPath := filepath.Join(tmpDir, "remote.db")
 
+	// Pre-initialize the remote database by running a command against it first
+	// This prevents migration race conditions when background sync starts
+	initConfigContent := `
+backends:
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(initConfigContent), 0644); err != nil {
+		t.Fatalf("failed to write init config: %v", err)
+	}
+	// Initialize the remote DB schema before enabling sync
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "add", "init-task")
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "delete", "init-task")
+
 	// Create a config with auto_sync enabled
 	// Use offline_mode: auto (default) - CLI uses local cache, sync pushes to remote
+	// Set high background_pull_cooldown to reduce interference
 	configContent := `
 sync:
   enabled: true
@@ -2247,6 +2312,7 @@ sync:
   conflict_resolution: server_wins
   offline_mode: auto
   auto_sync_after_operation: true
+  background_pull_cooldown: 3600
 backends:
   sqlite:
     type: sqlite
@@ -2257,7 +2323,6 @@ backends:
     path: "` + remoteDBPath + `"
 default_backend: sqlite-remote
 `
-	configPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -2298,8 +2363,27 @@ func TestAutoSyncAfterDeleteOperation(t *testing.T) {
 	// Set up path for "remote" SQLite database
 	remoteDBPath := filepath.Join(tmpDir, "remote.db")
 
+	// Pre-initialize the remote database by running a command against it first
+	// This prevents migration race conditions when background sync starts
+	initConfigContent := `
+backends:
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(initConfigContent), 0644); err != nil {
+		t.Fatalf("failed to write init config: %v", err)
+	}
+	// Initialize the remote DB schema before enabling sync
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "add", "init-task")
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "delete", "init-task")
+
 	// Create a config with auto_sync enabled
 	// Use offline_mode: auto (default) - CLI uses local cache, sync pushes to remote
+	// Set high background_pull_cooldown to reduce interference
 	configContent := `
 sync:
   enabled: true
@@ -2307,6 +2391,7 @@ sync:
   conflict_resolution: server_wins
   offline_mode: auto
   auto_sync_after_operation: true
+  background_pull_cooldown: 3600
 backends:
   sqlite:
     type: sqlite
@@ -2317,7 +2402,6 @@ backends:
     path: "` + remoteDBPath + `"
 default_backend: sqlite-remote
 `
-	configPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -2585,6 +2669,24 @@ func TestBackgroundSyncCompletesBeforeExit(t *testing.T) {
 	// Set up path for "remote" SQLite database
 	remoteDBPath := filepath.Join(tmpDir, "remote.db")
 
+	// Pre-initialize the remote database by running a command against it first
+	// This prevents migration race conditions when background sync starts
+	initConfigContent := `
+backends:
+  sqlite-remote:
+    type: sqlite
+    enabled: true
+    path: "` + remoteDBPath + `"
+default_backend: sqlite-remote
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(initConfigContent), 0644); err != nil {
+		t.Fatalf("failed to write init config: %v", err)
+	}
+	// Initialize the remote DB schema before enabling sync
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "add", "init-task")
+	cli.Execute("-y", "-b", "sqlite-remote", "Work", "delete", "init-task")
+
 	// Create a config with:
 	// - sync enabled with auto_sync_after_operation: true
 	// - a "remote" SQLite backend
@@ -2607,7 +2709,6 @@ backends:
     path: "` + remoteDBPath + `"
 default_backend: sqlite-remote
 `
-	configPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}

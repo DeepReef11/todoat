@@ -146,8 +146,10 @@ sync:
 The `--interval` flag on `sync daemon start` overrides the `interval` config value for that session.
 
 The daemon stores its state files at:
-- **PID file**: `$XDG_RUNTIME_DIR/todoat/daemon.pid` (or `/tmp/todoat-daemon.pid`)
-- **Socket**: `$XDG_RUNTIME_DIR/todoat/daemon.sock` (or `/tmp/todoat-daemon.sock`)
+- **PID file**: `$XDG_RUNTIME_DIR/todoat/daemon.pid` (or `/tmp/todoat-daemon-<UID>.pid`)
+- **Socket**: `$XDG_RUNTIME_DIR/todoat/daemon.sock` (or `/tmp/todoat-daemon-<UID>.sock`)
+
+When `$XDG_RUNTIME_DIR` is not set, the fallback paths include the user's numeric UID to prevent conflicts between users on shared systems.
 
 ## Sync Configuration Options
 
