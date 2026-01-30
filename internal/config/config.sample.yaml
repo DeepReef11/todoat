@@ -71,6 +71,10 @@ sync:
   # connectivity_timeout: "5s"               # Timeout for connectivity checks
   # auto_sync_after_operation: false         # Auto-sync after add/update/delete operations
   # background_pull_cooldown: "30s"          # Cooldown between background pull syncs (default: 30s, minimum: 5s)
+  # daemon:
+  #   enabled: false                         # Enable background sync daemon process
+  #   interval: 300                          # Sync interval in seconds (default: 5 minutes)
+  #   idle_timeout: 300                      # Seconds before idle daemon exits (default: 5 minutes)
 
 # =============================================================================
 # User Interface Settings
