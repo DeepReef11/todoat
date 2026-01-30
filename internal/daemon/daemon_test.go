@@ -479,6 +479,89 @@ func TestDaemonPerBackendSyncState(t *testing.T) {
 	}
 }
 
+// TestDaemonConcurrentPerformSync verifies no race condition when performSync
+// is called concurrently (Issue #52: ticker + notify handler).
+func TestDaemonConcurrentPerformSync(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    50 * time.Millisecond, // Short interval to trigger ticker syncs
+		IdleTimeout: 0,
+	}
+
+	d := New(cfg)
+
+	var syncCount int32
+	d.AddBackendSyncFunc("test_backend", func() error {
+		atomic.AddInt32(&syncCount, 1)
+		// Small sleep to increase window for concurrent execution
+		time.Sleep(10 * time.Millisecond)
+		return nil
+	})
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+	time.Sleep(30 * time.Millisecond) // Wait for daemon to start
+
+	// Send multiple notify messages concurrently to trigger concurrent performSync
+	client := NewClient(cfg.SocketPath)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = client.Notify()
+		}()
+	}
+	wg.Wait()
+
+	// Let the syncs complete
+	time.Sleep(200 * time.Millisecond)
+
+	d.Stop()
+	<-done
+
+	// The test passes if -race doesn't report a data race.
+	// Also verify syncs actually happened.
+	if atomic.LoadInt32(&syncCount) == 0 {
+		t.Errorf("expected at least one sync to occur")
+	}
+}
+
+// TestDaemonLastSyncRace verifies no race on backendEntry.lastSync (Issue #52).
+func TestDaemonLastSyncRace(t *testing.T) {
+	d := New(&Config{
+		PIDPath:    filepath.Join(t.TempDir(), "daemon.pid"),
+		SocketPath: filepath.Join(t.TempDir(), "daemon.sock"),
+		LogPath:    filepath.Join(t.TempDir(), "daemon.log"),
+		Interval:   50 * time.Millisecond,
+	})
+
+	d.AddBackendSyncFunc("race_backend", func() error {
+		return nil
+	})
+
+	// Call performSync concurrently to trigger race on be.lastSync
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			d.performSync()
+		}()
+	}
+	wg.Wait()
+
+	// The test passes if -race doesn't report a data race.
+}
+
 // TestDaemonPerBackendIntervals verifies configurable sync intervals per backend
 func TestDaemonPerBackendIntervals(t *testing.T) {
 	tmpDir := t.TempDir()

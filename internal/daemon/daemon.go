@@ -81,6 +81,7 @@ type Daemon struct {
 	syncCount int
 	lastSync  time.Time
 	mu        sync.RWMutex
+	syncMu    sync.Mutex   // Serializes performSync calls (Issue #52)
 	stopChan  chan struct{}
 	listener  net.Listener
 	syncFunc  func() error // Function to call for sync operations (legacy single-backend)
@@ -369,6 +370,11 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 }
 
 func (d *Daemon) performSync() {
+	// Serialize concurrent performSync calls (Issue #52).
+	// The ticker and IPC notify handler can both trigger performSync.
+	d.syncMu.Lock()
+	defer d.syncMu.Unlock()
+
 	d.mu.Lock()
 	d.syncCount++
 	count := d.syncCount
@@ -410,14 +416,18 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 	globalInterval := d.cfg.Interval
 
 	for _, be := range backends {
-		// Check if this backend should sync based on its interval
+		// Check if this backend should sync based on its interval.
+		// Read be.lastSync under lock to avoid data race (Issue #52).
 		interval := be.interval
 		if interval == 0 {
 			interval = globalInterval
 		}
 
-		// Check if enough time has passed since last sync
-		if !be.lastSync.IsZero() && now.Sub(be.lastSync) < interval {
+		d.backendsMu.RLock()
+		lastSync := be.lastSync
+		d.backendsMu.RUnlock()
+
+		if !lastSync.IsZero() && now.Sub(lastSync) < interval {
 			continue // Skip this backend - not yet time to sync
 		}
 
