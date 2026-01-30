@@ -1890,6 +1890,9 @@ default_backend: sqlite-remote
 			"Got: task already in remote database\n" +
 			"This means CLI used remote backend instead of sync architecture")
 	}
+
+	// Allow background sync goroutines to complete before test cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 // =============================================================================
