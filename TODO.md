@@ -221,3 +221,45 @@ The entire "Current Implementation Status", "Current Background Sync Patterns", 
 
 **Asked**: 2026-01-29
 **Status**: unanswered
+
+### [FEAT-014] What is the design intent for the Terminal User Interface (TUI)?
+
+**Context**: The TUI feature exists in code (`internal/tui/tui.go`, `todoat tui` command) and has a user-facing how-to guide (`docs/how-to/tui.md`), but is not documented in `docs/explanation/`. The TUI provides a two-pane interactive interface using Bubble Tea with keyboard-driven task management (add, edit, complete, delete, filter). Need to understand the design rationale (why Bubble Tea, interaction model choices, feature scope vs CLI) before the explanation doc is complete.
+
+**Options**:
+- [ ] Create docs/explanation/terminal-user-interface.md - TUI is a distinct interface mode warranting its own explanation doc
+- [ ] Add TUI section to docs/explanation/cli-interface.md - TUI is part of the CLI interface, not a separate subsystem
+- [ ] Already covered sufficiently - The how-to guide is adequate and no explanation doc is needed
+
+**Impact**: Determines whether TUI design rationale is documented in explanation docs.
+
+**Asked**: 2026-01-30
+**Status**: unanswered
+
+### [FEAT-015] What is the design intent for the migration system?
+
+**Context**: The migration feature exists in code (`todoat migrate` command with `--from`, `--to`, `--list`, `--dry-run`, `--target-info` flags) and has a user-facing how-to guide (`docs/how-to/migration.md`), but has no dedicated explanation doc in `docs/explanation/`. Migration is partially mentioned in `docs/explanation/backends.md` but the design rationale for cross-backend task migration (metadata preservation, UID handling, batch processing, status mapping) is not documented.
+
+**Options**:
+- [ ] Create docs/explanation/migration-system.md - Migration is a distinct subsystem warranting its own explanation doc
+- [ ] Add migration section to docs/explanation/backends.md - Migration is part of the backend system, not a standalone feature
+- [ ] Already covered sufficiently - The how-to guide and backends.md coverage are adequate
+
+**Impact**: Determines whether migration design rationale is documented in explanation docs.
+
+**Asked**: 2026-01-30
+**Status**: unanswered
+
+### [FEAT-016] What is the design intent for the reminder system?
+
+**Context**: The reminder feature exists in code (`internal/reminder/`, `todoat reminder` command with subcommands `check`, `list`, `disable`, `dismiss`, `status`) and has a user-facing how-to guide (`docs/how-to/reminders.md`) plus configuration reference in `docs/reference/configuration.md`. However, there is no dedicated explanation doc in `docs/explanation/`. The notification-manager.md mentions reminders only briefly. Need to understand the design rationale (interval-based reminders, dismissal semantics, integration with notification system, cron vs daemon-driven checks) before the explanation doc is complete.
+
+**Options**:
+- [ ] Create docs/explanation/reminder-system.md - Reminders are a distinct subsystem warranting their own explanation doc
+- [ ] Add reminder section to docs/explanation/notification-manager.md - Reminders are part of the notification system
+- [ ] Already covered sufficiently - The how-to guide and configuration reference are adequate
+
+**Impact**: Determines whether reminder design rationale is documented in explanation docs.
+
+**Asked**: 2026-01-30
+**Status**: unanswered
