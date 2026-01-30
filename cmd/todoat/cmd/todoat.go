@@ -10314,11 +10314,27 @@ func configToMap(c *config.Config) map[string]interface{} {
 		"output_format":       c.OutputFormat,
 		"auto_detect_backend": c.AutoDetectBackend,
 		"sync": map[string]interface{}{
-			"enabled":              c.Sync.Enabled,
-			"local_backend":        c.Sync.LocalBackend,
-			"conflict_resolution":  c.Sync.ConflictResolution,
-			"offline_mode":         c.GetOfflineMode(),
-			"connectivity_timeout": c.GetConnectivityTimeout(),
+			"enabled":                   c.Sync.Enabled,
+			"local_backend":             c.Sync.LocalBackend,
+			"conflict_resolution":       c.Sync.ConflictResolution,
+			"offline_mode":              c.GetOfflineMode(),
+			"connectivity_timeout":      c.GetConnectivityTimeout(),
+			"auto_sync_after_operation": c.GetAutoSyncAfterOperationConfigValue(),
+			"background_pull_cooldown":  c.Sync.BackgroundPullCooldown,
+			"daemon": map[string]interface{}{
+				"enabled":      c.Sync.Daemon.Enabled,
+				"interval":     c.Sync.Daemon.Interval,
+				"idle_timeout":  c.Sync.Daemon.IdleTimeout,
+				"file_watcher": c.Sync.Daemon.FileWatcher,
+				"smart_timing": c.Sync.Daemon.SmartTiming,
+				"debounce_ms":  c.Sync.Daemon.DebounceMs,
+			},
+		},
+		"reminder": map[string]interface{}{
+			"enabled":          c.Reminder.Enabled,
+			"intervals":        c.Reminder.Intervals,
+			"os_notification":  c.Reminder.OSNotification,
+			"log_notification": c.Reminder.LogNotification,
 		},
 		"trash": map[string]interface{}{
 			"retention_days": c.GetTrashRetentionDays(),
@@ -10392,6 +10408,15 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 				"offline_mode":              c.GetOfflineMode(),
 				"connectivity_timeout":      c.GetConnectivityTimeout(),
 				"auto_sync_after_operation": c.GetAutoSyncAfterOperationConfigValue(),
+				"background_pull_cooldown":  c.Sync.BackgroundPullCooldown,
+				"daemon": map[string]interface{}{
+					"enabled":      c.Sync.Daemon.Enabled,
+					"interval":     c.Sync.Daemon.Interval,
+					"idle_timeout":  c.Sync.Daemon.IdleTimeout,
+					"file_watcher": c.Sync.Daemon.FileWatcher,
+					"smart_timing": c.Sync.Daemon.SmartTiming,
+					"debounce_ms":  c.Sync.Daemon.DebounceMs,
+				},
 			}, nil
 		}
 		switch parts[1] {
@@ -10407,6 +10432,33 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 			return c.GetConnectivityTimeout(), nil
 		case "auto_sync_after_operation":
 			return c.GetAutoSyncAfterOperationConfigValue(), nil
+		case "background_pull_cooldown":
+			return c.Sync.BackgroundPullCooldown, nil
+		case "daemon":
+			if len(parts) < 3 {
+				return map[string]interface{}{
+					"enabled":      c.Sync.Daemon.Enabled,
+					"interval":     c.Sync.Daemon.Interval,
+					"idle_timeout":  c.Sync.Daemon.IdleTimeout,
+					"file_watcher": c.Sync.Daemon.FileWatcher,
+					"smart_timing": c.Sync.Daemon.SmartTiming,
+					"debounce_ms":  c.Sync.Daemon.DebounceMs,
+				}, nil
+			}
+			switch parts[2] {
+			case "enabled":
+				return c.Sync.Daemon.Enabled, nil
+			case "interval":
+				return c.Sync.Daemon.Interval, nil
+			case "idle_timeout":
+				return c.Sync.Daemon.IdleTimeout, nil
+			case "file_watcher":
+				return c.Sync.Daemon.FileWatcher, nil
+			case "smart_timing":
+				return c.Sync.Daemon.SmartTiming, nil
+			case "debounce_ms":
+				return c.Sync.Daemon.DebounceMs, nil
+			}
 		}
 	case "trash":
 		if len(parts) < 2 {
@@ -10430,6 +10482,25 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 			return c.Analytics.Enabled, nil
 		case "retention_days":
 			return c.GetAnalyticsRetentionDays(), nil
+		}
+	case "reminder":
+		if len(parts) < 2 {
+			return map[string]interface{}{
+				"enabled":          c.Reminder.Enabled,
+				"intervals":        c.Reminder.Intervals,
+				"os_notification":  c.Reminder.OSNotification,
+				"log_notification": c.Reminder.LogNotification,
+			}, nil
+		}
+		switch parts[1] {
+		case "enabled":
+			return c.Reminder.Enabled, nil
+		case "intervals":
+			return c.Reminder.Intervals, nil
+		case "os_notification":
+			return c.Reminder.OSNotification, nil
+		case "log_notification":
+			return c.Reminder.LogNotification, nil
 		}
 	}
 
@@ -10599,6 +10670,54 @@ func setConfigValue(c *config.Config, key, value string) error {
 			}
 			c.Sync.BackgroundPullCooldown = value
 			return nil
+		case "daemon":
+			if len(parts) < 3 {
+				return fmt.Errorf("invalid key: %s (use sync.daemon.<setting>)", key)
+			}
+			switch parts[2] {
+			case "enabled":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for sync.daemon.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Sync.Daemon.Enabled = boolVal
+				return nil
+			case "interval":
+				intVal, err := strconv.Atoi(value)
+				if err != nil || intVal < 1 {
+					return fmt.Errorf("invalid value for sync.daemon.interval: %s (must be a positive integer)", value)
+				}
+				c.Sync.Daemon.Interval = intVal
+				return nil
+			case "idle_timeout":
+				intVal, err := strconv.Atoi(value)
+				if err != nil || intVal < 0 {
+					return fmt.Errorf("invalid value for sync.daemon.idle_timeout: %s (must be a non-negative integer)", value)
+				}
+				c.Sync.Daemon.IdleTimeout = intVal
+				return nil
+			case "file_watcher":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for sync.daemon.file_watcher: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Sync.Daemon.FileWatcher = boolVal
+				return nil
+			case "smart_timing":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for sync.daemon.smart_timing: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Sync.Daemon.SmartTiming = boolVal
+				return nil
+			case "debounce_ms":
+				intVal, err := strconv.Atoi(value)
+				if err != nil || intVal < 0 {
+					return fmt.Errorf("invalid value for sync.daemon.debounce_ms: %s (must be a non-negative integer)", value)
+				}
+				c.Sync.Daemon.DebounceMs = intVal
+				return nil
+			}
 		}
 	case "trash":
 		if len(parts) < 2 {
@@ -10631,6 +10750,41 @@ func setConfigValue(c *config.Config, key, value string) error {
 				return fmt.Errorf("invalid value for analytics.retention_days: %s (must be a non-negative integer)", value)
 			}
 			c.Analytics.RetentionDays = days
+			return nil
+		}
+	case "reminder":
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid key: %s (use reminder.<setting>)", key)
+		}
+		switch parts[1] {
+		case "enabled":
+			boolVal, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid value for reminder.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+			}
+			c.Reminder.Enabled = boolVal
+			return nil
+		case "os_notification":
+			boolVal, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid value for reminder.os_notification: %s (valid: true, false, yes, no, 1, 0)", value)
+			}
+			c.Reminder.OSNotification = boolVal
+			return nil
+		case "log_notification":
+			boolVal, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid value for reminder.log_notification: %s (valid: true, false, yes, no, 1, 0)", value)
+			}
+			c.Reminder.LogNotification = boolVal
+			return nil
+		case "intervals":
+			// Parse comma-separated list of intervals
+			intervals := strings.Split(value, ",")
+			for i, interval := range intervals {
+				intervals[i] = strings.TrimSpace(interval)
+			}
+			c.Reminder.Intervals = intervals
 			return nil
 		}
 	}

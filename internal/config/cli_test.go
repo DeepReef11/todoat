@@ -471,6 +471,301 @@ sync:
 	}
 }
 
+// --- Config Get/Set Reminder and Daemon Keys Tests (Issue #61) ---
+
+// TestConfigGetReminderEnabledCLI verifies 'todoat config get reminder.enabled' works
+func TestConfigGetReminderEnabledCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+reminder:
+  enabled: true
+  os_notification: false
+  log_notification: true
+  intervals:
+    - "1h"
+    - "24h"
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "reminder.enabled")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigSetReminderEnabledCLI verifies 'todoat config set reminder.enabled true' works
+func TestConfigSetReminderEnabledCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+reminder:
+  enabled: false
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "reminder.enabled", "true")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	stdout = cli.MustExecute("-y", "config", "get", "reminder.enabled")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigGetReminderOSNotificationCLI verifies 'todoat config get reminder.os_notification' works
+func TestConfigGetReminderOSNotificationCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+reminder:
+  enabled: true
+  os_notification: true
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "reminder.os_notification")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigSetReminderOSNotificationCLI verifies 'todoat config set reminder.os_notification true' works
+func TestConfigSetReminderOSNotificationCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+reminder:
+  enabled: true
+  os_notification: false
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "reminder.os_notification", "true")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	stdout = cli.MustExecute("-y", "config", "get", "reminder.os_notification")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigGetReminderLogNotificationCLI verifies 'todoat config get reminder.log_notification' works
+func TestConfigGetReminderLogNotificationCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+reminder:
+  enabled: true
+  log_notification: true
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "reminder.log_notification")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigSetReminderLogNotificationCLI verifies 'todoat config set reminder.log_notification false' works
+func TestConfigSetReminderLogNotificationCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+reminder:
+  enabled: true
+  log_notification: true
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "reminder.log_notification", "false")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	stdout = cli.MustExecute("-y", "config", "get", "reminder.log_notification")
+	testutil.AssertContains(t, stdout, "false")
+}
+
+// TestConfigGetSyncDaemonEnabledCLI verifies 'todoat config get sync.daemon.enabled' works
+func TestConfigGetSyncDaemonEnabledCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    interval: 300
+    idle_timeout: 1800
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "sync.daemon.enabled")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigSetSyncDaemonEnabledCLI verifies 'todoat config set sync.daemon.enabled true' works
+func TestConfigSetSyncDaemonEnabledCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: false
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.daemon.enabled", "true")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	stdout = cli.MustExecute("-y", "config", "get", "sync.daemon.enabled")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigGetSyncDaemonIntervalCLI verifies 'todoat config get sync.daemon.interval' works
+func TestConfigGetSyncDaemonIntervalCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    interval: 300
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "sync.daemon.interval")
+	testutil.AssertContains(t, stdout, "300")
+}
+
+// TestConfigSetSyncDaemonIntervalCLI verifies 'todoat config set sync.daemon.interval 60' works
+func TestConfigSetSyncDaemonIntervalCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    interval: 300
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.daemon.interval", "60")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	stdout = cli.MustExecute("-y", "config", "get", "sync.daemon.interval")
+	testutil.AssertContains(t, stdout, "60")
+}
+
+// TestConfigGetSyncDaemonIdleTimeoutCLI verifies 'todoat config get sync.daemon.idle_timeout' works
+func TestConfigGetSyncDaemonIdleTimeoutCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    idle_timeout: 1800
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "sync.daemon.idle_timeout")
+	testutil.AssertContains(t, stdout, "1800")
+}
+
+// TestConfigSetSyncDaemonIdleTimeoutCLI verifies 'todoat config set sync.daemon.idle_timeout 3600' works
+func TestConfigSetSyncDaemonIdleTimeoutCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    idle_timeout: 1800
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.daemon.idle_timeout", "3600")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	stdout = cli.MustExecute("-y", "config", "get", "sync.daemon.idle_timeout")
+	testutil.AssertContains(t, stdout, "3600")
+}
+
+// TestConfigGetSyncBackgroundPullCooldownCLI verifies 'todoat config get sync.background_pull_cooldown' works
+func TestConfigGetSyncBackgroundPullCooldownCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  background_pull_cooldown: "60s"
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "sync.background_pull_cooldown")
+	testutil.AssertContains(t, stdout, "60s")
+}
+
+// TestConfigGetAllIncludesReminderAndDaemonCLI verifies 'todoat config get' includes reminder and daemon sections
+func TestConfigGetAllIncludesReminderAndDaemonCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+reminder:
+  enabled: true
+  os_notification: true
+  log_notification: false
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    interval: 300
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get")
+
+	testutil.AssertContains(t, stdout, "reminder")
+	testutil.AssertContains(t, stdout, "daemon")
+}
+
 // --- Config JSON Output Test ---
 
 // TestConfigJSONCLI verifies 'todoat --json config get' returns JSON format
