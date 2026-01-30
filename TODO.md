@@ -208,3 +208,16 @@ The entire "Current Implementation Status", "Current Background Sync Patterns", 
 **Asked**: 2026-01-29
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
 
+### [FEAT-013] What is the design intent for recurring tasks?
+
+**Context**: Recurring tasks feature exists in code (`--recur` and `--recur-from-completion` CLI flags, `Recurrence` field in `backend/interface.go:32`, RRULE string format) and is documented in user-facing docs (`docs/how-to/task-management.md`, `docs/reference/cli.md`), but is not documented in `docs/explanation/`. The `docs/explanation/task-management.md` covers CRUD operations, status, priority, dates, and search but does not cover recurrence. Need to understand the design rationale (RRULE format choice, completion-based vs due-date-based recurrence, backend compatibility) before the explanation doc is complete.
+
+**Options**:
+- [ ] Add recurrence section to docs/explanation/task-management.md - Feature is part of task management, not a standalone subsystem
+- [ ] Create separate docs/explanation/recurring-tasks.md - Feature is complex enough to warrant its own explanation doc
+- [ ] Already covered sufficiently - The user-facing docs are adequate and no explanation doc is needed
+
+**Impact**: Determines whether recurring tasks design rationale is documented in explanation docs, enabling complete user-facing documentation coverage.
+
+**Asked**: 2026-01-29
+**Status**: unanswered

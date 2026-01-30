@@ -81,7 +81,7 @@ type Daemon struct {
 	syncCount int
 	lastSync  time.Time
 	mu        sync.RWMutex
-	syncMu    sync.Mutex   // Serializes performSync calls (Issue #52)
+	syncMu    sync.Mutex // Serializes performSync calls (Issue #52)
 	stopChan  chan struct{}
 	listener  net.Listener
 	syncFunc  func() error // Function to call for sync operations (legacy single-backend)

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed broken relative link in backend testing setup doc (pointed to `backends.md` instead of `../explanation/backends.md`)
+
 ### Changed
 - Expanded sync daemon documentation with architecture details, IPC behavior, and state file locations
 - Updated notification configuration docs to reflect actual behavior (reminder-controlled, not separate config block)

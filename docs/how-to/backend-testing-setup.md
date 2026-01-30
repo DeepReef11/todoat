@@ -171,4 +171,4 @@ make test-integration
 ## See Also
 
 - [Integration Testing](../explanation/integration-testing.md) - Detailed explanation
-- [Backend Configuration](backends.md) - Backend setup for regular use
+- [Backend Configuration](../explanation/backends.md) - Backend setup for regular use
