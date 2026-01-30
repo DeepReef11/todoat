@@ -179,6 +179,9 @@ default_backend: nextcloud-test
 	// Should show the cached tasks
 	testutil.AssertContains(t, stdout, "Local task 1")
 	testutil.AssertContains(t, stdout, "Local task 2")
+
+	// Allow background sync goroutines to complete before test cleanup
+	time.Sleep(100 * time.Millisecond)
 }
 
 // TestSyncPullCLI tests that `todoat sync` pulls changes from remote backend to local cache
