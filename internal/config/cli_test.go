@@ -846,3 +846,68 @@ no_prompt: false
 	testutil.AssertContains(t, stdout, "{")
 	testutil.AssertContains(t, stdout, "}")
 }
+
+// TestConfigSetBooleanNumericValues verifies 'config set' converts 1/0 to true/false for boolean fields (issue #63)
+func TestConfigSetBooleanNumericValues(t *testing.T) {
+	t.Run("set boolean with 1", func(t *testing.T) {
+		cli := testutil.NewCLITestWithConfig(t)
+
+		cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+no_prompt: false
+`)
+
+		// Set boolean field with "1" — should be accepted and written as true
+		stdout := cli.MustExecute("-y", "config", "set", "no_prompt", "1")
+		testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+		// Config must still be loadable after setting with "1"
+		stdout = cli.MustExecute("-y", "config", "get", "no_prompt")
+		testutil.AssertContains(t, stdout, "true")
+
+		// Verify raw YAML file contains "true", not integer 1
+		configPath := cli.ConfigPath()
+		raw, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("failed to read config file: %v", err)
+		}
+		content := string(raw)
+		if strings.Contains(content, "no_prompt: 1") {
+			t.Errorf("config file contains 'no_prompt: 1' (raw integer), expected 'no_prompt: true'")
+		}
+	})
+
+	t.Run("set boolean with 0", func(t *testing.T) {
+		cli := testutil.NewCLITestWithConfig(t)
+
+		cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+no_prompt: true
+`)
+
+		// Set boolean field with "0" — should be accepted and written as false
+		stdout := cli.MustExecute("-y", "config", "set", "no_prompt", "0")
+		testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+		// Config must still be loadable after setting with "0"
+		stdout = cli.MustExecute("-y", "config", "get", "no_prompt")
+		testutil.AssertContains(t, stdout, "false")
+
+		// Verify raw YAML file contains "false", not integer 0
+		configPath := cli.ConfigPath()
+		raw, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("failed to read config file: %v", err)
+		}
+		content := string(raw)
+		if strings.Contains(content, "no_prompt: 0") {
+			t.Errorf("config file contains 'no_prompt: 0' (raw integer), expected 'no_prompt: false'")
+		}
+	})
+}

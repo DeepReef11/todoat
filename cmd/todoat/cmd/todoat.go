@@ -10561,6 +10561,12 @@ func doConfigSet(stdout, stderr io.Writer, cfg *Config, key, value string) error
 		return err
 	}
 
+	// Normalize boolean aliases (1/0) to true/false for YAML safety.
+	// "1" and "0" are parsed as integers by YAML, which corrupts boolean fields.
+	if isBoolConfigKey(key) {
+		value = normalizeBoolForYAML(value)
+	}
+
 	// Try to update the config file in-place, preserving comments
 	rawContent, err := os.ReadFile(configPath)
 	if err != nil {
@@ -10959,6 +10965,43 @@ func setConfigValue(c *config.Config, key, value string) error {
 	}
 
 	return fmt.Errorf("unknown config key: %s", key)
+}
+
+// isBoolConfigKey returns true if the given config key corresponds to a boolean field.
+func isBoolConfigKey(key string) bool {
+	switch strings.ToLower(key) {
+	case "no_prompt",
+		"auto_detect_backend",
+		"backends.sqlite.enabled",
+		"backends.todoist.enabled",
+		"sync.enabled",
+		"sync.auto_sync_after_operation",
+		"sync.daemon.enabled",
+		"sync.daemon.file_watcher",
+		"sync.daemon.smart_timing",
+		"analytics.enabled",
+		"reminder.enabled",
+		"reminder.os_notification",
+		"reminder.log_notification":
+		return true
+	default:
+		return false
+	}
+}
+
+// normalizeBoolForYAML converts "1" to "true" and "0" to "false" so that
+// YAML boolean fields receive a proper boolean instead of an integer literal.
+// Other boolean aliases ("yes"/"no") are already valid YAML booleans and need no conversion.
+// All other values are returned unchanged.
+func normalizeBoolForYAML(value string) string {
+	switch value {
+	case "1":
+		return "true"
+	case "0":
+		return "false"
+	default:
+		return value
+	}
 }
 
 // parseBool parses a boolean value from various formats
