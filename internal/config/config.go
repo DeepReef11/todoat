@@ -21,6 +21,11 @@ func GetSampleConfig() string {
 	return sampleConfig
 }
 
+// UIConfig holds user interface settings
+type UIConfig struct {
+	InteractivePromptForAllTasks bool `yaml:"interactive_prompt_for_all_tasks"`
+}
+
 // Config represents the application configuration
 type Config struct {
 	Backends          BackendsConfig  `yaml:"backends"`
@@ -33,6 +38,7 @@ type Config struct {
 	Trash             TrashConfig     `yaml:"trash"`
 	Analytics         AnalyticsConfig `yaml:"analytics"`
 	Reminder          ReminderConfig  `yaml:"reminder"`
+	UI                UIConfig        `yaml:"ui"`
 }
 
 // ReminderConfig holds reminder settings
@@ -314,6 +320,12 @@ func (c *Config) GetAutoSyncAfterOperationConfigValue() bool {
 // IsAutoDetectEnabled returns true if auto-detection is enabled
 func (c *Config) IsAutoDetectEnabled() bool {
 	return c.AutoDetectBackend
+}
+
+// IsInteractivePromptForAllTasks returns true if interactive prompts should show all tasks
+// including completed and cancelled.
+func (c *Config) IsInteractivePromptForAllTasks() bool {
+	return c.UI.InteractivePromptForAllTasks
 }
 
 // GetTrashRetentionDays returns the trash retention period in days.

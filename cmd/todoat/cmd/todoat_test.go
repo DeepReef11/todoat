@@ -2052,6 +2052,86 @@ func TestListInfoCommand(t *testing.T) {
 	}
 }
 
+// TestListCommandJSON verifies the list command outputs wrapped JSON with --json flag (Issue #67).
+func TestListCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list first
+	exitCode := Execute([]string{"list", "create", "TestList67"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// List all lists in JSON format
+	exitCode = Execute([]string{"--json", "list"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON object (not a bare array)
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("list --json should output a JSON object, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields: "lists" and "result"
+	for _, field := range []string{"lists", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+
+	// Check result value
+	if result["result"] != ResultInfoOnly {
+		t.Errorf("expected result '%s', got: %v", ResultInfoOnly, result["result"])
+	}
+
+	// Check lists is an array
+	lists, ok := result["lists"].([]interface{})
+	if !ok {
+		t.Fatalf("'lists' field should be an array, got: %T", result["lists"])
+	}
+
+	// Should contain the list we created
+	if len(lists) == 0 {
+		t.Fatal("'lists' array should not be empty")
+	}
+
+	// Check first list has expected fields
+	firstList, ok := lists[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("list entry should be an object, got: %T", lists[0])
+	}
+
+	for _, field := range []string{"id", "name", "tasks", "modified"} {
+		if _, ok := firstList[field]; !ok {
+			t.Errorf("list entry should contain '%s' field, got: %v", field, firstList)
+		}
+	}
+
+	if name, ok := firstList["name"].(string); !ok || name != "TestList67" {
+		t.Errorf("expected name 'TestList67', got: %v", firstList["name"])
+	}
+}
+
 // TestListInfoCommandJSON verifies the list info command outputs valid JSON with --json flag.
 func TestListInfoCommandJSON(t *testing.T) {
 	tmpDir := t.TempDir()

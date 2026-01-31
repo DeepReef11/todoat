@@ -172,8 +172,8 @@ todoat --json list trash
 ```json
 {
   "lists": [
-    {"id": "abc-123", "name": "Work Tasks", "task_count": 12, "color": "#0066cc"},
-    {"id": "def-456", "name": "Personal", "task_count": 5, "color": "#ff5733"}
+    {"id": "abc-123", "name": "Work Tasks", "tasks": 12, "color": "#0066cc"},
+    {"id": "def-456", "name": "Personal", "tasks": 5, "color": "#ff5733"}
   ],
   "result": "INFO_ONLY"
 }

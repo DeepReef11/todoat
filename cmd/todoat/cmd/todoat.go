@@ -613,9 +613,13 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 			Tasks       int    `json:"tasks"`
 			Modified    string `json:"modified"`
 		}
-		var output []listJSON
+		type listViewJSON struct {
+			Lists  []listJSON `json:"lists"`
+			Result string     `json:"result"`
+		}
+		var items []listJSON
 		for _, cl := range cachedLists {
-			output = append(output, listJSON{
+			items = append(items, listJSON{
 				ID:          cl.ID,
 				Name:        cl.Name,
 				Description: cl.Description,
@@ -624,8 +628,12 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 				Modified:    cl.Modified.Format("2006-01-02T15:04:05Z"),
 			})
 		}
-		if output == nil {
-			output = []listJSON{}
+		if items == nil {
+			items = []listJSON{}
+		}
+		output := listViewJSON{
+			Lists:  items,
+			Result: ResultInfoOnly,
 		}
 		jsonBytes, err := json.Marshal(output)
 		if err != nil {

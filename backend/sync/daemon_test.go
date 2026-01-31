@@ -1511,6 +1511,106 @@ sync:
 	}
 }
 
+// TestRegression_Issue59_StatusWithoutDaemonEnabled verifies that daemon status reports
+// the actual running interval even when sync.daemon.enabled is NOT set in config.
+// This catches the specific regression where isDaemonFeatureEnabled() returns false,
+// causing the status command to fall through to the else branch where IPC fails
+// and falls back to the config default (300 seconds / 5 minutes).
+//
+// The existing TestRegression_Issue59_SeparateProcessDaemonStatusInterval test only
+// covers the case WITH daemon.enabled: true in config, which takes a different code path.
+func TestRegression_Issue59_StatusWithoutDaemonEnabled(t *testing.T) {
+	// Need a pre-built binary for real separate-process testing
+	binaryPath := os.Getenv("TODOAT_BINARY")
+	if binaryPath == "" {
+		candidates := []string{
+			"./bin/todoat",
+			"../bin/todoat",
+			"../../bin/todoat",
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				abs, _ := filepath.Abs(c)
+				binaryPath = abs
+				break
+			}
+		}
+	}
+	if binaryPath == "" {
+		t.Skip("Skipping separate-process daemon test: no todoat binary found")
+	}
+
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, "todoat")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Write config WITHOUT daemon.enabled (the default user scenario).
+	// Users can still run `daemon start --interval 120` without daemon.enabled in config.
+	configContent := `
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	env := append(os.Environ(), "XDG_CONFIG_HOME="+tmpDir)
+
+	// Start daemon with custom interval in a SEPARATE process
+	startCmd := exec.Command(binaryPath, "-y", "sync", "daemon", "start", "--interval", "120")
+	startCmd.Env = env
+	startOut, err := startCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("daemon start failed: %v, output: %s", err, startOut)
+	}
+	testutil.AssertContains(t, string(startOut), "started")
+
+	// Ensure cleanup
+	defer func() {
+		stopCmd := exec.Command(binaryPath, "-y", "sync", "daemon", "stop")
+		stopCmd.Env = env
+		_ = stopCmd.Run()
+	}()
+
+	// Wait for daemon to fully initialize
+	time.Sleep(1 * time.Second)
+
+	// Check status in a SEPARATE process
+	statusCmd := exec.Command(binaryPath, "-y", "sync", "daemon", "status")
+	statusCmd.Env = env
+	statusOut, err := statusCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("daemon status failed: %v, output: %s", err, statusOut)
+	}
+
+	statusStr := string(statusOut)
+
+	// The status MUST show "120 seconds", not "300 seconds" (config default).
+	// When daemon.enabled is NOT in config, isDaemonFeatureEnabled() returns false,
+	// causing the status command to take the else branch. If IPC fails in the else
+	// branch, it falls back to getConfigDaemonInterval() which returns 300 seconds.
+	if strings.Contains(statusStr, "300 seconds") {
+		t.Errorf("Regression Issue #59: daemon status shows config default (300 seconds) "+
+			"instead of actual running interval (120 seconds) when daemon.enabled "+
+			"is NOT in config.\n"+
+			"Root cause: isDaemonFeatureEnabled() returns false without daemon.enabled "+
+			"in config, so the else branch IPC call fails and falls back to "+
+			"getConfigDaemonInterval() which returns the 5-minute default.\n"+
+			"Status output:\n%s", statusStr)
+	}
+	if !strings.Contains(statusStr, "120 seconds") {
+		t.Errorf("Expected daemon status to show '120 seconds' (actual running interval), got:\n%s", statusStr)
+	}
+}
+
 // TestCLIReturnsImmediately verifies that CLI returns immediately after local operations
 // instead of blocking on sync completion.
 // Issue #36: CLI should not hang waiting for sync

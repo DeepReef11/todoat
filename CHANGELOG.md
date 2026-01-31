@@ -8,10 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Interactive prompt package (`internal/cli/prompt`) with fuzzy-find task selection, context-aware filtering by action, and interactive add mode with field validation (#48)
+- `ui.interactive_prompt_for_all_tasks` config option to include completed/cancelled tasks in interactive prompts
+- `--all` / `-a` flag support for showing terminal tasks in interactive selection
 - Backend setup how-to guide with configuration examples for all backends (SQLite, Nextcloud, Todoist, Google Tasks, Microsoft To Do, Git, File)
 - Backend configuration reference table in configuration docs
 
 ### Changed
+- `list` command JSON output now wraps results in an object with `lists` and `result` fields instead of a bare array (#67)
+- Updated list-management docs JSON examples to use correct field name `tasks` instead of `task_count`
 - Updated cross-reference links to point to new backend setup guide
 
 ### Fixed
