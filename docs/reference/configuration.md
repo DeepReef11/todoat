@@ -224,6 +224,9 @@ todoat notification test
 # View notification history
 todoat notification log
 
+# View notification log as JSON
+todoat --json notification log
+
 # Clear notification log
 todoat notification log clear
 ```

@@ -274,6 +274,9 @@ Output a single line to stdout.
 
 ```bash
 todoat view list
+
+# JSON output
+todoat --json view list
 ```
 
 Output:

@@ -4297,9 +4297,9 @@ func TestSyncDaemonStatusCommandJSON(t *testing.T) {
 	}
 
 	cfg := &Config{
-		DBPath:          dbPath,
-		ConfigPath:      configPath,
-		DaemonPIDPath:   filepath.Join(tmpDir, "daemon.pid"),
+		DBPath:           dbPath,
+		ConfigPath:       configPath,
+		DaemonPIDPath:    filepath.Join(tmpDir, "daemon.pid"),
 		DaemonSocketPath: filepath.Join(tmpDir, "daemon.sock"),
 	}
 

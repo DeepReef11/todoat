@@ -6851,11 +6851,11 @@ func doSyncQueueView(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 
 	if jsonOutput {
 		type syncOperationJSON struct {
-			ID            int64  `json:"id"`
-			Type          string `json:"type"`
-			TaskSummary   string `json:"task_summary"`
-			RetryCount    int    `json:"retry_count"`
-			CreatedAt     string `json:"created_at"`
+			ID          int64  `json:"id"`
+			Type        string `json:"type"`
+			TaskSummary string `json:"task_summary"`
+			RetryCount  int    `json:"retry_count"`
+			CreatedAt   string `json:"created_at"`
 		}
 		type syncQueueJSON struct {
 			Operations []syncOperationJSON `json:"operations"`
@@ -8142,8 +8142,12 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 	if isDaemonFeatureEnabled(cfg) {
 		// Get idle timeout from config or use default
 		idleTimeout := 5 * time.Minute // Default
-		if cfg.ConfigPath != "" {
-			appConfig, err := config.LoadFromPath(cfg.ConfigPath)
+		configPathForDaemon := cfg.ConfigPath
+		if configPathForDaemon == "" {
+			configPathForDaemon = filepath.Join(config.GetConfigDir(), "config.yaml")
+		}
+		{
+			appConfig, err := config.LoadFromPath(configPathForDaemon)
 			if err == nil && appConfig != nil {
 				idleTimeoutSec := appConfig.GetDaemonIdleTimeout()
 				if idleTimeoutSec > 0 {
@@ -8159,7 +8163,7 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 			LogPath:     logPath,
 			Interval:    interval,
 			IdleTimeout: idleTimeout,
-			ConfigPath:  cfg.ConfigPath,
+			ConfigPath:  configPathForDaemon,
 			DBPath:      cfg.DBPath,
 			CachePath:   cfg.CachePath,
 			Executable:  cfg.DaemonBinaryPath, // For testing with pre-built binary
@@ -8717,7 +8721,7 @@ func isDaemonFeatureEnabled(cfg *Config) bool {
 	// Check config file for sync.daemon.enabled setting
 	configPath := cfg.ConfigPath
 	if configPath == "" {
-		return false
+		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
 	}
 
 	appConfig, err := config.LoadFromPath(configPath)
@@ -8743,7 +8747,7 @@ func isDaemonRunning(cfg *Config, pidPath string) bool {
 func getConfigDaemonInterval(cfg *Config) time.Duration {
 	configPath := cfg.ConfigPath
 	if configPath == "" {
-		return 0
+		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
 	}
 
 	data, err := os.ReadFile(configPath)

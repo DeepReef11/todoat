@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Daemon feature check, config interval lookup, and daemon start now fall back to default config path when `ConfigPath` is empty instead of silently returning early
+
 ### Added
+- Documentation for `--json` flag on `sync queue`, `sync daemon status`, `reminder check`, `notification log`, and `view list` commands
 - Regression test for Issue #59: in-process daemon status returns actual running interval via IPC instead of config default
 - Separate-process regression test for Issue #59: verifies daemon status shows actual interval when start and status are separate CLI invocations
 - Rate limit error documentation with causes, examples, and troubleshooting steps

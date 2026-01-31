@@ -608,6 +608,9 @@ todoat --json sync status
 # View pending operations
 todoat sync queue
 
+# View pending operations as JSON
+todoat --json sync queue
+
 # Clear all pending operations
 todoat sync queue clear
 
@@ -622,6 +625,9 @@ todoat sync daemon start
 
 # Check daemon status
 todoat sync daemon status
+
+# Check daemon status as JSON
+todoat --json sync daemon status
 
 # Stop background sync
 todoat sync daemon stop
@@ -669,6 +675,9 @@ Without `-y` flag, opens an interactive builder. With `-y`, uses provided flags 
 ```bash
 # List views
 todoat view list
+
+# List views as JSON
+todoat --json view list
 
 # Create a view interactively
 todoat view create urgent
@@ -843,6 +852,9 @@ todoat reminder list
 # Check for due reminders
 todoat reminder check
 
+# Check for due reminders as JSON
+todoat --json reminder check
+
 # Dismiss a reminder
 todoat reminder dismiss "Meeting prep"
 
@@ -894,6 +906,9 @@ todoat notification test
 
 # View notification log
 todoat notification log
+
+# View notification log as JSON
+todoat --json notification log
 
 # Clear notification log
 todoat notification log clear

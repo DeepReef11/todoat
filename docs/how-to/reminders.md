@@ -58,6 +58,9 @@ All reminder query commands support `--json` output:
 # Upcoming reminders as JSON
 todoat --json reminder list
 
+# Check for due reminders as JSON
+todoat --json reminder check
+
 # Reminder status as JSON
 todoat --json reminder status
 ```

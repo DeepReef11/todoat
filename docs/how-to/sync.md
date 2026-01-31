@@ -72,6 +72,12 @@ todoat sync queue
 
 Shows operations waiting to be synced.
 
+For JSON output:
+
+```bash
+todoat --json sync queue
+```
+
 ### Clear Sync Queue
 
 ```bash
@@ -132,6 +138,12 @@ todoat sync daemon start --interval 60
 
 ```bash
 todoat sync daemon status
+```
+
+For JSON output:
+
+```bash
+todoat --json sync daemon status
 ```
 
 Shows daemon status including PID, sync interval, sync count, and last sync time:
