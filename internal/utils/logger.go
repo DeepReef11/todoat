@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 )
 
 // ENABLE_BACKGROUND_LOGGING controls whether background logging is enabled.
@@ -66,7 +67,7 @@ func (l *Logger) Debug(msgOrFormat string, args ...interface{}) {
 	if !l.IsVerbose() {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "[DEBUG] %s\n", formatMessage(msgOrFormat, args...))
+	fmt.Fprintf(os.Stderr, "%s [DEBUG] %s\n", time.Now().Format("15:04:05"), formatMessage(msgOrFormat, args...))
 }
 
 // Info logs an info message (always shown).

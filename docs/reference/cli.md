@@ -54,7 +54,7 @@ These flags are available for all commands:
 | `--no-parent` | bool | Remove parent relationship (make root-level) |
 | `--summary <text>` | string | New task summary (for update) |
 | `-l, --literal` | bool | Treat task summary literally (don't parse / as hierarchy separator) |
-| `--recur <rule>` | string | Recurrence (daily, weekly, monthly, yearly, or "every N days/weeks/months") |
+| `--recur <rule>` | string | Recurrence rule (daily, weekly, monthly, yearly, or "every N days/weeks/months") |
 | `--recur-from-completion` | bool | Base next occurrence on completion date instead of due date |
 
 #### For get/filter operations:
@@ -466,8 +466,8 @@ todoat config [command]
 
 | Command | Description |
 |---------|-------------|
-| `get [key]` | Display configuration value(s) |
-| `set <key> <value>` | Update configuration value |
+| `get [key]` | Display a specific configuration value or all config if no key specified. Supports dot notation for nested keys (e.g., `sync.enabled`, `backends.sqlite.path`) |
+| `set <key> <value>` | Update a configuration value with validation. Supports dot notation for nested keys (e.g., `sync.offline_mode auto`) |
 | `edit` | Open config file in editor |
 | `path` | Show config file location |
 | `reset` | Reset to default configuration |
@@ -573,7 +573,7 @@ todoat sync daemon [command]
 | `start` | Start the sync daemon |
 | `status` | Show daemon status |
 | `stop` | Stop the sync daemon |
-| `kill` | Force kill the daemon (emergency) |
+| `kill` | Force kill the sync daemon |
 
 #### sync daemon start
 
@@ -708,7 +708,7 @@ todoat credentials [command]
 
 ### credentials set
 
-Store credentials securely in the system keyring.
+Store credentials securely in the system keyring (macOS Keychain, Windows Credential Manager, or Linux Secret Service).
 
 ```bash
 todoat credentials set [backend] [username] [flags]

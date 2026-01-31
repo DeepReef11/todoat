@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -308,6 +309,172 @@ func TestLoggerThreadSafety(t *testing.T) {
 	}
 	wg.Wait()
 	// Test passes if no race condition panics
+}
+
+// =============================================================================
+// Verbose Timestamp Tests (issue #47)
+// =============================================================================
+
+// TestVerboseOutputIncludesTimestamp verifies debug output lines include HH:MM:SS prefix
+func TestVerboseOutputIncludesTimestamp(t *testing.T) {
+	// Reset singleton for clean test
+	once = sync.Once{}
+	loggerInstance = nil
+
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	logger := GetLogger()
+	logger.SetVerbose(true)
+	logger.Debug("timestamp test message")
+
+	_ = w.Close()
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	os.Stderr = oldStderr
+
+	output := buf.String()
+
+	// Should contain a timestamp before [DEBUG]
+	// Format: "HH:MM:SS [DEBUG] timestamp test message\n"
+	if !strings.Contains(output, "[DEBUG]") {
+		t.Fatalf("expected [DEBUG] in output, got: %s", output)
+	}
+
+	// Verify timestamp appears before [DEBUG]
+	debugIdx := strings.Index(output, "[DEBUG]")
+	prefix := output[:debugIdx]
+	// Prefix should contain a time-like pattern (HH:MM:SS followed by space)
+	timePattern := regexp.MustCompile(`\d{2}:\d{2}:\d{2} $`)
+	if !timePattern.MatchString(prefix) {
+		t.Errorf("expected HH:MM:SS timestamp prefix before [DEBUG], got prefix: %q", prefix)
+	}
+}
+
+// TestVerboseTimestampFormat verifies timestamp format is consistent HH:MM:SS
+func TestVerboseTimestampFormat(t *testing.T) {
+	// Reset singleton for clean test
+	once = sync.Once{}
+	loggerInstance = nil
+
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	logger := GetLogger()
+	logger.SetVerbose(true)
+	logger.Debug("format check")
+
+	_ = w.Close()
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	os.Stderr = oldStderr
+
+	output := buf.String()
+
+	// Full line should match: "HH:MM:SS [DEBUG] format check\n"
+	linePattern := regexp.MustCompile(`^\d{2}:\d{2}:\d{2} \[DEBUG\] format check\n$`)
+	if !linePattern.MatchString(output) {
+		t.Errorf("expected output matching 'HH:MM:SS [DEBUG] format check\\n', got: %q", output)
+	}
+
+	// Validate the hour/minute/second ranges
+	timestampPattern := regexp.MustCompile(`^(\d{2}):(\d{2}):(\d{2}) `)
+	matches := timestampPattern.FindStringSubmatch(output)
+	if len(matches) != 4 {
+		t.Fatalf("could not parse timestamp from output: %q", output)
+	}
+	// Hour 00-23, Minute 00-59, Second 00-59 are enforced by Go's time format,
+	// but verify the values are plausible
+	hour := matches[1]
+	minute := matches[2]
+	second := matches[3]
+	if hour > "23" || minute > "59" || second > "59" {
+		t.Errorf("timestamp values out of range: %s:%s:%s", hour, minute, second)
+	}
+}
+
+// TestNonVerboseNoTimestamp verifies normal (non-verbose) output is unaffected
+func TestNonVerboseNoTimestamp(t *testing.T) {
+	// Reset singleton for clean test
+	once = sync.Once{}
+	loggerInstance = nil
+
+	logger := GetLogger()
+	logger.SetVerbose(false)
+
+	// Test Info output (non-debug) - should NOT have timestamp
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	logger.Info("info without timestamp")
+
+	_ = w.Close()
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	os.Stderr = oldStderr
+
+	infoOutput := buf.String()
+	// Info output should start with [INFO], no timestamp prefix
+	if !strings.HasPrefix(infoOutput, "[INFO]") {
+		t.Errorf("Info output should start with [INFO] (no timestamp), got: %q", infoOutput)
+	}
+	// Should not have a timestamp-like prefix
+	timestampPattern := regexp.MustCompile(`^\d{2}:\d{2}:\d{2} `)
+	if timestampPattern.MatchString(infoOutput) {
+		t.Errorf("non-debug output should NOT have timestamp prefix, got: %q", infoOutput)
+	}
+
+	// Test Warn output - should NOT have timestamp
+	r, w, _ = os.Pipe()
+	os.Stderr = w
+
+	logger.Warn("warn without timestamp")
+
+	_ = w.Close()
+	buf.Reset()
+	_, _ = io.Copy(&buf, r)
+	os.Stderr = oldStderr
+
+	warnOutput := buf.String()
+	if !strings.HasPrefix(warnOutput, "[WARN]") {
+		t.Errorf("Warn output should start with [WARN] (no timestamp), got: %q", warnOutput)
+	}
+
+	// Test Error output - should NOT have timestamp
+	r, w, _ = os.Pipe()
+	os.Stderr = w
+
+	logger.Error("error without timestamp")
+
+	_ = w.Close()
+	buf.Reset()
+	_, _ = io.Copy(&buf, r)
+	os.Stderr = oldStderr
+
+	errorOutput := buf.String()
+	if !strings.HasPrefix(errorOutput, "[ERROR]") {
+		t.Errorf("Error output should start with [ERROR] (no timestamp), got: %q", errorOutput)
+	}
+
+	// Also verify that Debug with verbose=false produces no output at all
+	r, w, _ = os.Pipe()
+	os.Stderr = w
+
+	logger.Debug("should not appear")
+
+	_ = w.Close()
+	buf.Reset()
+	_, _ = io.Copy(&buf, r)
+	os.Stderr = oldStderr
+
+	if buf.Len() > 0 {
+		t.Errorf("Debug with verbose=false should produce no output, got: %q", buf.String())
+	}
 }
 
 // =============================================================================
