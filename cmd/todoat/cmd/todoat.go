@@ -3754,8 +3754,9 @@ func newViewListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			return doViewList(cfg, stdout)
+			return doViewList(cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -3763,13 +3764,53 @@ func newViewListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 }
 
 // doViewList displays all available views
-func doViewList(cfg *Config, stdout io.Writer) error {
+func doViewList(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	viewsDir := getViewsDir(cfg)
 	loader := views.NewLoader(viewsDir)
 
 	viewList, err := loader.ListViews()
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		type viewInfoJSON struct {
+			Name      string `json:"name"`
+			Type      string `json:"type"`
+			BuiltIn   bool   `json:"built_in"`
+			Overrides bool   `json:"overrides"`
+		}
+		type viewListJSON struct {
+			Views  []viewInfoJSON `json:"views"`
+			Result string         `json:"result"`
+		}
+		jsonViews := make([]viewInfoJSON, 0, len(viewList))
+		for _, v := range viewList {
+			var viewType string
+			if v.BuiltIn {
+				viewType = "built-in"
+			} else if v.Overrides {
+				viewType = "user-defined, overrides built-in"
+			} else {
+				viewType = "user-defined"
+			}
+			jsonViews = append(jsonViews, viewInfoJSON{
+				Name:      v.Name,
+				Type:      viewType,
+				BuiltIn:   v.BuiltIn,
+				Overrides: v.Overrides,
+			})
+		}
+		output := viewListJSON{
+			Views:  jsonViews,
+			Result: ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	_, _ = fmt.Fprintln(stdout, "Available views:")
@@ -6785,8 +6826,9 @@ func newSyncQueueCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			return doSyncQueueView(cfg, stdout)
+			return doSyncQueueView(cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -6798,13 +6840,47 @@ func newSyncQueueCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 }
 
 // doSyncQueueView displays pending sync operations
-func doSyncQueueView(cfg *Config, stdout io.Writer) error {
+func doSyncQueueView(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	syncMgr := getSyncManager(cfg)
 	defer func() { _ = syncMgr.Close() }()
 
 	ops, err := syncMgr.GetPendingOperations()
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		type syncOperationJSON struct {
+			ID            int64  `json:"id"`
+			Type          string `json:"type"`
+			TaskSummary   string `json:"task_summary"`
+			RetryCount    int    `json:"retry_count"`
+			CreatedAt     string `json:"created_at"`
+		}
+		type syncQueueJSON struct {
+			Operations []syncOperationJSON `json:"operations"`
+			Result     string              `json:"result"`
+		}
+		jsonOps := make([]syncOperationJSON, 0, len(ops))
+		for _, op := range ops {
+			jsonOps = append(jsonOps, syncOperationJSON{
+				ID:          op.ID,
+				Type:        op.OperationType,
+				TaskSummary: op.TaskSummary,
+				RetryCount:  op.RetryCount,
+				CreatedAt:   op.CreatedAt.Format(time.RFC3339),
+			})
+		}
+		output := syncQueueJSON{
+			Operations: jsonOps,
+			Result:     ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Pending Operations: %d\n", len(ops))
@@ -7718,8 +7794,9 @@ func newNotificationLogCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			return doNotificationLogView(cfg, stdout)
+			return doNotificationLogView(cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -7731,7 +7808,7 @@ func newNotificationLogCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 }
 
 // doNotificationLogView displays the notification log
-func doNotificationLogView(cfg *Config, stdout io.Writer) error {
+func doNotificationLogView(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	logPath := cfg.NotificationLogPath
 	if logPath == "" {
 		logPath = getDefaultNotificationLogPath()
@@ -7740,6 +7817,26 @@ func doNotificationLogView(cfg *Config, stdout io.Writer) error {
 	entries, err := notification.ReadLog(logPath)
 	if err != nil {
 		return fmt.Errorf("failed to read notification log: %w", err)
+	}
+
+	if jsonOutput {
+		type notificationLogJSON struct {
+			Notifications []string `json:"notifications"`
+			Result        string   `json:"result"`
+		}
+		if entries == nil {
+			entries = []string{}
+		}
+		output := notificationLogJSON{
+			Notifications: entries,
+			Result:        ResultInfoOnly,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	if len(entries) == 0 {
@@ -7910,8 +8007,9 @@ func newSyncDaemonStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			return doDaemonStatus(cfg, stdout)
+			return doDaemonStatus(cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -8341,11 +8439,27 @@ func doDaemonStop(cfg *Config, stdout io.Writer) error {
 }
 
 // doDaemonStatus shows daemon status
-func doDaemonStatus(cfg *Config, stdout io.Writer) error {
+func doDaemonStatus(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	pidPath := getDaemonPIDPath(cfg)
 	socketPath := getDaemonSocketPath(cfg)
 
 	if !isDaemonRunning(cfg, pidPath) {
+		if jsonOutput {
+			type daemonStatusJSON struct {
+				Running bool   `json:"running"`
+				Result  string `json:"result"`
+			}
+			output := daemonStatusJSON{
+				Running: false,
+				Result:  ResultInfoOnly,
+			}
+			jsonBytes, err := json.Marshal(output)
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+			return nil
+		}
 		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running")
 		if cfg != nil && cfg.NoPrompt {
 			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
@@ -8414,6 +8528,33 @@ func doDaemonStatus(cfg *Config, stdout io.Writer) error {
 		if interval == 0 {
 			interval = 5 * time.Minute
 		}
+	}
+
+	if jsonOutput {
+		type daemonStatusJSON struct {
+			Running      bool   `json:"running"`
+			PID          int    `json:"pid"`
+			IntervalSecs int    `json:"interval_secs"`
+			SyncCount    int    `json:"sync_count"`
+			LastSync     string `json:"last_sync,omitempty"`
+			Result       string `json:"result"`
+		}
+		output := daemonStatusJSON{
+			Running:      true,
+			PID:          pid,
+			IntervalSecs: int(interval.Seconds()),
+			SyncCount:    syncCount,
+			Result:       ResultInfoOnly,
+		}
+		if !lastSync.IsZero() {
+			output.LastSync = lastSync.Format(time.RFC3339)
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	_, _ = fmt.Fprintln(stdout, "Sync daemon is running")
@@ -9667,8 +9808,9 @@ func newReminderCheckCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
+			jsonOutput, _ := cmd.Flags().GetBool("json")
 
-			return doReminderCheck(cfg, stdout)
+			return doReminderCheck(cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -9676,7 +9818,7 @@ func newReminderCheckCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 }
 
 // doReminderCheck checks for due reminders and sends notifications
-func doReminderCheck(cfg *Config, stdout io.Writer) error {
+func doReminderCheck(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	reminderCfg, err := loadReminderConfig(cfg)
 	if err != nil {
 		return err
@@ -9728,6 +9870,37 @@ func doReminderCheck(cfg *Config, stdout io.Writer) error {
 	triggered, err := service.CheckReminders(taskPtrs)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		type triggeredTaskJSON struct {
+			Summary string `json:"summary"`
+			DueDate string `json:"due_date,omitempty"`
+		}
+		type reminderCheckJSON struct {
+			Triggered []triggeredTaskJSON `json:"triggered"`
+			Result    string              `json:"result"`
+		}
+		jsonTriggered := make([]triggeredTaskJSON, 0, len(triggered))
+		for _, task := range triggered {
+			entry := triggeredTaskJSON{
+				Summary: task.Summary,
+			}
+			if task.DueDate != nil {
+				entry.DueDate = task.DueDate.Format(views.DefaultDateFormat)
+			}
+			jsonTriggered = append(jsonTriggered, entry)
+		}
+		output := reminderCheckJSON{
+			Triggered: jsonTriggered,
+			Result:    ResultActionCompleted,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
 	}
 
 	if len(triggered) == 0 {

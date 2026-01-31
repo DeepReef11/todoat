@@ -4247,3 +4247,199 @@ func TestExecuteDoesNotBlockOnBackgroundSync(t *testing.T) {
 		t.Fatalf("Execute() did not return within %v — backgroundSyncWG.Wait() is blocking CLI exit (Issue #46)", deadline)
 	}
 }
+
+// TestSyncQueueCommandJSON verifies the sync queue command outputs valid JSON with --json flag (Issue #64).
+func TestSyncQueueCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "sync", "queue"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("sync queue --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("sync queue --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"operations", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestSyncDaemonStatusCommandJSON verifies the sync daemon status command outputs valid JSON with --json flag (Issue #64).
+func TestSyncDaemonStatusCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:          dbPath,
+		ConfigPath:      configPath,
+		DaemonPIDPath:   filepath.Join(tmpDir, "daemon.pid"),
+		DaemonSocketPath: filepath.Join(tmpDir, "daemon.sock"),
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "sync", "daemon", "status"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("sync daemon status --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("sync daemon status --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"running", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestReminderCheckCommandJSON verifies the reminder check command outputs valid JSON with --json flag (Issue #64).
+func TestReminderCheckCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := "default_backend: sqlite\nreminder:\n  enabled: true\n  intervals:\n    - 1h\n  os_notification: false\n  log_notification: true\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "reminder", "check"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("reminder check --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("reminder check --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"triggered", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestNotificationLogCommandJSON verifies the notification log command outputs valid JSON with --json flag (Issue #64).
+func TestNotificationLogCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:              dbPath,
+		ConfigPath:          configPath,
+		NotificationLogPath: filepath.Join(tmpDir, "notifications.log"),
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "notification", "log"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("notification log --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("notification log --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"notifications", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestViewListCommandJSON verifies the view list command outputs valid JSON with --json flag (Issue #64).
+func TestViewListCommandJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	viewsDir := filepath.Join(tmpDir, "views")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+		ViewsPath:  viewsDir,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	exitCode := Execute([]string{"--json", "view", "list"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("view list --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Must be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("view list --json should output valid JSON, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields
+	for _, field := range []string{"views", "result"} {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
