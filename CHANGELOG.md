@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Regression test for Issue #59: in-process daemon status returns actual running interval via IPC instead of config default
+
 ### Changed
 - Updated sync daemon status docs with example output showing PID, interval, sync count, and last sync time
 - Updated task matching docs: single match completes directly without confirmation prompt; multiple matches show error with UIDs instead of interactive menu

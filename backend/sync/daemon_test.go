@@ -1370,6 +1370,39 @@ default_backend: sqlite
 	}
 }
 
+// TestRegression_Issue59_InProcessDaemonStatusInterval verifies that daemon status
+// reports the actual running interval even when using the in-process (non-forked)
+// daemon. This test specifically exercises the non-DaemonTestMode code path where
+// daemon start and daemon status occur in separate CLI invocations within the same
+// process. The in-process daemon's IPC socket must remain alive so that a subsequent
+// status call can query the interval via IPC rather than falling back to the config
+// default (300 seconds).
+//
+// Regression test for Issue #59 - catches the case where IPC is unavailable and
+// status falls back to config defaults.
+func TestRegression_Issue59_InProcessDaemonStatusInterval(t *testing.T) {
+	cli := testutil.NewCLITestWithDaemon(t)
+
+	// Start daemon with non-default interval
+	startOut := cli.MustExecute("-y", "sync", "daemon", "start", "--interval", "90")
+	testutil.AssertContains(t, startOut, "started")
+
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
+
+	// The status MUST show 90 seconds, not 300 seconds (config default)
+	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
+
+	if strings.Contains(statusOut, "300 seconds") {
+		t.Errorf("Regression Issue #59: daemon status shows config default (300 seconds) "+
+			"instead of actual running interval (90 seconds).\n"+
+			"This indicates the in-process daemon's IPC is not returning the correct interval.\n"+
+			"Status output:\n%s", statusOut)
+	}
+	if !strings.Contains(statusOut, "90 seconds") {
+		t.Errorf("Expected daemon status to show '90 seconds' (actual running interval), got:\n%s", statusOut)
+	}
+}
+
 // TestCLIReturnsImmediately verifies that CLI returns immediately after local operations
 // instead of blocking on sync completion.
 // Issue #36: CLI should not hang waiting for sync

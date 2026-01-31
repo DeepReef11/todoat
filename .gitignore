@@ -5,6 +5,7 @@ stats.txt
 bin/
 *.test
 todoat
+todoat-verify
 todoat_debug
 todoat_test*
 .env
