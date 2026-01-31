@@ -1763,6 +1763,33 @@ func TestAddSubtaskWithParentFlagSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, `"parent_id"`) // Should have parent reference
 }
 
+// TestAddSubtaskWithParentPathFlagSQLiteCLI verifies that -P accepts path-style parent names (Issue #70)
+func TestAddSubtaskWithParentPathFlagSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list and project structure using path syntax
+	cli.MustExecute("-y", "list", "create", "PathParentTest")
+	cli.MustExecute("-y", "PathParentTest", "add", "Project Alpha")
+	cli.MustExecute("-y", "PathParentTest", "add", "Project Alpha/Design")
+	cli.MustExecute("-y", "PathParentTest", "add", "Project Alpha/Development")
+	cli.MustExecute("-y", "PathParentTest", "add", "Project Alpha/Testing")
+
+	// Add subtask using -P with path-style parent name (this is the documented usage)
+	stdout := cli.MustExecute("-y", "PathParentTest", "add", "Create wireframes", "-P", "Project Alpha/Design", "-p", "2")
+	testutil.AssertContains(t, stdout, "Create wireframes")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Add another subtask using path-style parent
+	stdout = cli.MustExecute("-y", "PathParentTest", "add", "Write unit tests", "-P", "Project Alpha/Testing")
+	testutil.AssertContains(t, stdout, "Write unit tests")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Verify the subtasks are created under the correct parents
+	stdout = cli.MustExecute("-y", "--json", "PathParentTest")
+	testutil.AssertContains(t, stdout, `"Create wireframes"`)
+	testutil.AssertContains(t, stdout, `"Write unit tests"`)
+}
+
 // TestPathBasedHierarchyCreation verifies `todoat MyList add "A/B/C"` creates 3-level hierarchy
 func TestPathBasedHierarchyCreationSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)

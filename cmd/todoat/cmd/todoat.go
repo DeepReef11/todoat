@@ -5332,6 +5332,37 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 		// If no exact ID match, fall through to name matching
 	}
 
+	// If search term contains "/", try path-based hierarchical lookup first
+	if strings.Contains(searchTerm, "/") {
+		parts := strings.Split(searchTerm, "/")
+		parentID := ""
+		var found *backend.Task
+		pathResolved := true
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			var match *backend.Task
+			for i := range tasks {
+				if strings.EqualFold(tasks[i].Summary, part) && tasks[i].ParentID == parentID {
+					match = &tasks[i]
+					break
+				}
+			}
+			if match == nil {
+				pathResolved = false
+				break
+			}
+			parentID = match.ID
+			found = match
+		}
+		if pathResolved && found != nil {
+			return found, nil
+		}
+		// Path lookup failed, fall through to standard name matching
+	}
+
 	searchLower := strings.ToLower(searchTerm)
 
 	// First try exact match (case-insensitive) - collect ALL exact matches
