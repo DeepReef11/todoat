@@ -1441,7 +1441,12 @@ func TestRegression_Issue59_SeparateProcessDaemonStatusInterval(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
+	// config.GetConfigDir() uses XDG_CONFIG_HOME + "/todoat", so create that structure
+	configDir := filepath.Join(tmpDir, "todoat")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	configPath := filepath.Join(configDir, "config.yaml")
 
 	// Write config WITH daemon.enabled: true
 	configContent := `
@@ -1459,7 +1464,7 @@ sync:
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	env := append(os.Environ(), "TODOAT_CONFIG_DIR="+tmpDir)
+	env := append(os.Environ(), "XDG_CONFIG_HOME="+tmpDir)
 
 	// Start daemon with custom interval in a SEPARATE process
 	startCmd := exec.Command(binaryPath, "-y", "sync", "daemon", "start", "--interval", "120")

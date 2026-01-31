@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed separate-process regression test for Issue #59 to use correct XDG config directory structure (`XDG_CONFIG_HOME/todoat/config.yaml`)
 - Daemon feature check, config interval lookup, and daemon start now fall back to default config path when `ConfigPath` is empty instead of silently returning early
 - Corrected `--json` flag position in analytics docs (global flag goes before subcommand)
 - Fixed backend error message in errors.md to match actual CLI output (no quoted backend name)
