@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Regression test for Issue #59: in-process daemon status returns actual running interval via IPC instead of config default
+- Separate-process regression test for Issue #59: verifies daemon status shows actual interval when start and status are separate CLI invocations
 - Rate limit error documentation with causes, examples, and troubleshooting steps
 - Tests for verbose debug timestamp output (#47)
 

@@ -3,6 +3,8 @@ package sync_test
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -1400,6 +1402,107 @@ func TestRegression_Issue59_InProcessDaemonStatusInterval(t *testing.T) {
 	}
 	if !strings.Contains(statusOut, "90 seconds") {
 		t.Errorf("Expected daemon status to show '90 seconds' (actual running interval), got:\n%s", statusOut)
+	}
+}
+
+// TestRegression_Issue59_SeparateProcessDaemonStatusInterval verifies that when
+// daemon start and daemon status are run as separate real CLI process invocations
+// (the real-world scenario), the status command shows the actual running interval,
+// not the config default (300 seconds).
+//
+// Root cause: isDaemonFeatureEnabled() returns false when cfg.ConfigPath is empty
+// (which it always is in real CLI invocations since main.go passes nil Config).
+// This causes the daemon start to use the in-process fallback instead of forking,
+// and the in-process daemon's IPC socket dies when the start process exits.
+// A subsequent status process cannot reach the IPC socket and falls back to
+// the config default (300 seconds).
+//
+// This test uses exec.Command to run the actual binary as separate processes,
+// reproducing the exact real-world scenario.
+func TestRegression_Issue59_SeparateProcessDaemonStatusInterval(t *testing.T) {
+	// Need a pre-built binary for real separate-process testing
+	binaryPath := os.Getenv("TODOAT_BINARY")
+	if binaryPath == "" {
+		candidates := []string{
+			"./bin/todoat",
+			"../bin/todoat",
+			"../../bin/todoat",
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				abs, _ := filepath.Abs(c)
+				binaryPath = abs
+				break
+			}
+		}
+	}
+	if binaryPath == "" {
+		t.Skip("Skipping separate-process daemon test: no todoat binary found")
+	}
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write config WITH daemon.enabled: true
+	configContent := `
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	env := append(os.Environ(), "TODOAT_CONFIG_DIR="+tmpDir)
+
+	// Start daemon with custom interval in a SEPARATE process
+	startCmd := exec.Command(binaryPath, "-y", "sync", "daemon", "start", "--interval", "120")
+	startCmd.Env = env
+	startOut, err := startCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("daemon start failed: %v, output: %s", err, startOut)
+	}
+	testutil.AssertContains(t, string(startOut), "started")
+
+	// Ensure cleanup
+	defer func() {
+		stopCmd := exec.Command(binaryPath, "-y", "sync", "daemon", "stop")
+		stopCmd.Env = env
+		_ = stopCmd.Run()
+	}()
+
+	// Wait for daemon to fully initialize
+	time.Sleep(1 * time.Second)
+
+	// Check status in a SEPARATE process
+	statusCmd := exec.Command(binaryPath, "-y", "sync", "daemon", "status")
+	statusCmd.Env = env
+	statusOut, err := statusCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("daemon status failed: %v, output: %s", err, statusOut)
+	}
+
+	statusStr := string(statusOut)
+
+	// The status MUST show "120 seconds", not "300 seconds" (config default).
+	if strings.Contains(statusStr, "300 seconds") {
+		t.Errorf("Regression Issue #59: daemon status shows config default (300 seconds) "+
+			"instead of actual running interval (120 seconds) when start and status "+
+			"are separate CLI process invocations.\n"+
+			"Root cause: isDaemonFeatureEnabled() returns false when cfg.ConfigPath "+
+			"is empty (real CLI always has empty ConfigPath), so the forked daemon "+
+			"path is never taken. The in-process fallback daemon's IPC socket dies "+
+			"when the start process exits.\n"+
+			"Status output:\n%s", statusStr)
+	}
+	if !strings.Contains(statusStr, "120 seconds") {
+		t.Errorf("Expected daemon status to show '120 seconds' (actual running interval), got:\n%s", statusStr)
 	}
 }
 
