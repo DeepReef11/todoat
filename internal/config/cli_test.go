@@ -823,6 +823,119 @@ sync:
 	testutil.AssertContains(t, stdout, "daemon")
 }
 
+// --- Config Get Section-Level Keys Test (Issue #65) ---
+
+// TestConfigGetSectionKeyYAMLFormatCLI verifies section-level keys output YAML, not raw Go map format
+func TestConfigGetSectionKeyYAMLFormatCLI(t *testing.T) {
+	t.Run("sync section", func(t *testing.T) {
+		cli := testutil.NewCLITestWithConfig(t)
+		cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: false
+  offline_mode: auto
+  daemon:
+    enabled: true
+    interval: 60
+`)
+		stdout := cli.MustExecute("-y", "config", "get", "sync")
+
+		// Must NOT contain raw Go map format
+		testutil.AssertNotContains(t, stdout, "map[")
+		// Must contain YAML-formatted keys
+		testutil.AssertContains(t, stdout, "enabled:")
+		testutil.AssertContains(t, stdout, "daemon:")
+	})
+
+	t.Run("sync.daemon subsection", func(t *testing.T) {
+		cli := testutil.NewCLITestWithConfig(t)
+		cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  daemon:
+    enabled: true
+    interval: 60
+    idle_timeout: 300
+`)
+		stdout := cli.MustExecute("-y", "config", "get", "sync.daemon")
+
+		testutil.AssertNotContains(t, stdout, "map[")
+		testutil.AssertContains(t, stdout, "enabled:")
+		testutil.AssertContains(t, stdout, "interval:")
+	})
+
+	t.Run("reminder section", func(t *testing.T) {
+		cli := testutil.NewCLITestWithConfig(t)
+		cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+reminder:
+  enabled: true
+  os_notification: false
+  log_notification: true
+`)
+		stdout := cli.MustExecute("-y", "config", "get", "reminder")
+
+		testutil.AssertNotContains(t, stdout, "map[")
+		testutil.AssertContains(t, stdout, "enabled:")
+	})
+
+	t.Run("backends section", func(t *testing.T) {
+		cli := testutil.NewCLITestWithConfig(t)
+		cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`)
+		stdout := cli.MustExecute("-y", "config", "get", "backends")
+
+		testutil.AssertNotContains(t, stdout, "map[")
+		testutil.AssertContains(t, stdout, "sqlite:")
+	})
+
+	t.Run("analytics section", func(t *testing.T) {
+		cli := testutil.NewCLITestWithConfig(t)
+		cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+analytics:
+  enabled: true
+  retention_days: 365
+`)
+		stdout := cli.MustExecute("-y", "config", "get", "analytics")
+
+		testutil.AssertNotContains(t, stdout, "map[")
+		testutil.AssertContains(t, stdout, "enabled:")
+	})
+
+	t.Run("trash section", func(t *testing.T) {
+		cli := testutil.NewCLITestWithConfig(t)
+		cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+trash:
+  retention_days: 30
+`)
+		stdout := cli.MustExecute("-y", "config", "get", "trash")
+
+		testutil.AssertNotContains(t, stdout, "map[")
+		testutil.AssertContains(t, stdout, "retention_days:")
+	})
+}
+
 // --- Config JSON Output Test ---
 
 // TestConfigJSONCLI verifies 'todoat --json config get' returns JSON format

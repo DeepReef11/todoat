@@ -10286,7 +10286,16 @@ func doConfigGet(cmd *cobra.Command, stdout io.Writer, cfg *Config, key string, 
 		return enc.Encode(result)
 	}
 
-	_, _ = fmt.Fprintln(stdout, value)
+	// Format maps as YAML instead of Go's default map[] representation
+	if m, ok := value.(map[string]interface{}); ok {
+		data, err := yaml.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("failed to format config section: %w", err)
+		}
+		_, _ = fmt.Fprint(stdout, string(data))
+	} else {
+		_, _ = fmt.Fprintln(stdout, value)
+	}
 	if cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	}
