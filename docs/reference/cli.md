@@ -19,7 +19,7 @@ These flags are available for all commands (unless noted):
 | `--detect-backend` | Show auto-detected backends and exit |
 | `--json` | Output in JSON format |
 | `-y, --no-prompt` | Disable interactive prompts |
-| `-V, --verbose` | Enable verbose/debug output (not available on `version`) |
+| `-V, --verbose` | Enable verbose/debug output (not available on `version`; `sync status` uses its own local `--verbose` without `-V`) |
 | `--version` | Display version information |
 | `-h, --help` | Help for the command |
 
@@ -310,7 +310,7 @@ todoat list trash [command]
 | Subcommand | Description |
 |------------|-------------|
 | `restore` | Restore a list from trash |
-| `purge` | Permanently delete a list from trash |
+| `purge` | Permanently delete a list and all its tasks from trash |
 
 ### list stats
 
