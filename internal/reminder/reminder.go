@@ -111,10 +111,16 @@ func (s *Service) CheckReminders(tasks []*backend.Task) ([]*backend.Task, error)
 	}
 
 	var triggered []*backend.Task
+	seen := make(map[string]bool)
 	now := time.Now()
 
 	for _, task := range tasks {
 		if task.DueDate == nil || task.Status == backend.StatusCompleted {
+			continue
+		}
+
+		// Deduplicate by task ID
+		if seen[task.ID] {
 			continue
 		}
 
@@ -163,6 +169,7 @@ func (s *Service) CheckReminders(tasks []*backend.Task) ([]*backend.Task, error)
 
 			// Trigger reminder
 			triggered = append(triggered, task)
+			seen[task.ID] = true
 
 			// Send notification
 			if s.notifier != nil {
@@ -241,10 +248,16 @@ func (s *Service) GetUpcomingReminders(tasks []*backend.Task) ([]*backend.Task, 
 	}
 
 	var upcoming []*backend.Task
+	seen := make(map[string]bool)
 	now := time.Now()
 
 	for _, task := range tasks {
 		if task.DueDate == nil || task.Status == backend.StatusCompleted {
+			continue
+		}
+
+		// Deduplicate by task ID
+		if seen[task.ID] {
 			continue
 		}
 
@@ -261,6 +274,7 @@ func (s *Service) GetUpcomingReminders(tasks []*backend.Task) ([]*backend.Task, 
 		timeUntilDue := task.DueDate.Sub(now)
 		if timeUntilDue >= 0 && timeUntilDue <= maxDuration {
 			upcoming = append(upcoming, task)
+			seen[task.ID] = true
 		}
 	}
 

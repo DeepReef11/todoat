@@ -710,6 +710,121 @@ func TestParseInterval(t *testing.T) {
 	}
 }
 
+// TestReminderServiceNoDuplicates tests that duplicate tasks in input produce no duplicate reminders (Issue #69)
+func TestReminderServiceNoDuplicates(t *testing.T) {
+	t.Run("CheckReminders deduplicates by task ID", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "test.db")
+
+		service, err := reminder.NewService(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"1 day",
+				"at due time",
+			},
+			OSNotification:  true,
+			LogNotification: true,
+		}, dbPath)
+		if err != nil {
+			t.Fatalf("failed to create service: %v", err)
+		}
+		defer func() { _ = service.Close() }()
+
+		var sentNotifications []notification.Notification
+		mockNotifier := &mockNotificationManager{
+			sendFunc: func(n notification.Notification) error {
+				sentNotifications = append(sentNotifications, n)
+				return nil
+			},
+		}
+		service.SetNotifier(mockNotifier)
+
+		dueTime := time.Now().AddDate(0, 0, 1) // Tomorrow
+		taskA := &backend.Task{
+			ID:      "task-dup-1",
+			Summary: "Do tomorrow",
+			DueDate: &dueTime,
+			Status:  backend.StatusNeedsAction,
+		}
+		taskB := &backend.Task{
+			ID:      "task-dup-2",
+			Summary: "Weekly review",
+			DueDate: &dueTime,
+			Status:  backend.StatusNeedsAction,
+		}
+
+		// Simulate getAllTasks returning duplicate entries (same task appearing twice)
+		tasks := []*backend.Task{taskA, taskB, taskA, taskB}
+
+		triggered, err := service.CheckReminders(tasks)
+		if err != nil {
+			t.Fatalf("CheckReminders failed: %v", err)
+		}
+
+		// Each task should appear only once despite being passed twice
+		if len(triggered) != 2 {
+			t.Errorf("expected 2 triggered reminders (deduplicated), got %d", len(triggered))
+			for i, task := range triggered {
+				t.Logf("  triggered[%d]: %s (ID: %s)", i, task.Summary, task.ID)
+			}
+		}
+
+		// Notifications should also be deduplicated
+		if len(sentNotifications) != 2 {
+			t.Errorf("expected 2 notifications (deduplicated), got %d", len(sentNotifications))
+		}
+	})
+
+	t.Run("GetUpcomingReminders deduplicates by task ID", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "test.db")
+
+		service, err := reminder.NewService(&reminder.Config{
+			Enabled: true,
+			Intervals: []string{
+				"7 days",
+				"1 day",
+			},
+			OSNotification:  true,
+			LogNotification: true,
+		}, dbPath)
+		if err != nil {
+			t.Fatalf("failed to create service: %v", err)
+		}
+		defer func() { _ = service.Close() }()
+
+		dueTime := time.Now().AddDate(0, 0, 1)
+		taskA := &backend.Task{
+			ID:      "task-dup-3",
+			Summary: "Task A",
+			DueDate: &dueTime,
+			Status:  backend.StatusNeedsAction,
+		}
+		taskB := &backend.Task{
+			ID:      "task-dup-4",
+			Summary: "Task B",
+			DueDate: &dueTime,
+			Status:  backend.StatusNeedsAction,
+		}
+
+		// Simulate duplicate task entries
+		tasks := []*backend.Task{taskA, taskB, taskA, taskB}
+
+		upcoming, err := service.GetUpcomingReminders(tasks)
+		if err != nil {
+			t.Fatalf("GetUpcomingReminders failed: %v", err)
+		}
+
+		// Each task should appear only once despite being passed twice
+		if len(upcoming) != 2 {
+			t.Errorf("expected 2 upcoming reminders (deduplicated), got %d", len(upcoming))
+			for i, task := range upcoming {
+				t.Logf("  upcoming[%d]: %s (ID: %s)", i, task.Summary, task.ID)
+			}
+		}
+	})
+}
+
 // TestReminderServiceGetUpcoming tests listing upcoming reminders
 func TestReminderServiceGetUpcoming(t *testing.T) {
 	tmpDir := t.TempDir()
