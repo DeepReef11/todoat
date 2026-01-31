@@ -267,6 +267,7 @@ Create tasks that automatically regenerate when completed:
 todoat MyList add "Daily standup" --recur daily
 todoat MyList add "Weekly review" --recur weekly
 todoat MyList add "Monthly report" --recur monthly
+todoat MyList add "Annual review" --recur yearly
 
 # Custom intervals
 todoat MyList add "Check logs" --recur "every 3 days"
@@ -308,8 +309,10 @@ todoat MyList update "Daily standup" --recur none
 | `daily` | Every day |
 | `weekly` | Every week |
 | `monthly` | Every month |
+| `yearly` | Every year |
 | `every N days` | Every N days |
 | `every N weeks` | Every N weeks |
+| `every N months` | Every N months |
 | `none` | Remove recurrence |
 
 ### Task with Description

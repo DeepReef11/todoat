@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated task matching docs: single match completes directly without confirmation prompt; multiple matches show error with UIDs instead of interactive menu
 - Added daemon configuration section to sample config with `enabled`, `interval`, and `idle_timeout` options
 - Improved CLI reference: clearer flag descriptions, date filter inclusivity notes, sync subcommand clarifications
+- Improved CLI reference descriptions for `list`, `analytics`, `config`, `sync`, `view`, `credentials`, `migrate`, `reminder`, `notification`, `tags`, `tui`, `completion`, and `version` commands
+- Added `yearly` and `every N months` recurrence patterns to task management how-to guide
 
 ### Added
 - File watcher for real-time sync triggers with debouncing and smart timing (#41)

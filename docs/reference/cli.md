@@ -212,7 +212,7 @@ todoat MyList --page 2
 
 ## list
 
-Manage task lists.
+View all lists or manage lists with subcommands.
 
 ### Synopsis
 
@@ -228,7 +228,7 @@ todoat list [command]
 | (default) | View all lists (no subcommand) |
 | `create` | Create a new list |
 | `delete` | Delete a list (move to trash) |
-| `update` | Update list properties |
+| `update` | Update a list's properties |
 | `info` | Show list details |
 | `export` | Export a list to a file |
 | `import` | Import a list from a file |
@@ -238,7 +238,7 @@ todoat list [command]
 
 ### list create
 
-Create a new task list.
+Create a new task list with the given name.
 
 ```bash
 todoat list create [name] [flags]
@@ -265,7 +265,7 @@ todoat list update [name] [flags]
 
 ### list export
 
-Export a list to a file.
+Export a task list to a file in various formats (sqlite, json, csv, ical).
 
 ```bash
 todoat list export [name] [flags]
@@ -278,7 +278,7 @@ todoat list export [name] [flags]
 
 ### list import
 
-Import a list from a file.
+Import a task list from a file. Supported formats: sqlite, json, csv, ical.
 
 ```bash
 todoat list import [file] [flags]
@@ -300,9 +300,10 @@ Shows list name, description, color, task count, and creation date.
 
 ### list trash
 
-View and manage deleted lists.
+View lists in trash or use subcommands to restore/purge.
 
 ```bash
+todoat list trash [flags]
 todoat list trash [command]
 ```
 
@@ -313,7 +314,7 @@ todoat list trash [command]
 
 ### list stats
 
-Show database statistics.
+Display statistics about the database including task counts, status breakdown, and storage usage.
 
 ```bash
 todoat list stats [name] [flags]
@@ -371,7 +372,7 @@ todoat --json list trash
 
 ## analytics
 
-View usage analytics and statistics.
+View command usage statistics, backend performance metrics, and error reports from local analytics data.
 
 ### Synopsis
 
@@ -401,7 +402,7 @@ todoat analytics stats [flags]
 
 ### analytics backends
 
-Display performance metrics for each backend.
+Display performance metrics for each backend including usage count, average duration, and success rate.
 
 ```bash
 todoat analytics backends [flags]
@@ -453,7 +454,7 @@ todoat analytics errors --json
 
 ## config
 
-View and manage configuration.
+View and modify todoat configuration without manually editing YAML files.
 
 ### Synopsis
 
@@ -492,7 +493,7 @@ todoat config path
 
 ## sync
 
-Synchronize with remote backends.
+Synchronize local cache with remote backends. Use subcommands to view status and manage the sync queue.
 
 ### Synopsis
 
@@ -631,7 +632,7 @@ todoat sync daemon kill
 
 ## view
 
-Manage custom views.
+View management commands for listing and working with views.
 
 ### Synopsis
 
@@ -687,7 +688,7 @@ todoat view create urgent-tasks -y --filter-status "TODO" --filter-priority "1-3
 
 ## credentials
 
-Manage backend credentials.
+Store, retrieve, and manage credentials for backend services securely.
 
 ### Synopsis
 
@@ -754,7 +755,7 @@ todoat credentials delete nextcloud myuser
 
 ## migrate
 
-Migrate tasks between backends.
+Migrate tasks from one storage backend to another, preserving metadata and hierarchy.
 
 ### Synopsis
 
@@ -815,7 +816,7 @@ todoat migrate --target-info nextcloud
 
 ## reminder
 
-Manage task reminders.
+Manage reminder notifications for tasks with due dates.
 
 ### Synopsis
 
@@ -858,7 +859,7 @@ todoat --json reminder status
 
 ## notification
 
-Manage the notification system.
+Manage the notification system for background sync events.
 
 ### Synopsis
 
@@ -900,7 +901,7 @@ todoat notification log clear
 
 ## tags
 
-List all tags in use.
+List all unique tags across all tasks, with optional filtering by list.
 
 ### Synopsis
 
@@ -926,7 +927,7 @@ todoat tags -l MyList
 
 ## tui
 
-Launch the terminal user interface.
+Launch an interactive terminal user interface for managing tasks with keyboard navigation.
 
 ### Synopsis
 
@@ -934,13 +935,9 @@ Launch the terminal user interface.
 todoat tui [flags]
 ```
 
-### Description
-
-Launches an interactive terminal interface for managing tasks with keyboard navigation.
-
 ## completion
 
-Generate and install shell completion scripts.
+Generate the autocompletion script for todoat for the specified shell.
 
 ### Synopsis
 
@@ -1021,7 +1018,7 @@ todoat completion powershell | Out-String | Invoke-Expression
 
 ## version
 
-Display version information.
+Display the application version, build information, and optionally extended details.
 
 ### Synopsis
 
