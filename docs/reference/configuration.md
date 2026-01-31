@@ -170,6 +170,67 @@ Restores the default configuration. Requires confirmation.
 | `reminder.os_notification` | bool | Send reminders via OS notifications (default: `true`) |
 | `reminder.log_notification` | bool | Log reminders to notification log (default: `true`) |
 
+## Backend Configuration
+
+Each backend has its own configuration keys under `backends.<name>`.
+
+### SQLite
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backends.sqlite.enabled` | bool | `true` | Enable SQLite backend |
+| `backends.sqlite.path` | string | `~/.local/share/todoat/tasks.db` | Database file path |
+
+### Nextcloud
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backends.nextcloud.enabled` | bool | `false` | Enable Nextcloud backend |
+| `backends.nextcloud.host` | string | | Nextcloud server hostname |
+| `backends.nextcloud.username` | string | | CalDAV username |
+| `backends.nextcloud.insecure_skip_verify` | bool | `false` | Accept self-signed certificates |
+| `backends.nextcloud.allow_http` | bool | `false` | Allow HTTP (non-HTTPS) connections |
+
+### Todoist
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backends.todoist.enabled` | bool | `false` | Enable Todoist backend |
+| `backends.todoist.username` | string | `"token"` | Fixed value for Todoist auth |
+
+### Google Tasks
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backends.google.enabled` | bool | `false` | Enable Google Tasks backend |
+
+Credentials are set via environment variables (`TODOAT_GOOGLE_ACCESS_TOKEN`, `TODOAT_GOOGLE_REFRESH_TOKEN`, `TODOAT_GOOGLE_CLIENT_ID`, `TODOAT_GOOGLE_CLIENT_SECRET`).
+
+### Microsoft To Do
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backends.mstodo.enabled` | bool | `false` | Enable Microsoft To Do backend |
+
+Credentials are set via environment variables (`TODOAT_MSTODO_ACCESS_TOKEN`, `TODOAT_MSTODO_REFRESH_TOKEN`, `TODOAT_MSTODO_CLIENT_ID`, `TODOAT_MSTODO_CLIENT_SECRET`).
+
+### Git
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backends.git.enabled` | bool | `false` | Enable Git backend |
+| `backends.git.file` | string | `"TODO.md"` | Primary task file |
+| `backends.git.auto_commit` | bool | `false` | Auto-commit changes |
+
+### File
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backends.file.enabled` | bool | `false` | Enable File backend |
+| `backends.file.path` | string | | Path to task file |
+
+See [Backend Setup](../how-to/backends.md) for detailed setup instructions.
+
 ## Analytics Configuration
 
 Configure local command usage analytics:

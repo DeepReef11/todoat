@@ -1067,4 +1067,5 @@ todoat version [flags]
 
 - [Getting Started](../tutorials/getting-started.md) - Installation and first steps
 - [Task Management](../how-to/task-management.md) - Task operations guide
+- [Backend Setup](../how-to/backends.md) - Configure backends
 - [Configuration](configuration.md) - Config file reference
