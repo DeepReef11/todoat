@@ -29,10 +29,10 @@ These flags are available for all commands:
 
 | Action | Abbreviation | Description |
 |--------|--------------|-------------|
-| `get` | `g` | Show tasks (default) |
+| `get` | `g` | List/view tasks (default if no action specified) |
 | `add` | `a` | Add a new task |
-| `update` | `u` | Update task properties |
-| `complete` | `c` | Mark task as done |
+| `update` | `u` | Update an existing task |
+| `complete` | `c` | Mark a task as complete |
 | `delete` | `d` | Delete a task |
 
 ### Task Flags
@@ -41,21 +41,21 @@ These flags are available for all commands:
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `-d, --description <text>` | string | Task description/notes (use "" to clear) |
+| `-d, --description <text>` | string | Task description/notes (for add/update, use "" to clear) |
 | `--due-date <date>` | string | Due date (see [Date Syntax](#date-syntax) below, use "" to clear) |
 | `--start-date <date>` | string | Start date (see [Date Syntax](#date-syntax) below, use "" to clear) |
 | `-p, --priority <n>` | string | Priority (0-9, 1=highest) |
 | `-s, --status <status>` | string | Status (TODO, IN-PROGRESS, DONE, CANCELLED) |
-| `--tag <tag>` | strings | Tag/category (can specify multiple times) |
+| `--tag <tag>` | strings | Tag/category (can be specified multiple times or comma-separated) |
 | `--tags <tags>` | strings | Alias for --tag |
-| `--add-tag <tag>` | strings | Add tag to existing tags (for update) |
-| `--remove-tag <tag>` | strings | Remove tag from existing tags (for update) |
+| `--add-tag <tag>` | strings | Add tag(s) to existing tags (for update, can be specified multiple times) |
+| `--remove-tag <tag>` | strings | Remove tag(s) from existing tags (for update, can be specified multiple times) |
 | `-P, --parent <summary>` | string | Parent task summary (for subtasks) |
 | `--no-parent` | bool | Remove parent relationship (make root-level) |
-| `--summary <text>` | string | New task summary (for rename) |
-| `-l, --literal` | bool | Treat "/" literally (don't create hierarchy) |
+| `--summary <text>` | string | New task summary (for update) |
+| `-l, --literal` | bool | Treat task summary literally (don't parse / as hierarchy separator) |
 | `--recur <rule>` | string | Recurrence (daily, weekly, monthly, yearly, or "every N days/weeks/months") |
-| `--recur-from-completion` | bool | Base recurrence on completion date |
+| `--recur-from-completion` | bool | Base next occurrence on completion date instead of due date |
 
 #### For get/filter operations:
 
@@ -64,11 +64,11 @@ These flags are available for all commands:
 | `-s, --status <status>` | string | Filter by status (comma-separated) |
 | `-p, --priority <filter>` | string | Filter by priority (see below) |
 | `--tag <tag>` | strings | Filter by tag (can specify multiple) |
-| `-v, --view <name>` | string | View to use (default, all, or custom) |
-| `--due-after <date>` | string | Filter tasks due on or after date (see [Date Syntax](#date-syntax)) |
-| `--due-before <date>` | string | Filter tasks due before date (see [Date Syntax](#date-syntax)) |
-| `--created-after <date>` | string | Filter tasks created on or after date (see [Date Syntax](#date-syntax)) |
-| `--created-before <date>` | string | Filter tasks created before date (see [Date Syntax](#date-syntax)) |
+| `-v, --view <name>` | string | View to use for displaying tasks (default, all, or custom view name) |
+| `--due-after <date>` | string | Filter tasks due on or after date (inclusive, see [Date Syntax](#date-syntax)) |
+| `--due-before <date>` | string | Filter tasks due before date (inclusive, see [Date Syntax](#date-syntax)) |
+| `--created-after <date>` | string | Filter tasks created on or after date (inclusive, see [Date Syntax](#date-syntax)) |
+| `--created-before <date>` | string | Filter tasks created before date (inclusive, see [Date Syntax](#date-syntax)) |
 
 #### Pagination:
 
@@ -503,11 +503,12 @@ todoat sync [command]
 
 ### Subcommands
 
+Running `todoat sync` without a subcommand triggers synchronization immediately.
+
 | Command | Description |
 |---------|-------------|
-| `sync` | Synchronize now (default) |
 | `status` | Show sync status |
-| `queue` | View and manage pending sync operations |
+| `queue` | View pending sync operations |
 | `conflicts` | View and manage sync conflicts |
 | `daemon` | Manage the sync daemon |
 
@@ -828,7 +829,7 @@ todoat reminder [command]
 |---------|-------------|
 | `list` | List upcoming reminders |
 | `check` | Check for due reminders |
-| `dismiss <task>` | Dismiss current reminder |
+| `dismiss <task>` | Dismiss current reminder for a task |
 | `disable <task>` | Disable reminders for a task |
 | `status` | Show reminder configuration status |
 

@@ -162,6 +162,26 @@ Suggestion: Run 'todoat credentials set todoist token --prompt' to configure cre
 3. Verify your password hasn't changed (Nextcloud)
 4. Ensure your account has not been locked
 
+## Rate Limit Errors
+
+### Rate Limit Exceeded
+
+**Message**: `<backend> rate limit exceeded after <n> retries (max <max>)`
+
+**Cause**: The backend API returned HTTP 429 (Too Many Requests) and all automatic retries were exhausted. todoat retries rate-limited requests up to 5 times with exponential backoff before failing.
+
+**Example**:
+```bash
+$ todoat -b todoist list
+Error: todoist rate limit exceeded after 5 retries (max 5)
+```
+
+**Fix**:
+1. Wait a few minutes before trying again
+2. Check if you're running multiple instances of todoat against the same backend
+3. Consider spacing out bulk operations
+4. Verify your API token has adequate quotas
+
 ## Sync Errors
 
 ### Sync Not Enabled
