@@ -50,7 +50,7 @@ These flags are available for all commands (unless noted):
 | `--tags <tags>` | strings | Alias for --tag |
 | `--add-tag <tag>` | strings | Add tag(s) to existing tags (for update, can be specified multiple times) |
 | `--remove-tag <tag>` | strings | Remove tag(s) from existing tags (for update, can be specified multiple times) |
-| `-P, --parent <summary>` | string | Parent task summary (for subtasks) |
+| `-P, --parent <summary>` | string | Parent task summary or path (for subtasks, e.g., `"Parent"` or `"Parent/Child"`) |
 | `--no-parent` | bool | Remove parent relationship (make root-level) |
 | `--summary <text>` | string | New task summary (for update) |
 | `-l, --literal` | bool | Treat task summary literally (don't parse / as hierarchy separator) |

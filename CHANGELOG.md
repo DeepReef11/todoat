@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `daemon start` now always forks a real background daemon regardless of `daemon.enabled` config setting; the feature-flag check is only used for auto-start gating, preventing stale PID files when config omits `daemon.enabled` (#59)
+
+### Changed
+- Updated `-P/--parent` flag description to clarify it accepts path-style names (e.g., `"Parent/Child"`)
+
 ### Added
 - Interactive prompt package (`internal/cli/prompt`) with fuzzy-find task selection, context-aware filtering by action, and interactive add mode with field validation (#48)
 - `ui.interactive_prompt_for_all_tasks` config option to include completed/cancelled tasks in interactive prompts

@@ -8177,58 +8177,57 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 		return startTestDaemon(cfg, stdout, pidPath, logPath, interval)
 	}
 
-	// Check if forked daemon is enabled via config
-	if isDaemonFeatureEnabled(cfg) {
-		// Get idle timeout from config or use default
-		idleTimeout := 5 * time.Minute // Default
-		configPathForDaemon := cfg.ConfigPath
-		if configPathForDaemon == "" {
-			configPathForDaemon = filepath.Join(config.GetConfigDir(), "config.yaml")
-		}
-		{
-			appConfig, err := config.LoadFromPath(configPathForDaemon)
-			if err == nil && appConfig != nil {
-				idleTimeoutSec := appConfig.GetDaemonIdleTimeout()
-				if idleTimeoutSec > 0 {
-					idleTimeout = time.Duration(idleTimeoutSec) * time.Second
-				}
+	// Always fork a real background daemon when user explicitly runs "daemon start".
+	// The isDaemonFeatureEnabled check is only for auto-start gating, not explicit starts.
+	// (Issue #59: without this, daemon start without daemon.enabled in config falls back
+	// to in-process mode which dies immediately, leaving a stale PID file.)
+
+	// Get idle timeout from config or use default
+	idleTimeout := 5 * time.Minute // Default
+	configPathForDaemon := cfg.ConfigPath
+	if configPathForDaemon == "" {
+		configPathForDaemon = filepath.Join(config.GetConfigDir(), "config.yaml")
+	}
+	{
+		appConfig, err := config.LoadFromPath(configPathForDaemon)
+		if err == nil && appConfig != nil {
+			idleTimeoutSec := appConfig.GetDaemonIdleTimeout()
+			if idleTimeoutSec > 0 {
+				idleTimeout = time.Duration(idleTimeoutSec) * time.Second
 			}
 		}
-
-		// Fork a real background daemon process
-		daemonCfg := &daemon.Config{
-			PIDPath:     pidPath,
-			SocketPath:  socketPath,
-			LogPath:     logPath,
-			Interval:    interval,
-			IdleTimeout: idleTimeout,
-			ConfigPath:  configPathForDaemon,
-			DBPath:      cfg.DBPath,
-			CachePath:   cfg.CachePath,
-			Executable:  cfg.DaemonBinaryPath, // For testing with pre-built binary
-		}
-
-		if err := daemon.Fork(daemonCfg); err != nil {
-			return fmt.Errorf("failed to start daemon: %w", err)
-		}
-
-		// Wait briefly for daemon to start
-		time.Sleep(100 * time.Millisecond)
-
-		// Verify daemon started
-		if !daemon.IsRunning(pidPath, socketPath) {
-			return fmt.Errorf("daemon failed to start")
-		}
-
-		_, _ = fmt.Fprintf(stdout, "Sync daemon started (interval: %v)\n", interval)
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
-		}
-		return nil
 	}
 
-	// Fallback to in-process daemon (legacy behavior)
-	return startTestDaemon(cfg, stdout, pidPath, logPath, interval)
+	// Fork a real background daemon process
+	daemonCfg := &daemon.Config{
+		PIDPath:     pidPath,
+		SocketPath:  socketPath,
+		LogPath:     logPath,
+		Interval:    interval,
+		IdleTimeout: idleTimeout,
+		ConfigPath:  configPathForDaemon,
+		DBPath:      cfg.DBPath,
+		CachePath:   cfg.CachePath,
+		Executable:  cfg.DaemonBinaryPath, // For testing with pre-built binary
+	}
+
+	if err := daemon.Fork(daemonCfg); err != nil {
+		return fmt.Errorf("failed to start daemon: %w", err)
+	}
+
+	// Wait briefly for daemon to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify daemon started
+	if !daemon.IsRunning(pidPath, socketPath) {
+		return fmt.Errorf("daemon failed to start")
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Sync daemon started (interval: %v)\n", interval)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
 }
 
 // startTestDaemon starts an in-process daemon for testing
