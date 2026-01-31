@@ -17,6 +17,8 @@ For current design decisions, see `docs/explanation/`.
 | FEAT-011 | 2026-01-26 | Should child tasks of DONE parents be auto-hidden in default view? | NOT IMPLEMENTED - Feature was documented but never implemented. Decision reversed: children are filtered individually based on their own status |
 | COMPAT-012 | 2026-01-26 | Should documentation be updated to reflect that built-in views CAN be overridden? | Update documentation - views folder copied on first launch |
 | UX-013 | 2026-01-26 | Should views folder creation prompt user when -y flag is NOT provided? | Silent fallback - use built-in views without prompt; use -y flag to create views folder |
+| ARCH-001 | 2026-01-31 | Should the daemon Unix socket have restricted file permissions? | Restrict to owner only (0600) |
+| ARCH-002 | 2026-01-31 | Should conflict resolution propagate to remote on next sync? | Queue a remote update automatically after resolution |
 
 ---
 
@@ -195,5 +197,41 @@ For current design decisions, see `docs/explanation/`.
 - [x] Silent fallback - Use built-in views without prompt when views folder doesn't exist; users can run any command with `-y` flag to create the views folder
 
 **Impact**: Affects first-run user experience. Silent fallback is simpler. Users who want to customize views can use the `-y` flag to initialize the views folder.
+
+**Status**: answered
+
+---
+
+### [ARCH-001] Should the daemon Unix socket have restricted file permissions?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/architecture.md`
+
+**Context**: The daemon creates a Unix domain socket for IPC (`internal/daemon/daemon.go`). Currently the socket inherits the process umask, meaning other users on the system may be able to connect to the daemon and issue commands (status queries, sync triggers). This was introduced in commit `a0df401` (background sync daemon).
+
+**Options**:
+- [x] Restrict to owner only (0600) - Prevents other users from interacting with daemon
+
+**Impact**: Security posture for multi-user systems. Single-user desktops are unaffected.
+
+**Status**: answered
+
+---
+
+### [ARCH-002] Should conflict resolution propagate to remote on next sync?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/synchronization.md`
+
+**Context**: Sync conflict resolution is explicitly a local-only operation (`backend/sqlite/cli_test.go`). When a conflict is resolved locally, the remote backend is not updated. This means the next sync cycle may re-detect the same conflict if the remote still holds the conflicting version.
+
+**Options**:
+- [ ] Push resolution to remote on next sync - Prevents conflict reappearance, but adds complexity
+- [ ] Keep local-only resolution - Simpler, but users may see resolved conflicts reappear
+- [x] Queue a remote update automatically after resolution - Middle ground, uses existing sync queue
+
+**Impact**: Core sync behavior. Affects user trust in conflict resolution workflow.
 
 **Status**: answered

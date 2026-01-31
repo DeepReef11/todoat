@@ -428,6 +428,25 @@ if remoteTask.ETag != localMeta.RemoteETag && localMeta.LocallyModified {
 - Categories: Union of both sets
 - Description: Use remote if changed, else keep local
 
+### Resolution Propagation to Remote
+
+**Decision**: Queue a remote update automatically after local conflict resolution.
+
+**Context**: Conflict resolution was originally a local-only operation (`backend/sqlite/cli_test.go`). When a conflict was resolved locally, the remote backend was not updated. This meant the next sync cycle could re-detect the same conflict if the remote still held the conflicting version.
+
+**Alternatives Considered**:
+- Push resolution to remote on next sync: Prevents conflict reappearance, but adds complexity to the sync protocol.
+- Keep local-only resolution: Simpler, but users may see resolved conflicts reappear unexpectedly.
+
+**Chosen Approach**: After a conflict is resolved locally, the resolution is automatically queued as a remote update using the existing sync queue. This is a middle ground that prevents conflict reappearance without adding new sync protocol complexity — it reuses the existing operation queue infrastructure.
+
+**Consequences**:
+- Resolved conflicts are pushed to remote on the next sync cycle, preventing reappearance
+- Uses the existing sync queue mechanism, so no new infrastructure is needed
+- Users can trust that resolving a conflict is a one-time action
+
+**Related**: [ARCH-002] - See `docs/decisions/question-log.md` for full discussion
+
 ### Related Features
 - [Sync Operations](#sync-operations) - Context for when conflicts occur
 - [Configuration](configuration.md) - Setting conflict resolution strategy

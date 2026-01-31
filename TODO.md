@@ -8,32 +8,6 @@ _No documentation tasks pending._
 
 ## Questions for Team
 
-### [ARCH-001] Should the daemon Unix socket have restricted file permissions?
-
-**Context**: The daemon creates a Unix domain socket for IPC (`internal/daemon/daemon.go`). Currently the socket inherits the process umask, meaning other users on the system may be able to connect to the daemon and issue commands (status queries, sync triggers). This was introduced in commit `a0df401` (background sync daemon).
-
-**Options**:
-- [x] Restrict to owner only (0600) - Prevents other users from interacting with daemon
-
-**Impact**: Security posture for multi-user systems. Single-user desktops are unaffected.
-
-**Asked**: 2026-01-29
-**Status**: answered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [ARCH-002] Should conflict resolution propagate to remote on next sync?
-
-**Context**: Sync conflict resolution is explicitly a local-only operation (`backend/sqlite/cli_test.go`). When a conflict is resolved locally, the remote backend is not updated. This means the next sync cycle may re-detect the same conflict if the remote still holds the conflicting version.
-
-**Options**:
-- [ ] Push resolution to remote on next sync - Prevents conflict reappearance, but adds complexity
-- [ ] Keep local-only resolution - Simpler, but users may see resolved conflicts reappear
-- [x] Queue a remote update automatically after resolution - Middle ground, uses existing sync queue
-
-**Impact**: Core sync behavior. Affects user trust in conflict resolution workflow.
-
-**Asked**: 2026-01-29
-**Status**: answered  <!-- User changes to "answered" or removes "un" when done -->
-
 ### [FEAT-003] Should background logging be a runtime config option instead of compile-time constant?
 
 **Context**: `internal/utils/logger.go` defines `const ENABLE_BACKGROUND_LOGGING = true` as a compile-time constant. This means background logging (writing to `/tmp/todoat-*-{PID}.log`) is always on and cannot be toggled without recompiling. Users have no control over whether these log files are created.
@@ -290,3 +264,17 @@ The entire "Current Implementation Status", "Current Background Sync Patterns", 
 
 **Asked**: 2026-01-30
 **Status**: unanswered
+
+### [UX-019] Should the verbose flag be unified across all subcommands?
+
+**Context**: The CLI has three different verbose flag patterns: global `-V`/`--verbose` (persistent flag on root, enables debug output via `utils.SetVerboseMode`), `sync status --verbose` (local flag, no short form, shows sync metadata), and `version --verbose/-v` (local flag with lowercase `-v`, shows build info). Commit `8a05147` documents the `sync status` inconsistency in the CLI reference. Users expecting `-v` to work globally will get an error on most commands, and `-V` doesn't affect `sync status` verbose output.
+
+**Options**:
+- [ ] Unify all verbose flags under global `-V` - Each subcommand checks the global verbose flag, remove local verbose flags
+- [ ] Keep separate but rename local flags - Use `--detailed` or `--extended` for subcommand-specific extra output to avoid confusion with global `-V`
+- [ ] Keep current behavior - Document the distinction between global debug verbosity (`-V`) and subcommand-specific detail flags (`--verbose`)
+
+**Impact**: CLI consistency and discoverability. Affects `sync status`, `version`, and any future commands that want "show more detail" behavior.
+
+**Asked**: 2026-01-31
+**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
