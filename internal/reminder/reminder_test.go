@@ -1185,3 +1185,39 @@ reminder:
 	testutil.AssertContains(t, stdout, "at due time")
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
+
+// TestReminderStatusDisabledConfig tests that reminder status shows actual disabled config
+// Reproduces issue #68: reminder status shows hardcoded defaults instead of actual config values
+func TestReminderStatusDisabledConfig(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	// Config with reminders explicitly disabled and no intervals
+	configYAML := `backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+
+default_backend: sqlite
+
+reminder:
+  enabled: false
+  intervals: []
+  os_notification: false
+  log_notification: false
+`
+	cli.SetFullConfig(configYAML)
+
+	// Check reminder status - should reflect the actual config (disabled, no intervals)
+	stdout := cli.MustExecute("-y", "reminder", "status")
+
+	// Should show disabled, not hardcoded "enabled"
+	testutil.AssertContains(t, stdout, "disabled")
+	testutil.AssertNotContains(t, stdout, "Status: enabled")
+	// Should NOT show hardcoded default intervals
+	testutil.AssertNotContains(t, stdout, "1 day")
+	testutil.AssertNotContains(t, stdout, "at due time")
+	// Should show false for notifications, not hardcoded true
+	testutil.AssertContains(t, stdout, "OS Notification: false")
+	testutil.AssertContains(t, stdout, "Log Notification: false")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}

@@ -10257,23 +10257,17 @@ func loadReminderConfig(cfg *Config) (*reminder.Config, error) {
 
 	appConfig, err := config.LoadFromPath(configPath)
 	if err == nil && appConfig != nil {
-		// Check if reminder section has any configured values
-		if len(appConfig.Reminder.Intervals) > 0 || appConfig.Reminder.Enabled {
-			return &reminder.Config{
-				Enabled:         appConfig.Reminder.Enabled,
-				Intervals:       appConfig.Reminder.Intervals,
-				OSNotification:  appConfig.Reminder.OSNotification,
-				LogNotification: appConfig.Reminder.LogNotification,
-			}, nil
-		}
+		return &reminder.Config{
+			Enabled:         appConfig.Reminder.Enabled,
+			Intervals:       appConfig.Reminder.Intervals,
+			OSNotification:  appConfig.Reminder.OSNotification,
+			LogNotification: appConfig.Reminder.LogNotification,
+		}, nil
 	}
 
-	// Return default config if no config file or no reminder section
+	// Return disabled config if no config file exists
 	return &reminder.Config{
-		Enabled:         true,
-		Intervals:       []string{"1 day", "at due time"},
-		OSNotification:  true,
-		LogNotification: true,
+		Enabled: false,
 	}, nil
 }
 
