@@ -3649,6 +3649,50 @@ func nullStr(s string) interface{} {
 	return s
 }
 
+// TestAnalyticsNoSubcommandShowsHelpOnce tests that 'todoat analytics' without
+// a subcommand prints help text exactly once (Issue #71)
+func TestAnalyticsNoSubcommandShowsHelpOnce(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	dbPath := filepath.Join(tmpDir, "tasks.db")
+
+	// Write config file
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := Execute([]string{"analytics"}, &stdout, &stderr, cfg)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Help text should contain "Available Commands" exactly once
+	count := strings.Count(output, "Available Commands")
+	if count != 1 {
+		t.Errorf("expected help text to appear exactly once (1 'Available Commands'), got %d occurrences.\nFull output:\n%s", count, output)
+	}
+
+	// Also verify help text contains expected subcommands
+	if !strings.Contains(output, "stats") {
+		t.Errorf("help output should mention 'stats' subcommand, got: %s", output)
+	}
+	if !strings.Contains(output, "backends") {
+		t.Errorf("help output should mention 'backends' subcommand, got: %s", output)
+	}
+	if !strings.Contains(output, "errors") {
+		t.Errorf("help output should mention 'errors' subcommand, got: %s", output)
+	}
+}
+
 // TestAnalyticsStatsCommand tests 'todoat analytics stats' shows usage summary
 func TestAnalyticsStatsCommand(t *testing.T) {
 	analyticsPath := setupAnalyticsDB(t)

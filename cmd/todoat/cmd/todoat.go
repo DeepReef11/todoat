@@ -11641,9 +11641,7 @@ func newAnalyticsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 		Use:   "analytics",
 		Short: "View usage analytics and statistics",
 		Long:  "View command usage statistics, backend performance metrics, and error reports from local analytics data.",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return cmd.Help()
-		},
+		// No RunE: Cobra automatically prints help for parent commands with subcommands
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
