@@ -28,7 +28,7 @@ todoat analytics stats --since 1y
 ### JSON Output
 
 ```bash
-todoat analytics stats --json
+todoat --json analytics stats
 ```
 
 ## Viewing Backend Performance
@@ -51,7 +51,7 @@ todoat analytics backends --since 30d
 ### JSON Output
 
 ```bash
-todoat analytics backends --json
+todoat --json analytics backends
 ```
 
 ## Viewing Errors
@@ -80,7 +80,7 @@ todoat analytics errors --since 30d --limit 5
 ### JSON Output
 
 ```bash
-todoat analytics errors --json
+todoat --json analytics errors
 ```
 
 ## Configuration
@@ -180,8 +180,8 @@ todoat analytics errors --since 30d
 
 ```bash
 # Export stats as JSON for external tools
-todoat analytics stats --json > stats.json
-todoat analytics backends --json > backends.json
+todoat --json analytics stats > stats.json
+todoat --json analytics backends > backends.json
 ```
 
 ## See Also

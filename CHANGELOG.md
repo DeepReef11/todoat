@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Daemon feature check, config interval lookup, and daemon start now fall back to default config path when `ConfigPath` is empty instead of silently returning early
+- Corrected `--json` flag position in analytics docs (global flag goes before subcommand)
+- Fixed backend error message in errors.md to match actual CLI output (no quoted backend name)
+- Updated completion subcommand descriptions to match Cobra-generated help text
+- Added note that `--verbose` flag is not available on `version` command
 
 ### Added
 - Documentation for `--json` flag on `sync queue`, `sync daemon status`, `reminder check`, `notification log`, and `view list` commands
+- Regression test for Issue #60: backend error message matches documentation
 - Regression test for Issue #59: in-process daemon status returns actual running interval via IPC instead of config default
 - Separate-process regression test for Issue #59: verifies daemon status shows actual interval when start and status are separate CLI invocations
 - Rate limit error documentation with causes, examples, and troubleshooting steps

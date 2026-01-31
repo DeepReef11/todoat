@@ -11,7 +11,7 @@ todoat [command]
 
 ## Global Flags
 
-These flags are available for all commands:
+These flags are available for all commands (unless noted):
 
 | Flag | Description |
 |------|-------------|
@@ -19,7 +19,7 @@ These flags are available for all commands:
 | `--detect-backend` | Show auto-detected backends and exit |
 | `--json` | Output in JSON format |
 | `-y, --no-prompt` | Disable interactive prompts |
-| `-V, --verbose` | Enable verbose/debug output |
+| `-V, --verbose` | Enable verbose/debug output (not available on `version`) |
 | `--version` | Display version information |
 | `-h, --help` | Help for the command |
 
@@ -447,9 +447,9 @@ todoat analytics errors
 todoat analytics errors --since 1y --limit 20
 
 # Output in JSON format
-todoat analytics stats --json
-todoat analytics backends --json
-todoat analytics errors --json
+todoat --json analytics stats
+todoat --json analytics backends
+todoat --json analytics errors
 ```
 
 ## config
@@ -964,10 +964,10 @@ todoat completion [command]
 
 | Command | Description |
 |---------|-------------|
-| `bash` | Generate bash completion script |
-| `zsh` | Generate zsh completion script |
-| `fish` | Generate fish completion script |
-| `powershell` | Generate PowerShell completion script |
+| `bash` | Generate the autocompletion script for bash |
+| `zsh` | Generate the autocompletion script for zsh |
+| `fish` | Generate the autocompletion script for fish |
+| `powershell` | Generate the autocompletion script for powershell |
 | `install` | Install shell completion scripts |
 | `uninstall` | Remove installed shell completion scripts |
 

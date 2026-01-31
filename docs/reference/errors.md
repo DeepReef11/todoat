@@ -96,14 +96,14 @@ Suggestion: Valid options: TODO, IN-PROGRESS, DONE, CANCELLED
 
 ### Backend Not Configured
 
-**Message**: `todoist backend '<backend name>' requires API token (use 'credentials set <backend> token' or set TODOAT_<BACKEND>_TOKEN)`
+**Message**: `todoist backend requires API token (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)`
 
 **Cause**: The specified backend has not been set up with the required credentials.
 
 **Example**:
 ```bash
 $ todoat -b todoist list
-Error: todoist backend 'todoist' requires API token (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)
+Error: todoist backend requires API token (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)
 ```
 
 **Fix**: Set the API token using one of these methods:

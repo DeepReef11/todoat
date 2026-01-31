@@ -5095,3 +5095,39 @@ func TestIssue028ParentFlagAcceptsUIDSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, jsonOut, "ChildTask")
 	testutil.AssertContains(t, jsonOut, uid1) // parent UID should still exist
 }
+
+// TestIssue60_BackendErrorMessageMatchesDocs verifies that the backend-not-configured
+// error message in docs/reference/errors.md matches the actual CLI output.
+// Regression test: the docs showed 'todoist backend 'todoist' requires API token'
+// but the actual CLI output is 'todoist backend requires API token' (no quoted name
+// on the default backend path).
+func TestIssue60_BackendErrorMessageMatchesDocs(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Attempt to use todoist backend without API token
+	_, stderr, exitCode := cli.Execute("-b", "todoist", "list")
+
+	if exitCode == 0 {
+		t.Skip("todoist backend is configured, cannot test error message")
+	}
+
+	// The actual error message from the default todoist path should NOT contain
+	// a quoted backend name like 'todoist' between "backend" and "requires".
+	// It should be: "todoist backend requires API token ..."
+	expectedSubstring := "todoist backend requires API token"
+	if !strings.Contains(stderr, expectedSubstring) {
+		t.Errorf("expected stderr to contain %q, got: %s", expectedSubstring, stderr)
+	}
+
+	// Also verify the docs match. Read errors.md and check the example output.
+	docsContent, err := os.ReadFile("../../docs/reference/errors.md")
+	if err != nil {
+		t.Fatalf("failed to read errors.md: %v", err)
+	}
+
+	// The docs example for "todoat -b todoist list" should contain the same
+	// error message format as the actual CLI output
+	if !strings.Contains(string(docsContent), expectedSubstring) {
+		t.Errorf("docs/reference/errors.md does not contain the actual error message %q", expectedSubstring)
+	}
+}
