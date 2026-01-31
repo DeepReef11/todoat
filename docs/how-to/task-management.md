@@ -418,6 +418,9 @@ todoat MyList update "task" --tags ""
 # Move task under a parent
 todoat MyList update "subtask" -P "New Parent"
 
+# Move task under a nested parent using path syntax
+todoat MyList update "subtask" -P "Project Alpha/Design"
+
 # Make task a root-level task (remove parent)
 todoat MyList update "subtask" --no-parent
 ```

@@ -119,25 +119,25 @@ _No documentation tasks pending._
 **Asked**: 2026-01-29
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
 
-### [UX-009] How does the user interact with interactive prompt features beyond -y/--no-prompt?
+### [UX-009] docs/explanation/interactive-ux.md needs rewrite to match implemented interactive prompt
 
-**Context**: Feature is documented in docs/explanation/interactive-ux.md but several described capabilities don't exist in code. The explanation doc describes `ui.interactive_prompt_for_all_tasks` config option, `--all` flag for controlling prompt task filtering, and `promptui` library integration. However, the actual Config struct has no `interactive_prompt_for_all_tasks` field, the `--all` flag is not registered in the CLI, and `promptui` is not imported anywhere in the Go code. The actual interactive mode uses `bufio.Scanner` for user input.
+**Context**: The interactive prompt feature was implemented in commit `b6a6151` (2026-01-31). The code now includes:
+- `internal/cli/prompt/prompt.go` - Full fuzzy-find task selection (318 lines)
+- `internal/cli/prompt/prompt_test.go` - Comprehensive tests (661 lines)
+- `ui.interactive_prompt_for_all_tasks` config option in `internal/config/config.go`
+- Context-aware filtering by action type and interactive add mode with field validation
 
-**Current documentation says**: "Use `--all` flag or set `ui.interactive_prompt_for_all_tasks: true` in config to include COMPLETED/CANCELLED tasks in all interactive prompts."
+However, `docs/explanation/interactive-ux.md` still describes the prompt as "An empty stub exists at `internal/cli/prompt/prompt.go` intended for future prompt enhancements" (line 19) and lists it as "Empty, reserved for future use" (line 75). The explanation doc needs to be rewritten to document the actual implementation, including fuzzy-find behavior, context-aware filtering, auto-selection for single matches, and the `ui.interactive_prompt_for_all_tasks` config option.
 
-**Missing details**:
-- [x] CLI flags/commands (`--all` for prompts not implemented)
-- [x] Config file options (`ui.interactive_prompt_for_all_tasks` not in Config struct)
-- [ ] UI elements (basic prompts work via bufio.Scanner)
+**Blocks**: User-facing documentation for `ui.interactive_prompt_for_all_tasks` in `docs/reference/configuration.md` and any interactive prompt how-to guides.
 
 **Options**:
-- [ ] Implement described features - Add `ui.interactive_prompt_for_all_tasks` and `--all` for prompts
-- [ ] Update explanation doc to match code - Remove references to unimplemented features
-- [ ] Not user-facing - Current interactive behavior is sufficient as-is
+- [ ] Rewrite docs/explanation/interactive-ux.md - Update to document actual fuzzy-find prompt, config option, and context-aware filtering
+- [ ] Minimal update - Just fix the "empty stub" references and add config option mention
 
-**Impact**: Blocks user-facing documentation for interactive mode features. Current basic interactive mode is already documented in task-management how-to.
+**Impact**: Blocks user-facing documentation for the interactive prompt config option and fuzzy-find behavior.
 
-**Asked**: 2026-01-29
+**Asked**: 2026-01-29 (updated 2026-01-31)
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
 
 ### [UX-010] Should cache TTL be user-configurable via config.yaml?
