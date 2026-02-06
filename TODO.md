@@ -8,23 +8,6 @@ _No documentation tasks pending._
 
 ## Questions for Team
 
-### [FEAT-005] Should cache TTL be user-configurable?
-
-**Context**: List cache TTL is hardcoded to 5 minutes (`internal/testutil/cli.go`, cache implementation). This means list metadata can be stale for up to 5 minutes even if the remote has changes. Users with fast-changing backends or shared task lists may want shorter TTL; users on slow connections may want longer.
-
-**Options**:
-- [x] Add `cache.ttl` config option - Full user control
-- [ ] Keep hardcoded but reduce default - 1 minute balances freshness and network usage
-- [ ] Keep current 5-minute default - Acceptable for most use cases, not worth the config surface
-
-**Resolution**: Implemented as `cache_ttl` config option (e.g., `"5m"`, `"30s"`, `"10m"`). Default remains 5 minutes. Documented in `docs/reference/configuration.md`, `internal/config/config.sample.yaml`, and `docs/explanation/caching.md`. Getter methods `GetCacheTTL()` and `GetCacheTTLDuration()` added to Config struct.
-
-**Impact**: Data freshness vs network usage trade-off. Affects sync-enabled users.
-
-**Asked**: 2026-01-29
-**Resolved**: 2026-02-06
-**Status**: answered
-
 ### [UX-009] docs/explanation/interactive-ux.md needs rewrite to match implemented interactive prompt
 
 **Context**: The interactive prompt feature was implemented in commit `b6a6151` (2026-01-31). The code now includes:
@@ -229,6 +212,22 @@ However, `docs/explanation/background-deamon.md` still describes the heartbeat a
 - [ ] Remove planned sections - Delete the "NOT YET IMPLEMENTED" sections for features that are now implemented
 
 **Impact**: Explanation doc accuracy. User-facing docs are already correct.
+
+**Asked**: 2026-02-06
+**Status**: unanswered
+
+### [FEAT-026] Notification config block not wired in Config struct (UX-012 implementation pending)
+
+**Context**: Decision UX-012 (2026-01-31) approved adding a `notification:` config block to the Config struct. The sample config (`internal/config/config.sample.yaml:122-130`) and explanation docs (`docs/explanation/notification-manager.md`, `docs/explanation/configuration.md:402-417`) describe this config block with options like `os_notification.enabled`, `os_notification.on_sync_error`, `log_notification.path`, etc.
+
+However, the Config struct in `internal/config/config.go:35-49` still has no `Notification` field. Only reminder-specific notification options (`reminder.os_notification`, `reminder.log_notification`) are wired. Users setting the documented `notification:` block will have it silently ignored.
+
+**Options**:
+- [ ] Implement UX-012 - Add `Notification NotificationConfig` to Config struct and wire it in CLI
+- [ ] Update docs to reflect current state - Document that only reminder notification options are available until full notification config is implemented
+- [ ] Low priority - The reminder config covers the primary use case; full notification config is a nice-to-have
+
+**Impact**: Documentation claims features that don't work from config. Decision UX-012 approved implementation but it hasn't been done.
 
 **Asked**: 2026-02-06
 **Status**: unanswered
