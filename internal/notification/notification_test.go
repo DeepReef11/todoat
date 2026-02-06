@@ -517,6 +517,125 @@ func TestWindowsNotificationEscapesDollarSign(t *testing.T) {
 	}
 }
 
+// TestOSNotificationWindows tests that OS notification is sent via PowerShell on Windows
+func TestOSNotificationWindows(t *testing.T) {
+	var executedCmd string
+	var executedArgs []string
+
+	mock := &notification.MockCommandExecutor{
+		ExecuteFunc: func(cmd string, args ...string) error {
+			executedCmd = cmd
+			executedArgs = args
+			return nil
+		},
+	}
+
+	channel := notification.NewOSNotificationChannel(
+		&notification.OSNotificationConfig{
+			Enabled:        true,
+			OnSyncComplete: true,
+			OnSyncError:    true,
+			OnConflict:     true,
+		},
+		notification.WithCommandExecutor(mock),
+		notification.WithPlatform("windows"),
+	)
+
+	n := notification.Notification{
+		Type:      notification.NotifySyncComplete,
+		Title:     "Sync Complete",
+		Message:   "Synced 5 tasks",
+		Timestamp: time.Now(),
+	}
+
+	err := channel.Send(n)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if executedCmd != "powershell" {
+		t.Errorf("expected powershell command, got %q", executedCmd)
+	}
+
+	// Check args contain -Command flag with notification script
+	argsStr := strings.Join(executedArgs, " ")
+	if !strings.Contains(argsStr, "-Command") {
+		t.Errorf("expected args to contain -Command flag, got %v", executedArgs)
+	}
+	if !strings.Contains(argsStr, "BalloonTipTitle") {
+		t.Errorf("expected args to contain 'BalloonTipTitle', got %v", executedArgs)
+	}
+	if !strings.Contains(argsStr, "Sync Complete") {
+		t.Errorf("expected args to contain title, got %v", executedArgs)
+	}
+	if !strings.Contains(argsStr, "Synced 5 tasks") {
+		t.Errorf("expected args to contain message, got %v", executedArgs)
+	}
+}
+
+// TestNotificationManagerPlatformDetection tests that the manager auto-detects the platform
+func TestNotificationManagerPlatformDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "notifications.log")
+
+	var executedCmd string
+	mock := &notification.MockCommandExecutor{
+		ExecuteFunc: func(cmd string, args ...string) error {
+			executedCmd = cmd
+			return nil
+		},
+	}
+
+	cfg := &notification.Config{
+		Enabled: true,
+		OSNotification: notification.OSNotificationConfig{
+			Enabled:        true,
+			OnSyncComplete: true,
+			OnSyncError:    true,
+			OnConflict:     true,
+		},
+		LogNotification: notification.LogNotificationConfig{
+			Enabled:       true,
+			Path:          logPath,
+			MaxSizeMB:     10,
+			RetentionDays: 30,
+		},
+	}
+
+	manager, err := notification.NewManager(cfg, notification.WithCommandExecutor(mock))
+	if err != nil {
+		t.Fatalf("failed to create manager: %v", err)
+	}
+	defer func() { _ = manager.Close() }()
+
+	n := notification.Notification{
+		Type:      notification.NotifyTest,
+		Title:     "Test",
+		Message:   "Test message",
+		Timestamp: time.Now(),
+	}
+
+	err = manager.Send(n)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// The command used should be platform-specific
+	// On Linux: notify-send, on Darwin: osascript, on Windows: powershell
+	// Since we're running on Linux in this test, we expect notify-send
+	validCmds := []string{"notify-send", "osascript", "powershell"}
+	found := false
+	for _, cmd := range validCmds {
+		if executedCmd == cmd {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected platform-specific command, got %q", executedCmd)
+	}
+}
+
 // TestNotificationTypeFiltering tests that notification types are filtered based on config
 func TestNotificationTypeFiltering(t *testing.T) {
 	var sentNotifications []notification.Notification

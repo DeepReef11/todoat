@@ -1,5 +1,3 @@
-//go:build linux || darwin || windows
-
 package notification
 
 import (
@@ -75,6 +73,19 @@ func (c *osNotificationChannel) shouldSend(t NotificationType) bool {
 	}
 }
 
+// Close cleans up resources
+func (c *osNotificationChannel) Close() error {
+	return nil
+}
+
+// realCommandExecutor executes real system commands
+type realCommandExecutor struct{}
+
+// Execute runs a command
+func (e *realCommandExecutor) Execute(cmd string, args ...string) error {
+	return exec.Command(cmd, args...).Run()
+}
+
 // sendLinux sends notification using notify-send
 func (c *osNotificationChannel) sendLinux(n Notification) error {
 	return c.executor.Execute("notify-send", n.Title, n.Message)
@@ -120,17 +131,4 @@ $notification.Visible = $true
 $notification.ShowBalloonTip(5000)
 `, title, msg)
 	return c.executor.Execute("powershell", "-Command", script)
-}
-
-// Close cleans up resources
-func (c *osNotificationChannel) Close() error {
-	return nil
-}
-
-// realCommandExecutor executes real system commands
-type realCommandExecutor struct{}
-
-// Execute runs a command
-func (e *realCommandExecutor) Execute(cmd string, args ...string) error {
-	return exec.Command(cmd, args...).Run()
 }

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- OS notification channel now consolidated into single cross-platform implementation (`internal/notification/os.go`)
+- Default view config path lookup now uses `config.GetConfigDir()` directly instead of deriving from DBPath
+
 ### Added
 - `logging.background_enabled` config option to control background log file creation (default: true)
 - `NewBackgroundLoggerWithEnabled()` function for runtime config-aware background logging

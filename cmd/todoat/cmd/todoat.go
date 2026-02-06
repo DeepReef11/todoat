@@ -3702,13 +3702,7 @@ func getViewsDir(cfg *Config) string {
 func getDefaultView(cfg *Config, stderr io.Writer) string {
 	configPath := cfg.ConfigPath
 	if configPath == "" {
-		if cfg.DBPath != "" {
-			configPath = filepath.Join(filepath.Dir(cfg.DBPath), "config.yaml")
-		}
-	}
-
-	if configPath == "" {
-		return ""
+		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
 	}
 
 	appConfig, err := config.LoadFromPath(configPath)
