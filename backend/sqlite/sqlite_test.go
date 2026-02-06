@@ -591,6 +591,41 @@ func TestAllTaskStatuses(t *testing.T) {
 	}
 }
 
+// TestColumnExistsRejectsInvalidTableName_Issue072 verifies that columnExists
+// validates table names to prevent SQL injection (Issue #72).
+func TestColumnExistsRejectsInvalidTableName_Issue072(t *testing.T) {
+	b, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) error: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	testCases := []struct {
+		name      string
+		table     string
+		wantError bool
+	}{
+		{"valid tasks table", "tasks", false},
+		{"valid task_lists table", "task_lists", false},
+		{"valid schema_version table", "schema_version", false},
+		{"SQL injection attempt", "tasks; DROP TABLE tasks; --", true},
+		{"invalid table name", "nonexistent_table", true},
+		{"injection with parenthesis", "tasks) UNION SELECT * FROM sqlite_master--", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := columnExists(b.db, tc.table, "id")
+			if tc.wantError && err == nil {
+				t.Errorf("columnExists(%q, \"id\") = no error, want error for invalid table", tc.table)
+			}
+			if !tc.wantError && err != nil {
+				t.Errorf("columnExists(%q, \"id\") = %v, want no error for valid table", tc.table, err)
+			}
+		})
+	}
+}
+
 // TestBackendIsolation_Issue007 verifies that backends don't share data.
 // Issue #007: When multiple backends use the same database file (sync cache),
 // they must have isolated data via backend_id column.

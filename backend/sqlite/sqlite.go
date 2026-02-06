@@ -32,8 +32,20 @@ type Migration struct {
 	Up      func(db *sql.DB) error
 }
 
-// columnExists checks if a column exists in a table
+// validTables is an allowlist of table names that can be used with columnExists.
+// This prevents SQL injection since PRAGMA statements cannot use parameterized queries.
+var validTables = map[string]bool{
+	"tasks":          true,
+	"task_lists":     true,
+	"schema_version": true,
+}
+
+// columnExists checks if a column exists in a table.
+// The table parameter must be in the validTables allowlist to prevent SQL injection.
 func columnExists(db *sql.DB, table, column string) (bool, error) {
+	if !validTables[table] {
+		return false, fmt.Errorf("invalid table name: %s", table)
+	}
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return false, err

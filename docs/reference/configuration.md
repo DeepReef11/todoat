@@ -412,12 +412,10 @@ logging:
 
 When background logging is enabled, background processes (like the sync daemon) create log files at `/tmp/todoat-{PID}.log`. Set to `false` to disable these log files.
 
-```bash
-# Check logging configuration
-todoat config get logging
+To modify logging settings, edit `config.yaml` directly or use:
 
-# Disable background log files
-todoat config set logging.background_enabled false
+```bash
+todoat config edit
 ```
 
 ## Examples
