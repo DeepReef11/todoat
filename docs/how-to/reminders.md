@@ -76,11 +76,11 @@ todoat --json reminder status
 }
 ```
 
-**Reminder status:**
+**Reminder status (with configured intervals):**
 ```json
 {
   "enabled": true,
-  "intervals": ["1d", "at due time"],
+  "intervals": ["1d", "1h", "at due time"],
   "os_notification": true,
   "log_notification": true,
   "result": "INFO_ONLY"
@@ -89,27 +89,27 @@ todoat --json reminder status
 
 ## Configuration
 
-Configure reminders in `~/.config/todoat/config.yaml`:
+Configure reminders in `~/.config/todoat/config.yaml`. Reminders are disabled by default and require explicit configuration:
 
 ```yaml
 reminder:
-  enabled: true
+  enabled: true             # Must be enabled explicitly
   intervals:
     - 1d           # 1 day before due
     - 1h           # 1 hour before due
     - at due time  # When task is due
-  os_notification: true   # Send via OS desktop notifications
-  log_notification: true  # Log to notification log file
+  os_notification: true     # Enable OS desktop notifications
+  log_notification: true    # Enable notification log
 ```
 
 ### Configuration Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `enabled` | Enable reminder system | `true` |
-| `intervals` | Time before due to send reminders | `["1d", "at due time"]` |
-| `os_notification` | Send reminders via OS desktop notifications | `true` |
-| `log_notification` | Log reminders to notification log file | `true` |
+| `enabled` | Enable reminder system | `false` |
+| `intervals` | Time before due to send reminders | `[]` (none) |
+| `os_notification` | Send reminders via OS desktop notifications | `false` |
+| `log_notification` | Log reminders to notification log file | `false` |
 
 ### Notification Delivery
 

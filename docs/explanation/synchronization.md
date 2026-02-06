@@ -1403,6 +1403,26 @@ tx.Commit()  // Single disk write
 
 This section records team decisions related to synchronization behavior.
 
+### [2026-01-31] Auto-sync returns immediately with background indicator
+
+**Decision**: When `auto_sync_after_operation: true`, CLI operations fire-and-forget the sync and return immediately to the user. Sync status is shown on the next command or via OS notification.
+
+**Context**: When auto-sync triggers after a CLI operation (create, update, delete), it was unclear whether the CLI should wait for sync to complete or return immediately. Waiting gives users confidence their change is synced; returning immediately feels faster but leaves sync status ambiguous.
+
+**User Story**: As a CLI user, I expect the terminal to return quickly after a task operation, because I value responsiveness over blocking confirmation of sync completion.
+
+**Alternatives Considered**:
+- Wait for sync completion: User sees success/failure, but slower UX and defeats the purpose of background sync.
+- Configurable (`sync.wait_for_completion`): Let users choose their preference. Adds config surface area for a niche concern.
+
+**Consequences**:
+- CLI operations return instantly regardless of sync state
+- Users see sync status on their next command or via OS notification (if enabled)
+- Reduces perceived latency for all synced operations
+- Users who need sync confirmation should use `todoat sync` explicitly
+
+**Related**: [UX-006] - See `docs/decisions/question-log.md` for full discussion
+
 ### [2026-01-26] Documentation update for auto_sync_after_operation default
 
 **Decision**: Update documentation to reflect that `auto_sync_after_operation` defaults to `true` when `sync.enabled: true`.

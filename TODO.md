@@ -8,35 +8,6 @@ _No documentation tasks pending._
 
 ## Questions for Team
 
-### [FEAT-003] Should background logging be a runtime config option instead of compile-time constant?
-
-**Context**: `internal/utils/logger.go` defines `const ENABLE_BACKGROUND_LOGGING = true` as a compile-time constant. This means background logging (writing to `/tmp/todoat-*-{PID}.log`) is always on and cannot be toggled without recompiling. Users have no control over whether these log files are created.
-
-**Options**:
-- [ ] Make it a config option (`logging.background_enabled: true/false`) - User control, matches other config patterns
-- [ ] Keep as compile-time constant but default to false - Only developers enable it for debugging
-- [ ] Remove entirely and rely on verbose mode (`-v`) - Simplify, one logging mechanism
-
-**Impact**: Affects disk usage in `/tmp`, user privacy (logs may contain task content), debugging workflow.
-
-**Asked**: 2026-01-29
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [FEAT-004] What should happen when a notification backend tool is missing?
-
-**Context**: OS notifications use platform-specific tools: `notify-send` (Linux), `osascript` (macOS), `powershell` (Windows). The Linux fallback is `wall` which broadcasts to all terminal sessions. The behavior when the primary tool is missing is not explicitly handled—it may silently fail or produce a confusing error.
-
-**Options**:
-- [ ] Silent skip with debug log - Don't bother user, log for debugging
-- [ ] Warn once on first failure - Alert user their notification tool is missing, then suppress
-- [ ] Fail loudly - Return error so caller can decide
-- [ ] Auto-detect available tools at startup - Validate config and warn proactively
-
-**Impact**: User experience for notifications and reminders. Affects all platforms.
-
-**Asked**: 2026-01-29
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
 ### [FEAT-005] Should cache TTL be user-configurable?
 
 **Context**: List cache TTL is hardcoded to 5 minutes (`internal/testutil/cli.go`, cache implementation). This means list metadata can be stale for up to 5 minutes even if the remote has changes. Users with fast-changing backends or shared task lists may want shorter TTL; users on slow connections may want longer.
@@ -47,48 +18,6 @@ _No documentation tasks pending._
 - [ ] Keep current 5-minute default - Acceptable for most use cases, not worth the config surface
 
 **Impact**: Data freshness vs network usage trade-off. Affects sync-enabled users.
-
-**Asked**: 2026-01-29
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [UX-006] Should auto-sync wait for completion or return immediately?
-
-**Context**: When `auto_sync_after_operation: true`, CLI operations (create, update, delete) trigger a sync. It's unclear whether the CLI waits for sync to complete before returning to the user, or fires-and-forgets. Waiting gives users confidence their change is synced; returning immediately feels faster but leaves sync status ambiguous.
-
-**Options**:
-- [ ] Wait for sync completion - User sees success/failure, slower UX
-- [ ] Fire-and-forget with background indicator - Return immediately, show sync status on next command
-- [ ] Configurable (`sync.wait_for_completion: true/false`) - Let users choose their preference
-
-**Impact**: CLI responsiveness vs sync reliability. Core user experience for synced workflows.
-
-**Asked**: 2026-01-29
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [ARCH-007] Should the daemon HeartbeatInterval field be removed or implemented?
-
-**Context**: `DaemonConfig` in `internal/config/config.go` includes a `HeartbeatInterval` field, and tests reference heartbeat behavior (`daemon_test.go:842`), but no heartbeat recording or checking code exists. This creates a documentation-code gap where the config field is parseable but non-functional.
-
-**Options**:
-- [ ] Implement heartbeat mechanism - Enables hung daemon detection, matches documented architecture
-- [ ] Remove the field - Clean up dead code, reduce config surface area
-- [ ] Keep field but mark as reserved/future - Document that it's not yet functional
-
-**Impact**: Config clarity, daemon reliability monitoring. Dead config fields may confuse users.
-
-**Asked**: 2026-01-29
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [UX-008] How should reminder dismissal interact with multiple intervals?
-
-**Context**: Reminders support multiple intervals (e.g., `[1d, 1h, "at due time"]`). When a user dismisses a reminder, the docs say "you'll be reminded again at the next interval." It's unclear whether dismissal is per-interval (dismissing the 1d reminder still allows the 1h reminder to fire) or global (dismissing suppresses all intervals until next due cycle).
-
-**Options**:
-- [ ] Per-interval dismissal - Each interval tracked independently, more granular control
-- [ ] Global dismissal until next cycle - Single dismiss suppresses all, simpler mental model
-- [ ] Snooze-style with duration - "Remind me in 30 minutes" regardless of configured intervals
-
-**Impact**: Reminder UX, notification frequency. Affects daily usage patterns.
 
 **Asked**: 2026-01-29
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
@@ -107,79 +36,11 @@ However, `docs/explanation/interactive-ux.md` still describes the prompt as "An 
 
 **Options**:
 - [ ] Rewrite docs/explanation/interactive-ux.md - Update to document actual fuzzy-find prompt, config option, and context-aware filtering
-- [ ] Minimal update - Just fix the "empty stub" references and add config option mention
+- [x] Minimal update - Just fix the "empty stub" references and add config option mention
 
 **Impact**: Blocks user-facing documentation for the interactive prompt config option and fuzzy-find behavior.
 
 **Asked**: 2026-01-29 (updated 2026-01-31)
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [UX-010] Should cache TTL be user-configurable via config.yaml?
-
-**Context**: Feature is documented in docs/explanation/caching.md which states "The cache TTL can be configured in `config.yaml`: `cache_ttl: 5m`". However, the actual Config struct in `internal/config/config.go` has no cache TTL field. The TTL is hardcoded to 5 minutes in the test utility (`internal/testutil/cli.go`). Cannot create user-facing documentation for a config option that doesn't exist.
-
-**Current documentation says**: "The cache TTL can be configured in config.yaml: cache_ttl: 5m"
-
-**Missing details**:
-- [x] Config file options (`cache_ttl` not in Config struct)
-- [ ] CLI flags/commands (no cache management commands)
-
-**Options**:
-- [ ] Add `cache_ttl` config option - Implement the config field described in explanation doc
-- [ ] Update explanation doc - Remove the configurable TTL claim, document it as hardcoded 5 minutes
-- [ ] Not user-facing - Cache behavior is internal and doesn't need user documentation
-
-**Impact**: Blocks documentation of cache configuration. Users cannot currently adjust cache behavior.
-
-**Asked**: 2026-01-29
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [FEAT-011] docs/explanation/background-deamon.md is critically outdated and needs rewrite
-
-**Context**: The "Current todoat Implementation Status" table (lines 42-49) and subsequent sections in `docs/explanation/background-deamon.md` describe the daemon as having:
-- "In-process goroutine only" (Daemon process)
-- "None - single process" (IPC/Socket)
-- "CLI-driven background goroutines" (Sync mechanism)
-- "Single backend sync only" (Multi-backend)
-
-However, the actual code in `internal/daemon/daemon.go` has a fully implemented:
-- **Forked process** via `Fork()` using `exec.Command` with `Setsid: true`
-- **Unix domain socket IPC** with JSON message protocol (notify, status, stop)
-- **Daemon-driven sync loop** with `time.NewTicker`
-- **Multi-backend support** with per-backend intervals and failure isolation
-- **Client library** (`daemon.Client`) with `Notify()`, `Status()`, `Stop()` methods
-
-Additionally, line 373 states "There is no `todoat daemon start` command" but `todoat sync daemon start` exists and works.
-
-The entire "Current Implementation Status", "Current Background Sync Patterns", "No Unix Socket Infrastructure", and "Conflicts with Existing Implementation" sections describe a pre-implementation state that no longer exists.
-
-**Options**:
-- [ ] Rewrite the explanation doc to match current implementation - Remove outdated status table, update all code examples and descriptions to reflect real forked process + IPC architecture
-- [ ] Keep as historical context with clear "OUTDATED" markers - Preserve the design evolution but clearly mark which sections are superseded
-
-**Impact**: The outdated explanation doc blocks accurate user-facing documentation. The how-to/sync.md has been updated with correct daemon behavior, but the explanation doc still contradicts the actual implementation.
-
-**Asked**: 2026-01-29
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [UX-012] Should notification configuration be user-configurable via config.yaml?
-
-**Context**: The explanation doc `docs/explanation/notification-manager.md` describes a `notification:` YAML config block with options like `os_notification.enabled`, `os_notification.on_sync_error`, `log_notification.path`, `log_notification.max_size_mb`, etc. However, the main `Config` struct in `internal/config/config.go` has no `Notification` field. The notification system's config is hardcoded in `cmd/todoat/cmd/todoat.go` (lines 7556-7570) with all channels always enabled. Users cannot currently configure notification behavior through config.yaml — only reminder delivery channels are configurable via `reminder.os_notification` and `reminder.log_notification`.
-
-**Current documentation says**: "Configure desktop and log notifications" with a `notification:` YAML block.
-
-**Missing details**:
-- [x] Config file options (`notification:` block not in Config struct)
-- [ ] CLI flags/commands (notification commands work correctly)
-
-**Options**:
-- [ ] Add `notification` config to Config struct - Implement the config described in explanation doc
-- [ ] Update explanation doc - Remove the `notification:` config block, document that notification channels are always enabled and controlled only through reminder config
-- [ ] Keep as internal - Notification config is internal, reminder config controls user-facing notification preferences
-
-**Impact**: Blocks accurate documentation of notification configuration. Users may try to add `notification:` to config.yaml based on explanation doc.
-
-**Asked**: 2026-01-29
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
 
 ### [FEAT-013] What is the design intent for recurring tasks?
@@ -270,11 +131,51 @@ The entire "Current Implementation Status", "Current Background Sync Patterns", 
 **Context**: The CLI has three different verbose flag patterns: global `-V`/`--verbose` (persistent flag on root, enables debug output via `utils.SetVerboseMode`), `sync status --verbose` (local flag, no short form, shows sync metadata), and `version --verbose/-v` (local flag with lowercase `-v`, shows build info). Commit `8a05147` documents the `sync status` inconsistency in the CLI reference. Users expecting `-v` to work globally will get an error on most commands, and `-V` doesn't affect `sync status` verbose output.
 
 **Options**:
-- [ ] Unify all verbose flags under global `-V` - Each subcommand checks the global verbose flag, remove local verbose flags
-- [ ] Keep separate but rename local flags - Use `--detailed` or `--extended` for subcommand-specific extra output to avoid confusion with global `-V`
-- [ ] Keep current behavior - Document the distinction between global debug verbosity (`-V`) and subcommand-specific detail flags (`--verbose`)
+- `-v` is for view. Use `--verbose` only
 
 **Impact**: CLI consistency and discoverability. Affects `sync status`, `version`, and any future commands that want "show more detail" behavior.
+
+**Asked**: 2026-01-31
+**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+
+### [ARCH-020] Should config validation accept all 7 supported backends as default_backend?
+
+**Context**: `Config.Validate()` in `internal/config/config.go:197` hardcodes `validBackends` to only `sqlite`, `todoist`, and `nextcloud`. However, the codebase implements 7 backends: sqlite, todoist, nextcloud, google, mstodo, file, and git. These additional backends are loaded dynamically via `GetBackendConfig()` using the raw config map, bypassing the typed `BackendsConfig` struct (which also only has 3 fields). Users setting `default_backend: google` will get a validation error even though the backend works.
+
+**Options**:
+- [ ] Expand validation to all 7 backends - Add google, mstodo, file, git to `validBackends` map and `BackendsConfig` struct
+- [ ] Keep validation strict to typed backends only - The 4 additional backends are "dynamic" and don't need config struct fields; remove them from `default_backend` validation
+- [ ] Remove `default_backend` validation for dynamic backends - Only validate the 3 typed backends; skip validation for unknown names (let runtime discovery fail instead)
+
+**Impact**: Affects users of Google Tasks, MS Todo, File, and Git backends who want to set them as default. Config validation error vs runtime error trade-off.
+
+**Asked**: 2026-01-31
+**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+
+### [ARCH-021] Should RetentionDays use consistent types across TrashConfig and AnalyticsConfig?
+
+**Context**: `TrashConfig.RetentionDays` uses `*int` (pointer) in `internal/config/config.go:60`, allowing nil (default 30), explicit 0 (disabled), and positive values. `AnalyticsConfig.RetentionDays` uses plain `int` in `config.go:55`, where 0 (Go zero value) triggers the default of 365, making it impossible to explicitly set retention to 0 days (immediate purge). The `GetAnalyticsRetentionDays()` method at line 350 treats `<= 0` as "use default 365".
+
+**Options**:
+- [ ] Make both `*int` (pointer) - Consistent, allows explicit 0 for both (trash: keep forever, analytics: purge immediately)
+- [ ] Keep current inconsistency - Analytics should never have 0 retention (data loss), so the restriction is intentional
+- [ ] Make both plain `int` with documented minimum - Use 0 as "use default" for both, add explicit `disabled` boolean if needed
+
+**Impact**: Config consistency and user expectations. A user setting `analytics.retention_days: 0` gets 365 days silently, which may be surprising.
+
+**Asked**: 2026-01-31
+**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+
+### [FEAT-022] Should reminder.enabled default to true in DefaultConfig()?
+
+**Context**: Decision FEAT-008 states analytics should be "enabled by default" and `DefaultConfig()` in `internal/config/config.go:120` sets `Analytics.Enabled: true`. However, reminders have no explicit default in `DefaultConfig()`, so `Reminder.Enabled` defaults to `false` (Go zero value for bool). The sample config (`config.sample.yaml:127-134`) has the entire reminder section commented out. This means new users get analytics enabled but reminders disabled out of the box, requiring explicit config to use reminders.
+
+**Options**:
+- [ ] Add `Reminder: ReminderConfig{Enabled: true}` to DefaultConfig() - Reminders work out of the box for new users
+- [ ] Keep current behavior (disabled by default) - Reminders require explicit opt-in, avoids unexpected notifications for users who haven't configured intervals
+- [ ] Enable reminders only when intervals are configured - Auto-enable if user sets reminder intervals, skip if no intervals defined
+
+**Impact**: New user onboarding experience. Users who add `--due-date` to tasks won't get reminders unless they also enable them in config. The "enable only when intervals configured" option provides a middle ground.
 
 **Asked**: 2026-01-31
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->

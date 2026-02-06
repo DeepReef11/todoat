@@ -21,16 +21,15 @@ import (
 
 // Config holds daemon configuration.
 type Config struct {
-	PIDPath           string        // Path to PID file
-	SocketPath        string        // Path to Unix socket
-	LogPath           string        // Path to log file
-	Interval          time.Duration // Sync interval
-	IdleTimeout       time.Duration // Timeout before daemon exits when idle
-	HeartbeatInterval time.Duration // Interval for heartbeat updates
-	ConfigPath        string        // Path to app config file
-	DBPath            string        // Path to database
-	CachePath         string        // Path to cache
-	Executable        string        // Optional: explicit path to executable (for testing)
+	PIDPath     string        // Path to PID file
+	SocketPath  string        // Path to Unix socket
+	LogPath     string        // Path to log file
+	Interval    time.Duration // Sync interval
+	IdleTimeout time.Duration // Timeout before daemon exits when idle
+	ConfigPath  string        // Path to app config file
+	DBPath      string        // Path to database
+	CachePath   string        // Path to cache
+	Executable  string        // Optional: explicit path to executable (for testing)
 }
 
 // Message represents an IPC message between CLI and daemon.

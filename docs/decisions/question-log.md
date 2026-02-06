@@ -19,6 +19,14 @@ For current design decisions, see `docs/explanation/`.
 | UX-013 | 2026-01-26 | Should views folder creation prompt user when -y flag is NOT provided? | Silent fallback - use built-in views without prompt; use -y flag to create views folder |
 | ARCH-001 | 2026-01-31 | Should the daemon Unix socket have restricted file permissions? | Restrict to owner only (0600) |
 | ARCH-002 | 2026-01-31 | Should conflict resolution propagate to remote on next sync? | Queue a remote update automatically after resolution |
+| FEAT-003 | 2026-01-31 | Should background logging be a runtime config option? | Make it a config option (`logging.background_enabled`) |
+| FEAT-004 | 2026-01-31 | What should happen when a notification backend tool is missing? | Warn once on first failure + Auto-detect available tools at startup |
+| UX-006 | 2026-01-31 | Should auto-sync wait for completion or return immediately? | Fire-and-forget with background indicator |
+| ARCH-007 | 2026-01-31 | Should the daemon HeartbeatInterval field be removed or implemented? | Implement heartbeat mechanism |
+| UX-008 | 2026-01-31 | How should reminder dismissal interact with multiple intervals? | Per-interval dismissal - each interval tracked independently |
+| UX-010 | 2026-01-31 | Should cache TTL be user-configurable via config.yaml? | Add `cache_ttl` config option to Config struct |
+| UX-012 | 2026-01-31 | Should notification configuration be user-configurable via config.yaml? | Add `notification` config to Config struct |
+| FEAT-011 | 2026-01-31 | Is background-deamon.md critically outdated and needs rewrite? | Rewrite to match current forked process + IPC implementation |
 
 ---
 
@@ -233,5 +241,182 @@ For current design decisions, see `docs/explanation/`.
 - [x] Queue a remote update automatically after resolution - Middle ground, uses existing sync queue
 
 **Impact**: Core sync behavior. Affects user trust in conflict resolution workflow.
+
+**Status**: answered
+
+---
+
+### [FEAT-003] Should background logging be a runtime config option instead of compile-time constant?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/logging.md`
+
+**Context**: `internal/utils/logger.go` defines `const ENABLE_BACKGROUND_LOGGING = true` as a compile-time constant. This means background logging (writing to `/tmp/todoat-*-{PID}.log`) is always on and cannot be toggled without recompiling. Users have no control over whether these log files are created.
+
+**Options**:
+- [x] Make it a config option (`logging.background_enabled: true/false`) - User control, matches other config patterns
+- [ ] Keep as compile-time constant but default to false - Only developers enable it for debugging
+- [ ] Remove entirely and rely on verbose mode (`--verbose`) - Simplify, one logging mechanism
+
+**Impact**: Affects disk usage in `/tmp`, user privacy (logs may contain task content), debugging workflow.
+
+**Status**: answered
+
+---
+
+### [FEAT-004] What should happen when a notification backend tool is missing?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/notification-manager.md`
+
+**Context**: OS notifications use platform-specific tools: `notify-send` (Linux), `osascript` (macOS), `powershell` (Windows). The Linux fallback is `wall` which broadcasts to all terminal sessions. The behavior when the primary tool is missing is not explicitly handled—it may silently fail or produce a confusing error.
+
+**Options**:
+- [ ] Silent skip with debug log - Don't bother user, log for debugging
+- [x] Warn once on first failure - Alert user their notification tool is missing, then suppress
+- [x] Auto-detect available tools at startup - Validate config and warn proactively
+- [ ] Fail loudly - Return error so caller can decide
+
+**Impact**: User experience for notifications and reminders. Affects all platforms.
+
+**Status**: answered
+
+---
+
+### [UX-006] Should auto-sync wait for completion or return immediately?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/synchronization.md`
+
+**Context**: When `auto_sync_after_operation: true`, CLI operations (create, update, delete) trigger a sync. It's unclear whether the CLI waits for sync to complete before returning to the user, or fires-and-forgets. Waiting gives users confidence their change is synced; returning immediately feels faster but leaves sync status ambiguous.
+
+**Options**:
+- [ ] Wait for sync completion - User sees success/failure, slower UX
+- [x] Fire-and-forget with background indicator - Return immediately, show sync status on next command or use os notification
+- [ ] Configurable (`sync.wait_for_completion: true/false`) - Let users choose their preference
+
+**Impact**: CLI responsiveness vs sync reliability. Core user experience for synced workflows.
+
+**Status**: answered
+
+---
+
+### [ARCH-007] Should the daemon HeartbeatInterval field be removed or implemented?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/architecture.md`
+
+**Context**: `DaemonConfig` in `internal/config/config.go` includes a `HeartbeatInterval` field, and tests reference heartbeat behavior (`daemon_test.go:842`), but no heartbeat recording or checking code exists. This creates a documentation-code gap where the config field is parseable but non-functional.
+
+**Options**:
+- [x] Implement heartbeat mechanism - Enables hung daemon detection, matches documented architecture
+- [ ] Remove the field - Clean up dead code, reduce config surface area
+- [ ] Keep field but mark as reserved/future - Document that it's not yet functional
+
+**Impact**: Config clarity, daemon reliability monitoring. Dead config fields may confuse users.
+
+**Status**: answered
+
+---
+
+### [UX-008] How should reminder dismissal interact with multiple intervals?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/user-experience.md`
+
+**Context**: Reminders support multiple intervals (e.g., `[1d, 1h, "at due time"]`). When a user dismisses a reminder, the docs say "you'll be reminded again at the next interval." It's unclear whether dismissal is per-interval (dismissing the 1d reminder still allows the 1h reminder to fire) or global (dismissing suppresses all intervals until next due cycle).
+
+**Options**:
+- [x] Per-interval dismissal - Each interval tracked independently, more granular control
+- [ ] Global dismissal until next cycle - Single dismiss suppresses all, simpler mental model
+- [ ] Snooze-style with duration - "Remind me in 30 minutes" regardless of configured intervals
+
+**Impact**: Reminder UX, notification frequency. Affects daily usage patterns.
+
+**Status**: answered
+
+---
+
+### [UX-010] Should cache TTL be user-configurable via config.yaml?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/caching.md`
+
+**Context**: Feature is documented in docs/explanation/caching.md which states "The cache TTL can be configured in `config.yaml`: `cache_ttl: 5m`". However, the actual Config struct in `internal/config/config.go` has no cache TTL field. The TTL is hardcoded to 5 minutes in the test utility (`internal/testutil/cli.go`). Cannot create user-facing documentation for a config option that doesn't exist.
+
+**Current documentation says**: "The cache TTL can be configured in config.yaml: cache_ttl: 5m"
+
+**Missing details**:
+- [x] Config file options (`cache_ttl` not in Config struct)
+- [ ] CLI flags/commands (no cache management commands)
+
+**Options**:
+- [x] Add `cache_ttl` config option - Implement the config field described in explanation doc
+- [ ] Update explanation doc - Remove the configurable TTL claim, document it as hardcoded 5 minutes
+- [ ] Not user-facing - Cache behavior is internal and doesn't need user documentation
+
+**Impact**: Blocks documentation of cache configuration. Users cannot currently adjust cache behavior.
+
+**Status**: answered
+
+---
+
+### [UX-012] Should notification configuration be user-configurable via config.yaml?
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/notification-manager.md`
+
+**Context**: The explanation doc `docs/explanation/notification-manager.md` describes a `notification:` YAML config block with options like `os_notification.enabled`, `os_notification.on_sync_error`, `log_notification.path`, `log_notification.max_size_mb`, etc. However, the main `Config` struct in `internal/config/config.go` has no `Notification` field. The notification system's config is hardcoded in `cmd/todoat/cmd/todoat.go` (lines 7556-7570) with all channels always enabled. Users cannot currently configure notification behavior through config.yaml — only reminder delivery channels are configurable via `reminder.os_notification` and `reminder.log_notification`.
+
+**Current documentation says**: "Configure desktop and log notifications" with a `notification:` YAML block.
+
+**Missing details**:
+- [x] Config file options (`notification:` block not in Config struct)
+- [ ] CLI flags/commands (notification commands work correctly)
+
+**Options**:
+- [x] Add `notification` config to Config struct - Implement the config described in explanation doc
+- [ ] Update explanation doc - Remove the `notification:` config block, document that notification channels are always enabled and controlled only through reminder config
+- [ ] Keep as internal - Notification config is internal, reminder config controls user-facing notification preferences
+
+**Impact**: Blocks accurate documentation of notification configuration. Users may try to add `notification:` to config.yaml based on explanation doc.
+
+**Status**: answered
+
+---
+
+### [FEAT-011] docs/explanation/background-deamon.md is critically outdated and needs rewrite
+
+**Asked**: 2026-01-29
+**Answered**: 2026-01-31
+**Documented in**: `docs/explanation/background-deamon.md`
+
+**Context**: The "Current todoat Implementation Status" table (lines 42-49) and subsequent sections in `docs/explanation/background-deamon.md` describe the daemon as having:
+- "In-process goroutine only" (Daemon process)
+- "None - single process" (IPC/Socket)
+- "CLI-driven background goroutines" (Sync mechanism)
+- "Single backend sync only" (Multi-backend)
+
+However, the actual code in `internal/daemon/daemon.go` has a fully implemented:
+- **Forked process** via `Fork()` using `exec.Command` with `Setsid: true`
+- **Unix domain socket IPC** with JSON message protocol (notify, status, stop)
+- **Daemon-driven sync loop** with `time.NewTicker`
+- **Multi-backend support** with per-backend intervals and failure isolation
+- **Client library** (`daemon.Client`) with `Notify()`, `Status()`, `Stop()` methods
+
+Additionally, line 373 states "There is no `todoat daemon start` command" but `todoat sync daemon start` exists and works.
+
+**Options**:
+- [x] Rewrite the explanation doc to match current implementation - Remove outdated status table, update all code examples and descriptions to reflect real forked process + IPC architecture
+- [ ] Keep as historical context with clear "OUTDATED" markers - Preserve the design evolution but clearly mark which sections are superseded
+
+**Impact**: The outdated explanation doc blocks accurate user-facing documentation. The how-to/sync.md has been updated with correct daemon behavior, but the explanation doc still contradicts the actual implementation.
 
 **Status**: answered

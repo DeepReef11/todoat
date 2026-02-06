@@ -159,11 +159,19 @@ type CachedList struct {
 
 ### Related Configuration
 
-The cache TTL can be configured in `config.yaml`:
+**Decision [UX-010]**: The cache TTL is user-configurable via `config.yaml`:
 
 ```yaml
 cache_ttl: 5m  # Default: 5 minutes
 ```
+
+**Context**: The cache TTL was originally hardcoded to 5 minutes. The explanation doc described it as configurable, but the `Config` struct in `internal/config/config.go` had no `cache_ttl` field — the TTL was hardcoded in the implementation. The decision is to add the `cache_ttl` config option to the Config struct, making the documentation accurate.
+
+**Rationale**: Users with fast-changing backends or shared task lists may want shorter TTL for fresher data; users on slow connections may want longer TTL to reduce network usage. A configurable TTL provides user control while maintaining the 5-minute default.
+
+**Impact**: Data freshness vs network usage trade-off. Primarily affects sync-enabled users.
+
+**Related**: [UX-010] - See `docs/decisions/question-log.md` for full discussion
 
 ## Related Documentation
 

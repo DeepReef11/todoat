@@ -165,10 +165,10 @@ Restores the default configuration. Requires confirmation.
 | `trash.retention_days` | int | Days to keep deleted items (default: `30`, 0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `true`) |
 | `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |
-| `reminder.enabled` | bool | Enable task reminder notifications (default: `true`) |
-| `reminder.intervals` | list | Time before due to send reminders (default: `["1d", "at due time"]`) |
-| `reminder.os_notification` | bool | Send reminders via OS notifications (default: `true`) |
-| `reminder.log_notification` | bool | Log reminders to notification log (default: `true`) |
+| `reminder.enabled` | bool | Enable task reminder notifications (default: `false`) |
+| `reminder.intervals` | list | Time before due to send reminders (default: `[]`, no intervals) |
+| `reminder.os_notification` | bool | Send reminders via OS notifications (default: `false`) |
+| `reminder.log_notification` | bool | Log reminders to notification log (default: `false`) |
 
 ## Backend Configuration
 
@@ -296,27 +296,27 @@ The notification log is stored at `~/.local/share/todoat/notifications.log`.
 
 ## Reminder Configuration
 
-Configure task due date reminders:
+Configure task due date reminders. Reminders are disabled by default and require explicit configuration:
 
 ```yaml
 reminder:
-  enabled: true
+  enabled: true           # Must be enabled explicitly
   intervals:
     - 1d              # 1 day before due
     - 1h              # 1 hour before due
     - at due time     # When task is due
-  os_notification: true
-  log_notification: true
+  os_notification: true   # Enable OS desktop notifications
+  log_notification: true  # Enable notification log
 ```
 
 ### Reminder Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `enabled` | Enable reminder system | `true` |
-| `intervals` | Time before due to send reminders | `["1d", "at due time"]` |
-| `os_notification` | Send via OS desktop notifications | `true` |
-| `log_notification` | Log to notification log file | `true` |
+| `enabled` | Enable reminder system | `false` |
+| `intervals` | Time before due to send reminders | `[]` (none) |
+| `os_notification` | Send via OS desktop notifications | `false` |
+| `log_notification` | Log to notification log file | `false` |
 
 ### Interval Format
 
@@ -360,8 +360,10 @@ sync:
 | Option | Description | Default |
 |--------|-------------|---------|
 | `enabled` | Enable daemon process for background sync | `false` |
-| `interval` | Sync interval in seconds | `300` |
-| `idle_timeout` | Seconds before idle daemon exits | `300` |
+| `interval` | Sync interval in seconds | `300` (5 minutes) |
+| `idle_timeout` | Seconds before idle daemon exits | `300` (5 minutes) |
+
+When `interval` or `idle_timeout` are set to 0 or left unset, the effective default of 300 seconds is used.
 
 ### Managing the Daemon
 

@@ -74,10 +74,15 @@ type BackgroundLogger struct {
 ```
 
 **Configuration:**
-```go
-// Toggle background logging (compile-time constant)
-const ENABLE_BACKGROUND_LOGGING = true
+
+Background logging is a runtime config option controlled via `config.yaml`:
+
+```yaml
+logging:
+  background_enabled: true  # default: true; set to false to disable background log files
 ```
+
+> **Decision [FEAT-003]**: Background logging was changed from a compile-time constant to a runtime config option (`logging.background_enabled`). This gives users control over whether `/tmp/todoat-*-{PID}.log` files are created, matching other config patterns in the project. See `docs/decisions/question-log.md` for full discussion.
 
 **Log File Location:** `/tmp/todoat-{PID}.log`
 

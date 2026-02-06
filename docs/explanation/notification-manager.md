@@ -51,6 +51,23 @@ The notification manager auto-detects the available notification system:
 | macOS | osascript | `osascript -e 'display notification "message" with title "todoat"'` |
 | Windows | PowerShell | `[System.Windows.Forms.MessageBox]::Show("message")` |
 
+## Missing Backend Tool Behavior
+
+**Decision [FEAT-004]**: When a notification backend tool is missing (e.g., `notify-send` not installed on Linux), todoat uses a two-pronged approach:
+
+1. **Warn once on first failure**: Alert the user that their notification tool is missing, then suppress further warnings for the session.
+2. **Auto-detect available tools at startup**: Validate configured notification tools proactively and warn if the preferred tool is unavailable.
+
+**Context**: OS notifications use platform-specific tools: `notify-send` (Linux), `osascript` (macOS), `powershell` (Windows). The Linux fallback is `wall` which broadcasts to all terminal sessions. Previously, the behavior when the primary tool was missing was not explicitly handled — it could silently fail or produce confusing errors.
+
+**Rationale**: Combining warn-once with startup detection provides a good balance: users are informed about missing tools without being nagged repeatedly, and the auto-detection catches configuration issues before they affect runtime behavior.
+
+**Impact**: User experience for notifications and reminders across all platforms.
+
+**Related**: [FEAT-004] - See `docs/decisions/question-log.md` for full discussion
+
+---
+
 ## Log Notification Format
 
 ```
@@ -162,6 +179,20 @@ todoat notification log
 # Clear notification log
 todoat notification log clear
 ```
+
+## Notification Configuration Design
+
+**Decision [UX-012]**: Add `notification` config block to the Config struct in `internal/config/config.go`, implementing the configuration described in this document.
+
+**Context**: The notification system's config was hardcoded in `cmd/todoat/cmd/todoat.go` with all channels always enabled. Users could not configure notification behavior through `config.yaml` — only reminder delivery channels were configurable via `reminder.os_notification` and `reminder.log_notification`. However, this document described a `notification:` YAML config block with options like `os_notification.enabled`, `os_notification.on_sync_error`, `log_notification.path`, etc.
+
+**Rationale**: Adding the notification config to the Config struct makes the configuration described in this document functional. Users can control which notification channels are active and which events trigger notifications, matching the documented interface.
+
+**Impact**: Users can now configure notification behavior through `config.yaml` as documented above. Previously, users who added `notification:` to their config based on this document would have had it silently ignored.
+
+**Related**: [UX-012] - See `docs/decisions/question-log.md` for full discussion
+
+---
 
 ## Disabling Notifications
 

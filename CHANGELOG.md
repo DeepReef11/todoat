@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- Removed unused `HeartbeatInterval` field from daemon config (field was never implemented)
+
+### Added
+- User experience design decision document (`docs/explanation/user-experience.md`)
+
+### Changed
+- Updated explanation docs (architecture, background-daemon, caching, logging, notification-manager, synchronization) to match current implementation
+- Updated `docs/how-to/reminders.md` with design decision references
+- Updated `docs/reference/configuration.md` with config behavior clarifications
+- Recorded multiple design decisions in question log
+
 ### Fixed
 - `daemon start` now always forks a real background daemon regardless of `daemon.enabled` config setting; the feature-flag check is only used for auto-start gating, preventing stale PID files when config omits `daemon.enabled` (#59)
 

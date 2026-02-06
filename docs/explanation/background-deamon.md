@@ -35,25 +35,35 @@ todoat uses a background daemon to process sync operations with remote backends 
 
 ## Current todoat Implementation Status
 
-> **Important**: The current todoat implementation differs significantly from this target architecture.
+> **Decision [FEAT-011]**: This document requires a rewrite to match the current implementation. The status table and several sections below describe a pre-implementation state that no longer exists. The actual code in `internal/daemon/daemon.go` has a fully implemented forked process daemon with Unix domain socket IPC, daemon-driven sync loop, multi-backend support, and a client library. See `docs/decisions/question-log.md` for the full decision record.
+
+> **Important**: Several sections below are **outdated** and describe a pre-implementation state. The actual implementation includes:
+> - **Forked process** via `Fork()` using `exec.Command` with `Setsid: true`
+> - **Unix domain socket IPC** with JSON message protocol (notify, status, stop)
+> - **Daemon-driven sync loop** with `time.NewTicker`
+> - **Multi-backend support** with per-backend intervals and failure isolation
+> - **Client library** (`daemon.Client`) with `Notify()`, `Status()`, `Stop()` methods
+> - **`todoat sync daemon start`** command exists and works
 
 ### What Exists Today
 
+> **OUTDATED** — This table describes a pre-implementation state. See note above for current status.
+
 | Component | Target Design | Current Implementation |
 |-----------|---------------|------------------------|
-| Daemon process | Separate forked process | In-process goroutine only |
-| IPC/Socket | Unix domain socket | None - single process |
-| Sync mechanism | Daemon-driven | CLI-driven background goroutines |
-| Multi-backend | Daemon iterates all backends | Single backend sync only |
-| State management | Daemon process state | WaitGroup + channels in-process |
+| Daemon process | Separate forked process | ~~In-process goroutine only~~ **Implemented: forked process** |
+| IPC/Socket | Unix domain socket | ~~None - single process~~ **Implemented: Unix domain socket** |
+| Sync mechanism | Daemon-driven | ~~CLI-driven background goroutines~~ **Implemented: daemon-driven sync loop** |
+| Multi-backend | Daemon iterates all backends | ~~Single backend sync only~~ **Implemented: per-backend intervals** |
+| State management | Daemon process state | ~~WaitGroup + channels in-process~~ **Implemented: daemon process state** |
 
 ### Current Background Sync Patterns
 
-todoat currently uses three in-process mechanisms:
+todoat uses the following mechanisms:
 
 1. **Auto-sync after operations** (`triggerAutoSync`): Background goroutine triggered after create/update/delete
 2. **Background pull sync** (`triggerBackgroundPullSync`): Pulls from remote before read operations with cooldown
-3. **Test daemon mode** (`daemonSyncLoop`): Periodic sync via explicit start command (goroutine, not real daemon) - to be replaced by auto-start
+3. **Daemon sync loop** (`daemonSyncLoop`): Daemon-driven periodic sync via `todoat sync daemon start`
 
 All use `backgroundSyncWG` WaitGroup to ensure completion before CLI exits:
 
@@ -66,13 +76,15 @@ defer backgroundSyncWG.Wait()
 
 ## Conflicts with Existing Implementation
 
-### No Process Isolation
+> **OUTDATED** — Process isolation has been implemented. The daemon now runs as a separate forked process.
 
-The current in-process goroutine approach means:
-- Daemon cannot outlive the CLI process
-- No true background processing after CLI exits
-- Network latency blocks CLI responsiveness
-- Users experience "terminal hanging" during sync (Issue #36)
+### ~~No Process Isolation~~ (Resolved)
+
+The ~~current~~ previous in-process goroutine approach meant:
+- ~~Daemon cannot outlive the CLI process~~ **Resolved: daemon runs as forked process**
+- ~~No true background processing after CLI exits~~ **Resolved: daemon continues after CLI exits**
+- ~~Network latency blocks CLI responsiveness~~ **Resolved: fire-and-forget with background indicator**
+- ~~Users experience "terminal hanging" during sync (Issue #36)~~ **Resolved**
 
 ### Database Schema Differences
 
@@ -91,35 +103,31 @@ sync_queue (id, task_id, task_uid, operation_type, retry_count, ...)
 -- retry_count exists but no exponential backoff enforcement
 ```
 
-To implement the daemon architecture, todoat would need:
+To implement the planned failure recovery features, todoat would need:
 - Add `daemon_tasks` table for daemon work queue (or repurpose sync_queue)
-- Add `daemon_heartbeat` table for health monitoring
+- Add `daemon_heartbeat` table for health monitoring (see issue #74)
 - Add `worker_id`, `claimed_at` columns for atomic task claiming
 
-### No Unix Socket Infrastructure
+> **Note**: These schema additions are **not yet implemented**. They are described here as part of the planned design.
 
-Current daemon state tracking:
-```go
-type daemonState struct {
-    running   bool
-    pid       int
-    stopChan  chan struct{}
-    doneChan  chan struct{}
-    // ... no socket, no IPC
-}
-```
+### ~~No Unix Socket Infrastructure~~ (Resolved)
 
-Would need to add:
-- Unix socket creation/cleanup
-- Socket listener goroutine
-- Message protocol for CLI-daemon communication
+> **OUTDATED** — Unix socket IPC has been implemented in `internal/daemon/daemon.go`.
+
+The daemon now includes:
+- Unix domain socket creation/cleanup
+- Socket listener for IPC
+- JSON message protocol for CLI-daemon communication (notify, status, stop)
+- `daemon.Client` library with `Notify()`, `Status()`, `Stop()` methods
 
 ## Task Deduplication
+
+> **NOT YET IMPLEMENTED** — This section describes a planned design. The `worker_id`, `claimed_at`, and `status` columns do not exist in the `sync_queue` table. Current deduplication relies on the single-daemon-instance guarantee via pidfile locking.
 
 ### Problem
 Edge cases could allow two daemon instances briefly, risking double-execution of tasks.
 
-### Solution
+### Planned Solution
 Atomic task claiming in SQLite database.
 
 ```sql
@@ -201,6 +209,8 @@ COMMIT;
 
 ## Hung Daemon Detection and Recovery
 
+> **NOT YET IMPLEMENTED** — This entire section describes planned features. The `daemon_heartbeat` table, heartbeat worker, stuck task detection, exponential backoff, and `MaxConsecutiveErrors` mechanism do not exist in the codebase. See issue #74 for the heartbeat mechanism feature request.
+
 ### Problem
 Daemon may hang or loop infinitely due to:
 - Network timeouts to Nextcloud/Todoist
@@ -209,11 +219,11 @@ Daemon may hang or loop infinitely due to:
 - Deadlocks or blocking I/O
 - Resource exhaustion
 
-### Solution: Heartbeat Mechanism
+### Planned Solution: Heartbeat Mechanism
 
-#### Heartbeat Implementation (Asynchronous)
+#### Planned Heartbeat Implementation (Asynchronous)
 ```sql
--- Database schema addition (new table for todoat)
+-- Planned database schema addition (new table for todoat)
 CREATE TABLE daemon_heartbeat (
     worker_id TEXT PRIMARY KEY,
     last_heartbeat TIMESTAMP NOT NULL,
@@ -223,7 +233,7 @@ CREATE TABLE daemon_heartbeat (
 ```
 
 ```go
-// Go implementation for todoat
+// Planned Go implementation for todoat
 type HeartbeatWorker struct {
     workerID      string
     interval      time.Duration
@@ -269,7 +279,7 @@ func (h *HeartbeatWorker) SetStatus(status string) {
 }
 ```
 
-#### CLI Health Check (Instant)
+#### Planned CLI Health Check (Instant)
 ```go
 // Before attempting to communicate with daemon (no waiting, just read)
 func checkDaemonHealth(db *sql.DB, workerID string) (bool, int) {
@@ -297,7 +307,7 @@ func checkDaemonHealth(db *sql.DB, workerID string) (bool, int) {
 }
 ```
 
-### Task Timeout Protection
+### Planned Task Timeout Protection
 
 #### Per-Task Timeout
 ```go
@@ -370,9 +380,9 @@ todoat daemon kill
 # 6. Reset any stuck tasks in sync_queue
 ```
 
-> **Note**: There is no `todoat daemon start` command. The daemon starts automatically when the CLI detects pending background work and no running daemon. Users should never need to manually start the daemon.
+> **Note**: The `todoat sync daemon start` command exists and works. The daemon can also be started automatically when the CLI detects pending background work and no running daemon.
 
-### Error Loop Prevention
+### Planned Error Loop Prevention
 
 #### Exponential Backoff on Errors
 ```go
@@ -418,6 +428,8 @@ func (d *daemon) processLoop() {
 
 ## Configuration
 
+> **PARTIALLY IMPLEMENTED** — The daemon uses `PIDPath`, `SocketPath`, `LogPath`, `Interval`, `IdleTimeout`, `ConfigPath`, `DBPath`, and `CachePath` from its Config struct. The heartbeat, task timeout, and error threshold settings below are **not yet implemented**.
+
 todoat-specific paths and values:
 
 ```yaml
@@ -456,14 +468,14 @@ sync:
 - Verify process exists with `syscall.Kill(pid, 0)`
 - Remove pidfile if process dead, launch new daemon
 
-### Hung Daemon
+### Hung Daemon (Not Yet Implemented)
 - Detect via heartbeat timeout (30 seconds)
 - Send SIGTERM for graceful shutdown
 - Send SIGKILL after 5 second grace period
 - Reset stuck tasks back to pending status
 - Launch new daemon to continue processing
 
-### Task Processing Errors
+### Task Processing Errors (Not Yet Implemented)
 - Log error with full context
 - Increment consecutive error counter
 - Apply exponential backoff
@@ -492,16 +504,19 @@ daemon.notifyMgr.SendAsync(notification.Notification{
 ```
 
 ### Sync Queue
-Use existing `sync_queue` table with schema additions:
+
+> **NOT YET IMPLEMENTED** — The schema additions below are planned but not applied. The current `sync_queue` table does not have `status`, `worker_id`, `claimed_at`, or `completed_at` columns.
+
+Planned: use existing `sync_queue` table with schema additions:
 
 ```sql
--- Add columns to existing sync_queue table
+-- Planned: Add columns to existing sync_queue table
 ALTER TABLE sync_queue ADD COLUMN status TEXT DEFAULT 'pending';
 ALTER TABLE sync_queue ADD COLUMN worker_id TEXT;
 ALTER TABLE sync_queue ADD COLUMN claimed_at TEXT;
 ALTER TABLE sync_queue ADD COLUMN completed_at TEXT;
 
--- Add index for efficient task claiming
+-- Planned: Add index for efficient task claiming
 CREATE INDEX idx_sync_queue_status ON sync_queue(status);
 ```
 

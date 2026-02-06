@@ -8718,15 +8718,14 @@ func runDaemonMode(args []string, stderr io.Writer) {
 
 	// Create daemon config
 	daemonCfg := &daemon.Config{
-		PIDPath:           pidPath,
-		SocketPath:        socketPath,
-		LogPath:           logPath,
-		Interval:          time.Duration(intervalSec) * time.Second,
-		IdleTimeout:       time.Duration(idleTimeoutSec) * time.Second,
-		ConfigPath:        configPath,
-		DBPath:            dbPath,
-		CachePath:         cachePath,
-		HeartbeatInterval: 2 * time.Second, // Default heartbeat interval
+		PIDPath:     pidPath,
+		SocketPath:  socketPath,
+		LogPath:     logPath,
+		Interval:    time.Duration(intervalSec) * time.Second,
+		IdleTimeout: time.Duration(idleTimeoutSec) * time.Second,
+		ConfigPath:  configPath,
+		DBPath:      dbPath,
+		CachePath:   cachePath,
 	}
 
 	// Create a config for doSync
