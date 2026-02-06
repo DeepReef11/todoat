@@ -1055,19 +1055,18 @@ default_backend: sqlite
 }
 
 // TestDaemonHeartbeatDetectsHung verifies that heartbeat mechanism detects hung daemons.
-// Issue #39: Heartbeat table for hung daemon detection
+// Issue #39, #74: Heartbeat mechanism for hung daemon detection
 func TestDaemonHeartbeatDetectsHung(t *testing.T) {
 	cli := testutil.NewCLITestWithForkedDaemon(t)
 	configPath := cli.ConfigPath()
 
-	// Configure with short heartbeat for testing
+	// Configure with short heartbeat interval for testing (1 second)
 	configContent := `
 sync:
   enabled: true
   daemon:
     enabled: true
-    heartbeat_interval_ms: 100
-    heartbeat_timeout_ms: 500
+    heartbeat_interval: 1
     interval: 60
 backends:
   sqlite:
@@ -1080,20 +1079,16 @@ default_backend: sqlite
 
 	// Start daemon
 	cli.MustExecute("-y", "sync", "daemon", "start")
+	defer cli.MustExecute("-y", "sync", "daemon", "stop")
 
 	// Give daemon time to record heartbeats
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	// Check daemon status - should show healthy with recent heartbeat
 	statusOut := cli.MustExecute("-y", "sync", "daemon", "status")
 	testutil.AssertContains(t, statusOut, "running")
-
-	// Heartbeat display is not yet implemented.
-	// Skip until the feature is available to avoid a no-op assertion.
-	t.Skip("heartbeat display not yet implemented in daemon status")
-
-	// Cleanup
-	cli.MustExecute("-y", "sync", "daemon", "stop")
+	// Issue #74: Verify heartbeat health is shown
+	testutil.AssertContains(t, statusOut, "Heartbeat: healthy")
 }
 
 // TestDaemonGracefulShutdown verifies clean shutdown on SIGTERM.

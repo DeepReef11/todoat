@@ -208,3 +208,27 @@ However, `docs/explanation/interactive-ux.md` still describes the prompt as "An 
 
 **Asked**: 2026-02-06
 **Status**: unanswered
+
+### [UX-025] How does the user configure daemon heartbeat monitoring?
+
+**Context**: The daemon heartbeat mechanism is implemented in code (`internal/daemon/daemon.go` with `heartbeatLoop`, `writeHeartbeat` functions, and `HeartbeatInterval` config field at `sync.daemon.heartbeat_interval`). The config getter `GetDaemonHeartbeatInterval()` exists in `internal/config/config.go`. However:
+1. The `docs/explanation/background-deamon.md` describes the heartbeat as "NOT YET IMPLEMENTED" and shows a database-based approach that differs from the actual file-based implementation
+2. The `docs/reference/configuration.md` does not document `sync.daemon.heartbeat_interval`
+3. No user-facing how-to docs explain how to enable/configure heartbeat monitoring
+
+The actual implementation writes timestamps to a heartbeat file at configurable intervals, enabling hung daemon detection. This is simpler than the planned database approach in the explanation doc.
+
+**Missing details**:
+- [ ] Config option: `sync.daemon.heartbeat_interval` (int, seconds, default: 0 = disabled)
+- [ ] Config option: heartbeat file location (if user-configurable)
+- [ ] CLI command to check heartbeat status (if any)
+
+**Options**:
+- [ ] Document the file-based heartbeat in explanation/ - Update background-deamon.md to reflect actual implementation
+- [ ] Document config option in reference/ - Add `sync.daemon.heartbeat_interval` to configuration.md
+- [ ] Internal only - Heartbeat is for internal daemon health, no user documentation needed
+
+**Impact**: Blocks user-facing documentation for daemon heartbeat configuration. Users cannot discover this feature through docs.
+
+**Asked**: 2026-02-06
+**Status**: unanswered

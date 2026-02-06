@@ -25,10 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Plugin commands are now validated to be within the plugin directory, preventing arbitrary command execution via malicious view YAML files (#73)
 
-### Removed
-- Removed unused `HeartbeatInterval` field from daemon config (field was never implemented)
-
 ### Added
+- Daemon heartbeat mechanism for hung process detection (#74)
+  - `sync.daemon.heartbeat_interval` config option (seconds, default: 5)
+  - `daemon status` now displays heartbeat health when enabled
+  - Automatic cleanup of heartbeat file on daemon stop
 - User experience design decision document (`docs/explanation/user-experience.md`)
 
 ### Changed

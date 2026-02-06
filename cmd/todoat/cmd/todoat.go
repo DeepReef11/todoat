@@ -8177,7 +8177,8 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 	// to in-process mode which dies immediately, leaving a stale PID file.)
 
 	// Get idle timeout from config or use default
-	idleTimeout := 5 * time.Minute // Default
+	idleTimeout := 5 * time.Minute       // Default
+	heartbeatInterval := 5 * time.Second // Default heartbeat interval (Issue #74)
 	configPathForDaemon := cfg.ConfigPath
 	if configPathForDaemon == "" {
 		configPathForDaemon = filepath.Join(config.GetConfigDir(), "config.yaml")
@@ -8189,20 +8190,27 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 			if idleTimeoutSec > 0 {
 				idleTimeout = time.Duration(idleTimeoutSec) * time.Second
 			}
+			// Issue #74: Get heartbeat interval from config
+			heartbeatIntervalSec := appConfig.GetDaemonHeartbeatInterval()
+			if heartbeatIntervalSec > 0 {
+				heartbeatInterval = time.Duration(heartbeatIntervalSec) * time.Second
+			}
 		}
 	}
 
 	// Fork a real background daemon process
 	daemonCfg := &daemon.Config{
-		PIDPath:     pidPath,
-		SocketPath:  socketPath,
-		LogPath:     logPath,
-		Interval:    interval,
-		IdleTimeout: idleTimeout,
-		ConfigPath:  configPathForDaemon,
-		DBPath:      cfg.DBPath,
-		CachePath:   cfg.CachePath,
-		Executable:  cfg.DaemonBinaryPath, // For testing with pre-built binary
+		PIDPath:           pidPath,
+		SocketPath:        socketPath,
+		LogPath:           logPath,
+		HeartbeatPath:     getDaemonHeartbeatPath(cfg),
+		Interval:          interval,
+		HeartbeatInterval: heartbeatInterval,
+		IdleTimeout:       idleTimeout,
+		ConfigPath:        configPathForDaemon,
+		DBPath:            cfg.DBPath,
+		CachePath:         cfg.CachePath,
+		Executable:        cfg.DaemonBinaryPath, // For testing with pre-built binary
 	}
 
 	if err := daemon.Fork(daemonCfg); err != nil {
@@ -8566,21 +8574,34 @@ func doDaemonStatus(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 		}
 	}
 
+	// Issue #74: Check heartbeat health
+	heartbeatPath := getDaemonHeartbeatPath(cfg)
+	heartbeatInterval := getConfigDaemonHeartbeatInterval(cfg)
+	heartbeatHealthy := true
+	heartbeatReason := ""
+	if heartbeatInterval > 0 {
+		heartbeatHealthy, heartbeatReason = daemon.CheckDaemonHealth(pidPath, socketPath, heartbeatPath, heartbeatInterval)
+	}
+
 	if jsonOutput {
 		type daemonStatusJSON struct {
-			Running      bool   `json:"running"`
-			PID          int    `json:"pid"`
-			IntervalSecs int    `json:"interval_secs"`
-			SyncCount    int    `json:"sync_count"`
-			LastSync     string `json:"last_sync,omitempty"`
-			Result       string `json:"result"`
+			Running          bool   `json:"running"`
+			PID              int    `json:"pid"`
+			IntervalSecs     int    `json:"interval_secs"`
+			SyncCount        int    `json:"sync_count"`
+			LastSync         string `json:"last_sync,omitempty"`
+			HeartbeatHealthy bool   `json:"heartbeat_healthy"`
+			HeartbeatReason  string `json:"heartbeat_reason,omitempty"`
+			Result           string `json:"result"`
 		}
 		output := daemonStatusJSON{
-			Running:      true,
-			PID:          pid,
-			IntervalSecs: int(interval.Seconds()),
-			SyncCount:    syncCount,
-			Result:       ResultInfoOnly,
+			Running:          true,
+			PID:              pid,
+			IntervalSecs:     int(interval.Seconds()),
+			SyncCount:        syncCount,
+			HeartbeatHealthy: heartbeatHealthy,
+			HeartbeatReason:  heartbeatReason,
+			Result:           ResultInfoOnly,
 		}
 		if !lastSync.IsZero() {
 			output.LastSync = lastSync.Format(time.RFC3339)
@@ -8599,6 +8620,14 @@ func doDaemonStatus(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	_, _ = fmt.Fprintf(stdout, "  Sync count: %d\n", syncCount)
 	if !lastSync.IsZero() {
 		_, _ = fmt.Fprintf(stdout, "  Last sync: %s\n", lastSync.Format(time.RFC3339))
+	}
+	// Issue #74: Show heartbeat health
+	if heartbeatInterval > 0 {
+		if heartbeatHealthy {
+			_, _ = fmt.Fprintf(stdout, "  Heartbeat: %s\n", heartbeatReason)
+		} else {
+			_, _ = fmt.Fprintf(stdout, "  Heartbeat: UNHEALTHY - %s\n", heartbeatReason)
+		}
 	}
 
 	if cfg != nil && cfg.NoPrompt {
@@ -8642,6 +8671,17 @@ func getDaemonSocketPath(cfg *Config) string {
 	return daemon.GetSocketPath()
 }
 
+// getDaemonHeartbeatPath returns the path to the daemon heartbeat file.
+// Issue #74: Heartbeat mechanism for hung daemon detection.
+func getDaemonHeartbeatPath(cfg *Config) string {
+	// If a custom PID path is set (e.g., for testing), use the same directory
+	// for the heartbeat file to ensure consistency.
+	if cfg.DaemonPIDPath != "" {
+		return filepath.Join(filepath.Dir(cfg.DaemonPIDPath), "daemon.heartbeat")
+	}
+	return daemon.GetHeartbeatPath()
+}
+
 // isDaemonModeInvocation checks if this invocation is the forked daemon process
 // This is detected by the presence of --daemon-mode flag in args
 func isDaemonModeInvocation(args []string) bool {
@@ -8657,8 +8697,8 @@ func isDaemonModeInvocation(args []string) bool {
 // This function never returns - it calls os.Exit when done
 func runDaemonMode(args []string, stderr io.Writer) {
 	// Parse daemon-specific flags from args
-	var pidPath, socketPath, logPath, configPath, dbPath, cachePath string
-	var intervalSec, idleTimeoutSec int
+	var pidPath, socketPath, logPath, heartbeatPath, configPath, dbPath, cachePath string
+	var intervalSec, idleTimeoutSec, heartbeatIntervalSec int
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -8675,6 +8715,16 @@ func runDaemonMode(args []string, stderr io.Writer) {
 		case "--daemon-log-path":
 			if i+1 < len(args) {
 				logPath = args[i+1]
+				i++
+			}
+		case "--daemon-heartbeat-path":
+			if i+1 < len(args) {
+				heartbeatPath = args[i+1]
+				i++
+			}
+		case "--daemon-heartbeat-interval":
+			if i+1 < len(args) {
+				heartbeatIntervalSec, _ = strconv.Atoi(args[i+1])
 				i++
 			}
 		case "--config-path":
@@ -8712,14 +8762,16 @@ func runDaemonMode(args []string, stderr io.Writer) {
 
 	// Create daemon config
 	daemonCfg := &daemon.Config{
-		PIDPath:     pidPath,
-		SocketPath:  socketPath,
-		LogPath:     logPath,
-		Interval:    time.Duration(intervalSec) * time.Second,
-		IdleTimeout: time.Duration(idleTimeoutSec) * time.Second,
-		ConfigPath:  configPath,
-		DBPath:      dbPath,
-		CachePath:   cachePath,
+		PIDPath:           pidPath,
+		SocketPath:        socketPath,
+		LogPath:           logPath,
+		HeartbeatPath:     heartbeatPath,
+		Interval:          time.Duration(intervalSec) * time.Second,
+		HeartbeatInterval: time.Duration(heartbeatIntervalSec) * time.Second,
+		IdleTimeout:       time.Duration(idleTimeoutSec) * time.Second,
+		ConfigPath:        configPath,
+		DBPath:            dbPath,
+		CachePath:         cachePath,
 	}
 
 	// Create a config for doSync
@@ -8812,6 +8864,26 @@ func getConfigDaemonInterval(cfg *Config) time.Duration {
 		}
 	}
 	return 0
+}
+
+// getConfigDaemonHeartbeatInterval reads the daemon heartbeat interval from config file.
+// Issue #74: Heartbeat mechanism for hung daemon detection.
+func getConfigDaemonHeartbeatInterval(cfg *Config) time.Duration {
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+	}
+
+	appConfig, err := config.LoadFromPath(configPath)
+	if err != nil || appConfig == nil {
+		return 5 * time.Second // Default heartbeat interval
+	}
+
+	heartbeatIntervalSec := appConfig.GetDaemonHeartbeatInterval()
+	if heartbeatIntervalSec <= 0 {
+		return 5 * time.Second // Default
+	}
+	return time.Duration(heartbeatIntervalSec) * time.Second
 }
 
 // getTrashRetentionDays reads the trash retention days from config file.
@@ -10552,12 +10624,13 @@ func configToMap(c *config.Config) map[string]interface{} {
 			"auto_sync_after_operation": c.GetAutoSyncAfterOperationConfigValue(),
 			"background_pull_cooldown":  c.Sync.BackgroundPullCooldown,
 			"daemon": map[string]interface{}{
-				"enabled":      c.Sync.Daemon.Enabled,
-				"interval":     c.Sync.Daemon.Interval,
-				"idle_timeout": c.Sync.Daemon.IdleTimeout,
-				"file_watcher": c.Sync.Daemon.FileWatcher,
-				"smart_timing": c.Sync.Daemon.SmartTiming,
-				"debounce_ms":  c.Sync.Daemon.DebounceMs,
+				"enabled":            c.Sync.Daemon.Enabled,
+				"interval":           c.Sync.Daemon.Interval,
+				"idle_timeout":       c.Sync.Daemon.IdleTimeout,
+				"file_watcher":       c.Sync.Daemon.FileWatcher,
+				"smart_timing":       c.Sync.Daemon.SmartTiming,
+				"debounce_ms":        c.Sync.Daemon.DebounceMs,
+				"heartbeat_interval": c.Sync.Daemon.HeartbeatInterval,
 			},
 		},
 		"reminder": map[string]interface{}{
@@ -10640,12 +10713,13 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 				"auto_sync_after_operation": c.GetAutoSyncAfterOperationConfigValue(),
 				"background_pull_cooldown":  c.Sync.BackgroundPullCooldown,
 				"daemon": map[string]interface{}{
-					"enabled":      c.Sync.Daemon.Enabled,
-					"interval":     c.Sync.Daemon.Interval,
-					"idle_timeout": c.Sync.Daemon.IdleTimeout,
-					"file_watcher": c.Sync.Daemon.FileWatcher,
-					"smart_timing": c.Sync.Daemon.SmartTiming,
-					"debounce_ms":  c.Sync.Daemon.DebounceMs,
+					"enabled":            c.Sync.Daemon.Enabled,
+					"interval":           c.Sync.Daemon.Interval,
+					"idle_timeout":       c.Sync.Daemon.IdleTimeout,
+					"file_watcher":       c.Sync.Daemon.FileWatcher,
+					"smart_timing":       c.Sync.Daemon.SmartTiming,
+					"debounce_ms":        c.Sync.Daemon.DebounceMs,
+					"heartbeat_interval": c.Sync.Daemon.HeartbeatInterval,
 				},
 			}, nil
 		}
@@ -10667,12 +10741,13 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 		case "daemon":
 			if len(parts) < 3 {
 				return map[string]interface{}{
-					"enabled":      c.Sync.Daemon.Enabled,
-					"interval":     c.Sync.Daemon.Interval,
-					"idle_timeout": c.Sync.Daemon.IdleTimeout,
-					"file_watcher": c.Sync.Daemon.FileWatcher,
-					"smart_timing": c.Sync.Daemon.SmartTiming,
-					"debounce_ms":  c.Sync.Daemon.DebounceMs,
+					"enabled":            c.Sync.Daemon.Enabled,
+					"interval":           c.Sync.Daemon.Interval,
+					"idle_timeout":       c.Sync.Daemon.IdleTimeout,
+					"file_watcher":       c.Sync.Daemon.FileWatcher,
+					"smart_timing":       c.Sync.Daemon.SmartTiming,
+					"debounce_ms":        c.Sync.Daemon.DebounceMs,
+					"heartbeat_interval": c.Sync.Daemon.HeartbeatInterval,
 				}, nil
 			}
 			switch parts[2] {
@@ -10688,6 +10763,8 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 				return c.Sync.Daemon.SmartTiming, nil
 			case "debounce_ms":
 				return c.Sync.Daemon.DebounceMs, nil
+			case "heartbeat_interval":
+				return c.Sync.Daemon.HeartbeatInterval, nil
 			}
 		}
 	case "trash":
@@ -11102,6 +11179,13 @@ func setConfigValue(c *config.Config, key, value string) error {
 					return fmt.Errorf("invalid value for sync.daemon.debounce_ms: %s (must be a non-negative integer)", value)
 				}
 				c.Sync.Daemon.DebounceMs = intVal
+				return nil
+			case "heartbeat_interval":
+				intVal, err := strconv.Atoi(value)
+				if err != nil || intVal < 0 {
+					return fmt.Errorf("invalid value for sync.daemon.heartbeat_interval: %s (must be a non-negative integer)", value)
+				}
+				c.Sync.Daemon.HeartbeatInterval = intVal
 				return nil
 			}
 		}

@@ -80,12 +80,13 @@ type SyncConfig struct {
 
 // DaemonConfig holds background daemon settings
 type DaemonConfig struct {
-	Enabled     bool `yaml:"enabled"`      // Enable forked daemon process (Issue #36)
-	Interval    int  `yaml:"interval"`     // Sync interval in seconds
-	IdleTimeout int  `yaml:"idle_timeout"` // Idle timeout in seconds before daemon exits
-	FileWatcher bool `yaml:"file_watcher"` // Enable file watcher for real-time sync triggers (Issue #41)
-	SmartTiming bool `yaml:"smart_timing"` // Enable smart timing to avoid sync during active editing (Issue #41)
-	DebounceMs  int  `yaml:"debounce_ms"`  // Debounce duration in milliseconds (Issue #41)
+	Enabled           bool `yaml:"enabled"`            // Enable forked daemon process (Issue #36)
+	Interval          int  `yaml:"interval"`           // Sync interval in seconds
+	IdleTimeout       int  `yaml:"idle_timeout"`       // Idle timeout in seconds before daemon exits
+	HeartbeatInterval int  `yaml:"heartbeat_interval"` // Heartbeat recording interval in seconds (Issue #74)
+	FileWatcher       bool `yaml:"file_watcher"`       // Enable file watcher for real-time sync triggers (Issue #41)
+	SmartTiming       bool `yaml:"smart_timing"`       // Enable smart timing to avoid sync during active editing (Issue #41)
+	DebounceMs        int  `yaml:"debounce_ms"`        // Debounce duration in milliseconds (Issue #41)
 }
 
 // BackendsConfig holds configuration for all backends
@@ -400,6 +401,16 @@ func (c *Config) GetDaemonDebounceMs() int {
 		return 1000 // Default: 1 second
 	}
 	return c.Sync.Daemon.DebounceMs
+}
+
+// GetDaemonHeartbeatInterval returns the daemon heartbeat interval in seconds.
+// Returns 5 (5 seconds) if not configured.
+// Issue #74: Heartbeat mechanism for hung daemon detection.
+func (c *Config) GetDaemonHeartbeatInterval() int {
+	if c.Sync.Daemon.HeartbeatInterval <= 0 {
+		return 5 // Default: 5 seconds
+	}
+	return c.Sync.Daemon.HeartbeatInterval
 }
 
 // IsBackgroundLoggingEnabled returns true if background logging is enabled.

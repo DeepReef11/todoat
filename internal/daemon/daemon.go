@@ -21,15 +21,17 @@ import (
 
 // Config holds daemon configuration.
 type Config struct {
-	PIDPath     string        // Path to PID file
-	SocketPath  string        // Path to Unix socket
-	LogPath     string        // Path to log file
-	Interval    time.Duration // Sync interval
-	IdleTimeout time.Duration // Timeout before daemon exits when idle
-	ConfigPath  string        // Path to app config file
-	DBPath      string        // Path to database
-	CachePath   string        // Path to cache
-	Executable  string        // Optional: explicit path to executable (for testing)
+	PIDPath           string        // Path to PID file
+	SocketPath        string        // Path to Unix socket
+	LogPath           string        // Path to log file
+	HeartbeatPath     string        // Path to heartbeat file (Issue #74)
+	Interval          time.Duration // Sync interval
+	HeartbeatInterval time.Duration // Heartbeat recording interval (Issue #74)
+	IdleTimeout       time.Duration // Timeout before daemon exits when idle
+	ConfigPath        string        // Path to app config file
+	DBPath            string        // Path to database
+	CachePath         string        // Path to cache
+	Executable        string        // Optional: explicit path to executable (for testing)
 }
 
 // Message represents an IPC message between CLI and daemon.
@@ -239,6 +241,16 @@ func (d *Daemon) Start() error {
 	// Start IPC listener
 	go d.handleConnections()
 
+	// Start heartbeat goroutine if enabled (Issue #74)
+	var heartbeatTicker *time.Ticker
+	if d.cfg.HeartbeatInterval > 0 && d.cfg.HeartbeatPath != "" {
+		heartbeatTicker = time.NewTicker(d.cfg.HeartbeatInterval)
+		go d.heartbeatLoop(heartbeatTicker.C)
+		// Write initial heartbeat immediately
+		d.writeHeartbeat()
+		d.log("Heartbeat enabled (interval: %v)", d.cfg.HeartbeatInterval)
+	}
+
 	// Determine the tick interval - use the minimum of global interval and any backend intervals
 	tickInterval := d.getMinTickInterval()
 	d.log("Using tick interval: %v (backends: %d)", tickInterval, len(d.backends))
@@ -246,6 +258,11 @@ func (d *Daemon) Start() error {
 	// Start sync loop
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
+	defer func() {
+		if heartbeatTicker != nil {
+			heartbeatTicker.Stop()
+		}
+	}()
 
 	// Idle timer for auto-shutdown
 	var idleTimer *time.Timer
@@ -490,6 +507,40 @@ func (d *Daemon) cleanup() {
 	_ = os.Remove(d.cfg.PIDPath)
 	_ = os.Remove(d.cfg.SocketPath)
 	_ = os.Remove(d.cfg.LogPath)
+	// Clean up heartbeat file if it exists (Issue #74)
+	if d.cfg.HeartbeatPath != "" {
+		_ = os.Remove(d.cfg.HeartbeatPath)
+	}
+}
+
+// heartbeatLoop runs in a goroutine and writes heartbeat timestamps periodically.
+// Issue #74: Heartbeat mechanism for hung daemon detection.
+func (d *Daemon) heartbeatLoop(ticker <-chan time.Time) {
+	for {
+		select {
+		case <-d.stopChan:
+			return
+		case <-ticker:
+			d.writeHeartbeat()
+		}
+	}
+}
+
+// writeHeartbeat writes the current timestamp to the heartbeat file.
+func (d *Daemon) writeHeartbeat() {
+	if d.cfg.HeartbeatPath == "" {
+		return
+	}
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(d.cfg.HeartbeatPath), 0700); err != nil {
+		d.log("Failed to create heartbeat directory: %v", err)
+		return
+	}
+	// Write timestamp atomically
+	ts := time.Now().Format(time.RFC3339Nano)
+	if err := os.WriteFile(d.cfg.HeartbeatPath, []byte(ts), 0600); err != nil {
+		d.log("Failed to write heartbeat: %v", err)
+	}
 }
 
 func (d *Daemon) log(format string, args ...interface{}) {
@@ -581,6 +632,13 @@ func Fork(cfg *Config) error {
 	}
 	if cfg.IdleTimeout > 0 {
 		args = append(args, "--daemon-idle-timeout", strconv.FormatInt(int64(cfg.IdleTimeout.Seconds()), 10))
+	}
+	// Heartbeat settings (Issue #74)
+	if cfg.HeartbeatPath != "" {
+		args = append(args, "--daemon-heartbeat-path", cfg.HeartbeatPath)
+	}
+	if cfg.HeartbeatInterval > 0 {
+		args = append(args, "--daemon-heartbeat-interval", strconv.FormatInt(int64(cfg.HeartbeatInterval.Seconds()), 10))
 	}
 	if cfg.ConfigPath != "" {
 		args = append(args, "--config-path", cfg.ConfigPath)
@@ -678,4 +736,62 @@ func RunDaemonMode(ctx context.Context, cfg *Config, syncFunc func() error) {
 		os.Exit(1)
 	}
 	os.Exit(0)
+}
+
+// IsHeartbeatStale checks if the heartbeat file is stale (older than 2x interval).
+// Returns true if heartbeat is stale, false if fresh.
+// Issue #74: Heartbeat mechanism for hung daemon detection.
+func IsHeartbeatStale(heartbeatPath string, heartbeatInterval time.Duration) (bool, error) {
+	data, err := os.ReadFile(heartbeatPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil // No heartbeat file = stale
+		}
+		return false, fmt.Errorf("failed to read heartbeat file: %w", err)
+	}
+
+	ts, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(data)))
+	if err != nil {
+		return false, fmt.Errorf("invalid heartbeat timestamp: %w", err)
+	}
+
+	// Stale if older than 2x the heartbeat interval
+	age := time.Since(ts)
+	return age > 2*heartbeatInterval, nil
+}
+
+// CheckDaemonHealth checks daemon health via heartbeat before attempting IPC.
+// Returns (healthy bool, reason string).
+// Issue #74: Heartbeat mechanism for hung daemon detection.
+func CheckDaemonHealth(pidPath, socketPath, heartbeatPath string, heartbeatInterval time.Duration) (bool, string) {
+	// If heartbeat is not configured, skip the check
+	if heartbeatPath == "" || heartbeatInterval <= 0 {
+		return true, "heartbeat not configured"
+	}
+
+	// Check if heartbeat file exists
+	if _, err := os.Stat(heartbeatPath); os.IsNotExist(err) {
+		return false, "heartbeat file not found"
+	}
+
+	// Check if heartbeat is stale
+	isStale, err := IsHeartbeatStale(heartbeatPath, heartbeatInterval)
+	if err != nil {
+		return false, fmt.Sprintf("heartbeat check error: %v", err)
+	}
+
+	if isStale {
+		return false, "heartbeat is stale - daemon may be hung"
+	}
+
+	return true, "healthy"
+}
+
+// GetHeartbeatPath returns the default heartbeat file path.
+func GetHeartbeatPath() string {
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir != "" {
+		return filepath.Join(runtimeDir, "todoat", "daemon.heartbeat")
+	}
+	return fmt.Sprintf("/tmp/todoat-daemon-%d.heartbeat", os.Getuid())
 }

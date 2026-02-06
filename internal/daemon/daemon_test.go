@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -780,4 +781,273 @@ func TestIssue41_FileWatcherPackageExists(t *testing.T) {
 		t.Fatalf("Regression #41: internal/watcher/watcher.go does not exist. " +
 			"File watcher implementation file is missing")
 	}
+}
+
+// =============================================================================
+// Issue #74: Daemon Heartbeat Mechanism for Hung Process Detection
+// =============================================================================
+
+// TestDaemonHeartbeatRecording verifies daemon periodically writes heartbeat
+// timestamp at configured interval.
+func TestDaemonHeartbeatRecording(t *testing.T) {
+	tmpDir := t.TempDir()
+	heartbeatPath := filepath.Join(tmpDir, "daemon.heartbeat")
+
+	cfg := &Config{
+		PIDPath:           filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:        filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:           filepath.Join(tmpDir, "daemon.log"),
+		HeartbeatPath:     heartbeatPath,
+		HeartbeatInterval: 50 * time.Millisecond,
+		Interval:          1 * time.Hour, // Long sync interval - we only care about heartbeat
+		IdleTimeout:       0,
+	}
+
+	d := New(cfg)
+	d.SetSyncFunc(func() error { return nil })
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for heartbeat to be written (poll with timeout)
+	var data []byte
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		data, _ = os.ReadFile(heartbeatPath)
+		if len(data) > 0 {
+			break
+		}
+	}
+
+	// Verify heartbeat file exists and has content
+	if len(data) == 0 {
+		t.Fatalf("heartbeat file should exist with content at %s", heartbeatPath)
+	}
+
+	// Parse timestamp
+	ts, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatalf("heartbeat file should contain RFC3339Nano timestamp, got: %q", string(data))
+	}
+
+	// Verify timestamp is recent (within 2x heartbeat interval)
+	age := time.Since(ts)
+	if age > 2*cfg.HeartbeatInterval {
+		t.Errorf("heartbeat should be recent (within %v), but age is %v", 2*cfg.HeartbeatInterval, age)
+	}
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	// Heartbeat file should be cleaned up
+	if _, err := os.Stat(heartbeatPath); err == nil {
+		t.Errorf("heartbeat file should be removed after daemon stop")
+	}
+}
+
+// TestDaemonHeartbeatStaleDetection verifies stale heartbeat is detected
+// when daemon is not running.
+func TestDaemonHeartbeatStaleDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+	heartbeatPath := filepath.Join(tmpDir, "daemon.heartbeat")
+	heartbeatInterval := 50 * time.Millisecond
+
+	// Write a stale heartbeat (older than 2x interval)
+	staleTime := time.Now().Add(-3 * heartbeatInterval)
+	if err := os.WriteFile(heartbeatPath, []byte(staleTime.Format(time.RFC3339Nano)), 0600); err != nil {
+		t.Fatalf("failed to write stale heartbeat: %v", err)
+	}
+
+	// Check heartbeat staleness
+	isStale, err := IsHeartbeatStale(heartbeatPath, heartbeatInterval)
+	if err != nil {
+		t.Fatalf("IsHeartbeatStale failed: %v", err)
+	}
+	if !isStale {
+		t.Errorf("heartbeat should be detected as stale")
+	}
+
+	// Write a fresh heartbeat
+	freshTime := time.Now()
+	if err := os.WriteFile(heartbeatPath, []byte(freshTime.Format(time.RFC3339Nano)), 0600); err != nil {
+		t.Fatalf("failed to write fresh heartbeat: %v", err)
+	}
+
+	// Check heartbeat freshness
+	isStale, err = IsHeartbeatStale(heartbeatPath, heartbeatInterval)
+	if err != nil {
+		t.Fatalf("IsHeartbeatStale failed: %v", err)
+	}
+	if isStale {
+		t.Errorf("heartbeat should NOT be detected as stale")
+	}
+}
+
+// TestDaemonHeartbeatConfigInterval verifies HeartbeatInterval config field
+// controls the recording interval.
+func TestDaemonHeartbeatConfigInterval(t *testing.T) {
+	tmpDir := t.TempDir()
+	heartbeatPath := filepath.Join(tmpDir, "daemon.heartbeat")
+
+	// Use a specific heartbeat interval
+	heartbeatInterval := 100 * time.Millisecond
+
+	cfg := &Config{
+		PIDPath:           filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:        filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:           filepath.Join(tmpDir, "daemon.log"),
+		HeartbeatPath:     heartbeatPath,
+		HeartbeatInterval: heartbeatInterval,
+		Interval:          1 * time.Hour,
+		IdleTimeout:       0,
+	}
+
+	d := New(cfg)
+	d.SetSyncFunc(func() error { return nil })
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for first heartbeat to be written (poll with timeout)
+	var data1 []byte
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		data1, _ = os.ReadFile(heartbeatPath)
+		if len(data1) > 0 {
+			break
+		}
+	}
+	if len(data1) == 0 {
+		t.Fatalf("heartbeat file should have content")
+	}
+
+	// Record first timestamp
+	ts1, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(data1)))
+	if err != nil {
+		t.Fatalf("failed to parse timestamp: %v", err)
+	}
+
+	// Wait for another heartbeat interval
+	time.Sleep(heartbeatInterval + 50*time.Millisecond)
+
+	// Record second timestamp
+	data2, err := os.ReadFile(heartbeatPath)
+	if err != nil {
+		t.Fatalf("failed to read heartbeat file: %v", err)
+	}
+	ts2, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(data2)))
+	if err != nil {
+		t.Fatalf("failed to parse timestamp: %v", err)
+	}
+
+	// Verify heartbeat was updated
+	if !ts2.After(ts1) {
+		t.Errorf("heartbeat should be updated over time: ts1=%v, ts2=%v", ts1, ts2)
+	}
+
+	// Verify update interval is approximately correct (within 2x tolerance for timing variance)
+	diff := ts2.Sub(ts1)
+	if diff > 2*heartbeatInterval {
+		t.Errorf("heartbeat update interval should be close to %v, but was %v", heartbeatInterval, diff)
+	}
+
+	// Stop daemon
+	d.Stop()
+	<-done
+}
+
+// TestDaemonHealthCheckBeforeIPC verifies CLI can check heartbeat freshness
+// before attempting socket communication.
+func TestDaemonHealthCheckBeforeIPC(t *testing.T) {
+	tmpDir := t.TempDir()
+	pidPath := filepath.Join(tmpDir, "daemon.pid")
+	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	heartbeatPath := filepath.Join(tmpDir, "daemon.heartbeat")
+	heartbeatInterval := 50 * time.Millisecond
+
+	// Test 1: No heartbeat file - daemon not started
+	healthy, reason := CheckDaemonHealth(pidPath, socketPath, heartbeatPath, heartbeatInterval)
+	if healthy {
+		t.Errorf("daemon should be unhealthy when heartbeat file doesn't exist")
+	}
+	if reason != "heartbeat file not found" {
+		t.Errorf("expected reason 'heartbeat file not found', got: %q", reason)
+	}
+
+	// Test 2: Stale heartbeat - daemon potentially hung
+	staleTime := time.Now().Add(-3 * heartbeatInterval)
+	if err := os.WriteFile(heartbeatPath, []byte(staleTime.Format(time.RFC3339Nano)), 0600); err != nil {
+		t.Fatalf("failed to write stale heartbeat: %v", err)
+	}
+
+	healthy, reason = CheckDaemonHealth(pidPath, socketPath, heartbeatPath, heartbeatInterval)
+	if healthy {
+		t.Errorf("daemon should be unhealthy when heartbeat is stale")
+	}
+	if !strings.Contains(reason, "stale") {
+		t.Errorf("expected reason to contain 'stale', got: %q", reason)
+	}
+
+	// Test 3: Fresh heartbeat - daemon healthy
+	freshTime := time.Now()
+	if err := os.WriteFile(heartbeatPath, []byte(freshTime.Format(time.RFC3339Nano)), 0600); err != nil {
+		t.Fatalf("failed to write fresh heartbeat: %v", err)
+	}
+
+	healthy, reason = CheckDaemonHealth(pidPath, socketPath, heartbeatPath, heartbeatInterval)
+	if !healthy {
+		t.Errorf("daemon should be healthy when heartbeat is fresh, reason: %s", reason)
+	}
+	if reason != "healthy" {
+		t.Errorf("expected reason 'healthy', got: %q", reason)
+	}
+}
+
+// TestDaemonHeartbeatDisabled verifies daemon works without heartbeat when interval is 0.
+func TestDaemonHeartbeatDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	heartbeatPath := filepath.Join(tmpDir, "daemon.heartbeat")
+
+	cfg := &Config{
+		PIDPath:           filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:        filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:           filepath.Join(tmpDir, "daemon.log"),
+		HeartbeatPath:     heartbeatPath,
+		HeartbeatInterval: 0, // Disabled
+		Interval:          100 * time.Millisecond,
+		IdleTimeout:       0,
+	}
+
+	d := New(cfg)
+	d.SetSyncFunc(func() error { return nil })
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait a bit
+	time.Sleep(200 * time.Millisecond)
+
+	// Heartbeat file should NOT be created when disabled
+	if _, err := os.Stat(heartbeatPath); err == nil {
+		t.Errorf("heartbeat file should NOT be created when HeartbeatInterval is 0")
+	}
+
+	// Stop daemon
+	d.Stop()
+	<-done
 }
