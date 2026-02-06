@@ -179,3 +179,32 @@ However, `docs/explanation/interactive-ux.md` still describes the prompt as "An 
 
 **Asked**: 2026-01-31
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+
+### [FEAT-023] Nextcloud suppress_ssl_warning and suppress_http_warning not wired in CLI
+
+**Context**: The sample config (`internal/config/config.sample.yaml:16-19`) and explanation docs (`docs/explanation/backends.md:62-64`, `docs/explanation/configuration.md:81-84`) document `suppress_ssl_warning` and `suppress_http_warning` config options for the Nextcloud backend. However, these fields are not in the `nextcloud.Config` struct (`backend/nextcloud/nextcloud.go:25-32`) and `buildNextcloudConfigWithKeyring` in `cmd/todoat/cmd/todoat.go:2892-2930` only reads `insecure_skip_verify` and `allow_http`. No actual SSL/HTTP warnings are emitted by the code, making these settings no-ops.
+
+**Options**:
+- [ ] Implement warning system - Add SSL/HTTP security warnings when using `insecure_skip_verify` or `allow_http`, then add suppress options
+- [ ] Remove from docs - These are aspirational features that don't exist; remove from sample config and explanation docs
+- [ ] Low priority - Document that these are planned features, keep in sample config but mark as "not yet implemented"
+
+**Impact**: Documentation claims features that don't work. Users setting these options get no effect.
+
+**Asked**: 2026-02-06
+**Status**: unanswered
+
+### [FEAT-024] Git backend fallback_files and auto_detect not wired in CLI
+
+**Context**: The sample config (`internal/config/config.sample.yaml:34-35`) and explanation docs (`docs/explanation/backends.md:336-340`, `docs/explanation/configuration.md:292-293`) document `fallback_files` and `auto_detect` config options for the Git backend. While `FallbackFiles` exists in `git.Config` struct (`backend/git/git.go:34`) and is used internally, `createCustomBackend` in `cmd/todoat/cmd/todoat.go:2849-2861` only reads `work_dir`, `file`, and `auto_commit` - it does NOT read `fallback_files` from config YAML. Additionally, `auto_detect` is documented but doesn't exist in the `git.Config` struct at all.
+
+**Options**:
+- [ ] Wire fallback_files in CLI - Add `if fallbackFiles, ok := backendCfg["fallback_files"].([]interface{}); ok` in createCustomBackend
+- [ ] Wire auto_detect option - Add AutoDetect field to git.Config and read from config; clarify difference from global `auto_detect_backend`
+- [ ] Remove from docs - These are aspirational features that don't work; remove from sample config and explanation docs
+- [ ] Document the gap - Note that these features are internal defaults only, not user-configurable
+
+**Impact**: Documentation claims features that don't work from config. The git backend uses hardcoded fallback files internally but config values are ignored.
+
+**Asked**: 2026-02-06
+**Status**: unanswered
