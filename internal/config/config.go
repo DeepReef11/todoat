@@ -45,6 +45,7 @@ type Config struct {
 	Reminder          ReminderConfig  `yaml:"reminder"`
 	UI                UIConfig        `yaml:"ui"`
 	Logging           LoggingConfig   `yaml:"logging"`
+	CacheTTL          string          `yaml:"cache_ttl"` // List metadata cache TTL (e.g., "5m", "30s", "10m")
 }
 
 // ReminderConfig holds reminder settings
@@ -230,6 +231,14 @@ func (c *Config) Validate() error {
 		}
 		if duration < 5*time.Second {
 			return fmt.Errorf("sync.background_pull_cooldown must be at least 5s, got %q", c.Sync.BackgroundPullCooldown)
+		}
+	}
+
+	// Validate cache_ttl if specified
+	if c.CacheTTL != "" {
+		_, err := time.ParseDuration(c.CacheTTL)
+		if err != nil {
+			return fmt.Errorf("invalid duration for cache_ttl: %q", c.CacheTTL)
 		}
 	}
 
@@ -421,6 +430,26 @@ func (c *Config) IsBackgroundLoggingEnabled() bool {
 		return true // Default: enabled
 	}
 	return *c.Logging.BackgroundEnabled
+}
+
+// GetCacheTTL returns the cache TTL setting as a string.
+// Returns "5m" (default) if not configured.
+func (c *Config) GetCacheTTL() string {
+	if c.CacheTTL == "" {
+		return "5m" // Default: 5 minutes
+	}
+	return c.CacheTTL
+}
+
+// GetCacheTTLDuration returns the cache TTL as a time.Duration.
+// Returns 5 minutes as default if not configured or if parsing fails.
+func (c *Config) GetCacheTTLDuration() time.Duration {
+	ttlStr := c.GetCacheTTL()
+	duration, err := time.ParseDuration(ttlStr)
+	if err != nil {
+		return 5 * time.Minute // Default fallback
+	}
+	return duration
 }
 
 // LoadFromPath loads configuration from a specific path without creating defaults

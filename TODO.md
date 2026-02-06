@@ -13,14 +13,17 @@ _No documentation tasks pending._
 **Context**: List cache TTL is hardcoded to 5 minutes (`internal/testutil/cli.go`, cache implementation). This means list metadata can be stale for up to 5 minutes even if the remote has changes. Users with fast-changing backends or shared task lists may want shorter TTL; users on slow connections may want longer.
 
 **Options**:
-- [ ] Add `cache.ttl` config option - Full user control
+- [x] Add `cache.ttl` config option - Full user control
 - [ ] Keep hardcoded but reduce default - 1 minute balances freshness and network usage
 - [ ] Keep current 5-minute default - Acceptable for most use cases, not worth the config surface
+
+**Resolution**: Implemented as `cache_ttl` config option (e.g., `"5m"`, `"30s"`, `"10m"`). Default remains 5 minutes. Documented in `docs/reference/configuration.md`, `internal/config/config.sample.yaml`, and `docs/explanation/caching.md`. Getter methods `GetCacheTTL()` and `GetCacheTTLDuration()` added to Config struct.
 
 **Impact**: Data freshness vs network usage trade-off. Affects sync-enabled users.
 
 **Asked**: 2026-01-29
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+**Resolved**: 2026-02-06
+**Status**: answered
 
 ### [UX-009] docs/explanation/interactive-ux.md needs rewrite to match implemented interactive prompt
 
@@ -209,26 +212,23 @@ However, `docs/explanation/interactive-ux.md` still describes the prompt as "An 
 **Asked**: 2026-02-06
 **Status**: unanswered
 
-### [UX-025] How does the user configure daemon heartbeat monitoring?
+### [ARCH-025] Update docs/explanation/background-deamon.md to reflect implemented heartbeat mechanism
 
-**Context**: The daemon heartbeat mechanism is implemented in code (`internal/daemon/daemon.go` with `heartbeatLoop`, `writeHeartbeat` functions, and `HeartbeatInterval` config field at `sync.daemon.heartbeat_interval`). The config getter `GetDaemonHeartbeatInterval()` exists in `internal/config/config.go`. However:
-1. The `docs/explanation/background-deamon.md` describes the heartbeat as "NOT YET IMPLEMENTED" and shows a database-based approach that differs from the actual file-based implementation
-2. The `docs/reference/configuration.md` does not document `sync.daemon.heartbeat_interval`
-3. No user-facing how-to docs explain how to enable/configure heartbeat monitoring
+**Context**: The daemon heartbeat mechanism was implemented in commit `de7491d` (Issue #74). User-facing documentation is now complete:
+- `docs/reference/configuration.md` documents `sync.daemon.heartbeat_interval` (default: 5 seconds)
+- `docs/how-to/sync.md` explains heartbeat monitoring and status output
+- `internal/config/config.sample.yaml` includes the `heartbeat_interval` option
 
-The actual implementation writes timestamps to a heartbeat file at configurable intervals, enabling hung daemon detection. This is simpler than the planned database approach in the explanation doc.
-
-**Missing details**:
-- [ ] Config option: `sync.daemon.heartbeat_interval` (int, seconds, default: 0 = disabled)
-- [ ] Config option: heartbeat file location (if user-configurable)
-- [ ] CLI command to check heartbeat status (if any)
+However, `docs/explanation/background-deamon.md` still describes the heartbeat as "NOT YET IMPLEMENTED" (line 212) and shows a database-based `daemon_heartbeat` table approach that differs from the actual file-based implementation. The actual implementation:
+- Writes timestamps to a heartbeat file (not database)
+- Uses `$XDG_RUNTIME_DIR/todoat/daemon.heartbeat` or `/tmp/todoat-daemon-<UID>.heartbeat`
+- Checked by `todoat sync daemon status` command
 
 **Options**:
-- [ ] Document the file-based heartbeat in explanation/ - Update background-deamon.md to reflect actual implementation
-- [ ] Document config option in reference/ - Add `sync.daemon.heartbeat_interval` to configuration.md
-- [ ] Internal only - Heartbeat is for internal daemon health, no user documentation needed
+- [ ] Update explanation doc - Rewrite the "Hung Daemon Detection" section to describe the actual file-based heartbeat implementation
+- [ ] Remove planned sections - Delete the "NOT YET IMPLEMENTED" sections for features that are now implemented
 
-**Impact**: Blocks user-facing documentation for daemon heartbeat configuration. Users cannot discover this feature through docs.
+**Impact**: Explanation doc accuracy. User-facing docs are already correct.
 
 **Asked**: 2026-02-06
 **Status**: unanswered

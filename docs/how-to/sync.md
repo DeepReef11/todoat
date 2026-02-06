@@ -146,7 +146,7 @@ For JSON output:
 todoat --json sync daemon status
 ```
 
-Shows daemon status including PID, sync interval, sync count, and last sync time:
+Shows daemon status including PID, sync interval, sync count, last sync time, and heartbeat health:
 
 ```
 Sync daemon is running
@@ -154,6 +154,18 @@ Sync daemon is running
   Interval: 60 seconds
   Sync count: 5
   Last sync: 2026-01-30T10:15:00Z
+  Heartbeat: healthy
+```
+
+If heartbeat detection is enabled (via `sync.daemon.heartbeat_interval`), the status shows whether the daemon is responsive. A stale heartbeat indicates the daemon may be hung:
+
+```
+Sync daemon is running
+  PID: 12345
+  Interval: 60 seconds
+  Sync count: 5
+  Last sync: 2026-01-30T10:15:00Z
+  Heartbeat: UNHEALTHY - heartbeat is stale - daemon may be hung
 ```
 
 The interval shown is the actual running interval, which may differ from the config default if `--interval` was specified at start time.
@@ -184,9 +196,12 @@ sync:
     enabled: false        # Enable daemon process
     interval: 300         # Sync interval in seconds (default: 5 minutes)
     idle_timeout: 300     # Seconds before idle daemon exits (default: 5 minutes)
+    heartbeat_interval: 5 # Heartbeat recording interval in seconds (default: 5)
 ```
 
 The `--interval` flag on `sync daemon start` overrides the `interval` config value for that session.
+
+The `heartbeat_interval` enables hung daemon detection. When set to a positive value, the daemon writes a timestamp to a heartbeat file at the specified interval. The `status` command checks this heartbeat and reports if the daemon appears hung (heartbeat older than 2x the interval).
 
 The daemon stores its state files at:
 - **PID file**: `$XDG_RUNTIME_DIR/todoat/daemon.pid` (or `/tmp/todoat-daemon-<UID>.pid`)

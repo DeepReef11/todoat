@@ -2467,6 +2467,7 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 	}
 	loadSyncConfigFromAppConfig(cfg, appConfig)
 	loadAutoDetectConfig(cfg, appConfig)
+	loadCacheTTLFromAppConfig(cfg, appConfig)
 
 	// Determine database path: CLI flag > config file > default
 	dbPath := cfg.DBPath
@@ -3042,6 +3043,17 @@ func buildMSTodoConfigWithKeyring(name string, rawConfig map[string]interface{})
 func loadAutoDetectConfig(cfg *Config, appConfig *config.Config) {
 	if appConfig != nil && appConfig.IsAutoDetectEnabled() {
 		cfg.AutoDetectBackend = true
+	}
+}
+
+// loadCacheTTLFromAppConfig loads the cache TTL from the parsed app config.
+// Only sets CacheTTL if not already set (CLI/test override takes precedence).
+func loadCacheTTLFromAppConfig(cfg *Config, appConfig *config.Config) {
+	if cfg.CacheTTL > 0 {
+		return // Already set via CLI/test, don't override
+	}
+	if appConfig != nil {
+		cfg.CacheTTL = appConfig.GetCacheTTLDuration()
 	}
 }
 

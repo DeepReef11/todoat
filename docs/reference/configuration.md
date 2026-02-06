@@ -96,6 +96,7 @@ todoat config set sync.offline_mode auto
 # Set daemon configuration
 todoat config set sync.daemon.enabled true
 todoat config set sync.daemon.interval 60
+todoat config set sync.daemon.heartbeat_interval 10
 
 # Set background pull cooldown
 todoat config set sync.background_pull_cooldown "1m"
@@ -162,6 +163,7 @@ Restores the default configuration. Requires confirmation.
 | `sync.daemon.enabled` | bool | Enable background sync daemon (default: `false`) |
 | `sync.daemon.interval` | int | Daemon sync interval in seconds (default: `300`) |
 | `sync.daemon.idle_timeout` | int | Seconds of idle time before daemon exits (default: `300`) |
+| `sync.daemon.heartbeat_interval` | int | Heartbeat interval in seconds for hung daemon detection (default: `5`) |
 | `trash.retention_days` | int | Days to keep deleted items (default: `30`, 0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `true`) |
 | `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |
@@ -169,6 +171,7 @@ Restores the default configuration. Requires confirmation.
 | `reminder.intervals` | list | Time before due to send reminders (default: `[]`, no intervals) |
 | `reminder.os_notification` | bool | Send reminders via OS notifications (default: `false`) |
 | `reminder.log_notification` | bool | Log reminders to notification log (default: `false`) |
+| `cache_ttl` | string | List metadata cache TTL, e.g., `5m`, `30s`, `10m` (default: `5m`) |
 
 ## Backend Configuration
 
@@ -362,8 +365,11 @@ sync:
 | `enabled` | Enable daemon process for background sync | `false` |
 | `interval` | Sync interval in seconds | `300` (5 minutes) |
 | `idle_timeout` | Seconds before idle daemon exits | `300` (5 minutes) |
+| `heartbeat_interval` | Heartbeat recording interval in seconds for hung daemon detection | `5` |
 
 When `interval` or `idle_timeout` are set to 0 or left unset, the effective default of 300 seconds is used.
+
+When `heartbeat_interval` is set to a positive value, the daemon writes a timestamp to a heartbeat file at the specified interval. The `todoat sync daemon status` command checks this heartbeat to detect hung daemons. A heartbeat is considered stale if older than 2x the interval.
 
 ### Managing the Daemon
 
@@ -394,6 +400,24 @@ Configure automatic cleanup of deleted items:
 trash:
   retention_days: 30    # Keep deleted items for 30 days (0 = forever)
 ```
+
+## Cache Configuration
+
+Configure list metadata cache behavior:
+
+```yaml
+cache_ttl: "5m"    # List metadata cache TTL (default: 5 minutes)
+```
+
+The cache TTL controls how long list metadata (names, descriptions, colors) is cached before being refreshed from the backend. Format: Go duration (e.g., `30s`, `2m`, `10m`, `1h`).
+
+| Value | Use Case |
+|-------|----------|
+| `30s` - `2m` | Fast-changing backends, shared task lists |
+| `5m` (default) | Most use cases |
+| `10m` - `30m` | Slow connections, metered data |
+
+To modify, edit `config.yaml` directly using `todoat config edit`.
 
 ## Logging Configuration
 

@@ -810,8 +810,9 @@ func (r *ReminderCLITest) ClearNotificationLog() {
 // CacheCLITest extends CLITest with cache-specific helpers for testing list caching.
 type CacheCLITest struct {
 	*CLITest
-	cachePath string
-	cacheTTL  time.Duration
+	cachePath  string
+	cacheTTL   time.Duration
+	configPath string
 }
 
 // NewCLITestWithCache creates a new CLI test helper with cache support.
@@ -847,8 +848,9 @@ func NewCLITestWithCache(t *testing.T) *CacheCLITest {
 			cfg:    cfg,
 			tmpDir: tmpDir,
 		},
-		cachePath: cachePath,
-		cacheTTL:  5 * time.Minute,
+		cachePath:  cachePath,
+		cacheTTL:   5 * time.Minute,
+		configPath: configPath,
 	}
 }
 
@@ -857,10 +859,33 @@ func (c *CacheCLITest) CachePath() string {
 	return c.cachePath
 }
 
-// SetCacheTTL sets the cache TTL for testing.
+// SetCacheTTL sets the cache TTL for testing (runtime override).
 func (c *CacheCLITest) SetCacheTTL(ttl time.Duration) {
 	c.cacheTTL = ttl
 	c.cfg.CacheTTL = ttl
+}
+
+// SetCacheTTLViaConfig sets the cache TTL in the config file (tests config loading).
+// This clears the runtime CacheTTL to force loading from config file.
+func (c *CacheCLITest) SetCacheTTLViaConfig(ttlStr string) {
+	c.t.Helper()
+
+	// Read existing config
+	data, err := os.ReadFile(c.configPath)
+	if err != nil {
+		c.t.Fatalf("failed to read config file: %v", err)
+	}
+
+	// Append the cache_ttl config
+	newConfig := string(data) + "cache_ttl: \"" + ttlStr + "\"\n"
+
+	if err := os.WriteFile(c.configPath, []byte(newConfig), 0644); err != nil {
+		c.t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Clear runtime TTL to force loading from config
+	c.cfg.CacheTTL = 0
+	c.cacheTTL = 0
 }
 
 // TrashCLITest extends CLITest with trash-specific helpers for testing auto-purge.

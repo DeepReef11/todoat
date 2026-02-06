@@ -75,6 +75,7 @@ sync:
   #   enabled: false                         # Enable background sync daemon process
   #   interval: 300                          # Sync interval in seconds (default: 5 minutes)
   #   idle_timeout: 300                      # Seconds before idle daemon exits (default: 5 minutes)
+  #   heartbeat_interval: 5                  # Heartbeat interval in seconds for hung detection (default: 5)
 
 # =============================================================================
 # User Interface Settings
@@ -88,6 +89,15 @@ output_format: text  # Options: text | json
 
 # Default view for task display (omit for built-in "default" view)
 # default_view: "my-custom-view"
+
+# =============================================================================
+# Cache Settings
+# =============================================================================
+
+# cache_ttl: "5m"                            # List metadata cache TTL (default: 5 minutes)
+                                             # Format: Go duration (e.g., "30s", "2m", "10m", "1h")
+                                             # Lower values = fresher data but more backend requests
+                                             # Higher values = faster list commands but potentially stale data
 
 # =============================================================================
 # Trash Settings

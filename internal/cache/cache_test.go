@@ -634,3 +634,52 @@ func TestCacheInvalidationOnTaskDelete(t *testing.T) {
 		t.Errorf("expected task count to be 1 after deleting task, got %d (cache was not invalidated)", newCount)
 	}
 }
+
+// TestCacheTTLFromConfigFile verifies that cache TTL is loaded from the config file
+// and applied correctly. This is the integration test for Issue #75.
+func TestCacheTTLFromConfigFile(t *testing.T) {
+	cli := testutil.NewCLITestWithCache(t)
+
+	// Set a short TTL via config file (100ms)
+	cli.SetCacheTTLViaConfig("100ms")
+
+	// Create a list and populate cache
+	cli.MustExecute("-y", "list", "create", "ConfigTTLTest")
+	cli.MustExecute("-y", "list")
+
+	// Read cache timestamp
+	cachePath := cli.CachePath()
+	data1, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache: %v", err)
+	}
+
+	var cache1 cache.ListCache
+	if err := json.Unmarshal(data1, &cache1); err != nil {
+		t.Fatalf("failed to parse cache: %v", err)
+	}
+	ts1 := cache1.CreatedAt
+
+	// Wait for TTL to expire (100ms + some buffer)
+	time.Sleep(150 * time.Millisecond)
+
+	// Run list again - should refresh cache due to TTL expiration
+	cli.MustExecute("-y", "list")
+
+	// Read updated cache
+	data2, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache after TTL: %v", err)
+	}
+
+	var cache2 cache.ListCache
+	if err := json.Unmarshal(data2, &cache2); err != nil {
+		t.Fatalf("failed to parse cache after TTL: %v", err)
+	}
+	ts2 := cache2.CreatedAt
+
+	// Cache timestamp should be updated (TTL from config was applied)
+	if !ts2.After(ts1) {
+		t.Errorf("cache should be refreshed after TTL expiration (config TTL): old=%v, new=%v", ts1, ts2)
+	}
+}

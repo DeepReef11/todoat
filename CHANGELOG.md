@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `cache_ttl` config option for user-configurable list metadata cache TTL (e.g., `"5m"`, `"30s"`, `"10m"`)
+  - `GetCacheTTL()` and `GetCacheTTLDuration()` getter methods on Config struct
+  - Default remains 5 minutes for backwards compatibility
+
 ### Changed
 - OS notification channel now consolidated into single cross-platform implementation (`internal/notification/os.go`)
 - Default view config path lookup now uses `config.GetConfigDir()` directly instead of deriving from DBPath

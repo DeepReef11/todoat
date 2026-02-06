@@ -1318,3 +1318,263 @@ func TestLoggingBackgroundEnabledDefaultValue(t *testing.T) {
 		t.Error("IsBackgroundLoggingEnabled() should default to true")
 	}
 }
+
+// =============================================================================
+// Tests for Issue 075: Configurable Cache TTL via Config File
+// =============================================================================
+
+// TestCacheTTLFromConfig verifies cache respects TTL value from config file
+func TestCacheTTLFromConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name     string
+		config   string
+		expected string
+	}{
+		{
+			name: "2 minutes",
+			config: `
+cache_ttl: "2m"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: "2m",
+		},
+		{
+			name: "10 minutes",
+			config: `
+cache_ttl: "10m"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: "10m",
+		},
+		{
+			name: "30 seconds",
+			config: `
+cache_ttl: "30s"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: "30s",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(tmpDir, tt.name+"-config.yaml")
+			if err := os.WriteFile(configPath, []byte(tt.config), 0644); err != nil {
+				t.Fatalf("failed to write config: %v", err)
+			}
+
+			cfg, err := Load(configPath)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			got := cfg.GetCacheTTL()
+			if got != tt.expected {
+				t.Errorf("GetCacheTTL() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCacheTTLDefault verifies 5-minute default when cache_ttl is not set
+func TestCacheTTLDefault(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *Config
+		expected string
+	}{
+		{
+			name:     "empty config - returns default 5m",
+			config:   &Config{},
+			expected: "5m",
+		},
+		{
+			name:     "default config - returns default 5m",
+			config:   DefaultConfig(),
+			expected: "5m",
+		},
+		{
+			name: "empty string cache_ttl - returns default 5m",
+			config: &Config{
+				CacheTTL: "",
+			},
+			expected: "5m",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.GetCacheTTL()
+			if got != tt.expected {
+				t.Errorf("GetCacheTTL() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCacheTTLCustomValue verifies custom TTL (e.g., 2m, 10m) is applied correctly
+func TestCacheTTLCustomValue(t *testing.T) {
+	tests := []struct {
+		name            string
+		config          *Config
+		expectedString  string
+		expectedSeconds float64
+	}{
+		{
+			name: "2 minutes",
+			config: &Config{
+				CacheTTL: "2m",
+			},
+			expectedString:  "2m",
+			expectedSeconds: 120,
+		},
+		{
+			name: "10 minutes",
+			config: &Config{
+				CacheTTL: "10m",
+			},
+			expectedString:  "10m",
+			expectedSeconds: 600,
+		},
+		{
+			name: "30 seconds",
+			config: &Config{
+				CacheTTL: "30s",
+			},
+			expectedString:  "30s",
+			expectedSeconds: 30,
+		},
+		{
+			name: "1 hour",
+			config: &Config{
+				CacheTTL: "1h",
+			},
+			expectedString:  "1h",
+			expectedSeconds: 3600,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotString := tt.config.GetCacheTTL()
+			if gotString != tt.expectedString {
+				t.Errorf("GetCacheTTL() = %q, want %q", gotString, tt.expectedString)
+			}
+
+			gotDuration := tt.config.GetCacheTTLDuration()
+			if gotDuration.Seconds() != tt.expectedSeconds {
+				t.Errorf("GetCacheTTLDuration() = %v seconds, want %v seconds", gotDuration.Seconds(), tt.expectedSeconds)
+			}
+		})
+	}
+}
+
+// TestCacheTTLDurationDefault verifies GetCacheTTLDuration returns 5 minutes by default
+func TestCacheTTLDurationDefault(t *testing.T) {
+	cfg := &Config{}
+	got := cfg.GetCacheTTLDuration()
+	expected := 5 * 60.0 // 5 minutes in seconds
+
+	if got.Seconds() != expected {
+		t.Errorf("GetCacheTTLDuration() = %v seconds, want %v seconds", got.Seconds(), expected)
+	}
+}
+
+// TestCacheTTLDurationInvalidFallback verifies GetCacheTTLDuration returns 5 minutes for invalid values
+func TestCacheTTLDurationInvalidFallback(t *testing.T) {
+	cfg := &Config{
+		CacheTTL: "invalid",
+	}
+	got := cfg.GetCacheTTLDuration()
+	expected := 5 * 60.0 // 5 minutes in seconds
+
+	if got.Seconds() != expected {
+		t.Errorf("GetCacheTTLDuration() with invalid value = %v seconds, want %v seconds (fallback)", got.Seconds(), expected)
+	}
+}
+
+// TestCacheTTLValidation verifies invalid values are rejected
+func TestCacheTTLValidation(t *testing.T) {
+	tests := []struct {
+		name      string
+		cacheTTL  string
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name:     "valid 5m",
+			cacheTTL: "5m",
+			wantErr:  false,
+		},
+		{
+			name:     "valid 2m",
+			cacheTTL: "2m",
+			wantErr:  false,
+		},
+		{
+			name:     "valid 30s",
+			cacheTTL: "30s",
+			wantErr:  false,
+		},
+		{
+			name:     "valid 1h",
+			cacheTTL: "1h",
+			wantErr:  false,
+		},
+		{
+			name:     "valid empty string (uses default)",
+			cacheTTL: "",
+			wantErr:  false,
+		},
+		{
+			name:      "invalid - not a duration",
+			cacheTTL:  "notaduration",
+			wantErr:   true,
+			errSubstr: "invalid duration",
+		},
+		{
+			name:      "invalid - missing unit",
+			cacheTTL:  "5",
+			wantErr:   true,
+			errSubstr: "invalid duration",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Backends: BackendsConfig{
+					SQLite: SQLiteConfig{
+						Enabled: true,
+						Path:    "/path/to/db",
+					},
+				},
+				DefaultBackend: "sqlite",
+				OutputFormat:   "text",
+				CacheTTL:       tt.cacheTTL,
+			}
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error for cache_ttl %q, got nil", tt.cacheTTL)
+				} else if tt.errSubstr != "" && !containsSubstring(err.Error(), tt.errSubstr) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errSubstr)
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error for cache_ttl %q: %v", tt.cacheTTL, err)
+			}
+		})
+	}
+}
