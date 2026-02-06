@@ -2954,3 +2954,344 @@ default_backend: sqlite
 		t.Errorf("expected remaining operation to be ID %d, got %d", ops[1].ID, remaining[0].ID)
 	}
 }
+
+// =============================================================================
+// Issue #049: Sync Conflict Management CLI Commands Tests
+// =============================================================================
+
+// TestSyncConflictsListEmpty tests that `todoat sync conflicts` shows "no conflicts" when none exist
+func TestSyncConflictsListEmpty(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Run sync conflicts command without any conflicts
+	stdout := cli.MustExecute("-y", "sync", "conflicts")
+
+	// Should indicate 0 conflicts
+	testutil.AssertContains(t, stdout, "Conflicts: 0")
+}
+
+// TestSyncConflictsListDisplay tests that `todoat sync conflicts` lists all unresolved conflicts
+// with task summary, UID, and conflict details
+func TestSyncConflictsListDisplay(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Add a task locally
+	stdout := cli.MustExecute("-y", "Work", "add", "Display Test Task", "-p", "3")
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Get the task UID
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	// Initialize sync_conflicts table
+	cli.MustExecute("-y", "sync", "status")
+
+	// Insert a conflict record with details
+	dbPath := cli.Config().DBPath
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	localVersion := `{"id":"` + taskUID + `","summary":"Display Test Task","priority":3}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Remote Display Task","priority":1}`
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, 'Display Test Task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending')
+	`, taskUID, localVersion, remoteVersion)
+	if err != nil {
+		t.Fatalf("failed to insert conflict: %v", err)
+	}
+
+	// Run sync conflicts command
+	stdout = cli.MustExecute("-y", "sync", "conflicts")
+
+	// Should show conflicts count, task summary, UID, and status
+	testutil.AssertContains(t, stdout, "Conflicts: 1")
+	testutil.AssertContains(t, stdout, "Display Test Task")
+	testutil.AssertContains(t, stdout, taskUID)
+	testutil.AssertContains(t, stdout, "pending")
+}
+
+// TestSyncConflictsResolveServerWins tests that `todoat sync conflicts resolve <uid> --strategy server_wins`
+// resolves a conflict using server_wins strategy
+func TestSyncConflictsResolveServerWins(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Add a task locally
+	stdout := cli.MustExecute("-y", "Work", "add", "Server Wins Task", "-p", "5")
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Get the task UID
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	// Initialize sync_conflicts table
+	cli.MustExecute("-y", "sync", "status")
+
+	// Insert a conflict
+	dbPath := cli.Config().DBPath
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	localVersion := `{"id":"` + taskUID + `","summary":"Server Wins Task","priority":5}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Remote Version","priority":1}`
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, 'Server Wins Task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending')
+	`, taskUID, localVersion, remoteVersion)
+	if err != nil {
+		t.Fatalf("failed to insert conflict: %v", err)
+	}
+
+	// Resolve with server_wins
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", taskUID, "--strategy", "server_wins")
+	if exitCode != 0 {
+		t.Fatalf("resolve failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "resolved")
+
+	// Verify the task now has remote values
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON after resolve: %v", err)
+	}
+
+	for _, task := range tasksOutput.Tasks {
+		if task.UID == taskUID {
+			if task.Summary != "Remote Version" {
+				t.Errorf("expected summary='Remote Version' after server_wins, got '%s'", task.Summary)
+			}
+			if task.Priority != 1 {
+				t.Errorf("expected priority=1 after server_wins, got %d", task.Priority)
+			}
+			break
+		}
+	}
+}
+
+// TestSyncConflictsResolveLocalWins tests that `todoat sync conflicts resolve <uid> --strategy local_wins`
+// resolves a conflict using local_wins strategy (keeps local, queues update)
+func TestSyncConflictsResolveLocalWins(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Add a task locally
+	stdout := cli.MustExecute("-y", "Work", "add", "Local Wins Task", "-p", "5")
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Get the task UID
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	// Initialize sync_conflicts table
+	cli.MustExecute("-y", "sync", "status")
+
+	// Insert a conflict
+	dbPath := cli.Config().DBPath
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	localVersion := `{"id":"` + taskUID + `","summary":"Local Wins Task","priority":5}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Remote Version","priority":1}`
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, 'Local Wins Task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending')
+	`, taskUID, localVersion, remoteVersion)
+	if err != nil {
+		t.Fatalf("failed to insert conflict: %v", err)
+	}
+
+	// Resolve with local_wins
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", taskUID, "--strategy", "local_wins")
+	if exitCode != 0 {
+		t.Fatalf("resolve failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "resolved")
+
+	// Verify the task still has local values
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON after resolve: %v", err)
+	}
+
+	for _, task := range tasksOutput.Tasks {
+		if task.UID == taskUID {
+			if task.Summary != "Local Wins Task" {
+				t.Errorf("expected summary='Local Wins Task' after local_wins, got '%s'", task.Summary)
+			}
+			if task.Priority != 5 {
+				t.Errorf("expected priority=5 after local_wins, got %d", task.Priority)
+			}
+			break
+		}
+	}
+}
+
+// TestSyncConflictsResolveMerge tests that `todoat sync conflicts resolve <uid> --strategy merge`
+// resolves a conflict using merge strategy (remote summary, local priority)
+func TestSyncConflictsResolveMerge(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Add a task locally
+	stdout := cli.MustExecute("-y", "Work", "add", "Merge Task", "-p", "5")
+	testutil.AssertContains(t, stdout, "Created task")
+
+	// Get the task UID
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	// Initialize sync_conflicts table
+	cli.MustExecute("-y", "sync", "status")
+
+	// Insert a conflict
+	dbPath := cli.Config().DBPath
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	localVersion := `{"id":"` + taskUID + `","summary":"Merge Task","priority":5}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Remote Merge Task","priority":1}`
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, 'Merge Task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending')
+	`, taskUID, localVersion, remoteVersion)
+	if err != nil {
+		t.Fatalf("failed to insert conflict: %v", err)
+	}
+
+	// Resolve with merge strategy
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", taskUID, "--strategy", "merge")
+	if exitCode != 0 {
+		t.Fatalf("resolve failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+	testutil.AssertContains(t, stdout, "resolved")
+
+	// Verify the task has merged values: remote summary, local priority
+	stdout = cli.MustExecute("-y", "--json", "Work", "get")
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON after resolve: %v", err)
+	}
+
+	for _, task := range tasksOutput.Tasks {
+		if task.UID == taskUID {
+			if task.Summary != "Remote Merge Task" {
+				t.Errorf("expected summary='Remote Merge Task' (from remote) after merge, got '%s'", task.Summary)
+			}
+			if task.Priority != 5 {
+				t.Errorf("expected priority=5 (from local) after merge, got %d", task.Priority)
+			}
+			break
+		}
+	}
+}
+
+// TestSyncConflictsResolveInvalidUID tests that `todoat sync conflicts resolve <uid>`
+// returns an error for non-existent conflict UID
+func TestSyncConflictsResolveInvalidUID(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Initialize sync_conflicts table
+	cli.MustExecute("-y", "sync", "status")
+
+	// Try to resolve a non-existent conflict
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", "nonexistent-uid-12345", "--strategy", "server_wins")
+
+	// Should fail with non-zero exit code
+	if exitCode == 0 {
+		t.Errorf("expected non-zero exit code for invalid UID, got 0; stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	// Should indicate the conflict was not found
+	combined := stdout + stderr
+	if !strings.Contains(strings.ToLower(combined), "not found") && !strings.Contains(strings.ToLower(combined), "failed") {
+		t.Errorf("expected error message about not found/failed for invalid UID, got: stdout=%s stderr=%s", stdout, stderr)
+	}
+}
+
+// TestSyncConflictsNoPromptMode tests that `todoat sync conflicts` outputs proper
+// result codes in no-prompt mode
+func TestSyncConflictsNoPromptMode(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Run sync conflicts command in no-prompt mode
+	stdout := cli.MustExecute("-y", "sync", "conflicts")
+
+	// In no-prompt mode (-y), should output result code
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
