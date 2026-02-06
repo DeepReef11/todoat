@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `logging.background_enabled` config option to control background log file creation (default: true)
+- `NewBackgroundLoggerWithEnabled()` function for runtime config-aware background logging
+
+### Changed
+- Background logging is now controlled via config instead of compile-time constant
+- Updated logging docs to reflect config-based background logging control
+
+### Fixed
+- Plugin commands are now validated to be within the plugin directory, preventing arbitrary command execution via malicious view YAML files (#73)
+
 ### Removed
 - Removed unused `HeartbeatInterval` field from daemon config (field was never implemented)
 

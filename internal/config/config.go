@@ -26,6 +26,11 @@ type UIConfig struct {
 	InteractivePromptForAllTasks bool `yaml:"interactive_prompt_for_all_tasks"`
 }
 
+// LoggingConfig holds logging settings
+type LoggingConfig struct {
+	BackgroundEnabled *bool `yaml:"background_enabled"` // Controls background log file creation (default: true)
+}
+
 // Config represents the application configuration
 type Config struct {
 	Backends          BackendsConfig  `yaml:"backends"`
@@ -39,6 +44,7 @@ type Config struct {
 	Analytics         AnalyticsConfig `yaml:"analytics"`
 	Reminder          ReminderConfig  `yaml:"reminder"`
 	UI                UIConfig        `yaml:"ui"`
+	Logging           LoggingConfig   `yaml:"logging"`
 }
 
 // ReminderConfig holds reminder settings
@@ -394,6 +400,16 @@ func (c *Config) GetDaemonDebounceMs() int {
 		return 1000 // Default: 1 second
 	}
 	return c.Sync.Daemon.DebounceMs
+}
+
+// IsBackgroundLoggingEnabled returns true if background logging is enabled.
+// Background logging creates PID-specific log files in /tmp for background processes.
+// Returns true (default) if not configured.
+func (c *Config) IsBackgroundLoggingEnabled() bool {
+	if c.Logging.BackgroundEnabled == nil {
+		return true // Default: enabled
+	}
+	return *c.Logging.BackgroundEnabled
 }
 
 // LoadFromPath loads configuration from a specific path without creating defaults

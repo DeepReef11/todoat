@@ -9,8 +9,10 @@ import (
 	"time"
 )
 
-// ENABLE_BACKGROUND_LOGGING controls whether background logging is enabled.
-const ENABLE_BACKGROUND_LOGGING = true
+// defaultBackgroundLoggingEnabled is the default value when no config is available.
+// This is used by NewBackgroundLogger() when called without explicit enabled parameter.
+// The runtime config option logging.background_enabled overrides this default.
+const defaultBackgroundLoggingEnabled = true
 
 // Logger provides leveled logging with verbose mode support.
 type Logger struct {
@@ -117,8 +119,16 @@ type BackgroundLogger struct {
 }
 
 // NewBackgroundLogger creates a new background logger with a PID-specific log file.
+// Uses the default enabled value. For runtime config control, use NewBackgroundLoggerWithEnabled.
 func NewBackgroundLogger() (*BackgroundLogger, error) {
-	if !ENABLE_BACKGROUND_LOGGING {
+	return NewBackgroundLoggerWithEnabled(defaultBackgroundLoggingEnabled)
+}
+
+// NewBackgroundLoggerWithEnabled creates a background logger with explicit enabled control.
+// This is the runtime config-aware version of NewBackgroundLogger.
+// Pass config.IsBackgroundLoggingEnabled() to honor the logging.background_enabled config.
+func NewBackgroundLoggerWithEnabled(enabled bool) (*BackgroundLogger, error) {
+	if !enabled {
 		return &BackgroundLogger{
 			logger:  log.New(io.Discard, "", log.LstdFlags),
 			enabled: false,

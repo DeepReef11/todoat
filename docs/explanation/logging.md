@@ -88,8 +88,8 @@ logging:
 
 **Usage:**
 ```go
-// Create background logger
-bl, err := utils.NewBackgroundLogger()
+// Create background logger with config-aware enabled flag
+bl, err := utils.NewBackgroundLoggerWithEnabled(cfg.IsBackgroundLoggingEnabled())
 if err != nil {
     // Logging disabled, but bl is still usable (writes to io.Discard)
 }
@@ -109,7 +109,8 @@ if bl.IsEnabled() {
 **Methods:**
 | Method | Description |
 |--------|-------------|
-| `NewBackgroundLogger()` | Create new logger instance |
+| `NewBackgroundLogger()` | Create logger with default enabled (true) |
+| `NewBackgroundLoggerWithEnabled(enabled)` | Create logger with explicit enabled flag |
 | `Printf(format, args...)` | Log formatted message |
 | `Print(args...)` | Log message |
 | `Println(args...)` | Log message with newline |
@@ -255,7 +256,7 @@ if confirmed {
 1. **Logging**: Use `utils.Debugf()` for development/debug info; use `utils.Infof()` sparingly for user-facing messages
 2. **Errors**: Always use the pre-built error constructors when applicable for consistent UX
 3. **Validation**: Validate user input early using `ValidatePriority()` and `ParseDateFlag()`
-4. **Background Logging**: Only enable `ENABLE_BACKGROUND_LOGGING` during development/debugging
+4. **Background Logging**: Use `logging.background_enabled: false` in config to disable background log files in production if not needed
 
 ## Testing
 

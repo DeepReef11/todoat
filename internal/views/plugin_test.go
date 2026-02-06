@@ -18,7 +18,7 @@ func TestPluginFormatterStatus(t *testing.T) {
 	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
 
 	// Create plugin directory
-	pluginsDir := tmpDir + "/plugins"
+	pluginsDir := tmpDir + "/todoat/plugins"
 	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
 		t.Fatalf("failed to create plugins directory: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestPluginFormatterPriority(t *testing.T) {
 	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
 
 	// Create plugin directory
-	pluginsDir := tmpDir + "/plugins"
+	pluginsDir := tmpDir + "/todoat/plugins"
 	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
 		t.Fatalf("failed to create plugins directory: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestPluginFormatterDate(t *testing.T) {
 	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
 
 	// Create plugin directory
-	pluginsDir := tmpDir + "/plugins"
+	pluginsDir := tmpDir + "/todoat/plugins"
 	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
 		t.Fatalf("failed to create plugins directory: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestPluginTimeout(t *testing.T) {
 	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
 
 	// Create plugin directory
-	pluginsDir := tmpDir + "/plugins"
+	pluginsDir := tmpDir + "/todoat/plugins"
 	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
 		t.Fatalf("failed to create plugins directory: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestPluginError(t *testing.T) {
 	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
 
 	// Create plugin directory
-	pluginsDir := tmpDir + "/plugins"
+	pluginsDir := tmpDir + "/todoat/plugins"
 	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
 		t.Fatalf("failed to create plugins directory: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestPluginInvalidOutput(t *testing.T) {
 	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
 
 	// Create plugin directory
-	pluginsDir := tmpDir + "/plugins"
+	pluginsDir := tmpDir + "/todoat/plugins"
 	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
 		t.Fatalf("failed to create plugins directory: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestPluginEnvironmentVariables(t *testing.T) {
 	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
 
 	// Create plugin directory
-	pluginsDir := tmpDir + "/plugins"
+	pluginsDir := tmpDir + "/todoat/plugins"
 	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
 		t.Fatalf("failed to create plugins directory: %v", err)
 	}
@@ -437,7 +437,7 @@ func TestPluginReceivesTaskJSON(t *testing.T) {
 	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
 
 	// Create plugin directory
-	pluginsDir := tmpDir + "/plugins"
+	pluginsDir := tmpDir + "/todoat/plugins"
 	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
 		t.Fatalf("failed to create plugins directory: %v", err)
 	}
@@ -478,5 +478,154 @@ fields:
 	testutil.AssertExitCode(t, exitCode, 0)
 	// Plugin should have received and parsed the task JSON
 	testutil.AssertContains(t, stdout, "GOT:MyUniqueTaskName123")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// =============================================================================
+// Plugin Security Tests (Issue #73)
+// =============================================================================
+
+// TestPluginCommandMustBeInPluginDir verifies that plugin commands outside the plugin directory are rejected
+func TestPluginCommandMustBeInPluginDir(t *testing.T) {
+	cli, viewsDir := testutil.NewCLITestWithViews(t)
+
+	// Create view that tries to use /usr/bin/id (arbitrary system command)
+	viewYAML := `name: malicious
+fields:
+  - name: status
+    width: 15
+    plugin:
+      command: /usr/bin/id
+      timeout: 5000
+  - name: summary
+    width: 40
+`
+	if err := os.WriteFile(viewsDir+"/malicious.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create list and add task
+	cli.MustExecute("-y", "list", "create", "SecurityTest")
+	cli.MustExecute("-y", "SecurityTest", "add", "Security test task")
+
+	// List tasks with malicious view - should NOT execute /usr/bin/id
+	// Instead, should fall back to raw value since plugin command is rejected
+	stdout, _, exitCode := cli.Execute("-y", "SecurityTest", "-v", "malicious")
+
+	testutil.AssertExitCode(t, exitCode, 0)
+	testutil.AssertContains(t, stdout, "Security test task")
+	// Should show fallback value (raw status) since /usr/bin/id is outside plugin dir
+	if !strings.Contains(stdout, "TODO") {
+		t.Errorf("expected fallback to raw status value when plugin outside plugin dir, got:\n%s", stdout)
+	}
+	// Verify that the id command output is NOT in the output
+	// (uid=xxx, gid=xxx patterns from /usr/bin/id)
+	if strings.Contains(stdout, "uid=") || strings.Contains(stdout, "gid=") {
+		t.Errorf("SECURITY: arbitrary command /usr/bin/id was executed! output:\n%s", stdout)
+	}
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPluginCommandInPluginDirWorks verifies that plugin commands inside the plugin directory work
+func TestPluginCommandInPluginDirWorks(t *testing.T) {
+	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
+
+	// Create plugin directory - must be in XDG_CONFIG_HOME/todoat/plugins
+	// Tests set XDG_CONFIG_HOME to tmpDir/xdg-config
+	pluginsDir := tmpDir + "/todoat/plugins"
+	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
+		t.Fatalf("failed to create plugins directory: %v", err)
+	}
+
+	// Create a valid plugin in the plugin directory
+	pluginScript := `#!/bin/bash
+echo "PLUGIN_OUTPUT"
+`
+	pluginPath := pluginsDir + "/valid-plugin.sh"
+	if err := os.WriteFile(pluginPath, []byte(pluginScript), 0755); err != nil {
+		t.Fatalf("failed to write plugin script: %v", err)
+	}
+
+	// Create view with plugin in the plugin directory
+	viewYAML := `name: valid_plugin
+fields:
+  - name: status
+    width: 20
+    plugin:
+      command: ` + pluginPath + `
+      timeout: 1000
+  - name: summary
+    width: 40
+`
+	if err := os.WriteFile(viewsDir+"/valid_plugin.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create list and add task
+	cli.MustExecute("-y", "list", "create", "ValidPluginTest")
+	cli.MustExecute("-y", "ValidPluginTest", "add", "Valid plugin test task")
+
+	// List tasks with valid plugin view - should execute the plugin
+	stdout, _, exitCode := cli.Execute("-y", "ValidPluginTest", "-v", "valid_plugin")
+
+	testutil.AssertExitCode(t, exitCode, 0)
+	testutil.AssertContains(t, stdout, "Valid plugin test task")
+	// Plugin should have executed and returned output
+	testutil.AssertContains(t, stdout, "PLUGIN_OUTPUT")
+	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+}
+
+// TestPluginPathTraversalRejected verifies that path traversal in plugin commands is rejected
+func TestPluginPathTraversalRejected(t *testing.T) {
+	cli, viewsDir, tmpDir := testutil.NewCLITestWithViewsAndTmpDir(t)
+
+	// Create plugin directory - must be in XDG_CONFIG_HOME/todoat/plugins
+	// Tests set XDG_CONFIG_HOME to tmpDir/xdg-config
+	pluginsDir := tmpDir + "/todoat/plugins"
+	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
+		t.Fatalf("failed to create plugins directory: %v", err)
+	}
+
+	// Create a script outside the plugins directory
+	outsideScript := `#!/bin/bash
+echo "OUTSIDE_PLUGIN_DIR"
+`
+	outsidePath := tmpDir + "/outside-plugin.sh"
+	if err := os.WriteFile(outsidePath, []byte(outsideScript), 0755); err != nil {
+		t.Fatalf("failed to write outside script: %v", err)
+	}
+
+	// Create view with path traversal attempt
+	viewYAML := `name: traversal
+fields:
+  - name: status
+    width: 25
+    plugin:
+      command: ` + pluginsDir + `/../outside-plugin.sh
+      timeout: 1000
+  - name: summary
+    width: 40
+`
+	if err := os.WriteFile(viewsDir+"/traversal.yaml", []byte(viewYAML), 0644); err != nil {
+		t.Fatalf("failed to write view file: %v", err)
+	}
+
+	// Create list and add task
+	cli.MustExecute("-y", "list", "create", "TraversalTest")
+	cli.MustExecute("-y", "TraversalTest", "add", "Traversal test task")
+
+	// List tasks with traversal view - should NOT execute the outside script
+	stdout, _, exitCode := cli.Execute("-y", "TraversalTest", "-v", "traversal")
+
+	testutil.AssertExitCode(t, exitCode, 0)
+	testutil.AssertContains(t, stdout, "Traversal test task")
+	// Should show fallback value since path traversal is detected
+	if !strings.Contains(stdout, "TODO") {
+		t.Errorf("expected fallback to raw status value when path traversal detected, got:\n%s", stdout)
+	}
+	// Verify that the outside script output is NOT in the output
+	if strings.Contains(stdout, "OUTSIDE_PLUGIN_DIR") {
+		t.Errorf("SECURITY: path traversal allowed execution of script outside plugin dir! output:\n%s", stdout)
+	}
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }

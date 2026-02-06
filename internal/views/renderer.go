@@ -8,10 +8,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"todoat/backend"
+	"todoat/internal/config"
 )
 
 // Renderer handles rendering tasks using a view configuration
@@ -320,6 +322,41 @@ func StatusToString(status backend.TaskStatus) string {
 	}
 }
 
+// getPluginDir returns the plugin directory path.
+// Plugins must be located within this directory for security.
+func getPluginDir() string {
+	return filepath.Join(config.GetConfigDir(), "plugins")
+}
+
+// validatePluginCommand validates that a plugin command path is within the allowed plugin directory.
+// This prevents arbitrary command execution via malicious view YAML files.
+// Returns the resolved absolute command path if valid, or an error if the command is outside the plugin dir.
+func validatePluginCommand(command, pluginDir string) (string, error) {
+	// Resolve to absolute paths
+	absCommand, err := filepath.Abs(command)
+	if err != nil {
+		return "", fmt.Errorf("invalid command path: %w", err)
+	}
+	absPluginDir, err := filepath.Abs(pluginDir)
+	if err != nil {
+		return "", fmt.Errorf("invalid plugin dir: %w", err)
+	}
+
+	// Evaluate symlinks to prevent symlink-based escapes
+	absCommand, err = filepath.EvalSymlinks(absCommand)
+	if err != nil {
+		// If we can't evaluate symlinks (e.g., file doesn't exist), the command is invalid
+		return "", fmt.Errorf("command path does not exist or cannot be resolved: %w", err)
+	}
+
+	// Ensure the command is within the plugin directory
+	if !strings.HasPrefix(absCommand, absPluginDir+string(filepath.Separator)) {
+		return "", fmt.Errorf("plugin command must be within %s", pluginDir)
+	}
+
+	return absCommand, nil
+}
+
 // runPlugin executes a plugin command with task data and returns the formatted output
 // Returns the formatted value or empty string if the plugin fails
 func runPlugin(t *backend.Task, plugin *PluginConfig) (string, bool) {
@@ -336,7 +373,17 @@ func runPlugin(t *backend.Task, plugin *PluginConfig) (string, bool) {
 		}
 	}
 
-	// Check if command exists
+	// Validate that the command is within the plugin directory (security: issue #73)
+	pluginDir := getPluginDir()
+	validatedCommand, err := validatePluginCommand(command, pluginDir)
+	if err != nil {
+		// Plugin command is outside the allowed directory - silently fail
+		// This is a security measure to prevent arbitrary command execution
+		return "", false
+	}
+	command = validatedCommand
+
+	// Check if command exists (already done by validatePluginCommand via EvalSymlinks)
 	if _, err := os.Stat(command); os.IsNotExist(err) {
 		return "", false
 	}

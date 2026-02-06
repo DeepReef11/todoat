@@ -134,6 +134,14 @@ analytics:
 #   log_notification: true                   # Log to notification log file
 
 # =============================================================================
+# Logging Settings
+# =============================================================================
+
+# logging:
+#   background_enabled: true                 # Create log files for background processes (default: true)
+                                             # When enabled, creates /tmp/todoat-{PID}.log files
+
+# =============================================================================
 # Credentials
 # =============================================================================
 # todoat supports secure credential storage via system keyring.

@@ -395,6 +395,31 @@ trash:
   retention_days: 30    # Keep deleted items for 30 days (0 = forever)
 ```
 
+## Logging Configuration
+
+Configure logging behavior for background processes:
+
+```yaml
+logging:
+  background_enabled: true    # Create log files for background processes (default: true)
+```
+
+### Logging Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `background_enabled` | Create PID-specific log files for background processes in `/tmp` | `true` |
+
+When background logging is enabled, background processes (like the sync daemon) create log files at `/tmp/todoat-{PID}.log`. Set to `false` to disable these log files.
+
+```bash
+# Check logging configuration
+todoat config get logging
+
+# Disable background log files
+todoat config set logging.background_enabled false
+```
+
 ## Examples
 
 ### Switch Default Backend

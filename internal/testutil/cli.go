@@ -96,6 +96,8 @@ func NewCLITestWithViews(t *testing.T) (*CLITest, string) {
 
 // NewCLITestWithViewsAndTmpDir creates a new CLI test helper with views directory support.
 // Returns the CLITest, viewsDir, and tmpDir (base directory for config.yaml).
+// This function also sets XDG_CONFIG_HOME to isolate the test from user's real config
+// and enables proper plugin directory resolution.
 func NewCLITestWithViewsAndTmpDir(t *testing.T) (*CLITest, string, string) {
 	t.Helper()
 
@@ -113,6 +115,22 @@ func NewCLITestWithViewsAndTmpDir(t *testing.T) (*CLITest, string, string) {
 	if err := os.WriteFile(configPath, []byte(defaultTestConfig), 0644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
+
+	// Set XDG_CONFIG_HOME to isolate from user's real config
+	// This ensures config.GetConfigDir() returns a test-specific path
+	// which is needed for plugin directory resolution (security fix issue #73)
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	if err := os.Setenv("XDG_CONFIG_HOME", tmpDir); err != nil {
+		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
+	}
+
+	t.Cleanup(func() {
+		if oldConfigHome == "" {
+			_ = os.Unsetenv("XDG_CONFIG_HOME")
+		} else {
+			_ = os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		}
+	})
 
 	cfg := &cmd.Config{
 		NoPrompt:   true,

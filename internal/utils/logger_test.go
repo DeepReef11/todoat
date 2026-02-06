@@ -648,3 +648,82 @@ func TestNewBackgroundLoggerWithPath(t *testing.T) {
 		t.Errorf("Custom log should contain message, got: %s", content)
 	}
 }
+
+// =============================================================================
+// NewBackgroundLoggerWithEnabled Tests (Issue #76)
+// =============================================================================
+
+// TestNewBackgroundLoggerWithEnabledTrue verifies enabled=true creates log file
+func TestNewBackgroundLoggerWithEnabledTrue(t *testing.T) {
+	bl, err := NewBackgroundLoggerWithEnabled(true)
+	if err != nil {
+		t.Fatalf("NewBackgroundLoggerWithEnabled(true) error = %v", err)
+	}
+	defer bl.Close()
+
+	if !bl.IsEnabled() {
+		t.Error("NewBackgroundLoggerWithEnabled(true) should create enabled logger")
+	}
+
+	logPath := bl.GetLogPath()
+	if logPath == "" {
+		t.Error("GetLogPath() should return non-empty path when enabled")
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		t.Errorf("Log file should exist at %s when enabled", logPath)
+	}
+
+	// Clean up
+	_ = os.Remove(logPath)
+}
+
+// TestNewBackgroundLoggerWithEnabledFalse verifies enabled=false creates disabled logger
+func TestNewBackgroundLoggerWithEnabledFalse(t *testing.T) {
+	bl, err := NewBackgroundLoggerWithEnabled(false)
+	if err != nil {
+		t.Fatalf("NewBackgroundLoggerWithEnabled(false) error = %v", err)
+	}
+	defer bl.Close()
+
+	if bl.IsEnabled() {
+		t.Error("NewBackgroundLoggerWithEnabled(false) should create disabled logger")
+	}
+
+	// Should still be able to call methods without panic
+	bl.Printf("This should not panic: %s", "test")
+	bl.Print("This should not panic")
+	bl.Println("This should not panic")
+}
+
+// TestNewBackgroundLoggerWithEnabledFalseNoFileCreated verifies no file is created when disabled
+func TestNewBackgroundLoggerWithEnabledFalseNoFileCreated(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Count files before
+	filesBefore, _ := os.ReadDir(tmpDir)
+	countBefore := len(filesBefore)
+
+	// Create disabled logger (uses default temp dir, not tmpDir, but we're testing the concept)
+	bl, err := NewBackgroundLoggerWithEnabled(false)
+	if err != nil {
+		t.Fatalf("NewBackgroundLoggerWithEnabled(false) error = %v", err)
+	}
+
+	// Write some messages
+	bl.Printf("Test message")
+	bl.Close()
+
+	// GetLogPath should be empty for disabled logger
+	if bl.GetLogPath() != "" {
+		t.Errorf("GetLogPath() should be empty for disabled logger, got: %s", bl.GetLogPath())
+	}
+
+	// Verify no files were created (count should be same)
+	filesAfter, _ := os.ReadDir(tmpDir)
+	countAfter := len(filesAfter)
+	if countAfter != countBefore {
+		t.Errorf("No files should be created when disabled, before: %d, after: %d", countBefore, countAfter)
+	}
+}

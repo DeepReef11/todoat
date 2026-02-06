@@ -1238,3 +1238,83 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+// =============================================================================
+// Tests for Issue 076: Logging Background Enabled Runtime Config
+// =============================================================================
+
+// TestLoggingBackgroundEnabledConfig verifies that logging.background_enabled
+// is a runtime config option as documented in docs/explanation/logging.md
+func TestLoggingBackgroundEnabledConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name     string
+		config   string
+		expected bool
+	}{
+		{
+			name: "background logging disabled via config",
+			config: `
+logging:
+  background_enabled: false
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: false,
+		},
+		{
+			name: "background logging enabled via config",
+			config: `
+logging:
+  background_enabled: true
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: true,
+		},
+		{
+			name: "background logging defaults to true when not specified",
+			config: `
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(tmpDir, tt.name+"-config.yaml")
+			if err := os.WriteFile(configPath, []byte(tt.config), 0644); err != nil {
+				t.Fatalf("failed to write config: %v", err)
+			}
+
+			cfg, err := Load(configPath)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			got := cfg.IsBackgroundLoggingEnabled()
+			if got != tt.expected {
+				t.Errorf("IsBackgroundLoggingEnabled() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestLoggingBackgroundEnabledDefaultValue verifies the default is true when logging section is missing
+func TestLoggingBackgroundEnabledDefaultValue(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// Per documentation, background_enabled defaults to true
+	if !cfg.IsBackgroundLoggingEnabled() {
+		t.Error("IsBackgroundLoggingEnabled() should default to true")
+	}
+}
