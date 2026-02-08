@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `todoat sync` now uses backends configured in the `backends:` section even when `default_backend` is not set (#80)
+  - Sync command iterates over all enabled remote backends in the `backends:` section
+  - Per-backend failure isolation ensures one backend failure doesn't block others
+
 ### Added
 - `cache_ttl` config option for user-configurable list metadata cache TTL (e.g., `"5m"`, `"30s"`, `"10m"`)
   - `GetCacheTTL()` and `GetCacheTTLDuration()` getter methods on Config struct

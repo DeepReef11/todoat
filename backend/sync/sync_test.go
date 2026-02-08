@@ -3309,3 +3309,51 @@ func TestSyncConflictsNoPromptMode(t *testing.T) {
 	// In no-prompt mode (-y), should output result code
 	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
+
+// TestSyncWithBackendsSectionNoDefaultBackend tests that `todoat sync` uses backends
+// configured in the `backends:` section even when `default_backend` is not set (Issue #80).
+// The sync command should iterate over all enabled remote backends in the backends: section.
+func TestSyncWithBackendsSectionNoDefaultBackend(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+
+	// Create a config with a remote backend in backends: section but NO default_backend
+	// This is the documented pattern in docs/how-to/sync.md
+	configContent := `
+backends:
+  sqlite:
+    type: sqlite
+    enabled: true
+  nextcloud:
+    type: nextcloud
+    enabled: true
+    host: "localhost:8080"
+    username: "admin"
+    allow_http: true
+
+sync:
+  enabled: true
+  auto_sync_after_operation: true
+  conflict_resolution: server_wins
+  offline_mode: auto
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Run sync command
+	stdout, stderr, _ := cli.Execute("-y", "sync")
+	combined := stdout + stderr
+
+	// The sync command should NOT say "no remote backend configured"
+	// when a remote backend IS configured in the backends: section
+	if strings.Contains(combined, "no remote backend configured") {
+		t.Errorf("sync command incorrectly reports 'no remote backend configured' when nextcloud is configured in backends: section.\nOutput: %s", combined)
+	}
+
+	// Should attempt to sync with the configured backend (may fail due to connectivity, but should try)
+	// The output should mention the backend name it's trying to sync with (in stdout or stderr)
+	if !strings.Contains(combined, "nextcloud") {
+		t.Errorf("sync command should attempt to sync with backend 'nextcloud' from backends: section.\nOutput: %s", combined)
+	}
+}

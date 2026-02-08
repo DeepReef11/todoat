@@ -6159,6 +6159,51 @@ func newSyncStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	return cmd
 }
 
+// getEnabledRemoteBackends returns a list of enabled remote backends from the backends: config section.
+// It looks for backends that are NOT sqlite (local) and have "enabled: true" or no enabled field (defaults to true).
+// Issue #80: This allows sync to work with backends configured in backends: section without requiring default_backend.
+func getEnabledRemoteBackends(rawConfig map[string]interface{}) []string {
+	var remoteBackends []string
+	if rawConfig == nil {
+		return remoteBackends
+	}
+
+	backendsMap, ok := rawConfig["backends"].(map[string]interface{})
+	if !ok {
+		return remoteBackends
+	}
+
+	for name, backendCfg := range backendsMap {
+		cfgMap, ok := backendCfg.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Skip sqlite (local-only backend)
+		backendType, _ := cfgMap["type"].(string)
+		if backendType == "" {
+			backendType = name // Default type is the backend name
+		}
+		if backendType == "sqlite" {
+			continue
+		}
+
+		// Check if enabled (defaults to true if not specified)
+		enabled := true
+		if enabledVal, hasEnabled := cfgMap["enabled"]; hasEnabled {
+			if enabledBool, ok := enabledVal.(bool); ok {
+				enabled = enabledBool
+			}
+		}
+
+		if enabled {
+			remoteBackends = append(remoteBackends, name)
+		}
+	}
+
+	return remoteBackends
+}
+
 // doPullOnlySync performs a pull-only synchronization with remote backends.
 // Unlike doSync, this does NOT:
 // 1. Push pending local changes to remote
@@ -6168,16 +6213,19 @@ func doPullOnlySync(cfg *Config) error {
 	// Load config to check for remote backend
 	appConfig, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
 
-	// Determine the remote backend to sync with
-	remoteBackendName := ""
+	// Determine the remote backend(s) to sync with
+	var remoteBackendNames []string
 	if cfg.Backend != "" && cfg.Backend != "sqlite" {
-		remoteBackendName = cfg.Backend
+		remoteBackendNames = []string{cfg.Backend}
 	} else if appConfig != nil && appConfig.DefaultBackend != "" && appConfig.DefaultBackend != "sqlite" {
-		remoteBackendName = appConfig.DefaultBackend
+		remoteBackendNames = []string{appConfig.DefaultBackend}
+	} else {
+		// Issue #80: Check backends: section for enabled remote backends
+		remoteBackendNames = getEnabledRemoteBackends(rawConfig)
 	}
 
 	// If no remote backend configured, nothing to pull
-	if remoteBackendName == "" {
+	if len(remoteBackendNames) == 0 {
 		return nil
 	}
 
@@ -6186,24 +6234,36 @@ func doPullOnlySync(cfg *Config) error {
 		dbPath = getDefaultDBPath()
 	}
 
-	// Create the remote backend
-	remoteBE, err := createBackendByName(remoteBackendName, dbPath, rawConfig)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = remoteBE.Close() }()
-
-	// Get local SQLite backend using remote backend name for isolation
-	localBE, err := sqlite.NewWithBackendID(dbPath, remoteBackendName)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = localBE.Close() }()
-
-	// Perform pull-only sync (no deletes)
+	// Sync with each enabled remote backend (Issue #80: per-backend failure isolation)
 	ctx := context.Background()
-	_, _, _, pullErr := syncPullOnlyFromRemote(ctx, localBE, remoteBE)
-	return pullErr
+	var lastError error
+	for _, remoteBackendName := range remoteBackendNames {
+		// Create the remote backend
+		remoteBE, err := createBackendByName(remoteBackendName, dbPath, rawConfig)
+		if err != nil {
+			lastError = err
+			continue // Try next backend
+		}
+
+		// Get local SQLite backend using remote backend name for isolation
+		localBE, err := sqlite.NewWithBackendID(dbPath, remoteBackendName)
+		if err != nil {
+			_ = remoteBE.Close()
+			lastError = err
+			continue // Try next backend
+		}
+
+		// Perform pull-only sync (no deletes)
+		_, _, _, pullErr := syncPullOnlyFromRemote(ctx, localBE, remoteBE)
+		if pullErr != nil {
+			lastError = pullErr
+		}
+
+		_ = localBE.Close()
+		_ = remoteBE.Close()
+	}
+
+	return lastError
 }
 
 // doSync performs synchronization with remote backends
@@ -6211,19 +6271,22 @@ func doSync(cfg *Config, stdout, stderr io.Writer) error {
 	// Load config to check for remote backend
 	appConfig, rawConfig, _ := config.LoadWithRaw(cfg.ConfigPath)
 
-	// Determine the remote backend to sync with
-	remoteBackendName := ""
+	// Determine the remote backend(s) to sync with
+	var remoteBackendNames []string
 
 	// Check if -b flag was used
 	if cfg.Backend != "" && cfg.Backend != "sqlite" {
-		remoteBackendName = cfg.Backend
+		remoteBackendNames = []string{cfg.Backend}
 	} else if appConfig != nil && appConfig.DefaultBackend != "" && appConfig.DefaultBackend != "sqlite" {
 		// Use default_backend from config if it's not sqlite
-		remoteBackendName = appConfig.DefaultBackend
+		remoteBackendNames = []string{appConfig.DefaultBackend}
+	} else {
+		// Issue #80: Check backends: section for enabled remote backends
+		remoteBackendNames = getEnabledRemoteBackends(rawConfig)
 	}
 
 	// If no remote backend configured, report it
-	if remoteBackendName == "" {
+	if len(remoteBackendNames) == 0 {
 		_, _ = fmt.Fprintln(stdout, "Sync completed (no remote backend configured)")
 		if cfg != nil && cfg.NoPrompt {
 			_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
@@ -6245,97 +6308,110 @@ func doSync(cfg *Config, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	// Create the remote backend for syncing
 	dbPath := cfg.DBPath
 	if dbPath == "" {
 		dbPath = getDefaultDBPath()
 	}
-	remoteBE, err := createBackendByName(remoteBackendName, dbPath, rawConfig)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "Error connecting to backend '%s': %v\n", remoteBackendName, err)
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultError)
-		}
-		return err
-	}
-	defer func() { _ = remoteBE.Close() }()
 
-	// Get local SQLite backend to read task data for syncing
-	// Use the remote backend name for isolation (Issue #011)
-	localBE, err := sqlite.NewWithBackendID(dbPath, remoteBackendName)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "Error opening local database: %v\n", err)
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultError)
-		}
-		return err
-	}
-	defer func() { _ = localBE.Close() }()
-
-	// Process pending operations
+	// Sync with each enabled remote backend (Issue #80: per-backend failure isolation)
 	ctx := context.Background()
-	successCount := 0
-	errorCount := 0
 	var lastError error
-	var processedIDs []int64
+	totalSuccess := 0
+	totalErrors := 0
+	totalPullNew := 0
+	totalPullUpdated := 0
+	totalPullDeleted := 0
+	var allProcessedIDs []int64
 
-	for _, op := range pendingOps {
-		var syncErr error
-
-		switch op.OperationType {
-		case "create":
-			syncErr = syncCreateOperation(ctx, localBE, remoteBE, op, stderr)
-		case "update":
-			syncErr = syncUpdateOperation(ctx, localBE, remoteBE, op, stderr)
-		case "delete":
-			syncErr = syncDeleteOperation(ctx, remoteBE, op, stderr)
-		default:
-			syncErr = fmt.Errorf("unknown operation type: %s", op.OperationType)
+	for _, remoteBackendName := range remoteBackendNames {
+		// Create the remote backend for syncing
+		remoteBE, err := createBackendByName(remoteBackendName, dbPath, rawConfig)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "Error connecting to backend '%s': %v\n", remoteBackendName, err)
+			lastError = err
+			continue // Try next backend (per-backend failure isolation)
 		}
 
-		if syncErr != nil {
-			errorCount++
-			lastError = syncErr
-			_, _ = fmt.Fprintf(stderr, "Sync error for task '%s': %v\n", op.TaskSummary, syncErr)
-		} else {
-			successCount++
-			processedIDs = append(processedIDs, op.ID)
+		// Get local SQLite backend to read task data for syncing
+		// Use the remote backend name for isolation (Issue #011)
+		localBE, err := sqlite.NewWithBackendID(dbPath, remoteBackendName)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "Error opening local database for '%s': %v\n", remoteBackendName, err)
+			_ = remoteBE.Close()
+			lastError = err
+			continue // Try next backend
 		}
+
+		// Process pending operations for this backend
+		successCount := 0
+		errorCount := 0
+		var processedIDs []int64
+
+		for _, op := range pendingOps {
+			var syncErr error
+
+			switch op.OperationType {
+			case "create":
+				syncErr = syncCreateOperation(ctx, localBE, remoteBE, op, stderr)
+			case "update":
+				syncErr = syncUpdateOperation(ctx, localBE, remoteBE, op, stderr)
+			case "delete":
+				syncErr = syncDeleteOperation(ctx, remoteBE, op, stderr)
+			default:
+				syncErr = fmt.Errorf("unknown operation type: %s", op.OperationType)
+			}
+
+			if syncErr != nil {
+				errorCount++
+				lastError = syncErr
+				_, _ = fmt.Fprintf(stderr, "Sync error for task '%s' on '%s': %v\n", op.TaskSummary, remoteBackendName, syncErr)
+			} else {
+				successCount++
+				processedIDs = append(processedIDs, op.ID)
+			}
+		}
+
+		allProcessedIDs = append(allProcessedIDs, processedIDs...)
+		totalSuccess += successCount
+		totalErrors += errorCount
+
+		// Phase 2: Pull from remote
+		pullNew, pullUpdated, pullDeleted, pullErr := syncPullFromRemote(ctx, localBE, remoteBE, stderr)
+		if pullErr != nil {
+			_, _ = fmt.Fprintf(stderr, "Pull error from '%s': %v\n", remoteBackendName, pullErr)
+			lastError = pullErr
+		}
+		totalPullNew += pullNew
+		totalPullUpdated += pullUpdated
+		totalPullDeleted += pullDeleted
+
+		// Report results for this backend
+		_, _ = fmt.Fprintf(stdout, "Sync completed with backend '%s'\n", remoteBackendName)
+		_, _ = fmt.Fprintf(stdout, "  Push: %d operations processed\n", successCount)
+		if errorCount > 0 {
+			_, _ = fmt.Fprintf(stdout, "  Push errors: %d\n", errorCount)
+		}
+		_, _ = fmt.Fprintf(stdout, "  Pull: %d new, %d updated, %d deleted\n", pullNew, pullUpdated, pullDeleted)
+
+		_ = localBE.Close()
+		_ = remoteBE.Close()
 	}
 
 	// Clear only the operations that were actually processed (issue #45).
-	// Previously ClearQueue() deleted ALL entries, including operations queued
-	// between GetPendingOperations() and ClearQueue(). This caused subtasks
-	// created in hierarchies to never sync to the remote backend.
-	if len(processedIDs) > 0 {
-		_, _ = syncMgr.ClearOperations(processedIDs)
-	}
-
-	// If all operations failed, return the error
-	if errorCount > 0 && successCount == 0 && lastError != nil {
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultError)
-		}
-		return lastError
-	}
-
-	// Phase 2: Pull from remote
-	// Get all lists and tasks from remote and sync to local
-	pullNew, pullUpdated, pullDeleted, pullErr := syncPullFromRemote(ctx, localBE, remoteBE, stderr)
-	if pullErr != nil {
-		_, _ = fmt.Fprintf(stderr, "Pull error: %v\n", pullErr)
+	if len(allProcessedIDs) > 0 {
+		_, _ = syncMgr.ClearOperations(allProcessedIDs)
 	}
 
 	// Update last sync time
 	syncMgr.SetLastSyncTime(time.Now())
 
-	// Report results
-	_, _ = fmt.Fprintf(stdout, "Sync completed with backend '%s'\n", remoteBackendName)
-	_, _ = fmt.Fprintf(stdout, "  Push: %d operations processed\n", successCount)
-	if errorCount > 0 {
-		_, _ = fmt.Fprintf(stdout, "  Push errors: %d\n", errorCount)
+	// If all operations failed on all backends, return the error
+	if totalErrors > 0 && totalSuccess == 0 && lastError != nil {
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return lastError
 	}
-	_, _ = fmt.Fprintf(stdout, "  Pull: %d new, %d updated, %d deleted\n", pullNew, pullUpdated, pullDeleted)
 
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
