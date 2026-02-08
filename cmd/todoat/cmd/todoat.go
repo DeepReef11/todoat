@@ -7530,7 +7530,10 @@ func (sm *SyncManager) initDB() error {
 			operation_type TEXT NOT NULL,
 			retry_count INTEGER DEFAULT 0,
 			last_attempt_at TEXT,
-			created_at TEXT NOT NULL
+			created_at TEXT NOT NULL,
+			status TEXT DEFAULT 'pending',
+			worker_id TEXT DEFAULT '',
+			claimed_at TEXT
 		);
 
 		CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -7554,11 +7557,69 @@ func (sm *SyncManager) initDB() error {
 
 		CREATE INDEX IF NOT EXISTS idx_sync_queue_task ON sync_queue(task_id);
 		CREATE INDEX IF NOT EXISTS idx_sync_queue_type ON sync_queue(operation_type);
+		CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
 		CREATE INDEX IF NOT EXISTS idx_sync_conflicts_uid ON sync_conflicts(task_uid);
 		CREATE INDEX IF NOT EXISTS idx_sync_conflicts_status ON sync_conflicts(status);
 	`
 	_, err = db.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migrate existing databases: add new columns for atomic claiming (Issue #081)
+	// Check if columns exist using PRAGMA table_info
+	if err := sm.migrateSyncQueueSchema(); err != nil {
+		return fmt.Errorf("failed to migrate sync_queue schema: %w", err)
+	}
+
+	return nil
+}
+
+// migrateSyncQueueSchema adds new columns to sync_queue table for existing databases.
+// This handles the case where the database was created before Issue #081 columns were added.
+func (sm *SyncManager) migrateSyncQueueSchema() error {
+	// Check if status column exists
+	rows, err := sm.db.Query("PRAGMA table_info(sync_queue)")
+	if err != nil {
+		return err
+	}
+
+	columnExists := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue interface{}
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		columnExists[name] = true
+	}
+	_ = rows.Close()
+
+	// Add status column if missing
+	if !columnExists["status"] {
+		if _, err := sm.db.Exec("ALTER TABLE sync_queue ADD COLUMN status TEXT DEFAULT 'pending'"); err != nil {
+			return err
+		}
+	}
+
+	// Add worker_id column if missing
+	if !columnExists["worker_id"] {
+		if _, err := sm.db.Exec("ALTER TABLE sync_queue ADD COLUMN worker_id TEXT DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	// Add claimed_at column if missing
+	if !columnExists["claimed_at"] {
+		if _, err := sm.db.Exec("ALTER TABLE sync_queue ADD COLUMN claimed_at TEXT"); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Close closes the database connection
@@ -7615,19 +7676,21 @@ func (sm *SyncManager) GetConnectionStatus() string {
 	return "Offline (no remote backend configured)"
 }
 
-// GetPendingOperations returns all pending sync operations
+// GetPendingOperations returns all pending sync operations (status='pending' or NULL for backward compatibility)
 func (sm *SyncManager) GetPendingOperations() ([]SyncOperation, error) {
 	if sm.db == nil {
 		return []SyncOperation{}, nil
 	}
 
 	// First try with tasks table join, fall back to without
+	// Only return operations with status='pending' (or NULL for backward compatibility)
 	rows, err := sm.db.Query(`
 		SELECT sq.id, sq.task_id, sq.task_uid, sq.list_id, sq.operation_type,
 		       sq.retry_count, sq.last_attempt_at, sq.created_at,
 		       COALESCE(t.summary, sq.task_summary) as task_summary
 		FROM sync_queue sq
 		LEFT JOIN tasks t ON sq.task_id = t.id
+		WHERE sq.status = 'pending' OR sq.status IS NULL
 		ORDER BY sq.created_at ASC
 	`)
 	if err != nil {
@@ -7636,6 +7699,7 @@ func (sm *SyncManager) GetPendingOperations() ([]SyncOperation, error) {
 			SELECT id, task_id, task_uid, list_id, operation_type,
 			       retry_count, last_attempt_at, created_at, task_summary
 			FROM sync_queue
+			WHERE status = 'pending' OR status IS NULL
 			ORDER BY created_at ASC
 		`)
 		if err != nil {
@@ -7718,6 +7782,92 @@ func (sm *SyncManager) ClearOperations(ids []int64) (int, error) {
 
 	count, _ := result.RowsAffected()
 	return int(count), nil
+}
+
+// ClaimNextOperation atomically claims the next pending sync operation for processing.
+// Uses BEGIN IMMEDIATE to acquire a write lock and UPDATE with subquery to prevent
+// race conditions when multiple daemon instances briefly exist (Issue #081).
+// Returns nil if no pending operations are available.
+func (sm *SyncManager) ClaimNextOperation(workerID string) (*SyncOperation, error) {
+	if sm.db == nil {
+		return nil, nil
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
+	// Use BEGIN IMMEDIATE to acquire exclusive write lock immediately
+	tx, err := sm.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Atomic claim: UPDATE with subquery to get the oldest pending operation
+	result, err := tx.Exec(`
+		UPDATE sync_queue
+		SET status = 'processing',
+		    worker_id = ?,
+		    claimed_at = ?
+		WHERE id = (
+			SELECT id FROM sync_queue
+			WHERE status = 'pending' OR status IS NULL
+			ORDER BY created_at ASC
+			LIMIT 1
+		)
+	`, workerID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+
+	// No pending operations available
+	if rowsAffected == 0 {
+		_ = tx.Rollback()
+		tx = nil
+		return nil, nil
+	}
+
+	// Fetch the claimed operation's details
+	var op SyncOperation
+	var lastAttemptStr, createdAtStr, taskSummary sql.NullString
+	err = tx.QueryRow(`
+		SELECT id, task_id, task_uid, list_id, operation_type,
+		       retry_count, last_attempt_at, created_at, task_summary
+		FROM sync_queue
+		WHERE worker_id = ? AND status = 'processing'
+		ORDER BY claimed_at DESC
+		LIMIT 1
+	`, workerID).Scan(&op.ID, &op.TaskID, &op.TaskUID, &op.ListID, &op.OperationType,
+		&op.RetryCount, &lastAttemptStr, &createdAtStr, &taskSummary)
+	if err != nil {
+		return nil, err
+	}
+
+	if taskSummary.Valid {
+		op.TaskSummary = taskSummary.String
+	}
+	if lastAttemptStr.Valid {
+		t, _ := time.Parse(time.RFC3339Nano, lastAttemptStr.String)
+		op.LastAttemptAt = &t
+	}
+	if createdAtStr.Valid {
+		op.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAtStr.String)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	tx = nil
+
+	return &op, nil
 }
 
 // QueueOperation adds an operation to the sync queue

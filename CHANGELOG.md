@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sync queue atomic task claiming with deduplication (#81)
+  - New `ClaimNextOperation` method uses BEGIN IMMEDIATE for exclusive lock
+  - Prevents race conditions when multiple daemon instances briefly coexist
+  - New `status`, `worker_id`, `claimed_at` columns with automatic migration
 - Interactive task selection via TaskSelector when multiple tasks match a search term (#79)
   - Wired TaskSelector to CLI commands (complete, delete, update, add with parent)
   - Falls back to error with disambiguation info when `--no-prompt` mode is enabled

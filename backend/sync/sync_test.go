@@ -3357,3 +3357,176 @@ sync:
 		t.Errorf("sync command should attempt to sync with backend 'nextcloud' from backends: section.\nOutput: %s", combined)
 	}
 }
+
+// =============================================================================
+// Issue #081: Sync Queue Atomic Task Claiming with Deduplication
+// =============================================================================
+
+// TestSyncQueueAtomicClaiming tests that ClaimNextOperation uses atomic UPDATE
+// with BEGIN IMMEDIATE to prevent race conditions when claiming tasks.
+func TestSyncQueueAtomicClaiming(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Create SyncManager and queue an operation
+	syncMgr := cmd.NewSyncManager(dbPath)
+	defer func() { _ = syncMgr.Close() }()
+
+	// Queue a test operation
+	err := syncMgr.QueueOperationByStringID("task-123", "Test Task", "list-1", "create")
+	if err != nil {
+		t.Fatalf("QueueOperationByStringID failed: %v", err)
+	}
+
+	// Verify the operation is pending
+	ops, err := syncMgr.GetPendingOperations()
+	if err != nil {
+		t.Fatalf("GetPendingOperations failed: %v", err)
+	}
+	if len(ops) != 1 {
+		t.Fatalf("expected 1 pending operation, got %d", len(ops))
+	}
+
+	// Claim the operation atomically
+	workerID := "worker-1"
+	claimedOp, err := syncMgr.ClaimNextOperation(workerID)
+	if err != nil {
+		t.Fatalf("ClaimNextOperation failed: %v", err)
+	}
+	if claimedOp == nil {
+		t.Fatal("expected claimed operation, got nil")
+	}
+
+	// Verify claimed operation has correct fields
+	if claimedOp.TaskUID != "task-123" {
+		t.Errorf("expected task_uid 'task-123', got '%s'", claimedOp.TaskUID)
+	}
+	if claimedOp.TaskSummary != "Test Task" {
+		t.Errorf("expected task_summary 'Test Task', got '%s'", claimedOp.TaskSummary)
+	}
+
+	// Verify the operation status is now 'processing' in database
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var status, actualWorkerID string
+	var claimedAt sql.NullString
+	err = db.QueryRow(`
+		SELECT status, worker_id, claimed_at FROM sync_queue WHERE id = ?
+	`, claimedOp.ID).Scan(&status, &actualWorkerID, &claimedAt)
+	if err != nil {
+		t.Fatalf("failed to query claimed operation: %v", err)
+	}
+
+	if status != "processing" {
+		t.Errorf("Issue #081: expected status 'processing', got '%s'", status)
+	}
+	if actualWorkerID != workerID {
+		t.Errorf("Issue #081: expected worker_id '%s', got '%s'", workerID, actualWorkerID)
+	}
+	if !claimedAt.Valid {
+		t.Error("Issue #081: expected claimed_at to be set, got NULL")
+	}
+
+	// Verify no more pending operations (since the only one is now processing)
+	pendingOps, err := syncMgr.GetPendingOperations()
+	if err != nil {
+		t.Fatalf("GetPendingOperations after claim failed: %v", err)
+	}
+	if len(pendingOps) != 0 {
+		t.Errorf("Issue #081: expected 0 pending operations after claim, got %d", len(pendingOps))
+	}
+
+	// Try to claim again - should return nil (no pending operations)
+	nextClaimed, err := syncMgr.ClaimNextOperation("worker-2")
+	if err != nil {
+		t.Fatalf("second ClaimNextOperation failed: %v", err)
+	}
+	if nextClaimed != nil {
+		t.Error("Issue #081: expected nil when no pending operations, got an operation")
+	}
+}
+
+// TestDuplicateClaimPrevention tests that two concurrent goroutines cannot claim
+// the same task. Only one should succeed in claiming.
+func TestDuplicateClaimPrevention(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Create SyncManager and queue a single operation
+	syncMgr := cmd.NewSyncManager(dbPath)
+	defer func() { _ = syncMgr.Close() }()
+
+	err := syncMgr.QueueOperationByStringID("task-race", "Race Test Task", "list-1", "update")
+	if err != nil {
+		t.Fatalf("QueueOperationByStringID failed: %v", err)
+	}
+
+	// Create multiple SyncManagers (simulating multiple daemon instances)
+	syncMgr1 := cmd.NewSyncManager(dbPath)
+	defer func() { _ = syncMgr1.Close() }()
+
+	syncMgr2 := cmd.NewSyncManager(dbPath)
+	defer func() { _ = syncMgr2.Close() }()
+
+	// Use channels to collect results from concurrent claims
+	type claimResult struct {
+		workerID string
+		op       *cmd.SyncOperation
+		err      error
+	}
+	results := make(chan claimResult, 2)
+
+	// Launch concurrent claim attempts
+	go func() {
+		op, err := syncMgr1.ClaimNextOperation("worker-A")
+		results <- claimResult{"worker-A", op, err}
+	}()
+
+	go func() {
+		op, err := syncMgr2.ClaimNextOperation("worker-B")
+		results <- claimResult{"worker-B", op, err}
+	}()
+
+	// Collect results
+	var claimed int
+	var nilReturns int
+	for i := 0; i < 2; i++ {
+		result := <-results
+		if result.err != nil {
+			t.Fatalf("ClaimNextOperation failed for %s: %v", result.workerID, result.err)
+		}
+		if result.op != nil {
+			claimed++
+		} else {
+			nilReturns++
+		}
+	}
+
+	// Exactly one should have claimed the task
+	if claimed != 1 {
+		t.Errorf("Issue #081: expected exactly 1 successful claim, got %d", claimed)
+	}
+	if nilReturns != 1 {
+		t.Errorf("Issue #081: expected exactly 1 nil return (no task to claim), got %d", nilReturns)
+	}
+
+	// Verify in database that only one worker has claimed
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var count int
+	err = db.QueryRow(`SELECT COUNT(*) FROM sync_queue WHERE status = 'processing'`).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to count processing operations: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Issue #081: expected exactly 1 operation with status 'processing', got %d", count)
+	}
+}
