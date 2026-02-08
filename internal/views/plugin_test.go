@@ -70,7 +70,6 @@ fields:
 	testutil.AssertContains(t, stdout, "✅")
 	testutil.AssertContains(t, stdout, "Todo task")
 	testutil.AssertContains(t, stdout, "Done task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginFormatterPriority verifies that view with priority plugin displays custom priority
@@ -131,7 +130,6 @@ fields:
 	testutil.AssertContains(t, stdout, "HIGH")
 	testutil.AssertContains(t, stdout, "MEDIUM")
 	testutil.AssertContains(t, stdout, "LOW")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginFormatterDate verifies that view with date plugin displays relative dates
@@ -186,7 +184,6 @@ fields:
 	// Plugin should format date as relative
 	testutil.AssertContains(t, stdout, "due:relative")
 	testutil.AssertContains(t, stdout, "Task with due date")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginTimeout verifies that plugin exceeding timeout falls back to raw value
@@ -243,7 +240,6 @@ fields:
 	if !strings.Contains(stdout, "TODO") {
 		t.Errorf("expected fallback to raw status value, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginError verifies that plugin returning non-zero exit shows fallback value gracefully
@@ -293,7 +289,6 @@ fields:
 	if !strings.Contains(stdout, "TODO") {
 		t.Errorf("expected fallback to raw status value on error, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginInvalidOutput verifies that plugin returning invalid JSON falls back to raw value
@@ -343,7 +338,6 @@ fields:
 	if !strings.Contains(stdout, "TODO") {
 		t.Errorf("expected fallback to raw status value on empty output, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginNotFound verifies that non-existent plugin path shows warning and uses raw value
@@ -378,7 +372,6 @@ fields:
 	if !strings.Contains(stdout, "TODO") {
 		t.Errorf("expected fallback to raw status value when plugin not found, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginEnvironmentVariables verifies that plugin receives configured environment variables
@@ -429,7 +422,6 @@ fields:
 	// Plugin should output the env variable value
 	testutil.AssertContains(t, stdout, "dark_mode")
 	testutil.AssertContains(t, stdout, "Env test task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginReceivesTaskJSON verifies that plugins receive complete task data as JSON
@@ -478,7 +470,6 @@ fields:
 	testutil.AssertExitCode(t, exitCode, 0)
 	// Plugin should have received and parsed the task JSON
 	testutil.AssertContains(t, stdout, "GOT:MyUniqueTaskName123")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // =============================================================================
@@ -523,7 +514,6 @@ fields:
 	if strings.Contains(stdout, "uid=") || strings.Contains(stdout, "gid=") {
 		t.Errorf("SECURITY: arbitrary command /usr/bin/id was executed! output:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginCommandInPluginDirWorks verifies that plugin commands inside the plugin directory work
@@ -572,7 +562,6 @@ fields:
 	testutil.AssertContains(t, stdout, "Valid plugin test task")
 	// Plugin should have executed and returned output
 	testutil.AssertContains(t, stdout, "PLUGIN_OUTPUT")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPluginPathTraversalRejected verifies that path traversal in plugin commands is rejected
@@ -627,5 +616,4 @@ fields:
 	if strings.Contains(stdout, "OUTSIDE_PLUGIN_DIR") {
 		t.Errorf("SECURITY: path traversal allowed execution of script outside plugin dir! output:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }

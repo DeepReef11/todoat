@@ -46,7 +46,6 @@ fields:
 	// The due date should appear ONLY if the custom view from config is used
 	// Default tree output does NOT show due dates
 	testutil.AssertContains(t, stdout, "Mar 15")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestDefaultViewFallback verifies fallback to "default" if configured view not found
@@ -71,7 +70,6 @@ func TestDefaultViewFallback(t *testing.T) {
 	if !strings.Contains(strings.ToLower(combinedOutput), "warning") || !strings.Contains(strings.ToLower(combinedOutput), "nonexistent-but-fallback") {
 		t.Errorf("expected warning about missing default view, got stdout:\n%s\nstderr:\n%s", stdout, stderr)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestDefaultViewOverride verifies that `-v` flag overrides config default
@@ -122,7 +120,6 @@ fields:
 	// view2 shows start_date, NOT due_date
 	testutil.AssertContains(t, stdout2, "Mar 10")    // start_date from view2
 	testutil.AssertNotContains(t, stdout2, "Mar 20") // due_date NOT in view2
-	testutil.AssertResultCode(t, stdout2, testutil.ResultInfoOnly)
 }
 
 // TestDefaultViewBuiltin verifies that built-in views can be set as default
@@ -145,7 +142,6 @@ func TestDefaultViewBuiltin(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Jan 31")
 	// "all" view should show tags
 	testutil.AssertContains(t, stdout, "work")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestDefaultViewCustom verifies that custom views from ~/.config/todoat/views/ can be set as default
@@ -178,7 +174,6 @@ fields:
 	testutil.AssertContains(t, stdout, "Task with start")
 	// start_date should be visible (only if custom view is used; default tree output doesn't show it)
 	testutil.AssertContains(t, stdout, "Apr 01")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestDefaultViewMissing verifies that a warning is shown if configured default view doesn't exist
@@ -206,5 +201,4 @@ func TestDefaultViewMissing(t *testing.T) {
 	if !strings.Contains(combinedOutput, "missing-view") {
 		t.Errorf("expected warning to mention 'missing-view', got stdout:\n%s\nstderr:\n%s", stdout, stderr)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }

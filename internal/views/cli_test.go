@@ -34,7 +34,6 @@ func TestDefaultViewViewsCLI(t *testing.T) {
 	if !strings.Contains(stdout, "TODO") && !strings.Contains(stdout, "IN-PROGRESS") {
 		t.Errorf("expected status indicators in default view, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestAllView verifies that `todoat MyList -v all` displays all task metadata fields
@@ -57,7 +56,6 @@ func TestAllViewViewsCLI(t *testing.T) {
 	if !strings.Contains(stdout, "work") || !strings.Contains(stdout, "urgent") {
 		t.Errorf("expected tags in 'all' view, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestCustomViewSelection verifies that `todoat MyList -v myview` loads view from views directory
@@ -86,7 +84,6 @@ fields:
 
 	testutil.AssertExitCode(t, exitCode, 0)
 	testutil.AssertContains(t, stdout, "Task with priority")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewListCommand verifies that `todoat view list` shows all available views (built-in and custom)
@@ -111,7 +108,6 @@ fields:
 	testutil.AssertContains(t, stdout, "all")
 	// Should show custom view
 	testutil.AssertContains(t, stdout, "custom")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewFieldOrdering verifies that custom view with reordered fields displays columns in specified order
@@ -148,7 +144,6 @@ fields:
 	if prioIdx >= summIdx {
 		t.Errorf("expected priority to appear before summary in output, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewFiltering verifies that view with filters only shows matching tasks (e.g., status != DONE)
@@ -181,7 +176,6 @@ filters:
 	testutil.AssertExitCode(t, exitCode, 0)
 	testutil.AssertContains(t, stdout, "Active task")
 	testutil.AssertNotContains(t, stdout, "Completed task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewSorting verifies that view with sort rules orders tasks correctly (multi-level sort)
@@ -220,7 +214,6 @@ sort:
 	if highIdx >= medIdx || medIdx >= lowIdx {
 		t.Errorf("expected tasks sorted by priority (high, medium, low), got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewDateFilter verifies that view filters with relative dates (`today`, `+7d`, `-3d`) work correctly
@@ -266,7 +259,6 @@ filters:
 	testutil.AssertNotContains(t, stdout, "Due later task")
 	testutil.AssertNotContains(t, stdout, "Overdue task")
 	testutil.AssertNotContains(t, stdout, "No due date task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewTagFilter verifies that view filters on tags/categories work with `contains` and `in` operators
@@ -301,7 +293,6 @@ filters:
 	testutil.AssertContains(t, stdout, "Work task")
 	testutil.AssertContains(t, stdout, "Work and home task")
 	testutil.AssertNotContains(t, stdout, "Home task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewHierarchyPreserved verifies that custom views maintain parent-child tree structure display
@@ -335,7 +326,6 @@ fields:
 	if !strings.Contains(stdout, "├") && !strings.Contains(stdout, "└") {
 		t.Errorf("expected hierarchy preserved with tree characters in custom view, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestInvalidViewError verifies that invalid view name shows helpful error message

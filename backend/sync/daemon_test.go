@@ -60,7 +60,6 @@ func TestSyncDaemonStopNotRunningCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "sync", "daemon", "stop")
 
 	testutil.AssertContains(t, stdout, "not running")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestSyncDaemonStatusCLI tests that 'todoat sync daemon status' shows daemon state
@@ -71,7 +70,6 @@ func TestSyncDaemonStatusCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "sync", "daemon", "status")
 
 	testutil.AssertContains(t, stdout, "not running")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 	// Start daemon
 	cli.MustExecute("-y", "sync", "daemon", "start")
@@ -81,7 +79,6 @@ func TestSyncDaemonStatusCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "running")
 	testutil.AssertContains(t, stdout, "PID")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 	// Cleanup
 	cli.MustExecute("-y", "sync", "daemon", "stop")
@@ -246,7 +243,6 @@ func TestSyncDaemonDoubleStartCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "sync", "daemon", "start")
 
 	testutil.AssertContains(t, stdout, "already running")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestSyncDaemonGracefulShutdownCLI tests that daemon handles signals gracefully

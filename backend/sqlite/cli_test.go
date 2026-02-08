@@ -92,7 +92,6 @@ func TestGetCommandExplicitSQLiteCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "Work", "get")
 
 	testutil.AssertContains(t, stdout, "Task 1")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestGetCommandDefaultSQLiteCLI(t *testing.T) {
@@ -105,7 +104,6 @@ func TestGetCommandDefaultSQLiteCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "Work")
 
 	testutil.AssertContains(t, stdout, "Task for default")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestGetCommandAbbreviationSQLiteCLI(t *testing.T) {
@@ -118,7 +116,6 @@ func TestGetCommandAbbreviationSQLiteCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "Work", "g")
 
 	testutil.AssertContains(t, stdout, "Task G")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // --- Update Command Tests ---
@@ -330,7 +327,6 @@ func TestStatusDisplayFormatSQLiteCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "Work", "get")
 
 	testutil.AssertContains(t, stdout, "[TODO]")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestStatusDisplayFormatDoneSQLiteCLI(t *testing.T) {
@@ -344,7 +340,6 @@ func TestStatusDisplayFormatDoneSQLiteCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "Work", "-s", "DONE")
 
 	testutil.AssertContains(t, stdout, "[DONE]")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestStatusAbbreviationTSQLiteCLI(t *testing.T) {
@@ -406,7 +401,6 @@ func TestFilterByStatusTodoSQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "Task todo one")
 	testutil.AssertNotContains(t, stdout, "Task done one")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestFilterByStatusDoneSQLiteCLI(t *testing.T) {
@@ -422,7 +416,6 @@ func TestFilterByStatusDoneSQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "Task done two")
 	testutil.AssertNotContains(t, stdout, "Task todo two")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestFilterByStatusAbbreviationSQLiteCLI(t *testing.T) {
@@ -438,7 +431,6 @@ func TestFilterByStatusAbbreviationSQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "Task todo three")
 	testutil.AssertNotContains(t, stdout, "Task done three")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestFilterByStatusLongFlagSQLiteCLI(t *testing.T) {
@@ -454,7 +446,6 @@ func TestFilterByStatusLongFlagSQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "Task done four")
 	testutil.AssertNotContains(t, stdout, "Task todo four")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestDefaultViewFiltersDoneTasksSQLiteCLI(t *testing.T) {
@@ -470,7 +461,6 @@ func TestDefaultViewFiltersDoneTasksSQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "Task todo five")
 	testutil.AssertNotContains(t, stdout, "Task done five")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 	// Using -v all should show all tasks including DONE
 	stdoutAll := cli.MustExecute("-y", "Work", "-v", "all")
@@ -496,19 +486,16 @@ func TestResultCodeGetTasksSQLiteCLI(t *testing.T) {
 	// Add a task first
 	cli.MustExecute("-y", "Work", "add", "Task to list")
 
-	// Get tasks should return INFO_ONLY
-	stdout := cli.MustExecute("-y", "Work", "get")
-
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+	// Get tasks should complete successfully
+	_ = cli.MustExecute("-y", "Work", "get")
 }
 
 func TestResultCodeListEmptySQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
 
-	// Get empty list should return INFO_ONLY
+	// Get empty list should show message (no result code in text output)
 	stdout := cli.MustExecute("-y", "EmptyList")
 
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 	testutil.AssertContains(t, stdout, "No tasks")
 }
 
@@ -547,7 +534,6 @@ func TestResultCodeCompleteTaskChangesDoneStatusSQLiteCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "Work", "-s", "DONE")
 
 	testutil.AssertContains(t, stdout, "[DONE]")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 func TestResultCodeDeleteTaskSQLiteCLI(t *testing.T) {
@@ -686,7 +672,6 @@ func TestListViewSQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "Work")
 	testutil.AssertContains(t, stdout, "Personal")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestNoArgsShowsListsSQLiteCLI verifies that running todoat without arguments shows available lists
@@ -708,7 +693,6 @@ func TestNoArgsShowsListsSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "TASKS")
 	// Should show the list name
 	testutil.AssertContains(t, stdout, "l")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestNoArgsShowsListsEmptySQLiteCLI verifies that running todoat without arguments shows empty list message
@@ -722,7 +706,6 @@ func TestNoArgsShowsListsEmptySQLiteCLI(t *testing.T) {
 	if !strings.Contains(strings.ToLower(stdout), "no") || !strings.Contains(strings.ToLower(stdout), "list") {
 		t.Errorf("expected message about no lists, got: %s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListViewEmpty verifies that viewing lists with no lists shows INFO_ONLY message
@@ -736,7 +719,6 @@ func TestListViewEmptySQLiteCLI(t *testing.T) {
 	if !strings.Contains(strings.ToLower(stdout), "no") || !strings.Contains(strings.ToLower(stdout), "list") {
 		t.Errorf("expected message about no lists, got: %s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListViewJSON verifies that `todoat -y --json list` returns valid JSON
@@ -995,7 +977,6 @@ func TestPriorityFilterSingleSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Priority 1 task")
 	testutil.AssertNotContains(t, stdout, "Priority 2 task")
 	testutil.AssertNotContains(t, stdout, "Priority 5 task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPriorityFilterRange verifies that `todoat -y MyList -p 1,2,3` shows tasks with priority 1, 2, or 3
@@ -1017,7 +998,6 @@ func TestPriorityFilterRangeSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Priority 3 task")
 	testutil.AssertNotContains(t, stdout, "Priority 5 task")
 	testutil.AssertNotContains(t, stdout, "Priority 7 task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPriorityFilterHigh verifies that `todoat -y MyList -p high` shows priorities 1-4
@@ -1037,7 +1017,6 @@ func TestPriorityFilterHighSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Priority 4 task")
 	testutil.AssertNotContains(t, stdout, "Priority 5 task")
 	testutil.AssertNotContains(t, stdout, "Priority 9 task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPriorityFilterMedium verifies that `todoat -y MyList -p medium` shows priority 5
@@ -1055,7 +1034,6 @@ func TestPriorityFilterMediumSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "Priority 1 task")
 	testutil.AssertContains(t, stdout, "Priority 5 task")
 	testutil.AssertNotContains(t, stdout, "Priority 6 task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPriorityFilterLow verifies that `todoat -y MyList -p low` shows priorities 6-9
@@ -1075,7 +1053,6 @@ func TestPriorityFilterLowSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "Priority 5 task")
 	testutil.AssertContains(t, stdout, "Priority 6 task")
 	testutil.AssertContains(t, stdout, "Priority 9 task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPriorityFilterUndefined verifies that `todoat -y MyList -p 0` shows tasks with no priority set
@@ -1093,7 +1070,6 @@ func TestPriorityFilterUndefinedSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "No priority task")
 	testutil.AssertNotContains(t, stdout, "Priority 1 task")
 	testutil.AssertNotContains(t, stdout, "Priority 5 task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPriorityFilterNoMatch verifies that `todoat -y MyList -p 1` with no matching tasks returns INFO_ONLY with message
@@ -1110,7 +1086,6 @@ func TestPriorityFilterNoMatchSQLiteCLI(t *testing.T) {
 	if !strings.Contains(strings.ToLower(stdout), "no") || !strings.Contains(strings.ToLower(stdout), "task") {
 		t.Errorf("expected message about no matching tasks, got: %s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPriorityFilterJSON verifies that `todoat -y --json MyList -p 1` returns filtered JSON result
@@ -1161,7 +1136,6 @@ func TestPriorityFilterCombinedWithStatusSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "High priority TODO")
 	testutil.AssertNotContains(t, stdout, "High priority DONE")
 	testutil.AssertNotContains(t, stdout, "Low priority TODO")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPriorityFilterRangeSyntaxSQLiteCLI tests issue #072: priority range filter (1-3) should work
@@ -1183,7 +1157,6 @@ func TestPriorityFilterRangeSyntaxSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Priority 3 task")
 	testutil.AssertNotContains(t, stdout, "Priority 5 task")
 	testutil.AssertNotContains(t, stdout, "Priority 7 task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // =============================================================================
@@ -1207,7 +1180,6 @@ func TestStatusFilterCommaSeparatedSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Task TODO")
 	testutil.AssertContains(t, stdout, "Task IN-PROGRESS")
 	testutil.AssertNotContains(t, stdout, "Task DONE")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestStatusFilterAbbreviationCommaSeparatedSQLiteCLI tests issue #001: status filter should accept comma-separated abbreviations
@@ -1227,7 +1199,6 @@ func TestStatusFilterAbbreviationCommaSeparatedSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Task TODO")
 	testutil.AssertContains(t, stdout, "Task IN-PROGRESS")
 	testutil.AssertNotContains(t, stdout, "Task DONE")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // =============================================================================
@@ -1485,7 +1456,6 @@ func TestFilterByTagSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Work task")
 	testutil.AssertNotContains(t, stdout, "Home task")
 	testutil.AssertNotContains(t, stdout, "No tag task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterByMultipleTags verifies that `todoat -y MyList --tag work --tag urgent` shows tasks with ANY of the tags (OR logic)
@@ -1503,7 +1473,6 @@ func TestFilterByMultipleTagsSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Work task")
 	testutil.AssertContains(t, stdout, "Urgent task")
 	testutil.AssertNotContains(t, stdout, "Home task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterTagNoMatch verifies that `todoat -y MyList --tag nonexistent` returns INFO_ONLY with message
@@ -1520,7 +1489,6 @@ func TestFilterTagNoMatchSQLiteCLI(t *testing.T) {
 	if !strings.Contains(strings.ToLower(stdout), "no") || !strings.Contains(strings.ToLower(stdout), "task") {
 		t.Errorf("expected message about no matching tasks, got: %s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterTagJSON verifies that `todoat -y --json MyList --tag work` returns filtered JSON result with tags array
@@ -1559,7 +1527,6 @@ func TestFilterTagCombinedSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Work TODO task")
 	testutil.AssertNotContains(t, stdout, "Work DONE task")
 	testutil.AssertNotContains(t, stdout, "Home TODO task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // =============================================================================
@@ -1628,7 +1595,6 @@ func TestListTrashSQLiteCLI(t *testing.T) {
 	stdout := cli.MustExecute("-y", "list", "trash")
 
 	testutil.AssertContains(t, stdout, "TrashTest")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListTrashEmpty verifies that viewing empty trash returns INFO_ONLY
@@ -1636,9 +1602,7 @@ func TestListTrashEmptySQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
 
 	// View trash with no deleted lists
-	stdout := cli.MustExecute("-y", "list", "trash")
-
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+	_ = cli.MustExecute("-y", "list", "trash")
 }
 
 // TestListRestore verifies that `todoat -y list trash restore "Name"` restores a deleted list
@@ -1738,7 +1702,6 @@ func TestListInfoSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "InfoTest")
 	// Should show task count (2 tasks)
 	testutil.AssertContains(t, stdout, "2")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListInfoNotFoundSQLiteCLI verifies that `todoat list info NonExistent` shows error once (issue 002)
@@ -2030,7 +1993,6 @@ func TestDefaultViewSQLiteCLI(t *testing.T) {
 	if !strings.Contains(stdout, "TODO") && !strings.Contains(stdout, "IN-PROGRESS") {
 		t.Errorf("expected status indicators in default view, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestAllView verifies that `todoat MyList -v all` displays all task metadata fields
@@ -2052,7 +2014,6 @@ func TestAllViewSQLiteCLI(t *testing.T) {
 	if !strings.Contains(stdout, "work") || !strings.Contains(stdout, "urgent") {
 		t.Errorf("expected tags in 'all' view, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestCustomViewSelection verifies that `todoat MyList -v myview` loads view from views directory
@@ -2080,7 +2041,6 @@ fields:
 	stdout := cli.MustExecute("-y", "CustomViewTest", "-v", "minimal")
 
 	testutil.AssertContains(t, stdout, "Task with priority")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewListCommand verifies that `todoat view list` shows all available views (built-in and custom)
@@ -2104,7 +2064,6 @@ fields:
 	testutil.AssertContains(t, stdout, "all")
 	// Should show custom view
 	testutil.AssertContains(t, stdout, "custom")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewFieldOrdering verifies that custom view with reordered fields displays columns in specified order
@@ -2140,7 +2099,6 @@ fields:
 	if prioIdx >= summIdx {
 		t.Errorf("expected priority to appear before summary in output, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewFiltering verifies that view with filters only shows matching tasks (e.g., status != DONE)
@@ -2172,7 +2130,6 @@ filters:
 
 	testutil.AssertContains(t, stdout, "Active task")
 	testutil.AssertNotContains(t, stdout, "Completed task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewSorting verifies that view with sort rules orders tasks correctly (multi-level sort)
@@ -2210,7 +2167,6 @@ sort:
 	if highIdx >= medIdx || medIdx >= lowIdx {
 		t.Errorf("expected tasks sorted by priority (high, medium, low), got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewDateFilter verifies that view filters with relative dates (`today`, `+7d`, `-3d`) work correctly
@@ -2255,7 +2211,6 @@ filters:
 	testutil.AssertNotContains(t, stdout, "Due later task")
 	testutil.AssertNotContains(t, stdout, "Overdue task")
 	testutil.AssertNotContains(t, stdout, "No due date task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewTagFilter verifies that view filters on tags/categories work with `contains` and `in` operators
@@ -2289,7 +2244,6 @@ filters:
 	testutil.AssertContains(t, stdout, "Work task")
 	testutil.AssertContains(t, stdout, "Work and home task")
 	testutil.AssertNotContains(t, stdout, "Home task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestViewHierarchyPreserved verifies that custom views maintain parent-child tree structure display
@@ -2322,7 +2276,6 @@ fields:
 	if !strings.Contains(stdout, "├") && !strings.Contains(stdout, "└") {
 		t.Errorf("expected hierarchy preserved with tree characters in custom view, got:\n%s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestInvalidViewError verifies that invalid view name shows helpful error message
@@ -2690,7 +2643,6 @@ func TestListStatsSQLiteCLI(t *testing.T) {
 		t.Errorf("expected database size info, got: %s", stdout)
 	}
 
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListStatsInProgressStatusSQLiteCLI verifies that IN-PROGRESS tasks show "IN-PROGRESS" in stats output
@@ -2711,7 +2663,6 @@ func TestListStatsInProgressStatusSQLiteCLI(t *testing.T) {
 		t.Errorf("expected IN-PROGRESS in stats output, but found PROCESSING: %s", stdout)
 	}
 
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListStatsJSONSQLiteCLI verifies `todoat -y --json list stats` returns JSON statistics
@@ -2761,7 +2712,6 @@ func TestListStatsSpecificListSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "2") // 2 tasks in this list
 
 	// Should not show other list prominently
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListVacuumSQLiteCLI verifies `todoat -y list vacuum` reclaims space from deleted data
@@ -2939,7 +2889,6 @@ func TestBulkEmptyMatchSQLiteCLI(t *testing.T) {
 	// Try to bulk complete children of leaf task
 	stdout := cli.MustExecute("-y", "BulkEmptyTest", "complete", "LeafTask/*")
 
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 	// Should indicate no tasks were affected
 	testutil.AssertContains(t, stdout, "0")
 }
@@ -3395,7 +3344,6 @@ func TestFilterDueBeforeSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "Task due Feb 15")
 	// Tasks without due date should not match due date filters
 	testutil.AssertNotContains(t, stdout, "Task no due date")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterDueAfterSQLiteCLI verifies that `todoat -y MyList --due-after 2026-01-15` shows only tasks due after date
@@ -3421,7 +3369,6 @@ func TestFilterDueAfterSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "Task due Jan 10")
 	// Tasks without due date should not match due date filters
 	testutil.AssertNotContains(t, stdout, "Task no due date")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterDueRangeSQLiteCLI verifies that `todoat -y MyList --due-after 2026-01-15 --due-before 2026-02-01` shows tasks in range
@@ -3448,7 +3395,6 @@ func TestFilterDueRangeSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "Task due Jan 10")
 	testutil.AssertNotContains(t, stdout, "Task due Feb 15")
 	testutil.AssertNotContains(t, stdout, "Task no due date")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterCreatedAfterSQLiteCLI verifies that `todoat -y MyList --created-after 2026-01-01` shows tasks created after date
@@ -3464,12 +3410,10 @@ func TestFilterCreatedAfterSQLiteCLI(t *testing.T) {
 	// Filter for tasks created after a past date (should include all tasks)
 	stdout := cli.MustExecute("-y", "CreatedAfterTest", "--created-after", "2020-01-01")
 	testutil.AssertContains(t, stdout, "Task created now")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 	// Filter for tasks created after a future date (should include no tasks)
 	stdout = cli.MustExecute("-y", "CreatedAfterTest", "--created-after", "2030-01-01")
 	testutil.AssertNotContains(t, stdout, "Task created now")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterCreatedBeforeSQLiteCLI verifies that `todoat -y MyList --created-before 2026-01-15` shows tasks created before date
@@ -3485,12 +3429,10 @@ func TestFilterCreatedBeforeSQLiteCLI(t *testing.T) {
 	// Filter for tasks created before a future date (should include all tasks)
 	stdout := cli.MustExecute("-y", "CreatedBeforeTest", "--created-before", "2030-01-01")
 	testutil.AssertContains(t, stdout, "Task created now")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 	// Filter for tasks created before a past date (should include no tasks)
 	stdout = cli.MustExecute("-y", "CreatedBeforeTest", "--created-before", "2020-01-01")
 	testutil.AssertNotContains(t, stdout, "Task created now")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterNoDueDateSQLiteCLI verifies that tasks without due dates are excluded from due date filters
@@ -3513,13 +3455,11 @@ func TestFilterNoDueDateSQLiteCLI(t *testing.T) {
 	stdout = cli.MustExecute("-y", "NoDueDateTest", "--due-before", "2026-02-01")
 	testutil.AssertContains(t, stdout, "Task with due date")
 	testutil.AssertNotContains(t, stdout, "Task without due date")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 	// With due-after filter, only task with due date should appear
 	stdout = cli.MustExecute("-y", "NoDueDateTest", "--due-after", "2026-01-01")
 	testutil.AssertContains(t, stdout, "Task with due date")
 	testutil.AssertNotContains(t, stdout, "Task without due date")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestFilterCombinedStatusAndDateSQLiteCLI verifies that `todoat -y MyList -s TODO --due-before 2026-02-01` combines status and date filters
@@ -3544,7 +3484,6 @@ func TestFilterCombinedStatusAndDateSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "TODO task due later")
 	// Should not show DONE tasks even if due date matches
 	testutil.AssertNotContains(t, stdout, "Done task due soon")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // =============================================================================
@@ -3602,7 +3541,6 @@ func TestRelativeDateYesterdaySQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "Task due today")
 	testutil.AssertNotContains(t, stdout, "Task due 2 days ago")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestRelativeDateDaysAheadSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date +7d` sets due date 7 days from now
@@ -3640,7 +3578,6 @@ func TestRelativeDateDaysBackSQLiteCLI(t *testing.T) {
 
 	testutil.AssertContains(t, stdout, "Task due yesterday")
 	testutil.AssertNotContains(t, stdout, "Task due 5 days ago")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestRelativeDateWeeksSQLiteCLI verifies that `todoat -y MyList add "Task" --due-date +2w` sets due date 2 weeks from now
@@ -3713,7 +3650,6 @@ func TestTrashAutoPurgeDefaultSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "OldTrashList")
 	// Output should indicate purge happened
 	testutil.AssertContains(t, stdout, "purged")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestTrashAutoPurgeConfigurableSQLiteCLI verifies that `trash.retention_days: 7`
@@ -3736,7 +3672,6 @@ func TestTrashAutoPurgeConfigurableSQLiteCLI(t *testing.T) {
 
 	// The old list should be purged and not visible
 	testutil.AssertNotContains(t, stdout, "WeekOldList")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestTrashAutoPurgeDisabledSQLiteCLI verifies that `trash.retention_days: 0`
@@ -3759,7 +3694,6 @@ func TestTrashAutoPurgeDisabledSQLiteCLI(t *testing.T) {
 
 	// The list should still be visible
 	testutil.AssertContains(t, stdout, "ForeverList")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestTrashAutoPurgePreservesRecentSQLiteCLI verifies that lists deleted <30 days ago
@@ -3779,7 +3713,6 @@ func TestTrashAutoPurgePreservesRecentSQLiteCLI(t *testing.T) {
 
 	// The recent list should still be visible
 	testutil.AssertContains(t, stdout, "RecentList")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // =============================================================================
@@ -4029,7 +3962,6 @@ func TestListShowPropertiesSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "#AABBCC")                   // Color
 	testutil.AssertContains(t, stdout, "Test description for show") // Description
 	testutil.AssertContains(t, stdout, "2")                         // Task count
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListUpdateJSON verifies that `todoat --json list update "Work" --color "#FF5733"` returns JSON
@@ -4336,7 +4268,6 @@ func TestTaskTagsDisplaySQLiteCLI(t *testing.T) {
 	if !strings.Contains(stdout, "important") && !strings.Contains(stdout, "urgent") {
 		t.Errorf("expected tags to be displayed in 'all' view, got: %s", stdout)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListTags verifies that `todoat tags` lists all unique tags across all tasks
@@ -4360,7 +4291,6 @@ func TestListTagsSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "urgent")
 	testutil.AssertContains(t, stdout, "home")
 	testutil.AssertContains(t, stdout, "project-x")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListTagsWithCount verifies that `todoat tags` shows task counts for each tag
@@ -4405,7 +4335,6 @@ func TestListTagsForListSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "list1-only")
 	testutil.AssertContains(t, stdout, "shared")
 	testutil.AssertNotContains(t, stdout, "list2-only")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestListTagsJSON verifies that `todoat --json tags` returns JSON array of tags
@@ -4457,10 +4386,7 @@ func TestListTagsEmptySQLiteCLI(t *testing.T) {
 	cli.MustExecute("-y", "NoTagsList", "add", "Task without tags")
 
 	// List tags - should show appropriate message
-	stdout := cli.MustExecute("-y", "tags")
-
-	// Should indicate no tags or show empty result
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
+	_ = cli.MustExecute("-y", "tags")
 }
 
 // TestTagsCasePreserved verifies that tags are case-preserved but comparison is case-insensitive
@@ -5287,4 +5213,34 @@ func TestAllFlagAcceptedSQLiteCLI(t *testing.T) {
 	// The -a flag should be parseable even if it doesn't change behavior in no-prompt mode
 	stdout := cli.MustExecute("-y", "Work", "complete", "Test task for all flag")
 	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+}
+
+// =============================================================================
+// Issue #85: INFO_ONLY result code should not appear in text output
+// =============================================================================
+
+// TestInfoOnlyNotInTextOutput verifies that INFO_ONLY result code does not appear
+// in text output mode (only in --json output). This is a regression test for issue #85.
+func TestInfoOnlyNotInTextOutputSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with some tasks
+	cli.MustExecute("-y", "list", "create", "InfoTest")
+	cli.MustExecute("-y", "InfoTest", "add", "Task 1")
+	cli.MustExecute("-y", "InfoTest", "add", "Task 2")
+
+	// Test 1: `todoat -y Work` (get tasks) should NOT contain INFO_ONLY
+	stdout := cli.MustExecute("-y", "InfoTest")
+	testutil.AssertNotContains(t, stdout, "INFO_ONLY")
+	testutil.AssertContains(t, stdout, "Task 1")
+	testutil.AssertContains(t, stdout, "Task 2")
+
+	// Test 2: `todoat -y list` (list all lists) should NOT contain INFO_ONLY
+	stdout = cli.MustExecute("-y", "list")
+	testutil.AssertNotContains(t, stdout, "INFO_ONLY")
+	testutil.AssertContains(t, stdout, "InfoTest")
+
+	// Test 3: JSON output SHOULD contain INFO_ONLY (this is correct behavior)
+	stdout = cli.MustExecute("-y", "--json", "InfoTest")
+	testutil.AssertContains(t, stdout, `"INFO_ONLY"`)
 }

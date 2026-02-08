@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -18,6 +19,23 @@ import (
 	"syscall"
 	"time"
 )
+
+// MaxConsecutiveErrors is the number of consecutive sync failures before the daemon shuts down.
+// This prevents infinite error loops that could consume resources.
+const MaxConsecutiveErrors = 5
+
+// MaxBackoffSeconds is the maximum backoff delay between retries.
+const MaxBackoffSeconds = 60
+
+// CalculateBackoff returns the backoff duration for the given number of consecutive errors.
+// Uses exponential backoff: 2^consecutiveErrors seconds, capped at MaxBackoffSeconds.
+func CalculateBackoff(consecutiveErrors int) time.Duration {
+	backoffSeconds := math.Pow(2, float64(consecutiveErrors))
+	if backoffSeconds > MaxBackoffSeconds {
+		backoffSeconds = MaxBackoffSeconds
+	}
+	return time.Duration(backoffSeconds) * time.Second
+}
 
 // Config holds daemon configuration.
 type Config struct {
@@ -92,6 +110,10 @@ type Daemon struct {
 	backends      []*backendEntry          // List of backends with their sync functions
 	backendStates map[string]*BackendState // Per-backend state tracking
 	backendsMu    sync.RWMutex             // Protects backends and backendStates
+
+	// Error loop prevention (Issue #82)
+	consecutiveErrors     int      // Consecutive sync errors for legacy single-backend
+	testBackoffMultiplier *float64 // Multiplier for backoff duration (nil = 1.0, 0 = skip sleep)
 }
 
 // New creates a new Daemon instance.
@@ -109,6 +131,24 @@ func New(cfg *Config) *Daemon {
 // use AddBackendSyncFunc instead.
 func (d *Daemon) SetSyncFunc(f func() error) {
 	d.syncFunc = f
+}
+
+// SetTestBackoffMultiplier sets a multiplier for backoff duration (for testing).
+// Pass 0 to skip sleep entirely, or a fraction to speed up tests.
+func (d *Daemon) SetTestBackoffMultiplier(multiplier float64) {
+	d.testBackoffMultiplier = &multiplier
+}
+
+// getBackoffDuration returns the actual backoff duration, applying test multiplier if set.
+func (d *Daemon) getBackoffDuration(consecutiveErrors int) time.Duration {
+	backoff := CalculateBackoff(consecutiveErrors)
+	if d.testBackoffMultiplier != nil {
+		if *d.testBackoffMultiplier == 0 {
+			return 0
+		}
+		return time.Duration(float64(backoff) * *d.testBackoffMultiplier)
+	}
+	return backoff
 }
 
 // AddBackendSyncFunc adds a backend sync function using the global interval.
@@ -283,7 +323,33 @@ func (d *Daemon) Start() error {
 			return nil
 
 		case <-ticker.C:
-			d.performSync()
+			syncFailed := d.performSync()
+
+			// Error loop prevention (Issue #82)
+			if syncFailed {
+				d.consecutiveErrors++
+				d.log("Consecutive errors: %d/%d", d.consecutiveErrors, MaxConsecutiveErrors)
+
+				if d.consecutiveErrors >= MaxConsecutiveErrors {
+					d.log("Too many consecutive errors, shutting down daemon")
+					d.cleanup()
+					return nil
+				}
+
+				// Apply exponential backoff before next sync
+				backoff := d.getBackoffDuration(d.consecutiveErrors)
+				if backoff > 0 {
+					d.log("Backing off for %v before next sync", backoff)
+					time.Sleep(backoff)
+				}
+			} else {
+				// Reset consecutive error count on success
+				if d.consecutiveErrors > 0 {
+					d.log("Sync succeeded, resetting consecutive error count (was %d)", d.consecutiveErrors)
+				}
+				d.consecutiveErrors = 0
+			}
+
 			// Reset idle timer
 			if idleTimer != nil {
 				if !idleTimer.Stop() {
@@ -387,7 +453,9 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 	_ = encoder.Encode(resp)
 }
 
-func (d *Daemon) performSync() {
+// performSync executes a sync operation and returns whether it failed.
+// Returns true if the sync failed (for error tracking), false on success.
+func (d *Daemon) performSync() bool {
 	// Serialize concurrent performSync calls (Issue #52).
 	// The ticker and IPC notify handler can both trigger performSync.
 	d.syncMu.Lock()
@@ -400,6 +468,8 @@ func (d *Daemon) performSync() {
 
 	d.log("Starting sync (count: %d)", count)
 
+	var syncFailed bool
+
 	// Check if we have multi-backend configuration
 	d.backendsMu.RLock()
 	hasBackends := len(d.backends) > 0
@@ -407,19 +477,25 @@ func (d *Daemon) performSync() {
 
 	if hasBackends {
 		// Multi-backend sync (Issue #40)
+		// Multi-backend has its own error tracking per backend, doesn't trigger global shutdown
 		d.performMultiBackendSync(count)
+		syncFailed = false
 	} else if d.syncFunc != nil {
 		// Legacy single-backend sync
 		if err := d.syncFunc(); err != nil {
 			d.log("Sync error (count: %d): %v", count, err)
+			syncFailed = true
 		} else {
 			d.log("Sync completed (count: %d)", count)
+			syncFailed = false
 		}
 	}
 
 	d.mu.Lock()
 	d.lastSync = time.Now()
 	d.mu.Unlock()
+
+	return syncFailed
 }
 
 // performMultiBackendSync iterates through all backends and syncs each one.

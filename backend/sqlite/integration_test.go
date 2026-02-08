@@ -369,7 +369,6 @@ func TestCommandAbbreviationsIntegration(t *testing.T) {
 	// Test 'g' for get
 	stdout = cli.MustExecute("-y", "AbbrevTest", "g")
 	testutil.AssertContains(t, stdout, "Task via a")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 	// Test 'u' for update
 	stdout = cli.MustExecute("-y", "AbbrevTest", "u", "Task via a", "-p", "1")

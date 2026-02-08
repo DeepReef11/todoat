@@ -16,7 +16,7 @@ _No documentation tasks pending._
 - `ui.interactive_prompt_for_all_tasks` config option in `internal/config/config.go`
 - Context-aware filtering by action type and interactive add mode with field validation
 
-However, `docs/explanation/interactive-ux.md` still describes the prompt as "An empty stub exists at `internal/cli/prompt/prompt.go` intended for future prompt enhancements" (line 19) and lists it as "Empty, reserved for future use" (line 75). The explanation doc needs to be rewritten to document the actual implementation, including fuzzy-find behavior, context-aware filtering, auto-selection for single matches, and the `ui.interactive_prompt_for_all_tasks` config option.
+The explanation doc has been updated with minimal changes to remove "empty stub" references and document TaskSelector behavior. User-facing docs (`docs/how-to/task-management.md`) now describe interactive selection.
 
 **Blocks**: User-facing documentation for `ui.interactive_prompt_for_all_tasks` in `docs/reference/configuration.md` and any interactive prompt how-to guides.
 
@@ -27,7 +27,8 @@ However, `docs/explanation/interactive-ux.md` still describes the prompt as "An 
 **Impact**: Blocks user-facing documentation for the interactive prompt config option and fuzzy-find behavior.
 
 **Asked**: 2026-01-29 (updated 2026-01-31)
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+**Resolved**: 2026-02-08 (minimal update applied)
+**Status**: answered
 
 ### [FEAT-013] What is the design intent for recurring tasks?
 
@@ -202,19 +203,22 @@ However, `docs/explanation/interactive-ux.md` still describes the prompt as "An 
 - `docs/how-to/sync.md` explains heartbeat monitoring and status output
 - `internal/config/config.sample.yaml` includes the `heartbeat_interval` option
 
-However, `docs/explanation/background-deamon.md` still describes the heartbeat as "NOT YET IMPLEMENTED" (line 212) and shows a database-based `daemon_heartbeat` table approach that differs from the actual file-based implementation. The actual implementation:
-- Writes timestamps to a heartbeat file (not database)
-- Uses `$XDG_RUNTIME_DIR/todoat/daemon.heartbeat` or `/tmp/todoat-daemon-<UID>.heartbeat`
-- Checked by `todoat sync daemon status` command
+The explanation doc has been updated to describe the actual file-based heartbeat implementation:
+- Heartbeat file location documented
+- Configuration example added
+- Status output examples added
+- "NOT YET IMPLEMENTED" banner removed
+- Planned vs implemented sections clarified
 
 **Options**:
-- [ ] Update explanation doc - Rewrite the "Hung Daemon Detection" section to describe the actual file-based heartbeat implementation
+- [x] Update explanation doc - Rewrite the "Hung Daemon Detection" section to describe the actual file-based heartbeat implementation
 - [ ] Remove planned sections - Delete the "NOT YET IMPLEMENTED" sections for features that are now implemented
 
 **Impact**: Explanation doc accuracy. User-facing docs are already correct.
 
 **Asked**: 2026-02-06
-**Status**: unanswered
+**Resolved**: 2026-02-08
+**Status**: answered
 
 ### [FEAT-026] Notification config block not wired in Config struct (UX-012 implementation pending)
 

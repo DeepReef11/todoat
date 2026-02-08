@@ -209,8 +209,6 @@ COMMIT;
 
 ## Hung Daemon Detection and Recovery
 
-> **NOT YET IMPLEMENTED** — This entire section describes planned features. The `daemon_heartbeat` table, heartbeat worker, stuck task detection, exponential backoff, and `MaxConsecutiveErrors` mechanism do not exist in the codebase. See issue #74 for the heartbeat mechanism feature request.
-
 ### Problem
 Daemon may hang or loop infinitely due to:
 - Network timeouts to Nextcloud/Todoist
@@ -219,129 +217,86 @@ Daemon may hang or loop infinitely due to:
 - Deadlocks or blocking I/O
 - Resource exhaustion
 
-### Planned Solution: Heartbeat Mechanism
+### Heartbeat Mechanism (Implemented)
 
-#### Planned Heartbeat Implementation (Asynchronous)
-```sql
--- Planned database schema addition (new table for todoat)
-CREATE TABLE daemon_heartbeat (
-    worker_id TEXT PRIMARY KEY,
-    last_heartbeat TIMESTAMP NOT NULL,
-    pid INTEGER NOT NULL,
-    status TEXT NOT NULL  -- 'idle', 'processing', 'error'
-);
+The daemon writes timestamps to a heartbeat file at a configurable interval. The `todoat sync daemon status` command checks this heartbeat to detect hung daemons.
+
+**Heartbeat file location:**
+- `$XDG_RUNTIME_DIR/todoat/daemon.heartbeat` (preferred)
+- `/tmp/todoat-daemon-<UID>.heartbeat` (fallback)
+
+**Configuration:**
+```yaml
+sync:
+  daemon:
+    heartbeat_interval: 5  # seconds (default: 5)
 ```
+
+**Status output with heartbeat:**
+```
+Sync daemon is running
+  PID: 12345
+  Interval: 60 seconds
+  Sync count: 5
+  Last sync: 2026-01-30T10:15:00Z
+  Heartbeat: healthy
+```
+
+A heartbeat is considered stale if older than 2x the configured interval, indicating the daemon may be hung:
+
+```
+  Heartbeat: UNHEALTHY - heartbeat is stale - daemon may be hung
+```
+
+### CLI Health Check
+
+The `status` command reads the heartbeat file and compares the timestamp:
 
 ```go
-// Planned Go implementation for todoat
-type HeartbeatWorker struct {
-    workerID      string
-    interval      time.Duration
-    running       bool
-    currentStatus string
-    mu            sync.Mutex
-    stopChan      chan struct{}
-    db            *sql.DB
+// Check heartbeat health
+timeSinceHeartbeat := time.Since(lastHeartbeat)
+if timeSinceHeartbeat > 2 * heartbeatInterval {
+    // Daemon is likely hung
+    return "UNHEALTHY - heartbeat is stale"
 }
-
-func (h *HeartbeatWorker) Start() {
-    go func() {
-        ticker := time.NewTicker(h.interval)
-        defer ticker.Stop()
-
-        for {
-            select {
-            case <-ticker.C:
-                h.mu.Lock()
-                status := h.currentStatus
-                h.mu.Unlock()
-
-                _, err := h.db.Exec(`
-                    INSERT OR REPLACE INTO daemon_heartbeat
-                    (worker_id, last_heartbeat, pid, status)
-                    VALUES (?, datetime('now'), ?, ?)
-                `, h.workerID, os.Getpid(), status)
-                if err != nil {
-                    log.Printf("Heartbeat update failed: %v", err)
-                }
-
-            case <-h.stopChan:
-                return
-            }
-        }
-    }()
-}
-
-func (h *HeartbeatWorker) SetStatus(status string) {
-    h.mu.Lock()
-    h.currentStatus = status
-    h.mu.Unlock()
-}
+return "healthy"
 ```
 
-#### Planned CLI Health Check (Instant)
-```go
-// Before attempting to communicate with daemon (no waiting, just read)
-func checkDaemonHealth(db *sql.DB, workerID string) (bool, int) {
-    var lastHeartbeat time.Time
-    var pid int
+### Force Kill Command
 
-    err := db.QueryRow(`
-        SELECT last_heartbeat, pid
-        FROM daemon_heartbeat
-        WHERE worker_id = ?
-    `, workerID).Scan(&lastHeartbeat, &pid)
+When the daemon appears hung (stale heartbeat or unresponsive), use the kill command:
 
-    if err != nil {
-        return false, 0
-    }
-
-    timeSinceHeartbeat := time.Since(lastHeartbeat)
-
-    if timeSinceHeartbeat > 30*time.Second {
-        // Daemon is hung
-        return false, pid
-    }
-
-    return true, pid
-}
+```bash
+todoat sync daemon kill
 ```
 
-### Planned Task Timeout Protection
+This sends SIGTERM, waits briefly, then sends SIGKILL if needed, and cleans up the PID file and socket.
+
+### Planned Enhancements
+
+> The following features are not yet implemented but are planned for future versions.
 
 #### Per-Task Timeout
 ```go
-// In daemon task processing loop
+// Planned: In daemon task processing loop
 const MaxTaskDuration = 5 * time.Minute
 
 func processTaskWithTimeout(task SyncTask) error {
     ctx, cancel := context.WithTimeout(context.Background(), MaxTaskDuration)
     defer cancel()
-
-    done := make(chan error, 1)
-    go func() {
-        done <- processTask(task)
-    }()
-
-    select {
-    case err := <-done:
-        return err
-    case <-ctx.Done():
-        markTaskFailed(task.ID, "Task exceeded maximum duration")
-        return fmt.Errorf("task %s timed out after %v", task.ID, MaxTaskDuration)
-    }
+    // ... process with timeout
 }
 ```
 
 #### Stuck Task Detection
 ```sql
--- CLI or monitoring can detect stuck tasks
+-- Planned: CLI or monitoring can detect stuck tasks
 SELECT id, worker_id, claimed_at
 FROM sync_queue
 WHERE status = 'processing'
   AND claimed_at < datetime('now', '-10 minutes');
 
--- Reset stuck tasks (if daemon confirmed dead/hung)
+-- Planned: Reset stuck tasks (if daemon confirmed dead/hung)
 UPDATE sync_queue
 SET status = 'pending',
     worker_id = NULL,

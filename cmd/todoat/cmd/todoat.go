@@ -647,9 +647,6 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 
 	if len(lists) == 0 {
 		_, _ = fmt.Fprintln(stdout, "No lists found. Create one with: todoat list create \"MyList\"")
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -661,9 +658,6 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 		_, _ = fmt.Fprintf(stdout, "%-20s %d\n", cl.Name, cl.TaskCount)
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -1167,9 +1161,6 @@ func doListInfo(ctx context.Context, be backend.TaskManager, name string, cfg *C
 	}
 	_, _ = fmt.Fprintf(stdout, "Tasks: %d\n", len(tasks))
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -1282,9 +1273,6 @@ func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, s
 		if purgedCount == 0 {
 			_, _ = fmt.Fprintln(stdout, "Trash is empty.")
 		}
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -1299,9 +1287,6 @@ func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, s
 		_, _ = fmt.Fprintf(stdout, "%-20s %s\n", l.Name, deletedStr)
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -2345,9 +2330,6 @@ func doListStats(ctx context.Context, be backend.TaskManager, listName string, c
 		_, _ = fmt.Fprintf(stdout, "Last vacuum: %s\n", stats.LastVacuum.Format("2006-01-02 15:04:05"))
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -3702,10 +3684,6 @@ func doGetWithView(ctx context.Context, be backend.TaskManager, tasks []backend.
 		}
 	}
 
-	// Emit INFO_ONLY result code in no-prompt mode
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -3854,9 +3832,6 @@ func doViewList(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 		_, _ = fmt.Fprintf(stdout, "  - %s (%s)\n", v.Name, viewType)
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -4017,7 +3992,6 @@ func doViewCreateNonInteractive(viewName, fieldsFlag, sortFlag, filterStatusFlag
 	}
 
 	_, _ = fmt.Fprintf(stdout, "View '%s' created at %s\n", viewName, viewPath)
-	_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
 	return nil
 }
 
@@ -4818,9 +4792,6 @@ func doBulkUpdate(ctx context.Context, be backend.TaskManager, list *backend.Lis
 			return nil
 		}
 		_, _ = fmt.Fprintf(stdout, "Updated 0 tasks under \"%s\"\n", parent.Summary)
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -5039,9 +5010,6 @@ func doBulkComplete(ctx context.Context, be backend.TaskManager, list *backend.L
 			return nil
 		}
 		_, _ = fmt.Fprintf(stdout, "Completed 0 tasks under \"%s\"\n", parent.Summary)
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -5174,9 +5142,6 @@ func doBulkDelete(ctx context.Context, be backend.TaskManager, list *backend.Lis
 			return nil
 		}
 		_, _ = fmt.Fprintf(stdout, "Deleted 0 tasks under \"%s\"\n", parent.Summary)
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -6945,9 +6910,6 @@ func doSyncStatus(cfg *Config, stdout io.Writer, verbose bool, jsonOutput bool) 
 		// Show additional metadata when verbose
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -7106,9 +7068,6 @@ func doSyncQueueView(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 		}
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -7215,9 +7174,6 @@ func doSyncConflictsView(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 		}
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -8205,9 +8161,6 @@ func doNotificationLogView(cfg *Config, stdout io.Writer, jsonOutput bool) error
 		}
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -8400,9 +8353,6 @@ func doDaemonKill(cfg *Config, stdout io.Writer) error {
 	data, err := os.ReadFile(pidPath)
 	if err != nil {
 		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running (no PID file)")
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -8474,9 +8424,6 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 	// Check if already running
 	if isDaemonRunning(cfg, pidPath) {
 		_, _ = fmt.Fprintln(stdout, "Sync daemon is already running")
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -8766,9 +8713,6 @@ func doDaemonStop(cfg *Config, stdout io.Writer) error {
 
 	if !isDaemonRunning(cfg, pidPath) {
 		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running")
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -8828,9 +8772,6 @@ func doDaemonStatus(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 			return nil
 		}
 		_, _ = fmt.Fprintln(stdout, "Sync daemon is not running")
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 		return nil
 	}
 
@@ -8953,9 +8894,6 @@ func doDaemonStatus(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 		}
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -9914,9 +9852,6 @@ func doMigrate(cfg *Config, stdout io.Writer, fromBackend, toBackend, listName s
 		for _, task := range result.Tasks {
 			_, _ = fmt.Fprintf(stdout, "  - %s\n", task.Summary)
 		}
-		if cfg != nil && cfg.NoPrompt {
-			_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-		}
 	} else {
 		listInfo := ""
 		if listName != "" {
@@ -10067,9 +10002,6 @@ func doMigrateTargetInfo(cfg *Config, stdout io.Writer, targetBackend, listName 
 		_, _ = fmt.Fprintf(stdout, "  - %s (%s)\n", t.Summary, views.StatusToString(t.Status))
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -10221,9 +10153,6 @@ func doReminderStatus(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	_, _ = fmt.Fprintf(stdout, "  OS Notification: %v\n", reminderCfg.OSNotification)
 	_, _ = fmt.Fprintf(stdout, "  Log Notification: %v\n", reminderCfg.LogNotification)
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -10453,9 +10382,6 @@ func doReminderList(cfg *Config, stdout io.Writer, jsonOutput bool) error {
 		}
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -10893,9 +10819,6 @@ func doConfigGet(cmd *cobra.Command, stdout io.Writer, cfg *Config, key string, 
 	} else {
 		_, _ = fmt.Fprintln(stdout, value)
 	}
-	if cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -10915,9 +10838,6 @@ func outputConfig(stdout io.Writer, appConfig *config.Config, jsonOutput bool, n
 	}
 
 	_, _ = fmt.Fprint(stdout, string(data))
-	if noPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 
@@ -11695,9 +11615,6 @@ func newConfigPathCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			}
 
 			_, _ = fmt.Fprintln(stdout, configPath)
-			if cfg.NoPrompt {
-				_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-			}
 			return nil
 		},
 		SilenceUsage:  true,
@@ -12016,9 +11933,6 @@ func doTags(ctx context.Context, be backend.TaskManager, listName string, cfg *C
 		}
 	}
 
-	if cfg != nil && cfg.NoPrompt {
-		_, _ = fmt.Fprintln(stdout, ResultInfoOnly)
-	}
 	return nil
 }
 

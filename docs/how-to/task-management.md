@@ -587,7 +587,21 @@ todoat MyList complete "groceries"
 
 ### Multiple Matches
 
-When multiple tasks match, todoat shows an error with details and UIDs so you can select the exact task:
+When multiple tasks match your search term, todoat enters interactive selection mode:
+
+```
+Multiple tasks match 'review':
+Filter (or press Enter to show all):
+
+  1) Review PR #456 [TODO, P2, due: 2026-02-01]
+  2) Code review guidelines [TODO, tags: docs]
+  3) Review meeting notes [TODO, P5]
+Select (0 to cancel):
+```
+
+Type a filter term to narrow the list, or press Enter to show all matches. Then select by number.
+
+If you're running in non-interactive mode (`-y` / `--no-prompt`), todoat shows an error with UIDs instead:
 
 ```
 Error: multiple tasks match 'review'. Use --uid to specify:

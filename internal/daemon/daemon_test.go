@@ -1014,6 +1014,163 @@ func TestDaemonHealthCheckBeforeIPC(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Issue #82: Daemon Error Loop Prevention with Exponential Backoff
+// =============================================================================
+
+// TestDaemonExponentialBackoff verifies backoff delays: 1s, 2s, 4s, 8s, 16s (max 60s)
+func TestDaemonExponentialBackoff(t *testing.T) {
+	// Test the backoff calculation function
+	testCases := []struct {
+		consecutiveErrors int
+		expectedSeconds   float64
+	}{
+		{1, 2},   // 2^1 = 2
+		{2, 4},   // 2^2 = 4
+		{3, 8},   // 2^3 = 8
+		{4, 16},  // 2^4 = 16
+		{5, 32},  // 2^5 = 32
+		{6, 60},  // 2^6 = 64, but capped at 60
+		{10, 60}, // 2^10 = 1024, but capped at 60
+	}
+
+	for _, tc := range testCases {
+		backoff := CalculateBackoff(tc.consecutiveErrors)
+		expectedDuration := time.Duration(tc.expectedSeconds) * time.Second
+		if backoff != expectedDuration {
+			t.Errorf("CalculateBackoff(%d) = %v, want %v", tc.consecutiveErrors, backoff, expectedDuration)
+		}
+	}
+}
+
+// TestDaemonMaxConsecutiveErrors verifies daemon shuts down after 5 consecutive errors
+func TestDaemonMaxConsecutiveErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    10 * time.Millisecond, // Fast interval for testing
+		IdleTimeout: 0,
+	}
+
+	d := New(cfg)
+
+	// Count how many times sync was attempted
+	var syncAttempts int32
+
+	// Always fail the sync
+	d.SetSyncFunc(func() error {
+		atomic.AddInt32(&syncAttempts, 1)
+		return fmt.Errorf("simulated sync failure")
+	})
+
+	// Enable fast backoff for testing (skip actual delays)
+	d.SetTestBackoffMultiplier(0) // 0 = instant, no actual sleep
+
+	// Start daemon
+	done := make(chan struct{})
+	startTime := time.Now()
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for daemon to exit due to max consecutive errors
+	select {
+	case <-done:
+		// Good, daemon exited
+	case <-time.After(5 * time.Second):
+		t.Fatalf("daemon should have exited due to MaxConsecutiveErrors")
+		d.Stop()
+	}
+
+	elapsed := time.Since(startTime)
+
+	// Verify daemon exited quickly (not waiting for actual backoff)
+	if elapsed > 3*time.Second {
+		t.Errorf("daemon should exit quickly with test multiplier, took %v", elapsed)
+	}
+
+	// Verify sync was attempted MaxConsecutiveErrors times
+	attempts := atomic.LoadInt32(&syncAttempts)
+	if attempts != int32(MaxConsecutiveErrors) {
+		t.Errorf("expected %d sync attempts before shutdown, got %d", MaxConsecutiveErrors, attempts)
+	}
+
+	// Note: We don't check the log file here because cleanup() removes it.
+	// The critical verification is that:
+	// 1. The daemon exited (not timed out)
+	// 2. It exited after exactly MaxConsecutiveErrors attempts
+}
+
+// TestDaemonErrorCountReset verifies successful operation resets consecutive error count
+func TestDaemonErrorCountReset(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    10 * time.Millisecond,
+		IdleTimeout: 0,
+	}
+
+	d := New(cfg)
+
+	// Pattern: fail 3 times, succeed, fail 3 times, succeed, ...
+	// This should never trigger MaxConsecutiveErrors since we reset after each success
+	var syncAttempts int32
+	var successCount int32
+
+	d.SetSyncFunc(func() error {
+		attempt := atomic.AddInt32(&syncAttempts, 1)
+		// Fail first 3, succeed on 4th, fail next 3, succeed on 8th, etc.
+		if attempt%4 == 0 {
+			atomic.AddInt32(&successCount, 1)
+			return nil // Success - should reset error count
+		}
+		return fmt.Errorf("simulated failure %d", attempt)
+	})
+
+	// Enable fast backoff for testing
+	d.SetTestBackoffMultiplier(0)
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for enough sync cycles to verify error count reset
+	// We need at least 12 attempts (3 successes at attempts 4, 8, 12)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt32(&successCount) >= 3 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	// Daemon should NOT have exited due to MaxConsecutiveErrors
+	// (it should have been stopped by us)
+	if atomic.LoadInt32(&successCount) < 3 {
+		t.Errorf("expected at least 3 successful syncs to verify error reset, got %d", successCount)
+	}
+
+	// Note: We don't check the log file here because cleanup() removes it.
+	// The critical verification is that the daemon:
+	// 1. Continued running through multiple fail/success cycles
+	// 2. Had to be stopped manually (not auto-shutdown due to errors)
+	// 3. Achieved at least 3 successful syncs
+}
+
 // TestDaemonHeartbeatDisabled verifies daemon works without heartbeat when interval is 0.
 func TestDaemonHeartbeatDisabled(t *testing.T) {
 	tmpDir := t.TempDir()

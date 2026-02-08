@@ -37,7 +37,6 @@ func TestNotificationLog(t *testing.T) {
 
 	// Should contain the test notification
 	testutil.AssertContains(t, stdout, "TEST")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestNotificationLogClear tests that 'todoat notification log clear' clears the log file

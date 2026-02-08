@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Daemon error loop prevention with exponential backoff (#82)
+  - `MaxConsecutiveErrors` constant (5) triggers graceful shutdown after repeated sync failures
+  - Exponential backoff between retries: 2^n seconds, capped at 60 seconds
+  - Prevents infinite error loops that could consume system resources
 - Sync queue atomic task claiming with deduplication (#81)
   - New `ClaimNextOperation` method uses BEGIN IMMEDIATE for exclusive lock
   - Prevents race conditions when multiple daemon instances briefly coexist
@@ -27,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Default remains 5 minutes for backwards compatibility
 
 ### Changed
+- Removed redundant `ResultInfoOnly` output from info-only CLI commands in no-prompt mode (list, get, stats, status, queue views)
+- Updated `docs/explanation/background-deamon.md` to document actual file-based heartbeat implementation (removed "NOT YET IMPLEMENTED" sections)
+- Updated `docs/explanation/interactive-ux.md` to document TaskSelector component and interactive task selection behavior
 - OS notification channel now consolidated into single cross-platform implementation (`internal/notification/os.go`)
 - Default view config path lookup now uses `config.GetConfigDir()` directly instead of deriving from DBPath
 

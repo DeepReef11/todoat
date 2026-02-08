@@ -134,8 +134,6 @@ func TestMigrateDryRun(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Task B")
 	testutil.AssertContains(t, stdout, "Task C")
 	testutil.AssertContains(t, stdout, "dry-run")
-	// Result code should be INFO since no changes were made
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 	// Verify source tasks still exist and target is empty
 	sourceOutput := cli.MustExecute("-y", "Work")

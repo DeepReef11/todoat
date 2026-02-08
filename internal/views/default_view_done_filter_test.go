@@ -28,7 +28,6 @@ func TestDefaultViewFiltersDoneTasks(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Active task")
 	// Default view should NOT show completed tasks
 	testutil.AssertNotContains(t, stdout, "Completed task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestDefaultViewFiltersMultipleStatuses verifies correct filtering of various statuses
@@ -53,7 +52,6 @@ func TestDefaultViewFiltersMultipleStatuses(t *testing.T) {
 	testutil.AssertContains(t, stdout, "In progress task")
 	// Should NOT show DONE/COMPLETED tasks
 	testutil.AssertNotContains(t, stdout, "Done task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestAllViewShowsCompletedTasks verifies that 'all' view still shows completed tasks
@@ -73,5 +71,4 @@ func TestAllViewShowsCompletedTasks(t *testing.T) {
 	// 'all' view should show both active and completed tasks
 	testutil.AssertContains(t, stdout, "Active task")
 	testutil.AssertContains(t, stdout, "Completed task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }

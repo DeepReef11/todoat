@@ -31,7 +31,6 @@ func TestPaginationDefault(t *testing.T) {
 	// All 10 tasks should be visible
 	testutil.AssertContains(t, stdout, "Task A")
 	testutil.AssertContains(t, stdout, "Task J")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPaginationWithLimit verifies that `todoat MyList --limit 20` limits output to 20 tasks
@@ -56,7 +55,6 @@ func TestPaginationWithLimit(t *testing.T) {
 	if taskCount > 10 {
 		t.Errorf("expected at most 10 tasks, got %d", taskCount)
 	}
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPaginationWithOffset verifies that `todoat MyList --offset 20 --limit 20` shows second page
@@ -75,7 +73,6 @@ func TestPaginationWithOffset(t *testing.T) {
 	testutil.AssertExitCode(t, exitCode, 0)
 	// Should show pagination info for second page
 	testutil.AssertContains(t, stdout, "Showing 21-40 of 50 tasks")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPaginationPageFlag verifies that `todoat MyList --page 2` shows second page
@@ -94,7 +91,6 @@ func TestPaginationPageFlag(t *testing.T) {
 	testutil.AssertExitCode(t, exitCode, 0)
 	// Should show pagination info for second page
 	testutil.AssertContains(t, stdout, "Showing 51-100 of 100 tasks")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPaginationWithFilters verifies that pagination works correctly with view filters
@@ -119,7 +115,6 @@ func TestPaginationWithFilters(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Showing 1-5 of 20 tasks")
 	// Should not contain completed tasks
 	testutil.AssertNotContains(t, stdout, "Done Task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPaginationWithSort verifies that pagination preserves sort order
@@ -155,7 +150,6 @@ sort:
 	testutil.AssertContains(t, stdout, "Showing 1-2 of 3 tasks")
 	// High priority (p1) should appear first (top 2 should not include low priority p9)
 	testutil.AssertContains(t, stdout, "High priority task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPaginationTotalCount verifies that output includes total task count for UI navigation
@@ -174,7 +168,6 @@ func TestPaginationTotalCount(t *testing.T) {
 	testutil.AssertExitCode(t, exitCode, 0)
 	// Should show total count in footer
 	testutil.AssertContains(t, stdout, "of 75 tasks")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestPaginationJSONMetadata verifies that JSON output includes pagination metadata
@@ -241,7 +234,6 @@ func TestPaginationPageSize(t *testing.T) {
 	testutil.AssertExitCode(t, exitCode, 0)
 	// Should show pagination info for page 2 with 15 items per page
 	testutil.AssertContains(t, stdout, "Showing 16-30 of 50 tasks")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // padNumber pads a number to 3 digits for consistent sorting (e.g., 001, 002, ...)

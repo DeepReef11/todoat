@@ -141,9 +141,6 @@ func TestReminderStatusCLI(t *testing.T) {
 
 		stdout := cli.MustExecute("-y", "reminder", "status")
 
-		// Verify command succeeds with info result code
-		testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
-
 		// Verify status shows enabled
 		testutil.AssertContains(t, stdout, "enabled")
 
@@ -170,9 +167,6 @@ func TestReminderStatusCLI(t *testing.T) {
 		})
 
 		stdout := cli.MustExecute("-y", "reminder", "status")
-
-		// Verify command succeeds
-		testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 
 		// Verify status shows disabled
 		testutil.AssertContains(t, stdout, "disabled")
@@ -221,7 +215,6 @@ func TestReminderConfig(t *testing.T) {
 	testutil.AssertContains(t, stdout, "enabled")
 	testutil.AssertContains(t, stdout, "1 day")
 	testutil.AssertContains(t, stdout, "1 hour")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestReminderNotification tests that reminder notification is sent when task due date approaches
@@ -396,7 +389,6 @@ func TestReminderList(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Soon task")
 	testutil.AssertContains(t, stdout, "Later task")
 	testutil.AssertContains(t, stdout, "Much later task")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestReminderDismiss tests that 'todoat reminder dismiss <task>' dismisses a reminder
@@ -1183,7 +1175,6 @@ reminder:
 	// Also verify other intervals are present
 	testutil.AssertContains(t, stdout, "1 day")
 	testutil.AssertContains(t, stdout, "at due time")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }
 
 // TestReminderStatusDisabledConfig tests that reminder status shows actual disabled config
@@ -1219,5 +1210,4 @@ reminder:
 	// Should show false for notifications, not hardcoded true
 	testutil.AssertContains(t, stdout, "OS Notification: false")
 	testutil.AssertContains(t, stdout, "Log Notification: false")
-	testutil.AssertResultCode(t, stdout, testutil.ResultInfoOnly)
 }

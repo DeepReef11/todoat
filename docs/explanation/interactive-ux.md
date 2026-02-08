@@ -16,7 +16,7 @@ todoat uses `bufio.Scanner`-based prompts in `internal/utils/inputs.go`. Availab
 
 All prompt functions have `WithReader` variants that accept `io.Reader`/`io.Writer` for testing.
 
-An empty stub exists at `internal/cli/prompt/prompt.go` intended for future prompt enhancements.
+The `internal/cli/prompt/prompt.go` module provides interactive task selection with the `TaskSelector` component, featuring fuzzy-find filtering, context-aware task display, and auto-selection for single matches.
 
 ## Task Disambiguation
 
@@ -29,9 +29,19 @@ When an action targets a task by summary, todoat uses a two-phase search:
 3. **Partial match** (case-insensitive, substring): If exactly one task contains the search term, use it.
 4. **Multiple matches**: Return an error listing all matches with their UIDs, priority, due date, and description snippet so the user can re-run with `--uid`.
 
-### Multiple Match Error Format
+### Interactive Task Selection
 
-When multiple tasks match a query, todoat returns an error with details to help distinguish them:
+When multiple tasks match a query in interactive mode, todoat uses the `TaskSelector` to let you choose:
+
+1. A filter prompt appears, allowing you to narrow down matches
+2. Matching tasks are displayed with rich metadata (status, priority, due date, tags)
+3. You select a task by number, or enter 0 to cancel
+
+If filter input narrows to exactly one task, it is auto-selected.
+
+### Multiple Match Error Format (No-Prompt Mode)
+
+When multiple tasks match in `--no-prompt` mode, todoat returns an error with details to help distinguish them:
 
 ```
 multiple tasks match 'mytask'. Use --uid to specify:
@@ -60,7 +70,7 @@ This mode is designed for scripting and CI/CD integration.
 
 | Behavior | Interactive (default) | `--no-prompt` (`-y`) |
 |----------|----------------------|----------------------|
-| Multiple matches | Error with match list | Error with match list + `ACTION_INCOMPLETE` |
+| Multiple matches | Interactive selection via TaskSelector | Error with match list + `ACTION_INCOMPLETE` |
 | Add without summary | Error: summary required | Error: summary required |
 | Decorative output | Standard text | Plain text with result codes |
 | Single match | Proceeds silently | Proceeds + `ACTION_COMPLETED` |
@@ -72,10 +82,10 @@ This mode is designed for scripting and CI/CD integration.
 | Component | Location | Notes |
 |-----------|----------|-------|
 | Input utilities | `internal/utils/inputs.go` | `bufio.Scanner`-based prompts |
-| Prompt stub | `internal/cli/prompt/prompt.go` | Empty, reserved for future use |
-| Task search | `cmd/todoat/cmd/todoat.go` (`findTask`) | Exact → partial → multiple match error |
+| TaskSelector | `internal/cli/prompt/prompt.go` | Fuzzy-find task selection with filtering |
+| Task search | `cmd/todoat/cmd/todoat.go` (`findTask`) | Exact → partial → interactive select / error |
 | Match formatting | `cmd/todoat/cmd/todoat.go` (`formatMultipleMatchesError`) | Shows priority, due, desc, UID |
-| No-prompt check | `cfg.NoPrompt` field | Gates result code output |
+| No-prompt check | `cfg.NoPrompt` field | Gates result code output and TaskSelector |
 
 ### Testing
 
