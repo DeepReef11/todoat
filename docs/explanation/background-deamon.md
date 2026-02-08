@@ -98,17 +98,16 @@ tasks (id, list_id, summary, status, ...)  -- status is task completion, not pro
 
 **Sync queue database** (`~/.local/share/todoat/sync.db`):
 ```sql
-sync_queue (id, task_id, task_uid, operation_type, retry_count, ...)
--- No daemon-specific claiming mechanism
--- retry_count exists but no exponential backoff enforcement
+sync_queue (id, task_id, task_uid, operation_type, retry_count, status, worker_id, claimed_at, ...)
+-- status: 'pending', 'processing', 'completed'
+-- worker_id: daemon instance identifier
+-- claimed_at: timestamp when task was claimed
 ```
 
-To implement the planned failure recovery features, todoat would need:
-- Add `daemon_tasks` table for daemon work queue (or repurpose sync_queue)
-- Add `daemon_heartbeat` table for health monitoring (see issue #74)
-- Add `worker_id`, `claimed_at` columns for atomic task claiming
-
-> **Note**: These schema additions are **not yet implemented**. They are described here as part of the planned design.
+**Schema updates implemented** (commit `34edf10`, Issue #81):
+- Added `status`, `worker_id`, `claimed_at` columns for atomic task claiming
+- Automatic migration for existing databases
+- `GetPendingOperations` now filters by `status='pending'`
 
 ### ~~No Unix Socket Infrastructure~~ (Resolved)
 
@@ -120,15 +119,15 @@ The daemon now includes:
 - JSON message protocol for CLI-daemon communication (notify, status, stop)
 - `daemon.Client` library with `Notify()`, `Status()`, `Stop()` methods
 
-## Task Deduplication
+## Task Deduplication (Implemented)
 
-> **NOT YET IMPLEMENTED** — This section describes a planned design. The `worker_id`, `claimed_at`, and `status` columns do not exist in the `sync_queue` table. Current deduplication relies on the single-daemon-instance guarantee via pidfile locking.
+Implemented in commit `34edf10` (Issue #81). Atomic task claiming prevents duplicate execution when multiple daemon instances briefly coexist during restart scenarios.
 
 ### Problem
 Edge cases could allow two daemon instances briefly, risking double-execution of tasks.
 
-### Planned Solution
-Atomic task claiming in SQLite database.
+### Solution
+Atomic task claiming in SQLite database using `BEGIN IMMEDIATE` for exclusive write lock.
 
 ```sql
 -- Daemon atomically claims next pending task
@@ -337,53 +336,32 @@ todoat daemon kill
 
 > **Note**: The `todoat sync daemon start` command exists and works. The daemon can also be started automatically when the CLI detects pending background work and no running daemon.
 
-### Planned Error Loop Prevention
+### Error Loop Prevention (Implemented)
 
-#### Exponential Backoff on Errors
-```go
-// todoat sync_queue already has retry_count, but needs enforcement
-const MaxConsecutiveErrors = 5
+The daemon includes error loop prevention to avoid infinite error loops that could consume resources. Implemented in commit `7c1d1ed` (Issue #82).
 
-func (d *daemon) processLoop() {
-    consecutiveErrors := 0
+**Behavior:**
+- After each failed sync, the daemon increments a consecutive error counter
+- If 5 consecutive errors occur, the daemon shuts down automatically
+- Between failed syncs, exponential backoff is applied: 2^n seconds (capped at 60 seconds)
+- Any successful sync resets the error counter to zero
 
-    for {
-        select {
-        case <-d.stopChan:
-            return
-        default:
-        }
+**Constants:**
+- `MaxConsecutiveErrors = 5` — daemon shuts down after this many consecutive failures
+- `MaxBackoffSeconds = 60` — maximum delay between retry attempts
 
-        task, err := d.claimNextTask()
-        if err != nil {
-            consecutiveErrors++
-            log.Printf("Task claim error: %v", err)
+**Example backoff sequence for consecutive failures:**
+1. 1st failure: 2 second delay
+2. 2nd failure: 4 second delay
+3. 3rd failure: 8 second delay
+4. 4th failure: 16 second delay
+5. 5th failure: daemon shuts down
 
-            if consecutiveErrors >= MaxConsecutiveErrors {
-                log.Println("Too many consecutive errors, shutting down daemon")
-                return
-            }
-
-            // Exponential backoff: 1s, 2s, 4s, 8s, 16s (max 60s)
-            backoff := time.Duration(math.Min(math.Pow(2, float64(consecutiveErrors)), 60)) * time.Second
-            time.Sleep(backoff)
-            continue
-        }
-
-        if task != nil {
-            if err := d.processTask(task); err != nil {
-                consecutiveErrors++
-            } else {
-                consecutiveErrors = 0 // Reset on success
-            }
-        }
-    }
-}
-```
+This prevents scenarios where network issues or backend problems cause the daemon to spin in a tight error loop, consuming CPU and generating excessive log entries.
 
 ## Configuration
 
-> **PARTIALLY IMPLEMENTED** — The daemon uses `PIDPath`, `SocketPath`, `LogPath`, `Interval`, `IdleTimeout`, `ConfigPath`, `DBPath`, and `CachePath` from its Config struct. The heartbeat, task timeout, and error threshold settings below are **not yet implemented**.
+> **MOSTLY IMPLEMENTED** — The daemon uses `PIDPath`, `SocketPath`, `LogPath`, `HeartbeatPath`, `Interval`, `HeartbeatInterval`, `IdleTimeout`, `ConfigPath`, `DBPath`, and `CachePath` from its Config struct. Error loop prevention with exponential backoff is implemented. Per-task timeout is **not yet implemented**.
 
 todoat-specific paths and values:
 
@@ -423,19 +401,19 @@ sync:
 - Verify process exists with `syscall.Kill(pid, 0)`
 - Remove pidfile if process dead, launch new daemon
 
-### Hung Daemon (Not Yet Implemented)
-- Detect via heartbeat timeout (30 seconds)
-- Send SIGTERM for graceful shutdown
-- Send SIGKILL after 5 second grace period
-- Reset stuck tasks back to pending status
-- Launch new daemon to continue processing
+### Hung Daemon
+The heartbeat mechanism (implemented in commit `de7491d`, Issue #74) detects hung daemons:
+- Daemon writes timestamps to heartbeat file at configurable interval
+- `todoat sync daemon status` checks heartbeat and reports if stale (older than 2x interval)
+- Use `todoat sync daemon kill` to force terminate a hung daemon
 
-### Task Processing Errors (Not Yet Implemented)
+### Task Processing Errors (Implemented)
+Implemented in commit `7c1d1ed` (Issue #82):
 - Log error with full context
 - Increment consecutive error counter
-- Apply exponential backoff
+- Apply exponential backoff (2^n seconds, max 60s)
 - Shutdown daemon after 5 consecutive errors
-- Mark failed tasks for manual review
+- Successful sync resets the error counter
 
 ### Backend-Specific Errors
 - Nextcloud/CalDAV connection failures
@@ -458,22 +436,18 @@ daemon.notifyMgr.SendAsync(notification.Notification{
 })
 ```
 
-### Sync Queue
+### Sync Queue (Implemented)
 
-> **NOT YET IMPLEMENTED** — The schema additions below are planned but not applied. The current `sync_queue` table does not have `status`, `worker_id`, `claimed_at`, or `completed_at` columns.
-
-Planned: use existing `sync_queue` table with schema additions:
+Implemented in commit `34edf10` (Issue #81). The `sync_queue` table now includes atomic task claiming columns:
 
 ```sql
--- Planned: Add columns to existing sync_queue table
+-- Schema additions (automatic migration for existing databases)
 ALTER TABLE sync_queue ADD COLUMN status TEXT DEFAULT 'pending';
 ALTER TABLE sync_queue ADD COLUMN worker_id TEXT;
 ALTER TABLE sync_queue ADD COLUMN claimed_at TEXT;
-ALTER TABLE sync_queue ADD COLUMN completed_at TEXT;
-
--- Planned: Add index for efficient task claiming
-CREATE INDEX idx_sync_queue_status ON sync_queue(status);
 ```
+
+The `ClaimNextOperation` method uses `BEGIN IMMEDIATE` for exclusive write lock acquisition.
 
 ### Multi-Backend Support (Future)
 Per roadmap item 073, the daemon should eventually support:

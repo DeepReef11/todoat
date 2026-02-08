@@ -186,6 +186,22 @@ todoat sync daemon kill
 
 Force kills the daemon process. Use this for emergency termination if the daemon is hung and won't respond to the normal stop command. This sends SIGTERM, waits briefly, then sends SIGKILL if needed, and cleans up the PID file and socket.
 
+### Error Recovery
+
+The daemon automatically handles transient errors with exponential backoff:
+
+- After a failed sync, the daemon waits before retrying (2s, 4s, 8s, 16s, up to 60s)
+- After 5 consecutive sync failures, the daemon shuts down automatically
+- A successful sync resets the error counter
+
+This prevents the daemon from spinning in a tight loop when the remote backend is unavailable (e.g., network outage, server maintenance).
+
+To restart the daemon after it shuts down due to errors:
+
+```bash
+todoat sync daemon start
+```
+
 ### Daemon Configuration
 
 Configure daemon behavior in `config.yaml`:

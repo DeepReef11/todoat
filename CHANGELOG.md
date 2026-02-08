@@ -32,7 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Removed redundant `ResultInfoOnly` output from info-only CLI commands in no-prompt mode (list, get, stats, status, queue views)
-- Updated `docs/explanation/background-deamon.md` to document actual file-based heartbeat implementation (removed "NOT YET IMPLEMENTED" sections)
+- Updated `docs/explanation/background-deamon.md` to document implemented daemon features: atomic task claiming (#81), error loop prevention (#82), sync queue schema
+- Updated `docs/how-to/sync.md` with error recovery section documenting exponential backoff behavior
 - Updated `docs/explanation/interactive-ux.md` to document TaskSelector component and interactive task selection behavior
 - OS notification channel now consolidated into single cross-platform implementation (`internal/notification/os.go`)
 - Default view config path lookup now uses `config.GetConfigDir()` directly instead of deriving from DBPath
