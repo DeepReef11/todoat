@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Interactive task selection via TaskSelector when multiple tasks match a search term (#79)
+  - Wired TaskSelector to CLI commands (complete, delete, update, add with parent)
+  - Falls back to error with disambiguation info when `--no-prompt` mode is enabled
+
 ### Fixed
 - `todoat sync` now uses backends configured in the `backends:` section even when `default_backend` is not set (#80)
   - Sync command iterates over all enabled remote backends in the `backends:` section

@@ -292,6 +292,32 @@ func TestTaskMatchingCaseInsensitiveSQLiteCLI(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
 }
 
+// TestInteractiveTaskSelectionSQLiteCLI verifies that TaskSelector is used
+// for interactive selection when multiple tasks match and NoPrompt is false.
+// This tests issue #79 - TaskSelector wired to CLI commands.
+func TestInteractiveTaskSelectionSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with similar names
+	cli.MustExecute("-y", "Work", "add", "Review code")
+	cli.MustExecute("-y", "Work", "add", "Review docs")
+
+	// Disable no-prompt mode to enable interactive selection
+	cli.Config().NoPrompt = false
+
+	// Simulate user input: empty filter (show all), then select first match (1)
+	stdin := "\n1\n"
+	stdout, _, exitCode := cli.ExecuteWithStdin(stdin, "Work", "complete", "Review")
+
+	// Should succeed with interactive selection
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0 with interactive selection, got %d: %s", exitCode, stdout)
+	}
+
+	// Should contain completion message
+	testutil.AssertContains(t, stdout, "Completed task")
+}
+
 // --- Status System Tests ---
 
 func TestStatusDisplayFormatSQLiteCLI(t *testing.T) {

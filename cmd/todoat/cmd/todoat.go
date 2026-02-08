@@ -36,6 +36,7 @@ import (
 	"todoat/backend/todoist"
 	"todoat/internal/analytics"
 	"todoat/internal/cache"
+	"todoat/internal/cli/prompt"
 	"todoat/internal/config"
 	"todoat/internal/credentials"
 	"todoat/internal/daemon"
@@ -99,7 +100,8 @@ type Config struct {
 	AutoDetectBackend bool   // Enable auto-detection of backend
 	// Backend selection
 	Backend string // Backend name to use (from --backend flag)
-	// IO writers for output (for testing)
+	// IO for input/output (for testing)
+	Stdin  io.Reader // Reader for interactive prompts (defaults to os.Stdin)
 	Stderr io.Writer // Writer for warnings/errors (defaults to os.Stderr)
 	// Analytics-related config fields (for testing)
 	AnalyticsPath string // Path to analytics database file (for testing)
@@ -3506,7 +3508,11 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		}
 
 		// Resolve task by UID, local-id, or summary
-		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg)
+		stdin := cfg.Stdin
+		if stdin == nil {
+			stdin = os.Stdin
+		}
+		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg, stdin, stdout)
 		if err != nil {
 			return err
 		}
@@ -3524,7 +3530,11 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		}
 
 		// Resolve task by UID, local-id, or summary
-		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg)
+		stdin := cfg.Stdin
+		if stdin == nil {
+			stdin = os.Stdin
+		}
+		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg, stdin, stdout)
 		if err != nil {
 			return err
 		}
@@ -3542,7 +3552,11 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 		}
 
 		// Resolve task by UID, local-id, or summary
-		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg)
+		stdin := cfg.Stdin
+		if stdin == nil {
+			stdin = os.Stdin
+		}
+		task, err := resolveTaskByID(ctx, cmd, be, list, taskSummary, uidFlag, localIDFlag, cfg, stdin, stdout)
 		if err != nil {
 			return err
 		}
@@ -4512,7 +4526,11 @@ func doAdd(ctx context.Context, be backend.TaskManager, list *backend.List, summ
 
 	// If -P/--parent flag is provided, find the parent task
 	if parentSummary != "" {
-		parent, err := findTask(ctx, be, list, parentSummary, cfg)
+		stdin := cfg.Stdin
+		if stdin == nil {
+			stdin = os.Stdin
+		}
+		parent, err := findTask(ctx, be, list, parentSummary, cfg, stdin, stdout)
 		if err != nil {
 			return fmt.Errorf("parent task not found: %w", err)
 		}
@@ -4672,7 +4690,11 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 		return doBulkUpdate(ctx, be, list, bulkParentSummary, pattern, newDescription, status, priority, dueDate, startDate, clearDueDate, clearStartDate, newCategories, cfg, stdout, jsonOutput)
 	}
 
-	task, err := findTask(ctx, be, list, taskSummary, cfg)
+	stdin := cfg.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	task, err := findTask(ctx, be, list, taskSummary, cfg, stdin, stdout)
 	if err != nil {
 		return err
 	}
@@ -4727,7 +4749,7 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 	if noParent {
 		task.ParentID = ""
 	} else if parentSummary != "" {
-		parent, err := findTask(ctx, be, list, parentSummary, cfg)
+		parent, err := findTask(ctx, be, list, parentSummary, cfg, stdin, stdout)
 		if err != nil {
 			return fmt.Errorf("parent task not found: %w", err)
 		}
@@ -4761,7 +4783,11 @@ func doUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, t
 // doBulkUpdate modifies all children/descendants of a parent task
 func doBulkUpdate(ctx context.Context, be backend.TaskManager, list *backend.List, parentSummary, pattern string, newDescription *string, status string, priority int, dueDate, startDate *time.Time, clearDueDate, clearStartDate bool, newCategories *string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Find the parent task
-	parent, err := findTask(ctx, be, list, parentSummary, cfg)
+	stdin := cfg.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	parent, err := findTask(ctx, be, list, parentSummary, cfg, stdin, stdout)
 	if err != nil {
 		return err
 	}
@@ -4962,7 +4988,11 @@ func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List,
 		return doBulkComplete(ctx, be, list, parentSummary, pattern, cfg, stdout, jsonOutput)
 	}
 
-	task, err := findTask(ctx, be, list, taskSummary, cfg)
+	stdin := cfg.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	task, err := findTask(ctx, be, list, taskSummary, cfg, stdin, stdout)
 	if err != nil {
 		return err
 	}
@@ -4974,7 +5004,11 @@ func doComplete(ctx context.Context, be backend.TaskManager, list *backend.List,
 // doBulkComplete marks all children/descendants of a parent task as completed
 func doBulkComplete(ctx context.Context, be backend.TaskManager, list *backend.List, parentSummary, pattern string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Find the parent task
-	parent, err := findTask(ctx, be, list, parentSummary, cfg)
+	stdin := cfg.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	parent, err := findTask(ctx, be, list, parentSummary, cfg, stdin, stdout)
 	if err != nil {
 		return err
 	}
@@ -5055,7 +5089,11 @@ func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, t
 		return doBulkDelete(ctx, be, list, parentSummary, pattern, cfg, stdout, jsonOutput)
 	}
 
-	task, err := findTask(ctx, be, list, taskSummary, cfg)
+	stdin := cfg.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	task, err := findTask(ctx, be, list, taskSummary, cfg, stdin, stdout)
 	if err != nil {
 		return err
 	}
@@ -5101,7 +5139,11 @@ func doDelete(ctx context.Context, be backend.TaskManager, list *backend.List, t
 // doBulkDelete removes all children/descendants of a parent task
 func doBulkDelete(ctx context.Context, be backend.TaskManager, list *backend.List, parentSummary, pattern string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
 	// Find the parent task
-	parent, err := findTask(ctx, be, list, parentSummary, cfg)
+	stdin := cfg.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	parent, err := findTask(ctx, be, list, parentSummary, cfg, stdin, stdout)
 	if err != nil {
 		return err
 	}
@@ -5316,8 +5358,9 @@ type bulkActionResponse struct {
 	AffectedUIDs  []string `json:"affected_uids,omitempty"`
 }
 
-// findTask searches for a task by summary using exact then partial matching
-func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, searchTerm string, cfg *Config) (*backend.Task, error) {
+// findTask searches for a task by summary using exact then partial matching.
+// When multiple matches are found and NoPrompt is false, uses interactive TaskSelector.
+func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, searchTerm string, cfg *Config, stdin io.Reader, stdout io.Writer) (*backend.Task, error) {
 	if searchTerm == "" {
 		return nil, fmt.Errorf("task summary is required")
 	}
@@ -5384,9 +5427,9 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 		return &exactMatches[0], nil
 	}
 
-	// If multiple exact matches, handle ambiguity
+	// If multiple exact matches, use interactive selection or return error
 	if len(exactMatches) > 1 {
-		return nil, formatMultipleMatchesError(exactMatches, searchTerm)
+		return selectTaskInteractively(exactMatches, searchTerm, cfg, stdin, stdout)
 	}
 
 	// Then try partial match (case-insensitive)
@@ -5405,8 +5448,46 @@ func findTask(ctx context.Context, be backend.TaskManager, list *backend.List, s
 		return &matches[0], nil
 	}
 
-	// Multiple matches - show UIDs for disambiguation
-	return nil, formatMultipleMatchesError(matches, searchTerm)
+	// Multiple matches - use interactive selection or return error
+	return selectTaskInteractively(matches, searchTerm, cfg, stdin, stdout)
+}
+
+// selectTaskInteractively uses TaskSelector when NoPrompt is false, otherwise returns an error.
+func selectTaskInteractively(matches []backend.Task, searchTerm string, cfg *Config, stdin io.Reader, stdout io.Writer) (*backend.Task, error) {
+	// In no-prompt mode, return error with disambiguation info
+	if cfg == nil || cfg.NoPrompt {
+		return nil, formatMultipleMatchesError(matches, searchTerm)
+	}
+
+	// Use default stdin/stdout if not provided
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+
+	// Use TaskSelector for interactive selection
+	selector := &prompt.TaskSelector{
+		Tasks:    matches,
+		Prompt:   fmt.Sprintf("Multiple tasks match '%s'. Select one:", searchTerm),
+		Reader:   stdin,
+		Writer:   stdout,
+		NoPrompt: false,
+	}
+
+	selected, err := selector.Run()
+	if err != nil {
+		if errors.Is(err, prompt.ErrSelectionCancelled) {
+			return nil, fmt.Errorf("selection cancelled")
+		}
+		if errors.Is(err, prompt.ErrNoMatches) {
+			return nil, fmt.Errorf("no tasks match the filter")
+		}
+		return nil, err
+	}
+
+	return selected, nil
 }
 
 // looksLikeUUID checks if a string appears to be a UUID format.
@@ -5475,7 +5556,7 @@ func formatMultipleMatchesError(matches []backend.Task, searchTerm string) error
 }
 
 // resolveTaskByID resolves a task by UID, local-id, or summary (falls back to findTask for summary-based search)
-func resolveTaskByID(ctx context.Context, cmd *cobra.Command, be backend.TaskManager, list *backend.List, taskSummary, uidFlag string, localIDFlag int64, cfg *Config) (*backend.Task, error) {
+func resolveTaskByID(ctx context.Context, cmd *cobra.Command, be backend.TaskManager, list *backend.List, taskSummary, uidFlag string, localIDFlag int64, cfg *Config, stdin io.Reader, stdout io.Writer) (*backend.Task, error) {
 	// Check for --uid flag
 	if uidFlag != "" {
 		// Look up task directly by UID
@@ -5525,7 +5606,7 @@ func resolveTaskByID(ctx context.Context, cmd *cobra.Command, be backend.TaskMan
 		return nil, nil
 	}
 
-	return findTask(ctx, be, list, taskSummary, cfg)
+	return findTask(ctx, be, list, taskSummary, cfg, stdin, stdout)
 }
 
 // doUpdateWithTask modifies an existing task (task already resolved)
@@ -5585,7 +5666,11 @@ func doUpdateWithTask(ctx context.Context, be backend.TaskManager, list *backend
 	if noParent {
 		task.ParentID = ""
 	} else if parentSummary != "" {
-		parent, err := findTask(ctx, be, list, parentSummary, cfg)
+		stdin := cfg.Stdin
+		if stdin == nil {
+			stdin = os.Stdin
+		}
+		parent, err := findTask(ctx, be, list, parentSummary, cfg, stdin, stdout)
 		if err != nil {
 			return fmt.Errorf("parent task not found: %w", err)
 		}

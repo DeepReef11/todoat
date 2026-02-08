@@ -436,6 +436,19 @@ func (c *CLITest) Execute(args ...string) (stdout, stderr string, exitCode int) 
 	return stdoutBuf.String(), stderrBuf.String(), exitCode
 }
 
+// ExecuteWithStdin runs a CLI command with simulated stdin input.
+// This is used for testing interactive prompts.
+func (c *CLITest) ExecuteWithStdin(stdinInput string, args ...string) (stdout, stderr string, exitCode int) {
+	c.t.Helper()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	c.cfg.Stderr = &stderrBuf
+	c.cfg.Stdin = strings.NewReader(stdinInput)
+	defer func() { c.cfg.Stdin = nil }()
+	exitCode = cmd.Execute(args, &stdoutBuf, &stderrBuf, c.cfg)
+	return stdoutBuf.String(), stderrBuf.String(), exitCode
+}
+
 // MustExecute runs a CLI command and fails the test if exit code is non-zero.
 func (c *CLITest) MustExecute(args ...string) string {
 	c.t.Helper()
