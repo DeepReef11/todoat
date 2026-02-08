@@ -77,14 +77,15 @@ type Config struct {
 	NotificationLogPath string // Path to notification log file (for testing)
 	NotificationMock    bool   // Use mock executor for OS notifications (for testing)
 	// Daemon-related config fields (for testing)
-	DaemonPIDPath     string        // Path to daemon PID file
-	DaemonSocketPath  string        // Path to daemon Unix socket
-	DaemonLogPath     string        // Path to daemon log file
-	DaemonTestMode    bool          // Use in-process daemon for testing
-	DaemonInterval    time.Duration // Sync interval for daemon
-	DaemonOfflineMode bool          // Simulate offline mode for daemon
-	DaemonEnabled     bool          // Enable forked daemon (feature flag)
-	DaemonBinaryPath  string        // Path to binary for forked daemon (for testing)
+	DaemonPIDPath      string        // Path to daemon PID file
+	DaemonSocketPath   string        // Path to daemon Unix socket
+	DaemonLogPath      string        // Path to daemon log file
+	DaemonTestMode     bool          // Use in-process daemon for testing
+	DaemonInterval     time.Duration // Sync interval for daemon
+	DaemonOfflineMode  bool          // Simulate offline mode for daemon
+	DaemonEnabled      bool          // Enable forked daemon (feature flag)
+	DaemonBinaryPath   string        // Path to binary for forked daemon (for testing)
+	DaemonStuckTimeout time.Duration // Timeout for detecting stuck tasks (Issue #083)
 	// Migration-related config fields (for testing)
 	MigrateTargetDir      string // Directory for file-mock backend target
 	MigrateMockMode       bool   // Enable mock backends for testing
@@ -7428,6 +7429,9 @@ type SyncOperation struct {
 	RetryCount    int
 	LastAttemptAt *time.Time
 	CreatedAt     time.Time
+	// Fields for stuck task detection (Issue #083)
+	WorkerID  string
+	ClaimedAt *time.Time
 }
 
 // SyncConflict represents a sync conflict between local and remote versions
@@ -7854,6 +7858,234 @@ func (sm *SyncManager) QueueOperationByStringID(taskID string, taskSummary strin
 	return err
 }
 
+// GetStuckOperations returns operations stuck in 'processing' state for longer
+// than the specified timeout. These are tasks claimed by a daemon that may have
+// crashed or hung without completing them (Issue #083).
+func (sm *SyncManager) GetStuckOperations(stuckTimeout time.Duration) ([]SyncOperation, error) {
+	if sm.db == nil {
+		return []SyncOperation{}, nil
+	}
+
+	// Calculate the cutoff time - operations claimed before this are considered stuck
+	cutoffTime := time.Now().UTC().Add(-stuckTimeout).Format(time.RFC3339Nano)
+
+	rows, err := sm.db.Query(`
+		SELECT id, task_id, task_uid, task_summary, list_id, operation_type,
+		       retry_count, last_attempt_at, created_at, worker_id, claimed_at
+		FROM sync_queue
+		WHERE status = 'processing'
+		  AND claimed_at < ?
+		ORDER BY claimed_at ASC
+	`, cutoffTime)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var ops []SyncOperation
+	for rows.Next() {
+		var op SyncOperation
+		var lastAttemptStr, createdAtStr, claimedAtStr, workerID sql.NullString
+		if err := rows.Scan(&op.ID, &op.TaskID, &op.TaskUID, &op.TaskSummary, &op.ListID,
+			&op.OperationType, &op.RetryCount, &lastAttemptStr, &createdAtStr,
+			&workerID, &claimedAtStr); err != nil {
+			return nil, err
+		}
+
+		if workerID.Valid {
+			op.WorkerID = workerID.String
+		}
+		if lastAttemptStr.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, lastAttemptStr.String)
+			op.LastAttemptAt = &t
+		}
+		if createdAtStr.Valid {
+			op.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAtStr.String)
+		}
+		if claimedAtStr.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, claimedAtStr.String)
+			op.ClaimedAt = &t
+		}
+
+		ops = append(ops, op)
+	}
+
+	return ops, nil
+}
+
+// GetStuckOperationsWithValidation returns operations stuck in 'processing' state
+// for longer than the specified timeout, but only if the worker daemon is confirmed
+// dead or hung (via heartbeat file check). This prevents resetting tasks that are
+// still being actively processed by a slow but alive daemon (Issue #083).
+func (sm *SyncManager) GetStuckOperationsWithValidation(stuckTimeout time.Duration, heartbeatDir string, heartbeatStaleThreshold time.Duration) ([]SyncOperation, error) {
+	// First get all potentially stuck operations
+	allStuck, err := sm.GetStuckOperations(stuckTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter to only include operations where the worker daemon is confirmed dead/hung
+	var confirmedStuck []SyncOperation
+	for _, op := range allStuck {
+		if sm.isWorkerDead(op.WorkerID, heartbeatDir, heartbeatStaleThreshold) {
+			confirmedStuck = append(confirmedStuck, op)
+		}
+	}
+
+	return confirmedStuck, nil
+}
+
+// isWorkerDead checks if a worker daemon is dead or hung by examining its heartbeat file.
+// Returns true if:
+// - The heartbeat file doesn't exist (daemon never wrote one or was cleaned up)
+// - The heartbeat file contains a timestamp older than heartbeatStaleThreshold
+func (sm *SyncManager) isWorkerDead(workerID string, heartbeatDir string, heartbeatStaleThreshold time.Duration) bool {
+	if heartbeatDir == "" {
+		// No heartbeat directory configured - assume worker is dead if task is stuck
+		return true
+	}
+
+	heartbeatFile := filepath.Join(heartbeatDir, workerID+".heartbeat")
+	data, err := os.ReadFile(heartbeatFile)
+	if err != nil {
+		// File doesn't exist or can't be read - assume worker is dead
+		return true
+	}
+
+	// Parse the heartbeat timestamp
+	heartbeatTime, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(data)))
+	if err != nil {
+		// Invalid timestamp format - assume worker is dead
+		return true
+	}
+
+	// Check if heartbeat is stale (older than threshold)
+	return time.Since(heartbeatTime) > heartbeatStaleThreshold
+}
+
+// RecoverStuckOperations resets stuck operations back to 'pending' status so they
+// can be claimed by another daemon. This is called when a daemon is confirmed dead
+// or during daemon kill cleanup (Issue #083).
+// Returns the number of operations recovered.
+func (sm *SyncManager) RecoverStuckOperations(stuckTimeout time.Duration) (int, error) {
+	if sm.db == nil {
+		return 0, nil
+	}
+
+	cutoffTime := time.Now().UTC().Add(-stuckTimeout).Format(time.RFC3339Nano)
+
+	result, err := sm.db.Exec(`
+		UPDATE sync_queue
+		SET status = 'pending',
+		    worker_id = '',
+		    claimed_at = NULL
+		WHERE status = 'processing'
+		  AND claimed_at < ?
+	`, cutoffTime)
+	if err != nil {
+		return 0, err
+	}
+
+	count, _ := result.RowsAffected()
+	return int(count), nil
+}
+
+// RecoverStuckOperationsWithValidation resets stuck operations back to 'pending'
+// status, but only for operations where the worker daemon is confirmed dead or hung.
+// Returns the number of operations recovered.
+func (sm *SyncManager) RecoverStuckOperationsWithValidation(stuckTimeout time.Duration, heartbeatDir string, heartbeatStaleThreshold time.Duration) (int, error) {
+	if sm.db == nil {
+		return 0, nil
+	}
+
+	// Get operations that are confirmed stuck (with worker validation)
+	stuckOps, err := sm.GetStuckOperationsWithValidation(stuckTimeout, heartbeatDir, heartbeatStaleThreshold)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(stuckOps) == 0 {
+		return 0, nil
+	}
+
+	// Reset each stuck operation
+	recovered := 0
+	for _, op := range stuckOps {
+		_, err := sm.db.Exec(`
+			UPDATE sync_queue
+			SET status = 'pending',
+			    worker_id = '',
+			    claimed_at = NULL
+			WHERE id = ?
+		`, op.ID)
+		if err != nil {
+			// Log but continue with other operations
+			continue
+		}
+		recovered++
+	}
+
+	return recovered, nil
+}
+
+// RecoverStuckOperationsWithLogging resets stuck operations and logs each recovery.
+// This is intended for daemon use where logging is desirable.
+// Issue #083: Log recovered tasks for debugging.
+func (sm *SyncManager) RecoverStuckOperationsWithLogging(stuckTimeout time.Duration, logger func(format string, args ...interface{})) (int, error) {
+	if sm.db == nil {
+		return 0, nil
+	}
+
+	// Get all stuck operations first for logging
+	stuckOps, err := sm.GetStuckOperations(stuckTimeout)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(stuckOps) == 0 {
+		return 0, nil
+	}
+
+	// Log summary
+	if logger != nil {
+		logger("Recovering %d stuck task(s) (claimed >%v ago)", len(stuckOps), stuckTimeout)
+	}
+
+	cutoffTime := time.Now().UTC().Add(-stuckTimeout).Format(time.RFC3339Nano)
+	recovered := 0
+
+	for _, op := range stuckOps {
+		_, err := sm.db.Exec(`
+			UPDATE sync_queue
+			SET status = 'pending',
+			    worker_id = '',
+			    claimed_at = NULL
+			WHERE id = ? AND status = 'processing' AND claimed_at < ?
+		`, op.ID, cutoffTime)
+		if err != nil {
+			if logger != nil {
+				logger("Failed to recover stuck task %d (%s): %v", op.ID, op.TaskUID, err)
+			}
+			continue
+		}
+		recovered++
+		if logger != nil {
+			claimedAtStr := "unknown"
+			if op.ClaimedAt != nil {
+				claimedAtStr = op.ClaimedAt.Format(time.RFC3339)
+			}
+			logger("Recovered stuck task: id=%d, uid=%s, op=%s, worker=%s, claimed_at=%s",
+				op.ID, op.TaskUID, op.OperationType, op.WorkerID, claimedAtStr)
+		}
+	}
+
+	if logger != nil {
+		logger("Recovered %d/%d stuck tasks", recovered, len(stuckOps))
+	}
+
+	return recovered, nil
+}
+
 // GetConflicts returns all pending sync conflicts
 func (sm *SyncManager) GetConflicts() ([]SyncConflict, error) {
 	if sm.db == nil {
@@ -8275,6 +8507,11 @@ func newSyncDaemonStartCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command
 				cfg.DaemonInterval = time.Duration(interval) * time.Second
 			}
 
+			stuckTimeout, _ := cmd.Flags().GetInt("stuck-timeout")
+			if stuckTimeout > 0 {
+				cfg.DaemonStuckTimeout = time.Duration(stuckTimeout) * time.Minute
+			}
+
 			return doDaemonStart(cfg, stdout)
 		},
 		SilenceUsage:  true,
@@ -8282,6 +8519,7 @@ func newSyncDaemonStartCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command
 	}
 
 	cmd.Flags().Int("interval", 0, "Sync interval in seconds (default from config or 300)")
+	cmd.Flags().Int("stuck-timeout", 10, "Timeout in minutes for detecting stuck tasks (default: 10)")
 
 	return cmd
 }
@@ -8447,8 +8685,12 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 	// to in-process mode which dies immediately, leaving a stale PID file.)
 
 	// Get idle timeout from config or use default
-	idleTimeout := 5 * time.Minute       // Default
-	heartbeatInterval := 5 * time.Second // Default heartbeat interval (Issue #74)
+	idleTimeout := 5 * time.Minute             // Default
+	heartbeatInterval := 5 * time.Second       // Default heartbeat interval (Issue #74)
+	stuckTimeout := daemon.DefaultStuckTimeout // Default: 10 minutes (Issue #083)
+	if cfg.DaemonStuckTimeout > 0 {
+		stuckTimeout = cfg.DaemonStuckTimeout
+	}
 	configPathForDaemon := cfg.ConfigPath
 	if configPathForDaemon == "" {
 		configPathForDaemon = filepath.Join(config.GetConfigDir(), "config.yaml")
@@ -8465,6 +8707,11 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 			if heartbeatIntervalSec > 0 {
 				heartbeatInterval = time.Duration(heartbeatIntervalSec) * time.Second
 			}
+			// Issue #083: Get stuck timeout from config
+			stuckTimeoutMin := appConfig.GetDaemonStuckTimeout()
+			if stuckTimeoutMin > 0 {
+				stuckTimeout = time.Duration(stuckTimeoutMin) * time.Minute
+			}
 		}
 	}
 
@@ -8477,6 +8724,7 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 		Interval:          interval,
 		HeartbeatInterval: heartbeatInterval,
 		IdleTimeout:       idleTimeout,
+		StuckTimeout:      stuckTimeout,
 		ConfigPath:        configPathForDaemon,
 		DBPath:            cfg.DBPath,
 		CachePath:         cfg.CachePath,
@@ -8959,7 +9207,7 @@ func isDaemonModeInvocation(args []string) bool {
 func runDaemonMode(args []string, stderr io.Writer) {
 	// Parse daemon-specific flags from args
 	var pidPath, socketPath, logPath, heartbeatPath, configPath, dbPath, cachePath string
-	var intervalSec, idleTimeoutSec, heartbeatIntervalSec int
+	var intervalSec, idleTimeoutSec, heartbeatIntervalSec, stuckTimeoutMin int
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -9013,12 +9261,20 @@ func runDaemonMode(args []string, stderr io.Writer) {
 				idleTimeoutSec, _ = strconv.Atoi(args[i+1])
 				i++
 			}
+		case "--daemon-stuck-timeout":
+			if i+1 < len(args) {
+				stuckTimeoutMin, _ = strconv.Atoi(args[i+1])
+				i++
+			}
 		}
 	}
 
 	// Set defaults
 	if intervalSec == 0 {
 		intervalSec = 300 // 5 minutes
+	}
+	if stuckTimeoutMin == 0 {
+		stuckTimeoutMin = 10 // 10 minutes (default stuck timeout per Issue #083)
 	}
 
 	// Create daemon config
@@ -9030,6 +9286,7 @@ func runDaemonMode(args []string, stderr io.Writer) {
 		Interval:          time.Duration(intervalSec) * time.Second,
 		HeartbeatInterval: time.Duration(heartbeatIntervalSec) * time.Second,
 		IdleTimeout:       time.Duration(idleTimeoutSec) * time.Second,
+		StuckTimeout:      time.Duration(stuckTimeoutMin) * time.Minute,
 		ConfigPath:        configPath,
 		DBPath:            dbPath,
 		CachePath:         cachePath,

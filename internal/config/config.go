@@ -85,6 +85,7 @@ type DaemonConfig struct {
 	Interval          int  `yaml:"interval"`           // Sync interval in seconds
 	IdleTimeout       int  `yaml:"idle_timeout"`       // Idle timeout in seconds before daemon exits
 	HeartbeatInterval int  `yaml:"heartbeat_interval"` // Heartbeat recording interval in seconds (Issue #74)
+	StuckTimeout      int  `yaml:"stuck_timeout"`      // Stuck task timeout in minutes (Issue #083, default: 10)
 	FileWatcher       bool `yaml:"file_watcher"`       // Enable file watcher for real-time sync triggers (Issue #41)
 	SmartTiming       bool `yaml:"smart_timing"`       // Enable smart timing to avoid sync during active editing (Issue #41)
 	DebounceMs        int  `yaml:"debounce_ms"`        // Debounce duration in milliseconds (Issue #41)
@@ -420,6 +421,16 @@ func (c *Config) GetDaemonHeartbeatInterval() int {
 		return 5 // Default: 5 seconds
 	}
 	return c.Sync.Daemon.HeartbeatInterval
+}
+
+// GetDaemonStuckTimeout returns the stuck task timeout in minutes.
+// Returns 10 (10 minutes) if not configured.
+// Issue #083: Stuck task detection and recovery.
+func (c *Config) GetDaemonStuckTimeout() int {
+	if c.Sync.Daemon.StuckTimeout <= 0 {
+		return 10 // Default: 10 minutes
+	}
+	return c.Sync.Daemon.StuckTimeout
 }
 
 // IsBackgroundLoggingEnabled returns true if background logging is enabled.

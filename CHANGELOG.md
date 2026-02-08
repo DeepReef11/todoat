@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Stuck task detection and recovery for sync queue (#83)
+  - `GetStuckOperations` and `RecoverStuckOperations` methods detect tasks stuck in 'processing' state
+  - `GetStuckOperationsWithValidation` validates worker daemon liveness via heartbeat files before recovery
+  - `--stuck-timeout` flag for `sync daemon start` command (default: 10 minutes)
+  - `stuck_timeout` config option under `sync.daemon` section
+  - Prevents sync queue stalls when daemon crashes mid-task
 - Daemon error loop prevention with exponential backoff (#82)
   - `MaxConsecutiveErrors` constant (5) triggers graceful shutdown after repeated sync failures
   - Exponential backoff between retries: 2^n seconds, capped at 60 seconds

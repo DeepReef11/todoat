@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -3528,5 +3529,262 @@ func TestDuplicateClaimPrevention(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("Issue #081: expected exactly 1 operation with status 'processing', got %d", count)
+	}
+}
+
+// =============================================================================
+// Issue #083: Stuck Task Detection and Recovery for Sync Queue
+// =============================================================================
+
+// TestStuckTaskDetection tests that tasks stuck in 'processing' state for more
+// than the configured timeout (default 10 minutes) are identified.
+func TestStuckTaskDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Create SyncManager
+	syncMgr := cmd.NewSyncManager(dbPath)
+	defer func() { _ = syncMgr.Close() }()
+
+	// Queue and claim an operation
+	err := syncMgr.QueueOperationByStringID("task-stuck-1", "Stuck Task 1", "list-1", "create")
+	if err != nil {
+		t.Fatalf("QueueOperationByStringID failed: %v", err)
+	}
+
+	// Claim the operation
+	workerID := "daemon-dead-123"
+	_, err = syncMgr.ClaimNextOperation(workerID)
+	if err != nil {
+		t.Fatalf("ClaimNextOperation failed: %v", err)
+	}
+
+	// Manually backdated the claimed_at to simulate a stuck task (>10 minutes ago)
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Set claimed_at to 15 minutes ago
+	fifteenMinutesAgo := time.Now().UTC().Add(-15 * time.Minute).Format(time.RFC3339Nano)
+	_, err = db.Exec(`UPDATE sync_queue SET claimed_at = ? WHERE worker_id = ?`, fifteenMinutesAgo, workerID)
+	if err != nil {
+		t.Fatalf("failed to backdate claimed_at: %v", err)
+	}
+
+	// Detect stuck tasks with default timeout (10 minutes)
+	stuckTasks, err := syncMgr.GetStuckOperations(10 * time.Minute)
+	if err != nil {
+		t.Fatalf("GetStuckOperations failed: %v", err)
+	}
+
+	// Should find exactly 1 stuck task
+	if len(stuckTasks) != 1 {
+		t.Errorf("Issue #083: expected 1 stuck task, got %d", len(stuckTasks))
+	}
+
+	// Verify the stuck task details
+	if len(stuckTasks) > 0 {
+		if stuckTasks[0].WorkerID != workerID {
+			t.Errorf("Issue #083: expected worker_id '%s', got '%s'", workerID, stuckTasks[0].WorkerID)
+		}
+		if stuckTasks[0].TaskUID != "task-stuck-1" {
+			t.Errorf("Issue #083: expected task_uid 'task-stuck-1', got '%s'", stuckTasks[0].TaskUID)
+		}
+	}
+
+	// Queue another task and claim it (should NOT be stuck - claimed just now)
+	err = syncMgr.QueueOperationByStringID("task-fresh-2", "Fresh Task 2", "list-1", "update")
+	if err != nil {
+		t.Fatalf("QueueOperationByStringID failed: %v", err)
+	}
+	_, err = syncMgr.ClaimNextOperation("daemon-alive-456")
+	if err != nil {
+		t.Fatalf("ClaimNextOperation failed: %v", err)
+	}
+
+	// Should still find exactly 1 stuck task (the old one, not the fresh one)
+	stuckTasks, err = syncMgr.GetStuckOperations(10 * time.Minute)
+	if err != nil {
+		t.Fatalf("GetStuckOperations failed: %v", err)
+	}
+	if len(stuckTasks) != 1 {
+		t.Errorf("Issue #083: expected 1 stuck task (not fresh), got %d", len(stuckTasks))
+	}
+}
+
+// TestStuckTaskRecovery tests that stuck tasks can be reset to pending status.
+func TestStuckTaskRecovery(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Create SyncManager
+	syncMgr := cmd.NewSyncManager(dbPath)
+	defer func() { _ = syncMgr.Close() }()
+
+	// Queue and claim multiple operations
+	for i := 1; i <= 3; i++ {
+		taskID := fmt.Sprintf("task-recover-%d", i)
+		err := syncMgr.QueueOperationByStringID(taskID, fmt.Sprintf("Task %d", i), "list-1", "create")
+		if err != nil {
+			t.Fatalf("QueueOperationByStringID failed: %v", err)
+		}
+		_, err = syncMgr.ClaimNextOperation(fmt.Sprintf("daemon-dead-%d", i))
+		if err != nil {
+			t.Fatalf("ClaimNextOperation failed: %v", err)
+		}
+	}
+
+	// Manually backdate all claimed_at to simulate stuck tasks
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	fifteenMinutesAgo := time.Now().UTC().Add(-15 * time.Minute).Format(time.RFC3339Nano)
+	_, err = db.Exec(`UPDATE sync_queue SET claimed_at = ?`, fifteenMinutesAgo)
+	if err != nil {
+		t.Fatalf("failed to backdate claimed_at: %v", err)
+	}
+
+	// Get stuck tasks
+	stuckTasks, err := syncMgr.GetStuckOperations(10 * time.Minute)
+	if err != nil {
+		t.Fatalf("GetStuckOperations failed: %v", err)
+	}
+	if len(stuckTasks) != 3 {
+		t.Fatalf("Issue #083: expected 3 stuck tasks, got %d", len(stuckTasks))
+	}
+
+	// Recover all stuck tasks
+	recovered, err := syncMgr.RecoverStuckOperations(10 * time.Minute)
+	if err != nil {
+		t.Fatalf("RecoverStuckOperations failed: %v", err)
+	}
+	if recovered != 3 {
+		t.Errorf("Issue #083: expected 3 recovered tasks, got %d", recovered)
+	}
+
+	// Verify tasks are now pending
+	var count int
+	err = db.QueryRow(`SELECT COUNT(*) FROM sync_queue WHERE status = 'pending'`).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to count pending operations: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("Issue #083: expected 3 pending operations after recovery, got %d", count)
+	}
+
+	// Verify worker_id and claimed_at are cleared
+	var nullWorkers, nullClaimed int
+	err = db.QueryRow(`SELECT COUNT(*) FROM sync_queue WHERE worker_id = '' OR worker_id IS NULL`).Scan(&nullWorkers)
+	if err != nil {
+		t.Fatalf("failed to count null worker_id: %v", err)
+	}
+	err = db.QueryRow(`SELECT COUNT(*) FROM sync_queue WHERE claimed_at IS NULL`).Scan(&nullClaimed)
+	if err != nil {
+		t.Fatalf("failed to count null claimed_at: %v", err)
+	}
+	if nullWorkers != 3 {
+		t.Errorf("Issue #083: expected 3 operations with cleared worker_id, got %d", nullWorkers)
+	}
+	if nullClaimed != 3 {
+		t.Errorf("Issue #083: expected 3 operations with cleared claimed_at, got %d", nullClaimed)
+	}
+
+	// Recovered tasks should now be claimable again
+	pendingOps, err := syncMgr.GetPendingOperations()
+	if err != nil {
+		t.Fatalf("GetPendingOperations failed: %v", err)
+	}
+	if len(pendingOps) != 3 {
+		t.Errorf("Issue #083: expected 3 pending operations available for claim, got %d", len(pendingOps))
+	}
+}
+
+// TestStuckTaskWorkerValidation tests that tasks are only reset if the worker
+// daemon is confirmed dead (via heartbeat file or process check).
+func TestStuckTaskWorkerValidation(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Create SyncManager
+	syncMgr := cmd.NewSyncManager(dbPath)
+	defer func() { _ = syncMgr.Close() }()
+
+	// Queue and claim an operation
+	err := syncMgr.QueueOperationByStringID("task-validate-1", "Validate Task 1", "list-1", "create")
+	if err != nil {
+		t.Fatalf("QueueOperationByStringID failed: %v", err)
+	}
+
+	workerID := "daemon-pid-99999"
+	_, err = syncMgr.ClaimNextOperation(workerID)
+	if err != nil {
+		t.Fatalf("ClaimNextOperation failed: %v", err)
+	}
+
+	// Backdate the claimed_at
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	fifteenMinutesAgo := time.Now().UTC().Add(-15 * time.Minute).Format(time.RFC3339Nano)
+	_, err = db.Exec(`UPDATE sync_queue SET claimed_at = ?`, fifteenMinutesAgo)
+	if err != nil {
+		t.Fatalf("failed to backdate claimed_at: %v", err)
+	}
+
+	// Create a heartbeat file for the worker (simulating a live daemon)
+	heartbeatDir := filepath.Join(tmpDir, "heartbeats")
+	if err := os.MkdirAll(heartbeatDir, 0755); err != nil {
+		t.Fatalf("failed to create heartbeat dir: %v", err)
+	}
+	heartbeatFile := filepath.Join(heartbeatDir, workerID+".heartbeat")
+	recentHeartbeat := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := os.WriteFile(heartbeatFile, []byte(recentHeartbeat), 0644); err != nil {
+		t.Fatalf("failed to create heartbeat file: %v", err)
+	}
+
+	// Get stuck tasks with worker validation (should NOT include this task because daemon is alive)
+	stuckTasks, err := syncMgr.GetStuckOperationsWithValidation(10*time.Minute, heartbeatDir, 30*time.Second)
+	if err != nil {
+		t.Fatalf("GetStuckOperationsWithValidation failed: %v", err)
+	}
+	if len(stuckTasks) != 0 {
+		t.Errorf("Issue #083: expected 0 stuck tasks (worker is alive), got %d", len(stuckTasks))
+	}
+
+	// Delete the heartbeat file (simulate daemon died)
+	if err := os.Remove(heartbeatFile); err != nil {
+		t.Fatalf("failed to remove heartbeat file: %v", err)
+	}
+
+	// Now it should be detected as stuck (no heartbeat file = dead daemon)
+	stuckTasks, err = syncMgr.GetStuckOperationsWithValidation(10*time.Minute, heartbeatDir, 30*time.Second)
+	if err != nil {
+		t.Fatalf("GetStuckOperationsWithValidation failed: %v", err)
+	}
+	if len(stuckTasks) != 1 {
+		t.Errorf("Issue #083: expected 1 stuck task (worker is dead), got %d", len(stuckTasks))
+	}
+
+	// Test with stale heartbeat (older than threshold)
+	staleHeartbeat := time.Now().UTC().Add(-5 * time.Minute).Format(time.RFC3339Nano)
+	if err := os.WriteFile(heartbeatFile, []byte(staleHeartbeat), 0644); err != nil {
+		t.Fatalf("failed to create stale heartbeat file: %v", err)
+	}
+
+	// Should be detected as stuck (stale heartbeat = hung/dead daemon)
+	stuckTasks, err = syncMgr.GetStuckOperationsWithValidation(10*time.Minute, heartbeatDir, 30*time.Second)
+	if err != nil {
+		t.Fatalf("GetStuckOperationsWithValidation failed: %v", err)
+	}
+	if len(stuckTasks) != 1 {
+		t.Errorf("Issue #083: expected 1 stuck task (stale heartbeat), got %d", len(stuckTasks))
 	}
 }

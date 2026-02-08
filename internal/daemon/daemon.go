@@ -37,6 +37,9 @@ func CalculateBackoff(consecutiveErrors int) time.Duration {
 	return time.Duration(backoffSeconds) * time.Second
 }
 
+// DefaultStuckTimeout is the default timeout for detecting stuck tasks (10 minutes).
+const DefaultStuckTimeout = 10 * time.Minute
+
 // Config holds daemon configuration.
 type Config struct {
 	PIDPath           string        // Path to PID file
@@ -46,6 +49,7 @@ type Config struct {
 	Interval          time.Duration // Sync interval
 	HeartbeatInterval time.Duration // Heartbeat recording interval (Issue #74)
 	IdleTimeout       time.Duration // Timeout before daemon exits when idle
+	StuckTimeout      time.Duration // Timeout for detecting stuck tasks (Issue #083, default: 10 minutes)
 	ConfigPath        string        // Path to app config file
 	DBPath            string        // Path to database
 	CachePath         string        // Path to cache
@@ -708,6 +712,10 @@ func Fork(cfg *Config) error {
 	}
 	if cfg.IdleTimeout > 0 {
 		args = append(args, "--daemon-idle-timeout", strconv.FormatInt(int64(cfg.IdleTimeout.Seconds()), 10))
+	}
+	// Stuck timeout settings (Issue #083)
+	if cfg.StuckTimeout > 0 {
+		args = append(args, "--daemon-stuck-timeout", strconv.FormatInt(int64(cfg.StuckTimeout.Minutes()), 10))
 	}
 	// Heartbeat settings (Issue #74)
 	if cfg.HeartbeatPath != "" {
