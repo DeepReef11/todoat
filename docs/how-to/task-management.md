@@ -601,6 +601,14 @@ Select (0 to cancel):
 
 Type a filter term to narrow the list, or press Enter to show all matches. Then select by number.
 
+By default, interactive selection only shows tasks relevant to the action (e.g., only TODO/IN-PROGRESS tasks for complete). To include completed and cancelled tasks in the selection:
+
+```yaml
+# config.yaml
+ui:
+  interactive_prompt_for_all_tasks: true
+```
+
 If you're running in non-interactive mode (`-y` / `--no-prompt`), todoat shows an error with UIDs instead:
 
 ```

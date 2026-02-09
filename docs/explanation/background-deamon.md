@@ -271,36 +271,56 @@ todoat sync daemon kill
 
 This sends SIGTERM, waits briefly, then sends SIGKILL if needed, and cleans up the PID file and socket.
 
-### Planned Enhancements
+### Per-Task Timeout (Implemented)
 
-> The following features are not yet implemented but are planned for future versions.
+Implemented in commit `42f1b09` (Issue #84). The daemon now protects against stuck sync operations using context-based timeouts.
 
-#### Per-Task Timeout
 ```go
-// Planned: In daemon task processing loop
-const MaxTaskDuration = 5 * time.Minute
-
-func processTaskWithTimeout(task SyncTask) error {
-    ctx, cancel := context.WithTimeout(context.Background(), MaxTaskDuration)
+// From internal/daemon/daemon.go:616
+// syncBackendWithTimeout executes a backend sync with timeout protection.
+func (d *Daemon) syncBackendWithTimeout(be *backendEntry, timeout time.Duration) error {
+    ctx, cancel := context.WithTimeout(context.Background(), timeout)
     defer cancel()
-    // ... process with timeout
+    // ... process with timeout, invoke callback on timeout
 }
 ```
 
-#### Stuck Task Detection
+Configuration (default: 5 minutes):
+```yaml
+sync:
+  daemon:
+    task_timeout: 5  # Minutes before a sync operation times out
+```
+
+### Stuck Task Detection (Implemented)
+
+Implemented in commit `a3659d3` (Issue #83). The sync queue schema includes columns for tracking task processing state:
+
 ```sql
--- Planned: CLI or monitoring can detect stuck tasks
+-- Schema columns for stuck task detection
+sync_queue (
+    status TEXT,      -- 'pending', 'processing', 'completed'
+    worker_id TEXT,   -- Daemon instance identifier
+    claimed_at TEXT   -- Timestamp when task was claimed
+)
+
+-- Detect stuck tasks (processing for more than 10 minutes)
 SELECT id, worker_id, claimed_at
 FROM sync_queue
 WHERE status = 'processing'
   AND claimed_at < datetime('now', '-10 minutes');
+```
 
--- Planned: Reset stuck tasks (if daemon confirmed dead/hung)
-UPDATE sync_queue
-SET status = 'pending',
-    worker_id = NULL,
-    claimed_at = NULL
-WHERE id IN (stuck_task_ids);
+The `SyncManager` provides methods for detection and recovery:
+- `GetStuckOperations(timeout)` - Find tasks stuck in 'processing' state
+- `GetStuckOperationsWithValidation(timeout, heartbeatDir, staleThreshold)` - Validates worker liveness before flagging tasks as stuck
+- `RecoverStuckOperations(taskIDs)` - Reset stuck tasks to 'pending' status
+
+Configuration (default: 10 minutes):
+```yaml
+sync:
+  daemon:
+    stuck_timeout: 10  # Minutes before a task is considered stuck
 ```
 
 ### Graceful Shutdown Signal
@@ -361,7 +381,7 @@ This prevents scenarios where network issues or backend problems cause the daemo
 
 ## Configuration
 
-> **MOSTLY IMPLEMENTED** — The daemon uses `PIDPath`, `SocketPath`, `LogPath`, `HeartbeatPath`, `Interval`, `HeartbeatInterval`, `IdleTimeout`, `ConfigPath`, `DBPath`, and `CachePath` from its Config struct. Error loop prevention with exponential backoff is implemented. Per-task timeout is **not yet implemented**.
+> **IMPLEMENTED** — The daemon uses `PIDPath`, `SocketPath`, `LogPath`, `HeartbeatPath`, `Interval`, `HeartbeatInterval`, `IdleTimeout`, `ConfigPath`, `DBPath`, `CachePath`, `TaskTimeout`, and `StuckTimeout` from its Config struct. Error loop prevention with exponential backoff, per-task timeout protection, and stuck task detection are all implemented.
 
 todoat-specific paths and values:
 

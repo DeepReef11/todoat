@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Empty path components (e.g., `//`) in subtask paths are now silently ignored instead of causing an error
 
 ### Added
+- `ui.interactive_prompt_for_all_tasks` config option to include completed and cancelled tasks in interactive selection prompts
 - Per-task timeout protection for sync operations (#84)
   - `task_timeout` config option under `sync.daemon` section (default: 5 minutes)
   - Context-aware sync functions with `AddBackendSyncFuncWithContext` method

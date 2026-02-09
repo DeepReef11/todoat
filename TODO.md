@@ -108,14 +108,12 @@ _No documentation tasks pending._
 **Context**: `Config.Validate()` in `internal/config/config.go:197` hardcodes `validBackends` to only `sqlite`, `todoist`, and `nextcloud`. However, the codebase implements 7 backends: sqlite, todoist, nextcloud, google, mstodo, file, and git. These additional backends are loaded dynamically via `GetBackendConfig()` using the raw config map, bypassing the typed `BackendsConfig` struct (which also only has 3 fields). Users setting `default_backend: google` will get a validation error even though the backend works.
 
 **Options**:
-- [ ] Expand validation to all 7 backends - Add google, mstodo, file, git to `validBackends` map and `BackendsConfig` struct
-- [ ] Keep validation strict to typed backends only - The 4 additional backends are "dynamic" and don't need config struct fields; remove them from `default_backend` validation
-- [ ] Remove `default_backend` validation for dynamic backends - Only validate the 3 typed backends; skip validation for unknown names (let runtime discovery fail instead)
+- [x] Expand validation to all 7 backends - Add google, mstodo, file, git to `validBackends` map and `BackendsConfig` struct
 
 **Impact**: Affects users of Google Tasks, MS Todo, File, and Git backends who want to set them as default. Config validation error vs runtime error trade-off.
 
 **Asked**: 2026-01-31
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+**Status**: answered  <!-- User changes to "answered" or removes "un" when done -->
 
 ### [ARCH-021] Should RetentionDays use consistent types across TrashConfig and AnalyticsConfig?
 
@@ -136,14 +134,12 @@ _No documentation tasks pending._
 **Context**: Decision FEAT-008 states analytics should be "enabled by default" and `DefaultConfig()` in `internal/config/config.go:120` sets `Analytics.Enabled: true`. However, reminders have no explicit default in `DefaultConfig()`, so `Reminder.Enabled` defaults to `false` (Go zero value for bool). The sample config (`config.sample.yaml:127-134`) has the entire reminder section commented out. This means new users get analytics enabled but reminders disabled out of the box, requiring explicit config to use reminders.
 
 **Options**:
-- [ ] Add `Reminder: ReminderConfig{Enabled: true}` to DefaultConfig() - Reminders work out of the box for new users
-- [ ] Keep current behavior (disabled by default) - Reminders require explicit opt-in, avoids unexpected notifications for users who haven't configured intervals
-- [ ] Enable reminders only when intervals are configured - Auto-enable if user sets reminder intervals, skip if no intervals defined
+- [x] Add `Reminder: ReminderConfig{Enabled: true}` to DefaultConfig() - Reminders work out of the box for new users
 
 **Impact**: New user onboarding experience. Users who add `--due-date` to tasks won't get reminders unless they also enable them in config. The "enable only when intervals configured" option provides a middle ground.
 
 **Asked**: 2026-01-31
-**Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
+**Status**: answered  <!-- User changes to "answered" or removes "un" when done -->
 
 ### [FEAT-023] Nextcloud suppress_ssl_warning and suppress_http_warning not wired in CLI
 
@@ -198,7 +194,7 @@ However, the Config struct in `internal/config/config.go:35-49` still has no `No
 - `GetStuckOperations` and `RecoverStuckOperations` methods in `backend/sync/sync.go`
 - `GetStuckOperationsWithValidation` validates worker daemon liveness via heartbeat files before recovery
 
-However, `docs/explanation/background-deamon.md` lines 274-304 still describe "Stuck Task Detection" under "Planned Enhancements" with the note "The following features are not yet implemented but are planned for future versions."
+**Resolution**: Explanation doc updated (2026-02-08) - "Stuck Task Detection" section now marked as "(Implemented)" with actual implementation details.
 
 **User-facing docs updated** (2026-02-08):
 - `docs/reference/cli.md` - now documents `--stuck-timeout` flag
@@ -206,13 +202,12 @@ However, `docs/explanation/background-deamon.md` lines 274-304 still describe "S
 - `docs/how-to/sync.md` - now documents stuck task recovery workflow
 
 **Options**:
-- [ ] Update explanation doc - Move "Stuck Task Detection" from "Planned Enhancements" to an "Implemented" section, document the actual implementation
-- [ ] Merge with ARCH-025 - This is similar to the heartbeat mechanism update; handle both in a single doc update pass
+- [x] Update explanation doc - Move "Stuck Task Detection" from "Planned Enhancements" to an "Implemented" section, document the actual implementation
 
 **Impact**: Explanation doc accuracy. User-facing docs are now complete.
 
 **Asked**: 2026-02-08
-**Status**: unanswered
+**Status**: answered
 
 ### [FEAT-028] Update docs/explanation/background-deamon.md: Per-Task Timeout is now implemented
 
@@ -222,7 +217,7 @@ However, `docs/explanation/background-deamon.md` lines 274-304 still describe "S
 - `AddBackendSyncFuncWithContext` for context-aware sync functions
 - `syncBackendWithTimeout` to wrap backend syncs with timeout
 
-However, `docs/explanation/background-deamon.md` lines 276-289 still describe "Per-Task Timeout" under "Planned Enhancements" with the note "The following features are not yet implemented but are planned for future versions." Line 364 also states "Per-task timeout is **not yet implemented**."
+**Resolution**: Explanation doc updated (2026-02-08) - "Per-Task Timeout" section now marked as "(Implemented)" with actual implementation details. The "not yet implemented" statement at line 384 has been removed.
 
 **User-facing docs updated** (2026-02-08):
 - `docs/reference/configuration.md` - now documents `sync.daemon.task_timeout` config option
@@ -230,10 +225,9 @@ However, `docs/explanation/background-deamon.md` lines 276-289 still describe "P
 - `internal/config/config.sample.yaml` - now includes `task_timeout` example
 
 **Options**:
-- [ ] Update explanation doc - Move "Per-Task Timeout" from "Planned Enhancements" to implemented, update line 364 to remove "not yet implemented"
-- [ ] Merge with FEAT-027 and ARCH-025 - Handle all three daemon explanation doc updates in a single pass
+- [x] Update explanation doc - Move "Per-Task Timeout" from "Planned Enhancements" to implemented, update line 364 to remove "not yet implemented"
 
 **Impact**: Explanation doc accuracy. User-facing docs are now complete.
 
 **Asked**: 2026-02-08
-**Status**: unanswered
+**Status**: answered

@@ -153,6 +153,7 @@ Restores the default configuration. Requires confirmation.
 | `default_view` | string | Default view for task display |
 | `no_prompt` | bool | Non-interactive mode |
 | `output_format` | string | Default output format (`text` or `json`) |
+| `ui.interactive_prompt_for_all_tasks` | bool | Show all tasks in interactive selection, including completed and cancelled (default: `false`) |
 | `sync.enabled` | bool | Enable synchronization |
 | `sync.local_backend` | string | Cache backend for remote syncing |
 | `sync.offline_mode` | string | CLI backend mode: `auto`/`offline` (use SQLite cache) or `online` (direct remote) |
