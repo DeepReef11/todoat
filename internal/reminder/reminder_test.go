@@ -1211,3 +1211,53 @@ reminder:
 	testutil.AssertContains(t, stdout, "OS Notification: false")
 	testutil.AssertContains(t, stdout, "Log Notification: false")
 }
+
+// =============================================================================
+// Issue #91: reminder list/check fails with database error on fresh installation
+// =============================================================================
+
+// TestReminderServiceCreatesParentDirectory tests that NewService creates the parent
+// directory if it doesn't exist. This reproduces issue #91 where reminder list/check
+// failed with "unable to open database file: out of memory (14)" (SQLITE_CANTOPEN)
+// on fresh installations because the database directory didn't exist.
+func TestReminderServiceCreatesParentDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Use a nested path where parent directory doesn't exist
+	nonExistentDir := filepath.Join(tmpDir, "nonexistent", "nested", "dir")
+	dbPath := filepath.Join(nonExistentDir, "test.db")
+
+	cfg := &reminder.Config{
+		Enabled: true,
+		Intervals: []string{
+			"1 day",
+		},
+		OSNotification:  true,
+		LogNotification: true,
+	}
+
+	// Before fix: This would fail with "unable to open database file: out of memory (14)"
+	// After fix: The service should create the parent directory and succeed
+	service, err := reminder.NewService(cfg, dbPath)
+	if err != nil {
+		t.Fatalf("NewService failed to create service with non-existent parent directory: %v", err)
+	}
+	defer func() { _ = service.Close() }()
+
+	// Verify the service works by checking reminders (empty list is fine)
+	triggered, err := service.CheckReminders(nil)
+	if err != nil {
+		t.Fatalf("CheckReminders failed: %v", err)
+	}
+	if len(triggered) != 0 {
+		t.Errorf("expected 0 triggered reminders, got %d", len(triggered))
+	}
+
+	// Verify upcoming reminders also works
+	upcoming, err := service.GetUpcomingReminders(nil)
+	if err != nil {
+		t.Fatalf("GetUpcomingReminders failed: %v", err)
+	}
+	if len(upcoming) != 0 {
+		t.Errorf("expected 0 upcoming reminders, got %d", len(upcoming))
+	}
+}

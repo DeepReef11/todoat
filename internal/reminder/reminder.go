@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -50,6 +52,14 @@ type UpcomingReminder struct {
 func NewService(cfg *Config, dbPath string) (*Service, error) {
 	if cfg == nil {
 		return nil, errors.New("config is required")
+	}
+
+	// Ensure parent directory exists before opening database
+	// This prevents confusing "out of memory" errors on fresh installs
+	// where the data directory doesn't exist yet (SQLite error code 14 = SQLITE_CANTOPEN)
+	dir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
 	db, err := sql.Open("sqlite", dbPath)

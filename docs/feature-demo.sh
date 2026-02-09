@@ -507,6 +507,10 @@ demo_tui() {
 demo_export_import() {
     print_header "EXPORT & IMPORT"
 
+    # Create demo list and add tasks for export demo
+    todoat list create "$DEMO_LIST" 2>/dev/null || true
+    todoat "$DEMO_LIST" add "Sample task for export" -p 1 2>/dev/null || true
+
     print_info "Export list to JSON:"
     print_cmd "todoat list export '$DEMO_LIST' --format json --output /tmp/demo-export.json"
 

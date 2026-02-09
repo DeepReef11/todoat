@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Falls back to error with disambiguation info when `--no-prompt` mode is enabled
 
 ### Fixed
+- Fixed reminder list/check failing with "out of memory" database error on fresh installations (#91)
+  - Reminder service now creates parent directory for database if it doesn't exist
+  - Prevents SQLITE_CANTOPEN (error code 14) when data directory is missing
 - Fixed phantom data appearing on fresh install when stale cache exists from previously deleted database (#92)
   - Cache is now invalidated when database file is newer than cache creation time
   - Prevents serving outdated list/task data after database deletion
