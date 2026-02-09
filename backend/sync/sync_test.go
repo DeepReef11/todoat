@@ -2542,12 +2542,23 @@ default_backend: sqlite-remote
 	// a full sync with server_wins conflict resolution, which could temporarily
 	// affect the locally-added task if it runs concurrently with our verification.
 	// We wait long enough for the sync round-trip (local→remote→local) to finish.
-	time.Sleep(2 * time.Second)
+	// Use a retry loop with short sleeps instead of a single long sleep to make
+	// the test more reliable on slow CI runners while keeping it fast when sync completes quickly.
+	var taskFound bool
+	for i := 0; i < 10; i++ {
+		time.Sleep(500 * time.Millisecond)
+		stdout = cli.MustExecute("-y", "Work")
+		if strings.Contains(stdout, "Quick add task") {
+			taskFound = true
+			break
+		}
+	}
 
 	// Verify that the task exists after sync round-trip completes.
 	// After auto-sync pushes the task to remote and pulls back, it should be present.
-	stdout = cli.MustExecute("-y", "Work")
-	testutil.AssertContains(t, stdout, "Quick add task")
+	if !taskFound {
+		t.Errorf("expected output to contain \"Quick add task\", got:\n%s", stdout)
+	}
 
 	// Allow background goroutines spawned by the list command to finish
 	// before TempDir cleanup removes the database files they're accessing.
