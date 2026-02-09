@@ -7480,7 +7480,8 @@ func (sm *SyncManager) initDB() error {
 		return err
 	}
 
-	schema := `
+	// Create tables first (without indexes that reference potentially missing columns)
+	tableSchema := `
 		CREATE TABLE IF NOT EXISTS sync_queue (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			task_id INTEGER NOT NULL,
@@ -7517,19 +7518,26 @@ func (sm *SyncManager) initDB() error {
 
 		CREATE INDEX IF NOT EXISTS idx_sync_queue_task ON sync_queue(task_id);
 		CREATE INDEX IF NOT EXISTS idx_sync_queue_type ON sync_queue(operation_type);
-		CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
 		CREATE INDEX IF NOT EXISTS idx_sync_conflicts_uid ON sync_conflicts(task_uid);
 		CREATE INDEX IF NOT EXISTS idx_sync_conflicts_status ON sync_conflicts(status);
 	`
-	_, err = db.Exec(schema)
+	_, err = db.Exec(tableSchema)
 	if err != nil {
 		return err
 	}
 
 	// Migrate existing databases: add new columns for atomic claiming (Issue #081)
-	// Check if columns exist using PRAGMA table_info
+	// This MUST run before creating indexes on the new columns
 	if err := sm.migrateSyncQueueSchema(); err != nil {
 		return fmt.Errorf("failed to migrate sync_queue schema: %w", err)
+	}
+
+	// Create indexes on columns that may have been added by migration (Issue #086)
+	indexSchema := `
+		CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+	`
+	if _, err = db.Exec(indexSchema); err != nil {
+		return fmt.Errorf("failed to create sync_queue indexes: %w", err)
 	}
 
 	return nil

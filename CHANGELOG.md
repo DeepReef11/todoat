@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Falls back to error with disambiguation info when `--no-prompt` mode is enabled
 
 ### Fixed
+- Fixed sync queue schema initialization to create indexes after column migrations (#86)
+  - Prevents `no such column: status` error on fresh databases with old schema
+  - Index creation now runs after `migrateSyncQueueSchema` ensures columns exist
 - `todoat sync` now uses backends configured in the `backends:` section even when `default_backend` is not set (#80)
   - Sync command iterates over all enabled remote backends in the `backends:` section
   - Per-backend failure isolation ensures one backend failure doesn't block others

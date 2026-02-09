@@ -235,3 +235,27 @@ However, the Config struct in `internal/config/config.go:35-49` still has no `No
 
 **Asked**: 2026-02-06
 **Status**: unanswered
+
+### [FEAT-027] Update docs/explanation/background-deamon.md: Stuck Task Detection is now implemented
+
+**Context**: Stuck task detection and recovery was implemented in commit `a3659d3` (Issue #83). The code now includes:
+- `--stuck-timeout` flag for `todoat sync daemon start` command (default: 10 minutes)
+- `stuck_timeout` config option under `sync.daemon` section
+- `GetStuckOperations` and `RecoverStuckOperations` methods in `backend/sync/sync.go`
+- `GetStuckOperationsWithValidation` validates worker daemon liveness via heartbeat files before recovery
+
+However, `docs/explanation/background-deamon.md` lines 274-304 still describe "Stuck Task Detection" under "Planned Enhancements" with the note "The following features are not yet implemented but are planned for future versions."
+
+**User-facing docs updated** (2026-02-08):
+- `docs/reference/cli.md` - now documents `--stuck-timeout` flag
+- `docs/reference/configuration.md` - now documents `sync.daemon.stuck_timeout` config option
+- `docs/how-to/sync.md` - now documents stuck task recovery workflow
+
+**Options**:
+- [ ] Update explanation doc - Move "Stuck Task Detection" from "Planned Enhancements" to an "Implemented" section, document the actual implementation
+- [ ] Merge with ARCH-025 - This is similar to the heartbeat mechanism update; handle both in a single doc update pass
+
+**Impact**: Explanation doc accuracy. User-facing docs are now complete.
+
+**Asked**: 2026-02-08
+**Status**: unanswered

@@ -584,6 +584,7 @@ todoat sync daemon start [flags]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--interval` | int | config or 300 | Sync interval in seconds |
+| `--stuck-timeout` | int | 10 | Timeout in minutes for detecting stuck tasks |
 
 #### sync daemon kill
 

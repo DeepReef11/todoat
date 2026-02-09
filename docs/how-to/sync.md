@@ -202,6 +202,32 @@ To restart the daemon after it shuts down due to errors:
 todoat sync daemon start
 ```
 
+### Stuck Task Recovery
+
+If the daemon crashes or is killed while processing a sync task, that task can become "stuck" in the processing state. The daemon automatically detects and recovers stuck tasks:
+
+- Tasks in `processing` state for longer than the stuck timeout are considered stuck
+- The daemon validates whether the original worker is still alive before recovery
+- Stuck tasks are reset to `pending` and will be retried
+
+Configure the stuck timeout (default: 10 minutes):
+
+```bash
+# Via CLI flag
+todoat sync daemon start --stuck-timeout 15
+
+# Via configuration
+todoat config set sync.daemon.stuck_timeout 15
+```
+
+Or in `config.yaml`:
+
+```yaml
+sync:
+  daemon:
+    stuck_timeout: 15  # minutes
+```
+
 ### Daemon Configuration
 
 Configure daemon behavior in `config.yaml`:
