@@ -103,18 +103,6 @@ _No documentation tasks pending._
 **Asked**: 2026-01-31
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
 
-### [ARCH-020] Should config validation accept all 7 supported backends as default_backend?
-
-**Context**: `Config.Validate()` in `internal/config/config.go:197` hardcodes `validBackends` to only `sqlite`, `todoist`, and `nextcloud`. However, the codebase implements 7 backends: sqlite, todoist, nextcloud, google, mstodo, file, and git. These additional backends are loaded dynamically via `GetBackendConfig()` using the raw config map, bypassing the typed `BackendsConfig` struct (which also only has 3 fields). Users setting `default_backend: google` will get a validation error even though the backend works.
-
-**Options**:
-- [x] Expand validation to all 7 backends - Add google, mstodo, file, git to `validBackends` map and `BackendsConfig` struct
-
-**Impact**: Affects users of Google Tasks, MS Todo, File, and Git backends who want to set them as default. Config validation error vs runtime error trade-off.
-
-**Asked**: 2026-01-31
-**Status**: answered  <!-- User changes to "answered" or removes "un" when done -->
-
 ### [ARCH-021] Should RetentionDays use consistent types across TrashConfig and AnalyticsConfig?
 
 **Context**: `TrashConfig.RetentionDays` uses `*int` (pointer) in `internal/config/config.go:60`, allowing nil (default 30), explicit 0 (disabled), and positive values. `AnalyticsConfig.RetentionDays` uses plain `int` in `config.go:55`, where 0 (Go zero value) triggers the default of 365, making it impossible to explicitly set retention to 0 days (immediate purge). The `GetAnalyticsRetentionDays()` method at line 350 treats `<= 0` as "use default 365".
@@ -128,18 +116,6 @@ _No documentation tasks pending._
 
 **Asked**: 2026-01-31
 **Status**: unanswered  <!-- User changes to "answered" or removes "un" when done -->
-
-### [FEAT-022] Should reminder.enabled default to true in DefaultConfig()?
-
-**Context**: Decision FEAT-008 states analytics should be "enabled by default" and `DefaultConfig()` in `internal/config/config.go:120` sets `Analytics.Enabled: true`. However, reminders have no explicit default in `DefaultConfig()`, so `Reminder.Enabled` defaults to `false` (Go zero value for bool). The sample config (`config.sample.yaml:127-134`) has the entire reminder section commented out. This means new users get analytics enabled but reminders disabled out of the box, requiring explicit config to use reminders.
-
-**Options**:
-- [x] Add `Reminder: ReminderConfig{Enabled: true}` to DefaultConfig() - Reminders work out of the box for new users
-
-**Impact**: New user onboarding experience. Users who add `--due-date` to tasks won't get reminders unless they also enable them in config. The "enable only when intervals configured" option provides a middle ground.
-
-**Asked**: 2026-01-31
-**Status**: answered  <!-- User changes to "answered" or removes "un" when done -->
 
 ### [FEAT-023] Nextcloud suppress_ssl_warning and suppress_http_warning not wired in CLI
 
@@ -186,48 +162,28 @@ However, the Config struct in `internal/config/config.go:35-49` still has no `No
 **Asked**: 2026-02-06
 **Status**: unanswered
 
-### [FEAT-027] Update docs/explanation/background-deamon.md: Stuck Task Detection is now implemented
+### [ARCH-029] Merge conflict strategy documentation does not match implementation
 
-**Context**: Stuck task detection and recovery was implemented in commit `a3659d3` (Issue #83). The code now includes:
-- `--stuck-timeout` flag for `todoat sync daemon start` command (default: 10 minutes)
-- `stuck_timeout` config option under `sync.daemon` section
-- `GetStuckOperations` and `RecoverStuckOperations` methods in `backend/sync/sync.go`
-- `GetStuckOperationsWithValidation` validates worker daemon liveness via heartbeat files before recovery
+**Context**: Decision ARCH-007 (2026-01-26) approved field-level timestamp-based merge resolution, and `docs/explanation/synchronization.md:424-429` documents this behavior:
+- "Timestamps: Use latest `modified` time"
+- "Categories: Union of both sets"
+- "Description: Use remote if changed, else keep local"
 
-**Resolution**: Explanation doc updated (2026-02-08) - "Stuck Task Detection" section now marked as "(Implemented)" with actual implementation details.
+However, the actual implementation in `cmd/todoat/cmd/todoat.go:7399-7413` uses simple hardcoded field selection:
+- Summary: Always remote (not timestamp-based)
+- Description: Always remote (not conditional)
+- Priority: Always local
+- Categories: Always local (not union)
+- Status: Always remote
 
-**User-facing docs updated** (2026-02-08):
-- `docs/reference/cli.md` - now documents `--stuck-timeout` flag
-- `docs/reference/configuration.md` - now documents `sync.daemon.stuck_timeout` config option
-- `docs/how-to/sync.md` - now documents stuck task recovery workflow
-
-**Options**:
-- [x] Update explanation doc - Move "Stuck Task Detection" from "Planned Enhancements" to an "Implemented" section, document the actual implementation
-
-**Impact**: Explanation doc accuracy. User-facing docs are now complete.
-
-**Asked**: 2026-02-08
-**Status**: answered
-
-### [FEAT-028] Update docs/explanation/background-deamon.md: Per-Task Timeout is now implemented
-
-**Context**: Per-task timeout protection was implemented in commit `42f1b09` (Issue #84). The code now includes:
-- `task_timeout` config option under `sync.daemon` section (default: "5m")
-- `GetDaemonTaskTimeout()` method in `internal/config/config.go`
-- `AddBackendSyncFuncWithContext` for context-aware sync functions
-- `syncBackendWithTimeout` to wrap backend syncs with timeout
-
-**Resolution**: Explanation doc updated (2026-02-08) - "Per-Task Timeout" section now marked as "(Implemented)" with actual implementation details. The "not yet implemented" statement at line 384 has been removed.
-
-**User-facing docs updated** (2026-02-08):
-- `docs/reference/configuration.md` - now documents `sync.daemon.task_timeout` config option
-- `docs/how-to/sync.md` - now documents per-task timeout configuration
-- `internal/config/config.sample.yaml` - now includes `task_timeout` example
+The field-level timestamp tracking mentioned in ARCH-007 does not appear to be implemented. Users expecting intelligent merge behavior per the documentation will get the simpler hardcoded version.
 
 **Options**:
-- [x] Update explanation doc - Move "Per-Task Timeout" from "Planned Enhancements" to implemented, update line 364 to remove "not yet implemented"
+- [ ] Implement ARCH-007 - Add field-level modification tracking and use timestamps for merge resolution
+- [ ] Update documentation - Change `docs/explanation/synchronization.md:424-429` to reflect actual behavior (hardcoded field selection)
+- [ ] Keep as-is - The simple implementation is intentional; ARCH-007 is a future enhancement
 
-**Impact**: Explanation doc accuracy. User-facing docs are now complete.
+**Impact**: Documentation accuracy. Users who choose "merge" strategy may not get expected results if their mental model matches the documented behavior rather than the actual implementation.
 
 **Asked**: 2026-02-08
-**Status**: answered
+**Status**: unanswered

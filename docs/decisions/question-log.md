@@ -30,6 +30,10 @@ For current design decisions, see `docs/explanation/`.
 | FEAT-005 | 2026-02-06 | Should cache TTL be user-configurable? | Add `cache_ttl` config option - Full user control |
 | UX-009 | 2026-02-08 | docs/explanation/interactive-ux.md needs rewrite to match implemented interactive prompt | Minimal update - fix empty stub references and add config option mention |
 | ARCH-025 | 2026-02-08 | Update docs/explanation/background-deamon.md to reflect implemented heartbeat mechanism | Update explanation doc - rewrite Hung Daemon Detection section |
+| ARCH-020 | 2026-02-08 | Should config validation accept all 7 supported backends as default_backend? | Expand validation to all 7 backends |
+| FEAT-022 | 2026-02-08 | Should reminder.enabled default to true in DefaultConfig()? | Add Reminder: ReminderConfig{Enabled: true} to DefaultConfig() |
+| FEAT-027 | 2026-02-08 | Update docs/explanation/background-deamon.md: Stuck Task Detection is now implemented | Update explanation doc |
+| FEAT-028 | 2026-02-08 | Update docs/explanation/background-deamon.md: Per-Task Timeout is now implemented | Update explanation doc |
 
 ---
 
@@ -500,5 +504,95 @@ The explanation doc has been updated to describe the actual file-based heartbeat
 **Impact**: Explanation doc accuracy. User-facing docs are already correct.
 
 **Resolution**: Explanation doc updated to reflect the implemented heartbeat mechanism. The "Hung Daemon Detection" section now describes the actual file-based heartbeat implementation.
+
+**Status**: answered
+
+---
+
+### [ARCH-020] Should config validation accept all 7 supported backends as default_backend?
+
+**Asked**: 2026-01-31
+**Answered**: 2026-02-08
+**Documented in**: `docs/explanation/architecture.md`
+
+**Context**: `Config.Validate()` in `internal/config/config.go:197` hardcodes `validBackends` to only `sqlite`, `todoist`, and `nextcloud`. However, the codebase implements 7 backends: sqlite, todoist, nextcloud, google, mstodo, file, and git. These additional backends are loaded dynamically via `GetBackendConfig()` using the raw config map, bypassing the typed `BackendsConfig` struct (which also only has 3 fields). Users setting `default_backend: google` will get a validation error even though the backend works.
+
+**Options**:
+- [x] Expand validation to all 7 backends - Add google, mstodo, file, git to `validBackends` map and `BackendsConfig` struct
+
+**Impact**: Affects users of Google Tasks, MS Todo, File, and Git backends who want to set them as default. Config validation error vs runtime error trade-off.
+
+**Status**: answered
+
+---
+
+### [FEAT-022] Should reminder.enabled default to true in DefaultConfig()?
+
+**Asked**: 2026-01-31
+**Answered**: 2026-02-08
+**Documented in**: `docs/explanation/architecture.md`
+
+**Context**: Decision FEAT-008 states analytics should be "enabled by default" and `DefaultConfig()` in `internal/config/config.go:120` sets `Analytics.Enabled: true`. However, reminders have no explicit default in `DefaultConfig()`, so `Reminder.Enabled` defaults to `false` (Go zero value for bool). The sample config (`config.sample.yaml:127-134`) has the entire reminder section commented out. This means new users get analytics enabled but reminders disabled out of the box, requiring explicit config to use reminders.
+
+**Options**:
+- [x] Add `Reminder: ReminderConfig{Enabled: true}` to DefaultConfig() - Reminders work out of the box for new users
+
+**Impact**: New user onboarding experience. Users who add `--due-date` to tasks won't get reminders unless they also enable them in config. The "enable only when intervals configured" option provides a middle ground.
+
+**Status**: answered
+
+---
+
+### [FEAT-027] Update docs/explanation/background-deamon.md: Stuck Task Detection is now implemented
+
+**Asked**: 2026-02-08
+**Answered**: 2026-02-08
+**Documented in**: `docs/explanation/background-deamon.md`
+
+**Context**: Stuck task detection and recovery was implemented in commit `a3659d3` (Issue #83). The code now includes:
+- `--stuck-timeout` flag for `todoat sync daemon start` command (default: 10 minutes)
+- `stuck_timeout` config option under `sync.daemon` section
+- `GetStuckOperations` and `RecoverStuckOperations` methods in `backend/sync/sync.go`
+- `GetStuckOperationsWithValidation` validates worker daemon liveness via heartbeat files before recovery
+
+**Resolution**: Explanation doc updated (2026-02-08) - "Stuck Task Detection" section now marked as "(Implemented)" with actual implementation details.
+
+**User-facing docs updated** (2026-02-08):
+- `docs/reference/cli.md` - now documents `--stuck-timeout` flag
+- `docs/reference/configuration.md` - now documents `sync.daemon.stuck_timeout` config option
+- `docs/how-to/sync.md` - now documents stuck task recovery workflow
+
+**Options**:
+- [x] Update explanation doc - Move "Stuck Task Detection" from "Planned Enhancements" to an "Implemented" section, document the actual implementation
+
+**Impact**: Explanation doc accuracy. User-facing docs are now complete.
+
+**Status**: answered
+
+---
+
+### [FEAT-028] Update docs/explanation/background-deamon.md: Per-Task Timeout is now implemented
+
+**Asked**: 2026-02-08
+**Answered**: 2026-02-08
+**Documented in**: `docs/explanation/background-deamon.md`
+
+**Context**: Per-task timeout protection was implemented in commit `42f1b09` (Issue #84). The code now includes:
+- `task_timeout` config option under `sync.daemon` section (default: "5m")
+- `GetDaemonTaskTimeout()` method in `internal/config/config.go`
+- `AddBackendSyncFuncWithContext` for context-aware sync functions
+- `syncBackendWithTimeout` to wrap backend syncs with timeout
+
+**Resolution**: Explanation doc updated (2026-02-08) - "Per-Task Timeout" section now marked as "(Implemented)" with actual implementation details. The "not yet implemented" statement at line 384 has been removed.
+
+**User-facing docs updated** (2026-02-08):
+- `docs/reference/configuration.md` - now documents `sync.daemon.task_timeout` config option
+- `docs/how-to/sync.md` - now documents per-task timeout configuration
+- `internal/config/config.sample.yaml` - now includes `task_timeout` example
+
+**Options**:
+- [x] Update explanation doc - Move "Per-Task Timeout" from "Planned Enhancements" to implemented, update line 364 to remove "not yet implemented"
+
+**Impact**: Explanation doc accuracy. User-facing docs are now complete.
 
 **Status**: answered

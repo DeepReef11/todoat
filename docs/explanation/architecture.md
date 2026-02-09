@@ -58,3 +58,40 @@ This document records architecture-level design decisions for the todoat project
 - Users can understand the file-based heartbeat design
 
 **Related**: [ARCH-025] - See `docs/decisions/question-log.md` for full discussion
+
+### 2026-02-08 Config Validation Expanded to All 7 Supported Backends
+
+**Decision**: Expand the `validBackends` map in `Config.Validate()` to include all 7 supported backends: sqlite, todoist, nextcloud, google, mstodo, file, and git.
+
+**Context**: The `Config.Validate()` function in `internal/config/config.go` hardcoded `validBackends` to only `sqlite`, `todoist`, and `nextcloud`. However, the codebase implements 7 backends that are loaded dynamically via `GetBackendConfig()` using the raw config map. Users setting `default_backend: google` would get a validation error even though the backend works correctly.
+
+**Alternatives Considered**:
+- Keep current validation: Users of Google Tasks, MS Todo, File, and Git backends would need to work around validation errors.
+
+**Consequences**:
+- All 7 backends can now be set as `default_backend` without validation errors
+- The `BackendsConfig` struct should be expanded to include typed fields for all backends
+- Config validation is consistent with the actual backend implementations
+
+**Implementation**: `internal/config/config.go` - expand `validBackends` map and `BackendsConfig` struct.
+
+**Related**: [ARCH-020] - See `docs/decisions/question-log.md` for full discussion
+
+### 2026-02-08 Reminder System Enabled by Default
+
+**Decision**: Add `Reminder: ReminderConfig{Enabled: true}` to `DefaultConfig()`, enabling reminders out of the box for new users.
+
+**Context**: Decision FEAT-008 established that analytics should be "enabled by default" with `Analytics.Enabled: true` in `DefaultConfig()`. However, reminders had no explicit default, so `Reminder.Enabled` defaulted to `false` (Go zero value). This meant new users got analytics enabled but reminders disabled, requiring explicit configuration to use reminders. Users adding `--due-date` to tasks wouldn't get reminders unless they also enabled them in config.
+
+**Alternatives Considered**:
+- Keep reminders disabled by default: Users must explicitly enable reminders in config, which is a barrier to adoption.
+- Enable only when intervals configured: Provides a middle ground but adds complexity.
+
+**Consequences**:
+- New users get reminders enabled by default, matching the analytics default
+- Users can disable reminders explicitly in config if desired
+- The sample config should be updated to reflect the new default
+
+**Implementation**: `internal/config/config.go` - add `Reminder: ReminderConfig{Enabled: true}` to `DefaultConfig()`.
+
+**Related**: [FEAT-022] - See `docs/decisions/question-log.md` for full discussion
