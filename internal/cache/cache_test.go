@@ -683,3 +683,69 @@ func TestCacheTTLFromConfigFile(t *testing.T) {
 		t.Errorf("cache should be refreshed after TTL expiration (config TTL): old=%v, new=%v", ts1, ts2)
 	}
 }
+
+// ==================== Issue #92 Phantom Data on Fresh Install Tests ====================
+
+// TestCacheInvalidationOnDatabaseRecreation verifies that cache is invalidated when the
+// database is deleted and recreated (Issue #92).
+// Bug: Phantom data appears on fresh installation because stale cache data is served
+// after the database is deleted, even when within TTL.
+// Fix: Cache should be invalidated when database file is newer than cache.
+func TestCacheInvalidationOnDatabaseRecreation(t *testing.T) {
+	cli := testutil.NewCLITestWithCache(t)
+
+	// Create a list with a task
+	cli.MustExecute("-y", "list", "create", "PhantomTestList")
+	cli.MustExecute("-y", "PhantomTestList", "add", "Test task")
+
+	// Run list command to populate cache
+	stdout := cli.MustExecute("-y", "list")
+	testutil.AssertContains(t, stdout, "PhantomTestList")
+	testutil.AssertContains(t, stdout, "1") // task count
+
+	// Verify cache was created
+	cachePath := cli.CachePath()
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("failed to read cache: %v", err)
+	}
+
+	var cacheData cache.ListCache
+	if err := json.Unmarshal(data, &cacheData); err != nil {
+		t.Fatalf("failed to parse cache: %v", err)
+	}
+
+	// Verify cache contains our list
+	found := false
+	for _, l := range cacheData.Lists {
+		if l.Name == "PhantomTestList" {
+			found = true
+			if l.TaskCount != 1 {
+				t.Errorf("expected task count 1, got %d", l.TaskCount)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("expected PhantomTestList in cache")
+	}
+
+	// Now delete the database file (simulating fresh install)
+	dbPath := cli.Config().DBPath
+	if err := os.Remove(dbPath); err != nil {
+		t.Fatalf("failed to remove database: %v", err)
+	}
+
+	// Wait briefly to ensure filesystem timestamp difference
+	time.Sleep(10 * time.Millisecond)
+
+	// Run list command again - should NOT show phantom data
+	// The cache should be invalidated because the database is newer (recreated)
+	stdout = cli.MustExecute("-y", "list")
+
+	// Should NOT contain the old list name (it was in the deleted database)
+	testutil.AssertNotContains(t, stdout, "PhantomTestList")
+
+	// Should show empty state message
+	testutil.AssertContains(t, stdout, "No lists found")
+}

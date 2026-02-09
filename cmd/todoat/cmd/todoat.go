@@ -562,8 +562,11 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 	cacheTTL := getListCacheTTL(cfg)
 	backendName := getBackendName(be)
 
+	// Get database path for cache validation (Issue #092)
+	dbPath := getDBPathForCacheValidation(cfg, be)
+
 	// Check if we have a valid cache for this backend (Issue #008 fix)
-	cachedData, cacheValid := tryReadListCache(cachePath, cacheTTL, backendName)
+	cachedData, cacheValid := tryReadListCache(cachePath, cacheTTL, backendName, dbPath)
 
 	var lists []backend.List
 	var err error
@@ -685,8 +688,9 @@ func getListCacheTTL(cfg *Config) time.Duration {
 }
 
 // tryReadListCache attempts to read and validate the cache file for the given backend.
-// Returns nil, false if cache is invalid, expired, or for a different backend.
-func tryReadListCache(cachePath string, ttl time.Duration, currentBackend string) (*cache.ListCache, bool) {
+// Returns nil, false if cache is invalid, expired, for a different backend, or if
+// the database file is newer than the cache (Issue #092 fix for phantom data).
+func tryReadListCache(cachePath string, ttl time.Duration, currentBackend string, dbPath string) (*cache.ListCache, bool) {
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		return nil, false
@@ -708,6 +712,19 @@ func tryReadListCache(cachePath string, ttl time.Duration, currentBackend string
 	// This prevents showing cached data from one backend when using a different backend
 	if cacheData.Backend != currentBackend {
 		return nil, false
+	}
+
+	// Issue #092: Check if database file is newer than cache
+	// This prevents phantom data appearing when database is deleted and recreated
+	// while cache still contains stale data from the old database.
+	if dbPath != "" {
+		if dbInfo, err := os.Stat(dbPath); err == nil {
+			// Database exists - check if it was created/modified after the cache
+			if dbInfo.ModTime().After(cacheData.CreatedAt) {
+				// Database is newer than cache - invalidate cache
+				return nil, false
+			}
+		}
 	}
 
 	return &cacheData, true
@@ -740,6 +757,24 @@ func writeListCache(cachePath string, lists []cache.CachedList, backendName stri
 func invalidateListCache(cfg *Config) {
 	cachePath := getListCachePath(cfg)
 	_ = os.Remove(cachePath)
+}
+
+// getDBPathForCacheValidation returns the database path for cache validation (Issue #092).
+// For SQLite backend, returns the database file path so we can check if it's newer than cache.
+// For other backends, returns empty string (no local file to check).
+func getDBPathForCacheValidation(cfg *Config, be backend.TaskManager) string {
+	// Only check SQLite backend's database file
+	switch be.(type) {
+	case *sqlite.Backend, *sqlite.DetectableBackend:
+		// Return the database path from config, or default path
+		if cfg != nil && cfg.DBPath != "" {
+			return cfg.DBPath
+		}
+		return getDefaultDBPath()
+	default:
+		// For other backends, no local file to check
+		return ""
+	}
 }
 
 // getBackendName returns a name for the backend for cache isolation.

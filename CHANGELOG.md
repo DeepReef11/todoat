@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Falls back to error with disambiguation info when `--no-prompt` mode is enabled
 
 ### Fixed
+- Fixed phantom data appearing on fresh install when stale cache exists from previously deleted database (#92)
+  - Cache is now invalidated when database file is newer than cache creation time
+  - Prevents serving outdated list/task data after database deletion
 - List restore now fails with clear error when a list with the same name already exists (#88)
 - Fixed sync queue schema initialization to create indexes after column migrations (#86)
   - Prevents `no such column: status` error on fresh databases with old schema
