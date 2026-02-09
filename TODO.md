@@ -8,28 +8,6 @@ _No documentation tasks pending._
 
 ## Questions for Team
 
-### [UX-009] docs/explanation/interactive-ux.md needs rewrite to match implemented interactive prompt
-
-**Context**: The interactive prompt feature was implemented in commit `b6a6151` (2026-01-31). The code now includes:
-- `internal/cli/prompt/prompt.go` - Full fuzzy-find task selection (318 lines)
-- `internal/cli/prompt/prompt_test.go` - Comprehensive tests (661 lines)
-- `ui.interactive_prompt_for_all_tasks` config option in `internal/config/config.go`
-- Context-aware filtering by action type and interactive add mode with field validation
-
-The explanation doc has been updated with minimal changes to remove "empty stub" references and document TaskSelector behavior. User-facing docs (`docs/how-to/task-management.md`) now describe interactive selection.
-
-**Blocks**: User-facing documentation for `ui.interactive_prompt_for_all_tasks` in `docs/reference/configuration.md` and any interactive prompt how-to guides.
-
-**Options**:
-- [ ] Rewrite docs/explanation/interactive-ux.md - Update to document actual fuzzy-find prompt, config option, and context-aware filtering
-- [x] Minimal update - Just fix the "empty stub" references and add config option mention
-
-**Impact**: Blocks user-facing documentation for the interactive prompt config option and fuzzy-find behavior.
-
-**Asked**: 2026-01-29 (updated 2026-01-31)
-**Resolved**: 2026-02-08 (minimal update applied)
-**Status**: answered
-
 ### [FEAT-013] What is the design intent for recurring tasks?
 
 **Context**: Recurring tasks feature exists in code (`--recur` and `--recur-from-completion` CLI flags, `Recurrence` field in `backend/interface.go:32`, RRULE string format) and is documented in user-facing docs (`docs/how-to/task-management.md`, `docs/reference/cli.md`), but is not documented in `docs/explanation/`. The `docs/explanation/task-management.md` covers CRUD operations, status, priority, dates, and search but does not cover recurrence. Need to understand the design rationale (RRULE format choice, completion-based vs due-date-based recurrence, backend compatibility) before the explanation doc is complete.
@@ -195,30 +173,6 @@ The explanation doc has been updated with minimal changes to remove "empty stub"
 
 **Asked**: 2026-02-06
 **Status**: unanswered
-
-### [ARCH-025] Update docs/explanation/background-deamon.md to reflect implemented heartbeat mechanism
-
-**Context**: The daemon heartbeat mechanism was implemented in commit `de7491d` (Issue #74). User-facing documentation is now complete:
-- `docs/reference/configuration.md` documents `sync.daemon.heartbeat_interval` (default: 5 seconds)
-- `docs/how-to/sync.md` explains heartbeat monitoring and status output
-- `internal/config/config.sample.yaml` includes the `heartbeat_interval` option
-
-The explanation doc has been updated to describe the actual file-based heartbeat implementation:
-- Heartbeat file location documented
-- Configuration example added
-- Status output examples added
-- "NOT YET IMPLEMENTED" banner removed
-- Planned vs implemented sections clarified
-
-**Options**:
-- [x] Update explanation doc - Rewrite the "Hung Daemon Detection" section to describe the actual file-based heartbeat implementation
-- [ ] Remove planned sections - Delete the "NOT YET IMPLEMENTED" sections for features that are now implemented
-
-**Impact**: Explanation doc accuracy. User-facing docs are already correct.
-
-**Asked**: 2026-02-06
-**Resolved**: 2026-02-08
-**Status**: answered
 
 ### [FEAT-026] Notification config block not wired in Config struct (UX-012 implementation pending)
 

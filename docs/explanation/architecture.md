@@ -41,3 +41,20 @@ This document records architecture-level design decisions for the todoat project
 **Implementation**: `internal/daemon/daemon.go` - heartbeat recording loop; `internal/config/config.go` - `HeartbeatInterval` field in `DaemonConfig`.
 
 **Related**: [ARCH-007] - See `docs/decisions/question-log.md` for full discussion
+
+### 2026-02-08 Background Daemon Explanation Doc Updated for Heartbeat Implementation
+
+**Decision**: Update `docs/explanation/background-deamon.md` to describe the actual file-based heartbeat implementation, removing "NOT YET IMPLEMENTED" markers.
+
+**Context**: The daemon heartbeat mechanism was implemented in commit `de7491d` (Issue #74). User-facing documentation was complete (`docs/reference/configuration.md`, `docs/how-to/sync.md`), but the explanation doc still contained outdated content. The update documented the heartbeat file location, configuration example, status output examples, and clarified planned vs implemented sections.
+
+**Alternatives Considered**:
+- Remove planned sections entirely: Would lose context about the feature's evolution.
+
+**Consequences**:
+- Explanation doc accurately reflects the implemented heartbeat mechanism
+- "NOT YET IMPLEMENTED" banners removed from implemented features
+- Configuration example shows `heartbeat_interval` option (default: 5 seconds)
+- Users can understand the file-based heartbeat design
+
+**Related**: [ARCH-025] - See `docs/decisions/question-log.md` for full discussion

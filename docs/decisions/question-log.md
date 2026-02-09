@@ -28,6 +28,8 @@ For current design decisions, see `docs/explanation/`.
 | UX-012 | 2026-01-31 | Should notification configuration be user-configurable via config.yaml? | Add `notification` config to Config struct |
 | FEAT-011 | 2026-01-31 | Is background-deamon.md critically outdated and needs rewrite? | Rewrite to match current forked process + IPC implementation |
 | FEAT-005 | 2026-02-06 | Should cache TTL be user-configurable? | Add `cache_ttl` config option - Full user control |
+| UX-009 | 2026-02-08 | docs/explanation/interactive-ux.md needs rewrite to match implemented interactive prompt | Minimal update - fix empty stub references and add config option mention |
+| ARCH-025 | 2026-02-08 | Update docs/explanation/background-deamon.md to reflect implemented heartbeat mechanism | Update explanation doc - rewrite Hung Daemon Detection section |
 
 ---
 
@@ -440,5 +442,63 @@ Additionally, line 373 states "There is no `todoat daemon start` command" but `t
 **Resolution**: Implemented as `cache_ttl` config option (e.g., `"5m"`, `"30s"`, `"10m"`). Default remains 5 minutes. Documented in `docs/reference/configuration.md`, `internal/config/config.sample.yaml`, and `docs/explanation/caching.md`. Getter methods `GetCacheTTL()` and `GetCacheTTLDuration()` added to Config struct.
 
 **Impact**: Data freshness vs network usage trade-off. Affects sync-enabled users.
+
+**Status**: answered
+
+---
+
+### [UX-009] docs/explanation/interactive-ux.md needs rewrite to match implemented interactive prompt
+
+**Asked**: 2026-01-29 (updated 2026-01-31)
+**Answered**: 2026-02-08
+**Documented in**: `docs/explanation/user-experience.md`
+
+**Context**: The interactive prompt feature was implemented in commit `b6a6151` (2026-01-31). The code now includes:
+- `internal/cli/prompt/prompt.go` - Full fuzzy-find task selection (318 lines)
+- `internal/cli/prompt/prompt_test.go` - Comprehensive tests (661 lines)
+- `ui.interactive_prompt_for_all_tasks` config option in `internal/config/config.go`
+- Context-aware filtering by action type and interactive add mode with field validation
+
+The explanation doc has been updated with minimal changes to remove "empty stub" references and document TaskSelector behavior. User-facing docs (`docs/how-to/task-management.md`) now describe interactive selection.
+
+**Blocks**: User-facing documentation for `ui.interactive_prompt_for_all_tasks` in `docs/reference/configuration.md` and any interactive prompt how-to guides.
+
+**Options**:
+- [ ] Rewrite docs/explanation/interactive-ux.md - Update to document actual fuzzy-find prompt, config option, and context-aware filtering
+- [x] Minimal update - Just fix the "empty stub" references and add config option mention
+
+**Impact**: Blocks user-facing documentation for the interactive prompt config option and fuzzy-find behavior.
+
+**Resolution**: Minimal update applied. The explanation doc (`docs/explanation/interactive-ux.md`) has been updated to remove empty stub references and document TaskSelector behavior with config option mention. User-facing documentation is unblocked.
+
+**Status**: answered
+
+---
+
+### [ARCH-025] Update docs/explanation/background-deamon.md to reflect implemented heartbeat mechanism
+
+**Asked**: 2026-02-06
+**Answered**: 2026-02-08
+**Documented in**: `docs/explanation/architecture.md`
+
+**Context**: The daemon heartbeat mechanism was implemented in commit `de7491d` (Issue #74). User-facing documentation is now complete:
+- `docs/reference/configuration.md` documents `sync.daemon.heartbeat_interval` (default: 5 seconds)
+- `docs/how-to/sync.md` explains heartbeat monitoring and status output
+- `internal/config/config.sample.yaml` includes the `heartbeat_interval` option
+
+The explanation doc has been updated to describe the actual file-based heartbeat implementation:
+- Heartbeat file location documented
+- Configuration example added
+- Status output examples added
+- "NOT YET IMPLEMENTED" banner removed
+- Planned vs implemented sections clarified
+
+**Options**:
+- [x] Update explanation doc - Rewrite the "Hung Daemon Detection" section to describe the actual file-based heartbeat implementation
+- [ ] Remove planned sections - Delete the "NOT YET IMPLEMENTED" sections for features that are now implemented
+
+**Impact**: Explanation doc accuracy. User-facing docs are already correct.
+
+**Resolution**: Explanation doc updated to reflect the implemented heartbeat mechanism. The "Hung Daemon Detection" section now describes the actual file-based heartbeat implementation.
 
 **Status**: answered
