@@ -165,6 +165,7 @@ Restores the default configuration. Requires confirmation.
 | `sync.daemon.idle_timeout` | int | Seconds of idle time before daemon exits (default: `300`) |
 | `sync.daemon.heartbeat_interval` | int | Heartbeat interval in seconds for hung daemon detection (default: `5`) |
 | `sync.daemon.stuck_timeout` | int | Minutes before a processing task is considered stuck (default: `10`) |
+| `sync.daemon.task_timeout` | string | Per-task timeout for sync operations (default: `5m`) |
 | `trash.retention_days` | int | Days to keep deleted items (default: `30`, 0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `true`) |
 | `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |
@@ -368,6 +369,7 @@ sync:
 | `idle_timeout` | Seconds before idle daemon exits | `300` (5 minutes) |
 | `heartbeat_interval` | Heartbeat recording interval in seconds for hung daemon detection | `5` |
 | `stuck_timeout` | Minutes before a processing task is considered stuck and recovered | `10` |
+| `task_timeout` | Per-task timeout for individual sync operations | `5m` |
 
 When `interval` or `idle_timeout` are set to 0 or left unset, the effective default of 300 seconds is used.
 

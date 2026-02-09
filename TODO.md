@@ -259,3 +259,27 @@ However, `docs/explanation/background-deamon.md` lines 274-304 still describe "S
 
 **Asked**: 2026-02-08
 **Status**: unanswered
+
+### [FEAT-028] Update docs/explanation/background-deamon.md: Per-Task Timeout is now implemented
+
+**Context**: Per-task timeout protection was implemented in commit `42f1b09` (Issue #84). The code now includes:
+- `task_timeout` config option under `sync.daemon` section (default: "5m")
+- `GetDaemonTaskTimeout()` method in `internal/config/config.go`
+- `AddBackendSyncFuncWithContext` for context-aware sync functions
+- `syncBackendWithTimeout` to wrap backend syncs with timeout
+
+However, `docs/explanation/background-deamon.md` lines 276-289 still describe "Per-Task Timeout" under "Planned Enhancements" with the note "The following features are not yet implemented but are planned for future versions." Line 364 also states "Per-task timeout is **not yet implemented**."
+
+**User-facing docs updated** (2026-02-08):
+- `docs/reference/configuration.md` - now documents `sync.daemon.task_timeout` config option
+- `docs/how-to/sync.md` - now documents per-task timeout configuration
+- `internal/config/config.sample.yaml` - now includes `task_timeout` example
+
+**Options**:
+- [ ] Update explanation doc - Move "Per-Task Timeout" from "Planned Enhancements" to implemented, update line 364 to remove "not yet implemented"
+- [ ] Merge with FEAT-027 and ARCH-025 - Handle all three daemon explanation doc updates in a single pass
+
+**Impact**: Explanation doc accuracy. User-facing docs are now complete.
+
+**Asked**: 2026-02-08
+**Status**: unanswered

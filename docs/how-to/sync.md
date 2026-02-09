@@ -228,6 +228,20 @@ sync:
     stuck_timeout: 15  # minutes
 ```
 
+### Per-Task Timeout
+
+Each individual sync operation has a configurable timeout to prevent hung operations from blocking the sync queue indefinitely. If a task exceeds the timeout, it's cancelled and retried later.
+
+Configure the per-task timeout (default: 5 minutes):
+
+```yaml
+sync:
+  daemon:
+    task_timeout: "5m"  # 5 minutes (default)
+```
+
+The `task_timeout` value uses Go duration format (e.g., `"30s"`, `"2m"`, `"10m"`).
+
 ### Daemon Configuration
 
 Configure daemon behavior in `config.yaml`:
@@ -239,6 +253,8 @@ sync:
     interval: 300         # Sync interval in seconds (default: 5 minutes)
     idle_timeout: 300     # Seconds before idle daemon exits (default: 5 minutes)
     heartbeat_interval: 5 # Heartbeat recording interval in seconds (default: 5)
+    stuck_timeout: 10     # Minutes before a task is considered stuck (default: 10)
+    task_timeout: "5m"    # Per-task timeout for sync operations (default: 5m)
 ```
 
 The `--interval` flag on `sync daemon start` overrides the `interval` config value for that session.

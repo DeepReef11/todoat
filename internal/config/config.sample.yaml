@@ -76,6 +76,8 @@ sync:
   #   interval: 300                          # Sync interval in seconds (default: 5 minutes)
   #   idle_timeout: 300                      # Seconds before idle daemon exits (default: 5 minutes)
   #   heartbeat_interval: 5                  # Heartbeat interval in seconds for hung detection (default: 5)
+  #   stuck_timeout: 10                      # Minutes before a task is considered stuck (default: 10)
+  #   task_timeout: "5m"                     # Per-task timeout for sync operations (default: 5m)
 
 # =============================================================================
 # User Interface Settings

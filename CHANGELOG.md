@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Context-aware sync functions with `AddBackendSyncFuncWithContext` method
   - Timeout events logged with backend name and duration
   - `DefaultTaskTimeout` constant for 5-minute default
+  - Documentation added to `docs/how-to/sync.md` and `docs/reference/configuration.md`
 - Stuck task detection and recovery for sync queue (#83)
   - `GetStuckOperations` and `RecoverStuckOperations` methods detect tasks stuck in 'processing' state
   - `GetStuckOperationsWithValidation` validates worker daemon liveness via heartbeat files before recovery
