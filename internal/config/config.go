@@ -81,14 +81,15 @@ type SyncConfig struct {
 
 // DaemonConfig holds background daemon settings
 type DaemonConfig struct {
-	Enabled           bool `yaml:"enabled"`            // Enable forked daemon process (Issue #36)
-	Interval          int  `yaml:"interval"`           // Sync interval in seconds
-	IdleTimeout       int  `yaml:"idle_timeout"`       // Idle timeout in seconds before daemon exits
-	HeartbeatInterval int  `yaml:"heartbeat_interval"` // Heartbeat recording interval in seconds (Issue #74)
-	StuckTimeout      int  `yaml:"stuck_timeout"`      // Stuck task timeout in minutes (Issue #083, default: 10)
-	FileWatcher       bool `yaml:"file_watcher"`       // Enable file watcher for real-time sync triggers (Issue #41)
-	SmartTiming       bool `yaml:"smart_timing"`       // Enable smart timing to avoid sync during active editing (Issue #41)
-	DebounceMs        int  `yaml:"debounce_ms"`        // Debounce duration in milliseconds (Issue #41)
+	Enabled           bool   `yaml:"enabled"`            // Enable forked daemon process (Issue #36)
+	Interval          int    `yaml:"interval"`           // Sync interval in seconds
+	IdleTimeout       int    `yaml:"idle_timeout"`       // Idle timeout in seconds before daemon exits
+	HeartbeatInterval int    `yaml:"heartbeat_interval"` // Heartbeat recording interval in seconds (Issue #74)
+	StuckTimeout      int    `yaml:"stuck_timeout"`      // Stuck task timeout in minutes (Issue #083, default: 10)
+	TaskTimeout       string `yaml:"task_timeout"`       // Per-task timeout for sync operations (Issue #84, default: "5m")
+	FileWatcher       bool   `yaml:"file_watcher"`       // Enable file watcher for real-time sync triggers (Issue #41)
+	SmartTiming       bool   `yaml:"smart_timing"`       // Enable smart timing to avoid sync during active editing (Issue #41)
+	DebounceMs        int    `yaml:"debounce_ms"`        // Debounce duration in milliseconds (Issue #41)
 }
 
 // BackendsConfig holds configuration for all backends
@@ -431,6 +432,20 @@ func (c *Config) GetDaemonStuckTimeout() int {
 		return 10 // Default: 10 minutes
 	}
 	return c.Sync.Daemon.StuckTimeout
+}
+
+// GetDaemonTaskTimeout returns the per-task timeout for sync operations.
+// Returns 5 minutes if not configured.
+// Issue #84: Per-task timeout protection for sync operations.
+func (c *Config) GetDaemonTaskTimeout() time.Duration {
+	if c.Sync.Daemon.TaskTimeout == "" {
+		return 5 * time.Minute // Default: 5 minutes
+	}
+	d, err := time.ParseDuration(c.Sync.Daemon.TaskTimeout)
+	if err != nil {
+		return 5 * time.Minute // Default on parse error
+	}
+	return d
 }
 
 // IsBackgroundLoggingEnabled returns true if background logging is enabled.

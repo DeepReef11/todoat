@@ -40,6 +40,10 @@ func CalculateBackoff(consecutiveErrors int) time.Duration {
 // DefaultStuckTimeout is the default timeout for detecting stuck tasks (10 minutes).
 const DefaultStuckTimeout = 10 * time.Minute
 
+// DefaultTaskTimeout is the default timeout for individual task processing (5 minutes).
+// Issue #84: Per-task timeout protection for sync operations.
+const DefaultTaskTimeout = 5 * time.Minute
+
 // Config holds daemon configuration.
 type Config struct {
 	PIDPath           string        // Path to PID file
@@ -50,6 +54,7 @@ type Config struct {
 	HeartbeatInterval time.Duration // Heartbeat recording interval (Issue #74)
 	IdleTimeout       time.Duration // Timeout before daemon exits when idle
 	StuckTimeout      time.Duration // Timeout for detecting stuck tasks (Issue #083, default: 10 minutes)
+	TaskTimeout       time.Duration // Timeout for individual task processing (Issue #84, default: 5 minutes)
 	ConfigPath        string        // Path to app config file
 	DBPath            string        // Path to database
 	CachePath         string        // Path to cache
@@ -93,10 +98,11 @@ type BackendState struct {
 
 // backendEntry holds a backend's sync function and configuration.
 type backendEntry struct {
-	name     string
-	syncFunc func() error
-	interval time.Duration // Per-backend interval (0 = use global interval)
-	lastSync time.Time     // When this backend was last synced
+	name        string
+	syncFunc    func() error                    // Legacy sync function (no context)
+	syncFuncCtx func(ctx context.Context) error // Context-aware sync function (Issue #84)
+	interval    time.Duration                   // Per-backend interval (0 = use global interval)
+	lastSync    time.Time                       // When this backend was last synced
 }
 
 // Daemon represents a running daemon process.
@@ -118,6 +124,9 @@ type Daemon struct {
 	// Error loop prevention (Issue #82)
 	consecutiveErrors     int      // Consecutive sync errors for legacy single-backend
 	testBackoffMultiplier *float64 // Multiplier for backoff duration (nil = 1.0, 0 = skip sleep)
+
+	// Per-task timeout (Issue #84)
+	onTaskTimeout func(backendName string, duration time.Duration) // Callback for timeout events
 }
 
 // New creates a new Daemon instance.
@@ -155,6 +164,20 @@ func (d *Daemon) getBackoffDuration(consecutiveErrors int) time.Duration {
 	return backoff
 }
 
+// SetOnTaskTimeout sets a callback that will be invoked when a task times out.
+// Issue #84: Per-task timeout protection for sync operations.
+func (d *Daemon) SetOnTaskTimeout(f func(backendName string, duration time.Duration)) {
+	d.onTaskTimeout = f
+}
+
+// getTaskTimeout returns the configured task timeout or the default.
+func (d *Daemon) getTaskTimeout() time.Duration {
+	if d.cfg.TaskTimeout > 0 {
+		return d.cfg.TaskTimeout
+	}
+	return DefaultTaskTimeout
+}
+
 // AddBackendSyncFunc adds a backend sync function using the global interval.
 // This enables multi-backend sync support (Issue #40).
 func (d *Daemon) AddBackendSyncFunc(name string, syncFunc func() error) {
@@ -171,6 +194,32 @@ func (d *Daemon) AddBackendSyncFuncWithInterval(name string, interval time.Durat
 		name:     name,
 		syncFunc: syncFunc,
 		interval: interval,
+	}
+	d.backends = append(d.backends, entry)
+
+	// Initialize state for this backend
+	d.backendStates[name] = &BackendState{
+		Name: name,
+	}
+}
+
+// AddBackendSyncFuncWithContext adds a context-aware backend sync function.
+// The function receives a context that will be cancelled if the task times out.
+// Issue #84: Per-task timeout protection for sync operations.
+func (d *Daemon) AddBackendSyncFuncWithContext(name string, syncFunc func(ctx context.Context) error) {
+	d.AddBackendSyncFuncWithContextAndInterval(name, 0, syncFunc)
+}
+
+// AddBackendSyncFuncWithContextAndInterval adds a context-aware backend sync function with a custom interval.
+// Issue #84: Per-task timeout protection for sync operations.
+func (d *Daemon) AddBackendSyncFuncWithContextAndInterval(name string, interval time.Duration, syncFunc func(ctx context.Context) error) {
+	d.backendsMu.Lock()
+	defer d.backendsMu.Unlock()
+
+	entry := &backendEntry{
+		name:        name,
+		syncFuncCtx: syncFunc,
+		interval:    interval,
 	}
 	d.backends = append(d.backends, entry)
 
@@ -504,6 +553,7 @@ func (d *Daemon) performSync() bool {
 
 // performMultiBackendSync iterates through all backends and syncs each one.
 // Failure in one backend does not affect others (failure isolation).
+// Issue #84: Each backend sync is wrapped in a context with timeout.
 func (d *Daemon) performMultiBackendSync(globalCount int) {
 	d.backendsMu.Lock()
 	backends := make([]*backendEntry, len(d.backends))
@@ -512,6 +562,7 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 
 	now := time.Now()
 	globalInterval := d.cfg.Interval
+	taskTimeout := d.getTaskTimeout()
 
 	for _, be := range backends {
 		// Check if this backend should sync based on its interval.
@@ -531,8 +582,8 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 
 		d.log("Syncing backend: %s", be.name)
 
-		// Perform sync with failure isolation
-		err := be.syncFunc()
+		// Perform sync with timeout protection (Issue #84)
+		err := d.syncBackendWithTimeout(be, taskTimeout)
 
 		// Update backend state
 		d.backendsMu.Lock()
@@ -559,6 +610,44 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 		// Update backend's last sync time (regardless of success/failure)
 		be.lastSync = now
 		d.backendsMu.Unlock()
+	}
+}
+
+// syncBackendWithTimeout executes a backend sync with timeout protection.
+// Issue #84: Per-task timeout protection for sync operations.
+func (d *Daemon) syncBackendWithTimeout(be *backendEntry, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	done := make(chan error, 1)
+	startTime := time.Now()
+
+	go func() {
+		var err error
+		if be.syncFuncCtx != nil {
+			// Use context-aware sync function
+			err = be.syncFuncCtx(ctx)
+		} else if be.syncFunc != nil {
+			// Legacy sync function - no context support
+			err = be.syncFunc()
+		}
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		// Timeout exceeded
+		elapsed := time.Since(startTime)
+		d.log("Backend %s timed out after %v (limit: %v)", be.name, elapsed, timeout)
+
+		// Invoke callback if registered
+		if d.onTaskTimeout != nil {
+			d.onTaskTimeout(be.name, elapsed)
+		}
+
+		return fmt.Errorf("task timeout: backend %s exceeded maximum duration of %v", be.name, timeout)
 	}
 }
 

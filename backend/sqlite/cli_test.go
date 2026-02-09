@@ -1669,6 +1669,28 @@ func TestListRestoreNotInTrashSQLiteCLI(t *testing.T) {
 	testutil.AssertResultCode(t, stdout, testutil.ResultError)
 }
 
+// TestListRestoreDuplicateNameSQLiteCLI verifies that restoring a list fails when
+// a list with the same name already exists (Issue #88)
+func TestListRestoreDuplicateNameSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Step 1: Create a list
+	cli.MustExecute("-y", "list", "create", "Work")
+
+	// Step 2: Delete the list
+	cli.MustExecute("-y", "list", "delete", "Work")
+
+	// Step 3: Create a new list with the same name
+	cli.MustExecute("-y", "list", "create", "Work")
+
+	// Step 4: Try to restore the deleted list - should fail with duplicate name error
+	stdout, _, exitCode := cli.Execute("-y", "list", "trash", "restore", "Work")
+
+	testutil.AssertExitCode(t, exitCode, 1)
+	testutil.AssertContains(t, stdout, "already exists")
+	testutil.AssertResultCode(t, stdout, testutil.ResultError)
+}
+
 // TestListPurge verifies that `todoat -y list trash purge "Name"` permanently deletes
 func TestListPurgeSQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)

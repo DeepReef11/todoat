@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1169,6 +1170,266 @@ func TestDaemonErrorCountReset(t *testing.T) {
 	// 1. Continued running through multiple fail/success cycles
 	// 2. Had to be stopped manually (not auto-shutdown due to errors)
 	// 3. Achieved at least 3 successful syncs
+}
+
+// =============================================================================
+// Issue #84: Per-Task Timeout Protection for Sync Operations
+// =============================================================================
+
+// TestTaskProcessingTimeout verifies that task exceeding timeout is cancelled.
+// Issue #84: Per-task timeout protection for sync operations.
+func TestTaskProcessingTimeout(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    100 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: 50 * time.Millisecond, // Short timeout for testing
+	}
+
+	d := New(cfg)
+
+	// Track whether sync was interrupted
+	var syncStarted, syncCompleted int32
+
+	// Backend sync that takes longer than the task timeout
+	d.AddBackendSyncFunc("slow_backend", func() error {
+		atomic.AddInt32(&syncStarted, 1)
+		time.Sleep(200 * time.Millisecond) // Takes longer than 50ms timeout
+		atomic.AddInt32(&syncCompleted, 1)
+		return nil
+	})
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for at least one sync attempt
+	time.Sleep(300 * time.Millisecond)
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	// Verify sync was started
+	if atomic.LoadInt32(&syncStarted) == 0 {
+		t.Errorf("expected sync to start at least once")
+	}
+
+	// Verify the backend state shows failure due to timeout
+	state := d.GetBackendState("slow_backend")
+	if state == nil {
+		t.Fatalf("expected state for slow_backend")
+	}
+	if state.ErrorCount == 0 {
+		t.Errorf("expected error count > 0 for timed out backend, got 0")
+	}
+	if state.LastError == "" || !strings.Contains(state.LastError, "timeout") {
+		t.Errorf("expected timeout error in LastError, got: %q", state.LastError)
+	}
+}
+
+// TestTaskTimeoutMarksFailure verifies that timed out task is marked as failed in queue.
+// Issue #84: Per-task timeout protection for sync operations.
+func TestTaskTimeoutMarksFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    100 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: 30 * time.Millisecond, // Short timeout for testing
+	}
+
+	d := New(cfg)
+
+	var timeoutCount int32
+
+	// Backend sync that blocks indefinitely (until timeout)
+	d.AddBackendSyncFunc("blocking_backend", func() error {
+		time.Sleep(100 * time.Millisecond) // Will timeout
+		return nil
+	})
+
+	// Register callback to track timeout events
+	d.SetOnTaskTimeout(func(backendName string, duration time.Duration) {
+		atomic.AddInt32(&timeoutCount, 1)
+	})
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for timeout events
+	time.Sleep(250 * time.Millisecond)
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	// Verify timeout was detected
+	if atomic.LoadInt32(&timeoutCount) == 0 {
+		t.Errorf("expected at least one timeout event, got 0")
+	}
+
+	// Verify backend state shows error
+	state := d.GetBackendState("blocking_backend")
+	if state == nil {
+		t.Fatalf("expected state for blocking_backend")
+	}
+	if state.ErrorCount == 0 {
+		t.Errorf("expected error count > 0 for timed out backend")
+	}
+}
+
+// TestTaskTimeoutContextCancellation verifies that Context.Done() is properly handled.
+// Issue #84: Per-task timeout protection for sync operations.
+func TestTaskTimeoutContextCancellation(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    100 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: 30 * time.Millisecond, // Short timeout for testing
+	}
+
+	d := New(cfg)
+
+	var contextCancelled int32
+
+	// Backend sync that respects context cancellation
+	d.AddBackendSyncFuncWithContext("context_aware_backend", func(ctx context.Context) error {
+		select {
+		case <-time.After(100 * time.Millisecond):
+			return nil // Would complete normally but timeout is shorter
+		case <-ctx.Done():
+			atomic.AddInt32(&contextCancelled, 1)
+			return ctx.Err()
+		}
+	})
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for context cancellation
+	time.Sleep(250 * time.Millisecond)
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	// Verify context was cancelled due to timeout
+	if atomic.LoadInt32(&contextCancelled) == 0 {
+		t.Errorf("expected context to be cancelled at least once due to timeout")
+	}
+
+	// Verify backend state shows timeout error
+	state := d.GetBackendState("context_aware_backend")
+	if state == nil {
+		t.Fatalf("expected state for context_aware_backend")
+	}
+	if state.ErrorCount == 0 {
+		t.Errorf("expected error count > 0 for backend with cancelled context")
+	}
+}
+
+// TestTaskTimeoutDefaultValue verifies default MaxTaskDuration is 5 minutes.
+// Issue #84: Default MaxTaskDuration = 5 minutes.
+func TestTaskTimeoutDefaultValue(t *testing.T) {
+	if DefaultTaskTimeout != 5*time.Minute {
+		t.Errorf("expected DefaultTaskTimeout to be 5 minutes, got %v", DefaultTaskTimeout)
+	}
+}
+
+// TestTaskTimeoutConfigurable verifies TaskTimeout can be set via Config.
+// Issue #84: Add task_timeout config option to daemon section.
+func TestTaskTimeoutConfigurable(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	customTimeout := 10 * time.Minute
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    100 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: customTimeout,
+	}
+
+	d := New(cfg)
+
+	// Verify the configured timeout is used
+	if d.cfg.TaskTimeout != customTimeout {
+		t.Errorf("expected TaskTimeout %v, got %v", customTimeout, d.cfg.TaskTimeout)
+	}
+}
+
+// TestTaskTimeoutLogging verifies timeout events are logged with task ID and duration.
+// Issue #84: Log timeout events with task ID and duration.
+func TestTaskTimeoutLogging(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "daemon.log")
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     logPath,
+		Interval:    100 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: 30 * time.Millisecond, // Short timeout for testing
+	}
+
+	d := New(cfg)
+
+	// Backend sync that will timeout
+	d.AddBackendSyncFunc("log_test_backend", func() error {
+		time.Sleep(100 * time.Millisecond) // Will timeout
+		return nil
+	})
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for timeout event to be logged
+	time.Sleep(200 * time.Millisecond)
+
+	// Read log file BEFORE stopping daemon (cleanup() removes it)
+	logContent, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	logStr := string(logContent)
+	if !strings.Contains(logStr, "timed out") || !strings.Contains(logStr, "log_test_backend") {
+		t.Errorf("expected log to contain timeout message with backend name, got: %s", logStr)
+	}
 }
 
 // TestDaemonHeartbeatDisabled verifies daemon works without heartbeat when interval is 0.

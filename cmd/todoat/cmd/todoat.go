@@ -1332,6 +1332,19 @@ func doListRestore(ctx context.Context, be backend.TaskManager, name string, cfg
 		return fmt.Errorf("list '%s' not found in trash", name)
 	}
 
+	// Check if a list with the same name already exists (Issue #88)
+	existingList, err := be.GetListByName(ctx, list.Name)
+	if err != nil {
+		return err
+	}
+	if existingList != nil {
+		_, _ = fmt.Fprintf(stdout, "Error: cannot restore '%s' - a list with this name already exists\n", list.Name)
+		if cfg != nil && cfg.NoPrompt {
+			_, _ = fmt.Fprintln(stdout, ResultError)
+		}
+		return fmt.Errorf("cannot restore '%s' - a list with this name already exists", list.Name)
+	}
+
 	// Restore the list
 	if err := be.RestoreList(ctx, list.ID); err != nil {
 		return err

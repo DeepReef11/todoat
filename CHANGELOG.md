@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Per-task timeout protection for sync operations (#84)
+  - `task_timeout` config option under `sync.daemon` section (default: 5 minutes)
+  - Context-aware sync functions with `AddBackendSyncFuncWithContext` method
+  - Timeout events logged with backend name and duration
+  - `DefaultTaskTimeout` constant for 5-minute default
 - Stuck task detection and recovery for sync queue (#83)
   - `GetStuckOperations` and `RecoverStuckOperations` methods detect tasks stuck in 'processing' state
   - `GetStuckOperationsWithValidation` validates worker daemon liveness via heartbeat files before recovery
@@ -27,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Falls back to error with disambiguation info when `--no-prompt` mode is enabled
 
 ### Fixed
+- List restore now fails with clear error when a list with the same name already exists (#88)
 - Fixed sync queue schema initialization to create indexes after column migrations (#86)
   - Prevents `no such column: status` error on fresh databases with old schema
   - Index creation now runs after `migrateSyncQueueSchema` ensures columns exist

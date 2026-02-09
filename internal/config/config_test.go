@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // =============================================================================
@@ -1501,6 +1502,113 @@ func TestCacheTTLDurationInvalidFallback(t *testing.T) {
 
 	if got.Seconds() != expected {
 		t.Errorf("GetCacheTTLDuration() with invalid value = %v seconds, want %v seconds (fallback)", got.Seconds(), expected)
+	}
+}
+
+// =============================================================================
+// Tests for Issue 084: Per-Task Timeout Protection for Sync Operations
+// =============================================================================
+
+// TestDaemonTaskTimeoutConfig verifies task_timeout config option
+func TestDaemonTaskTimeoutConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name     string
+		config   string
+		expected time.Duration
+	}{
+		{
+			name: "5 minutes (default)",
+			config: `
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: 5 * time.Minute,
+		},
+		{
+			name: "custom 10 minutes",
+			config: `
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    task_timeout: "10m"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: 10 * time.Minute,
+		},
+		{
+			name: "custom 30 seconds",
+			config: `
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    task_timeout: "30s"
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`,
+			expected: 30 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(tmpDir, tt.name+"-config.yaml")
+			if err := os.WriteFile(configPath, []byte(tt.config), 0644); err != nil {
+				t.Fatalf("failed to write config: %v", err)
+			}
+
+			cfg, err := Load(configPath)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			got := cfg.GetDaemonTaskTimeout()
+			if got != tt.expected {
+				t.Errorf("GetDaemonTaskTimeout() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestDaemonTaskTimeoutDefault verifies default value is 5 minutes
+func TestDaemonTaskTimeoutDefault(t *testing.T) {
+	cfg := &Config{}
+	got := cfg.GetDaemonTaskTimeout()
+	expected := 5 * time.Minute
+
+	if got != expected {
+		t.Errorf("GetDaemonTaskTimeout() = %v, want %v", got, expected)
+	}
+}
+
+// TestDaemonTaskTimeoutInvalidFallback verifies fallback to 5 minutes for invalid values
+func TestDaemonTaskTimeoutInvalidFallback(t *testing.T) {
+	cfg := &Config{
+		Sync: SyncConfig{
+			Daemon: DaemonConfig{
+				TaskTimeout: "invalid",
+			},
+		},
+	}
+	got := cfg.GetDaemonTaskTimeout()
+	expected := 5 * time.Minute
+
+	if got != expected {
+		t.Errorf("GetDaemonTaskTimeout() with invalid value = %v, want %v (fallback)", got, expected)
 	}
 }
 
