@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Empty path components (e.g., `//`) in subtask paths are now silently ignored instead of causing an error
+
 ### Added
 - Per-task timeout protection for sync operations (#84)
   - `task_timeout` config option under `sync.daemon` section (default: 5 minutes)

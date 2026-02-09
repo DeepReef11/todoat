@@ -176,7 +176,7 @@ Streamline creation of multi-level task hierarchies using a single command with 
 - Auto-creates missing intermediate levels
 - Final level is always created as new task
 - All tasks created in same transaction (atomic operation)
-- Errors on `//` (empty child)
+- Empty path components (e.g., `//`) are silently ignored
 
 **Advanced Path Usage:**
 
