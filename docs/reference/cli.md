@@ -227,7 +227,7 @@ todoat list [command]
 |---------|-------------|
 | (default) | View all lists (no subcommand) |
 | `create` | Create a new list |
-| `delete` | Delete a list (move to trash) |
+| `delete` | Delete a list (soft-delete on SQLite, permanent on other backends) |
 | `update` | Update a list's properties |
 | `info` | Show list details |
 | `export` | Export a list to a file |

@@ -74,13 +74,16 @@ todoat list update "Work Tasks" --description "Updated description text"
 
 ## Deleting Lists
 
-### Soft Delete (Move to Trash)
+### Delete a List
 
 ```bash
 todoat list delete "List Name"
 ```
 
-You'll be prompted to confirm. Lists are moved to trash, not permanently deleted.
+You'll be prompted to confirm. Behavior depends on the backend:
+- **SQLite**: Soft-deletes the list (moves to trash, recoverable)
+- **Nextcloud**: Returns an error (CalDAV deletion not supported to prevent data loss)
+- **Todoist, Google Tasks, Microsoft To Do, Git, File**: Permanently deletes the list
 
 ### Force Delete (Skip Confirmation)
 
@@ -307,7 +310,7 @@ Reclaims unused space in the SQLite database. Run this periodically if you frequ
 ## Notes
 
 - List names must be unique within a backend
-- Deleting a list moves it to trash (recoverable for 30 days by default)
+- Deleting a list on SQLite moves it to trash (recoverable for 30 days by default); on other backends, deletion may be permanent
 - Colors are supported by most backends (Nextcloud, Todoist)
 - List properties sync when synchronization is enabled
 
