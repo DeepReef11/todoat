@@ -677,6 +677,25 @@ func TestListViewSQLiteCLI(t *testing.T) {
 	testutil.AssertContains(t, stdout, "Personal")
 }
 
+// TestListViewShowsColorSQLiteCLI verifies that `todoat -y list` shows color column when lists have colors
+// Issue #106: text output should display color when set
+func TestListViewShowsColorSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Create a list with a color
+	cli.MustExecute("-y", "list", "create", "Work", "--color", "#0066CC")
+	// Create a list without a color
+	cli.MustExecute("-y", "list", "create", "Personal")
+
+	// View lists
+	stdout := cli.MustExecute("-y", "list")
+
+	// Should show COLOR header when any list has a color
+	testutil.AssertContains(t, stdout, "COLOR")
+	// Should show the color value for the colored list
+	testutil.AssertContains(t, stdout, "#0066CC")
+}
+
 // TestNoArgsShowsListsSQLiteCLI verifies that running todoat without arguments shows available lists
 // Issue #0: todoat should show available list when run without args
 func TestNoArgsShowsListsSQLiteCLI(t *testing.T) {

@@ -670,10 +670,26 @@ func doListView(ctx context.Context, be backend.TaskManager, cfg *Config, stdout
 
 	// Display formatted list with task counts
 	_, _ = fmt.Fprintf(stdout, "Available lists (%d):\n\n", len(lists))
-	_, _ = fmt.Fprintf(stdout, "%-20s %s\n", "NAME", "TASKS")
 
+	// Check if any list has a color set
+	hasColor := false
 	for _, cl := range cachedLists {
-		_, _ = fmt.Fprintf(stdout, "%-20s %d\n", cl.Name, cl.TaskCount)
+		if cl.Color != "" {
+			hasColor = true
+			break
+		}
+	}
+
+	if hasColor {
+		_, _ = fmt.Fprintf(stdout, "%-20s %-10s %s\n", "NAME", "COLOR", "TASKS")
+		for _, cl := range cachedLists {
+			_, _ = fmt.Fprintf(stdout, "%-20s %-10s %d\n", cl.Name, cl.Color, cl.TaskCount)
+		}
+	} else {
+		_, _ = fmt.Fprintf(stdout, "%-20s %s\n", "NAME", "TASKS")
+		for _, cl := range cachedLists {
+			_, _ = fmt.Fprintf(stdout, "%-20s %d\n", cl.Name, cl.TaskCount)
+		}
 	}
 
 	return nil
