@@ -2,7 +2,7 @@
 
 ## Documentation Tasks
 
-_No documentation tasks pending._
+- [ ] Update `docs/explanation/task-management.md:203` - Todoist API reference says "REST API v2" but code was migrated to "API v1" in commit `91b911c`. The line "For Todoist: Sends POST request to REST API v2" should reference "API v1".
 
 ---
 
@@ -188,18 +188,12 @@ The field-level timestamp tracking mentioned in ARCH-007 does not appear to be i
 **Asked**: 2026-02-08
 **Status**: unanswered
 
-### [ARCH-030] SetLastSyncTime references non-existent `updated_at` column in sync_metadata table
+### [ARCH-030] ~~SetLastSyncTime references non-existent `updated_at` column in sync_metadata table~~
 
-**Context**: The `sync_metadata` table is created at `cmd/todoat/cmd/todoat.go:7548` with columns `(id, key, value)`. However, `SetLastSyncTime` at line 7683 executes `INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)` which references a non-existent `updated_at` column. The error is discarded with `_, _` so this INSERT silently fails every time. As a result, `GetLastSyncTime()` always returns the zero time, and `sync status` always shows "Last sync: Never" regardless of actual sync activity. Additionally, `doSync` at line 6505 calls `SetLastSyncTime` before the error check at line 6508, so even fixing the schema would record sync time for failed syncs.
-
-**Options**:
-- [ ] Fix schema - Remove `updated_at` from the INSERT statement to match the table definition `(key, value)`
-- [ ] Fix schema and move timing - Fix the INSERT and move `SetLastSyncTime` call to after the error check so only successful syncs are recorded
-
-**Impact**: `sync status` always reports "Last sync: Never" which misleads users into thinking sync has never run. This is a bug, not a design decision, but the fix approach needs a decision (option 2 changes behavior).
+**Resolved**: Fixed in commit `6d6ca8d` - removed non-existent `updated_at` column from SetLastSyncTime INSERT statement.
 
 **Asked**: 2026-02-12
-**Status**: unanswered
+**Status**: resolved (2026-02-12)
 
 ### [ARCH-031] ClaimNextOperation uses BEGIN instead of BEGIN IMMEDIATE despite comment
 
@@ -230,33 +224,19 @@ The field-level timestamp tracking mentioned in ARCH-007 does not appear to be i
 **Asked**: 2026-02-12
 **Status**: unanswered
 
-### [ARCH-033] Per-task timeout not passed to forked daemon process
+### [ARCH-033] ~~Per-task timeout not passed to forked daemon process~~
 
-**Context**: The `Fork()` function in `internal/daemon/daemon.go:794-824` builds CLI arguments for the forked daemon process, passing `--daemon-interval`, `--daemon-idle-timeout`, `--daemon-stuck-timeout`, `--daemon-heartbeat-path`, and `--daemon-heartbeat-interval`. However, there is no `--daemon-task-timeout` argument, so the `TaskTimeout` config field is never propagated. Furthermore, `runDaemonMode` at `cmd/todoat/cmd/todoat.go:9263-9366` calls `doSync()` directly rather than using `syncBackendWithTimeout`, so the forked daemon never applies per-task timeout protection (Issue #84). The timeout only works via `AddBackendSyncFuncWithContext` which is used in tests, not in the forked production daemon.
-
-**Options**:
-- [ ] Wire TaskTimeout in Fork and runDaemonMode - Add `--daemon-task-timeout` flag and use `syncBackendWithTimeout` in the forked daemon's sync path
-- [ ] Accept limitation - Per-task timeout is only for the in-process daemon; forked daemon relies on stuck task recovery instead
-- [ ] Redesign - Move timeout enforcement into the sync queue processing layer so it applies regardless of daemon mode
-
-**Impact**: The per-task timeout feature (Issue #84) is effectively unreachable in the primary production use case (forked daemon). Users configuring `task_timeout` get no protection from hung syncs.
+**Resolved**: Fixed in commit `7ee8945` (#98) - `Fork()` now passes `--daemon-task-timeout` to the forked daemon process, and `runDaemonMode` parses and applies it.
 
 **Asked**: 2026-02-12
-**Status**: unanswered
+**Status**: resolved (2026-02-12)
 
-### [ARCH-034] NewSyncManager silently discards initDB errors, causing silent sync data loss
+### [ARCH-034] ~~NewSyncManager silently discards initDB errors~~
 
-**Context**: `NewSyncManager` at `cmd/todoat/cmd/todoat.go:7500-7503` discards the error from `initDB()` with `_ = sm.initDB()`. If database initialization fails (permissions, disk full, corrupted file), the `SyncManager` is returned with `db == nil`. All subsequent operations (`QueueOperationByStringID`, `GetPendingCount`, etc.) check `if sm.db == nil` and silently return zero/nil. Additionally, `syncAwareBackend` at lines 3253, 3269, 3292 discards queue errors with `_ = b.syncMgr.QueueOperationByStringID(...)`. The combined effect: if the sync database is inaccessible, local task operations succeed but sync queue entries are silently lost. The user sees "task created" but the change never syncs to the remote backend.
-
-**Options**:
-- [ ] Return error from NewSyncManager - Change signature to `NewSyncManager(dbPath string) (*SyncManager, error)` and propagate to callers
-- [ ] Log warning on initDB failure - Keep current signature but log a visible warning so users know sync is degraded
-- [ ] Propagate queue errors in syncAwareBackend - Return errors from `QueueOperationByStringID` so the user knows their change won't sync
-
-**Impact**: Silent data sync loss. Users create/update/delete tasks locally, get success messages, but changes never reach the remote backend. No error or warning is shown.
+**Resolved**: Fixed in commit `1e6a483` (#97) - `NewSyncManager` now returns `(*SyncManager, error)`, queue operations return errors when db is nil, and `syncAwareBackend` logs warnings when queue operations fail.
 
 **Asked**: 2026-02-12
-**Status**: unanswered
+**Status**: resolved (2026-02-12)
 
 ### [ARCH-035] Multi-backend daemon bypasses error loop prevention (consecutiveErrors never increments)
 

@@ -4586,12 +4586,12 @@ func TestIssue097_NewSyncManagerReturnsErrorOnInitFailure(t *testing.T) {
 	sm, err := NewSyncManager(dbPath)
 	if err == nil {
 		if sm != nil && sm.db != nil {
-			sm.db.Close()
+			_ = sm.db.Close()
 		}
 		t.Fatal("NewSyncManager should return error when database directory is not writable")
 	}
 	if sm != nil && sm.db != nil {
-		sm.db.Close()
+		_ = sm.db.Close()
 		t.Fatal("NewSyncManager should not return a SyncManager with initialized db on error")
 	}
 }
@@ -4608,7 +4608,7 @@ func TestIssue097_NewSyncManagerSucceeds(t *testing.T) {
 	if sm == nil || sm.db == nil {
 		t.Fatal("SyncManager should have initialized db")
 	}
-	defer sm.db.Close()
+	defer func() { _ = sm.db.Close() }()
 }
 
 // TestIssue097_QueueOperationByStringIDReturnsErrorWhenDBNil verifies that
