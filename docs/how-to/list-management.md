@@ -132,10 +132,10 @@ todoat list info "Work Tasks"
 
 Shows:
 - Name
-- Description
+- ID
 - Color
+- Description
 - Task count
-- Created date
 
 ## Sharing Lists (Nextcloud)
 
