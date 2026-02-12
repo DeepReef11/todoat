@@ -387,10 +387,22 @@ Examples:
 				taskSummary = args[2]
 			}
 
-			// Get or create list
-			list, err := getOrCreateList(ctx, be, listName)
-			if err != nil {
-				return err
+			// For "add" action, auto-create the list if it doesn't exist.
+			// For all other actions, require the list to already exist.
+			var list *backend.List
+			if action == "add" {
+				list, err = getOrCreateList(ctx, be, listName)
+				if err != nil {
+					return err
+				}
+			} else {
+				list, err = be.GetListByName(ctx, listName)
+				if err != nil {
+					return err
+				}
+				if list == nil {
+					return utils.ErrListNotFound(listName)
+				}
 			}
 
 			// Check for JSON output mode
@@ -3506,6 +3518,15 @@ func (b *syncAwareBackend) GetLists(ctx context.Context) ([]backend.List, error)
 
 	// Return current local data immediately
 	return b.TaskManager.GetLists(ctx)
+}
+
+// GetListByName returns a list from the local cache and triggers a background pull sync.
+func (b *syncAwareBackend) GetListByName(ctx context.Context, name string) (*backend.List, error) {
+	// Trigger background pull sync (non-blocking)
+	b.triggerBackgroundPullSync()
+
+	// Return current local data immediately
+	return b.TaskManager.GetListByName(ctx, name)
 }
 
 // GetTaskByLocalID delegates to the underlying backend if it supports LocalIDBackend

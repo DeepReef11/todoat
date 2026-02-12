@@ -1050,7 +1050,7 @@ func TestAppStartsWithoutExistingDBSQLiteCLI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	// Running a list command should work even with no existing DB
-	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+	exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d: stderr=%s stdout=%s", exitCode, stderr.String(), stdout.String())
@@ -1114,7 +1114,7 @@ func TestDBCreatedAtCorrectPathSQLiteCLI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	// Running a command that requires DB should trigger DB creation at XDG path
-	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+	exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
@@ -1176,7 +1176,7 @@ func TestDirectoriesCreatedAutomaticallySQLiteCLI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	// Running a command should create all necessary directories
-	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+	exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())
@@ -1225,7 +1225,7 @@ func TestConfigCreatedOnCLIExecutionSQLiteCLI(t *testing.T) {
 
 	// Run a CLI command that triggers backend creation (uses default XDG paths)
 	cfg := &Config{}
-	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+	exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d: stderr=%s stdout=%s", exitCode, stderr.String(), stdout.String())
@@ -1258,7 +1258,7 @@ func TestSchemaInitializedOnNewDBSQLiteCLI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	// Running a command should initialize the schema
-	exitCode := Execute([]string{"TestList", "get"}, &stdout, &stderr, cfg)
+	exitCode := Execute([]string{"list"}, &stdout, &stderr, cfg)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d: stderr=%s", exitCode, stderr.String())

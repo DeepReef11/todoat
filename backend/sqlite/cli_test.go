@@ -493,6 +493,9 @@ func TestResultCodeGetTasksSQLiteCLI(t *testing.T) {
 func TestResultCodeListEmptySQLiteCLI(t *testing.T) {
 	cli := testutil.NewCLITest(t)
 
+	// Create the list first, then view it empty
+	cli.MustExecute("-y", "list", "create", "EmptyList")
+
 	// Get empty list should show message (no result code in text output)
 	stdout := cli.MustExecute("-y", "EmptyList")
 
@@ -5268,4 +5271,32 @@ func TestInfoOnlyNotInTextOutputSQLiteCLI(t *testing.T) {
 	// Test 3: JSON output SHOULD contain INFO_ONLY (this is correct behavior)
 	stdout = cli.MustExecute("-y", "--json", "InfoTest")
 	testutil.AssertContains(t, stdout, `"INFO_ONLY"`)
+}
+
+// =============================================================================
+// Issue #103: Viewing tasks on non-existent list should not auto-create it
+// =============================================================================
+
+func TestViewNonExistentListSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Step 1: Check existing lists
+	listOutput := cli.MustExecute("-y", "list")
+	testutil.AssertNotContains(t, listOutput, "MyLsit")
+
+	// Step 2: View tasks on a non-existent list (e.g., a typo)
+	stdout, stderr, exitCode := cli.Execute("-y", "MyLsit")
+
+	// Expected: exit code should be non-zero (error)
+	testutil.AssertExitCode(t, exitCode, 1)
+
+	// Expected: should show error message indicating list not found
+	combinedOutput := stdout + stderr
+	if !strings.Contains(combinedOutput, "list not found") {
+		t.Errorf("expected error about list not found, got:\nstdout: %s\nstderr: %s", stdout, stderr)
+	}
+
+	// Step 3: Verify the list was NOT auto-created
+	listOutput = cli.MustExecute("-y", "list")
+	testutil.AssertNotContains(t, listOutput, "MyLsit")
 }
