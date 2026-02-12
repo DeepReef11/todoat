@@ -1549,14 +1549,16 @@ func TestMultiBackendConsecutiveErrors(t *testing.T) {
 		d.Stop()
 	}
 
-	// Both backends should have been attempted MaxConsecutiveErrors times
+	// Issue #114: With circuit breaker, each backend is called DefaultCircuitBreakerThreshold times
+	// before the circuit opens. After that, circuit-blocked ticks count as global failures
+	// until MaxConsecutiveErrors is reached and the daemon shuts down.
 	aSyncs := atomic.LoadInt32(&backendASyncs)
 	bSyncs := atomic.LoadInt32(&backendBSyncs)
-	if aSyncs != int32(MaxConsecutiveErrors) {
-		t.Errorf("expected backendA to sync %d times, got %d", MaxConsecutiveErrors, aSyncs)
+	if aSyncs != int32(DefaultCircuitBreakerThreshold) {
+		t.Errorf("expected backendA to sync %d times (circuit breaker threshold), got %d", DefaultCircuitBreakerThreshold, aSyncs)
 	}
-	if bSyncs != int32(MaxConsecutiveErrors) {
-		t.Errorf("expected backendB to sync %d times, got %d", MaxConsecutiveErrors, bSyncs)
+	if bSyncs != int32(DefaultCircuitBreakerThreshold) {
+		t.Errorf("expected backendB to sync %d times (circuit breaker threshold), got %d", DefaultCircuitBreakerThreshold, bSyncs)
 	}
 }
 
@@ -1614,6 +1616,274 @@ func TestMultiBackendErrorResetOnPartialSuccess(t *testing.T) {
 	if syncs < int32(MaxConsecutiveErrors*2+4) {
 		t.Errorf("expected daemon to keep running with partial success, but only got %d total syncs", syncs)
 	}
+}
+
+// =============================================================================
+// Issue #114: Circuit Breaker Pattern for Backend-Specific Daemon Errors
+// =============================================================================
+
+// TestCircuitBreakerOpensOnConsecutiveFailures verifies the circuit opens after
+// N consecutive failures for a specific backend.
+func TestCircuitBreakerOpensOnConsecutiveFailures(t *testing.T) {
+	cb := NewCircuitBreaker(3, 1*time.Second)
+
+	// Initially closed - should allow requests
+	if !cb.Allow() {
+		t.Fatal("circuit should allow requests when closed")
+	}
+	if cb.State() != CircuitClosed {
+		t.Fatalf("expected state Closed, got %v", cb.State())
+	}
+
+	// Record 2 failures - should still be closed
+	cb.RecordFailure()
+	cb.RecordFailure()
+	if !cb.Allow() {
+		t.Fatal("circuit should still allow after 2 failures (threshold=3)")
+	}
+	if cb.State() != CircuitClosed {
+		t.Fatalf("expected state Closed after 2 failures, got %v", cb.State())
+	}
+
+	// Record 3rd failure - should open
+	cb.RecordFailure()
+	if cb.State() != CircuitOpen {
+		t.Fatalf("expected state Open after 3 failures, got %v", cb.State())
+	}
+	if cb.Allow() {
+		t.Fatal("circuit should NOT allow requests when open")
+	}
+}
+
+// TestCircuitBreakerHalfOpenRecovery verifies that after cooldown, the circuit
+// enters half-open state and allows a probe request.
+func TestCircuitBreakerHalfOpenRecovery(t *testing.T) {
+	cooldown := 50 * time.Millisecond
+	cb := NewCircuitBreaker(2, cooldown)
+
+	// Trip the circuit
+	cb.RecordFailure()
+	cb.RecordFailure()
+	if cb.State() != CircuitOpen {
+		t.Fatalf("expected Open, got %v", cb.State())
+	}
+	if cb.Allow() {
+		t.Fatal("should not allow when open")
+	}
+
+	// Wait for cooldown
+	time.Sleep(cooldown + 10*time.Millisecond)
+
+	// Should now be half-open and allow one probe
+	if cb.State() != CircuitHalfOpen {
+		t.Fatalf("expected HalfOpen after cooldown, got %v", cb.State())
+	}
+	if !cb.Allow() {
+		t.Fatal("half-open circuit should allow one probe request")
+	}
+
+	// Probe succeeds → circuit should close
+	cb.RecordSuccess()
+	if cb.State() != CircuitClosed {
+		t.Fatalf("expected Closed after successful probe, got %v", cb.State())
+	}
+	if cb.FailureCount() != 0 {
+		t.Fatalf("failure count should be 0 after reset, got %d", cb.FailureCount())
+	}
+
+	// Now test: probe fails → circuit re-opens
+	cb2 := NewCircuitBreaker(2, cooldown)
+	cb2.RecordFailure()
+	cb2.RecordFailure()
+	time.Sleep(cooldown + 10*time.Millisecond)
+
+	// Half-open, allow probe
+	if !cb2.Allow() {
+		t.Fatal("should allow probe in half-open")
+	}
+	// Probe fails
+	cb2.RecordFailure()
+	if cb2.State() != CircuitOpen {
+		t.Fatalf("expected Open after failed probe, got %v", cb2.State())
+	}
+}
+
+// TestCircuitBreakerPerBackendIsolation verifies one backend's circuit breaker
+// state does not affect other backends.
+func TestCircuitBreakerPerBackendIsolation(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    50 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: 1 * time.Second,
+	}
+
+	d := New(cfg)
+	d.SetTestBackoffMultiplier(0)
+
+	var successSyncs int32
+	var failAttempts int32
+
+	// backendA: always fails → circuit should open
+	d.AddBackendSyncFunc("backendA", func() error {
+		atomic.AddInt32(&failAttempts, 1)
+		return fmt.Errorf("backendA down")
+	})
+
+	// backendB: always succeeds → circuit stays closed
+	d.AddBackendSyncFunc("backendB", func() error {
+		atomic.AddInt32(&successSyncs, 1)
+		return nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Let it run for a while - enough for backendA's circuit to open
+	time.Sleep(400 * time.Millisecond)
+
+	d.Stop()
+	<-done
+
+	fails := atomic.LoadInt32(&failAttempts)
+	successes := atomic.LoadInt32(&successSyncs)
+
+	// backendA should have been called up to the threshold (3) then blocked by circuit
+	// backendB should have been called many more times since its circuit stays closed
+	if successes < 4 {
+		t.Errorf("backendB should have synced many times, got %d", successes)
+	}
+
+	// backendA's circuit should have opened after DefaultCircuitBreakerThreshold failures,
+	// so it should have fewer total attempts than backendB
+	if fails >= successes {
+		t.Errorf("backendA (failing, circuit should open) attempts (%d) should be less than backendB successes (%d)", fails, successes)
+	}
+
+	// Verify circuit breaker states
+	stateA := d.GetBackendState("backendA")
+	stateB := d.GetBackendState("backendB")
+	if stateA == nil || stateB == nil {
+		t.Fatal("expected backend states to exist")
+	}
+	// backendA should show circuit open
+	if stateA.CircuitState != CircuitOpen.String() {
+		t.Errorf("backendA circuit should be Open, got %s", stateA.CircuitState)
+	}
+	// backendB should show circuit closed
+	if stateB.CircuitState != CircuitClosed.String() {
+		t.Errorf("backendB circuit should be Closed, got %s", stateB.CircuitState)
+	}
+}
+
+// TestCircuitBreakerResetOnSuccess verifies that a successful sync closes the
+// circuit and resets the failure count.
+func TestCircuitBreakerResetOnSuccess(t *testing.T) {
+	cb := NewCircuitBreaker(3, 50*time.Millisecond)
+
+	// Record 2 failures (below threshold)
+	cb.RecordFailure()
+	cb.RecordFailure()
+	if cb.FailureCount() != 2 {
+		t.Fatalf("expected 2 failures, got %d", cb.FailureCount())
+	}
+
+	// Success resets failure count
+	cb.RecordSuccess()
+	if cb.FailureCount() != 0 {
+		t.Fatalf("expected 0 failures after success, got %d", cb.FailureCount())
+	}
+	if cb.State() != CircuitClosed {
+		t.Fatalf("expected Closed after success, got %v", cb.State())
+	}
+
+	// Trip it fully, then recover via half-open probe
+	cb.RecordFailure()
+	cb.RecordFailure()
+	cb.RecordFailure()
+	if cb.State() != CircuitOpen {
+		t.Fatalf("expected Open, got %v", cb.State())
+	}
+
+	// Wait for cooldown, then succeed
+	time.Sleep(60 * time.Millisecond)
+	if !cb.Allow() {
+		t.Fatal("should allow probe in half-open")
+	}
+	cb.RecordSuccess()
+	if cb.State() != CircuitClosed {
+		t.Fatalf("expected Closed after successful probe, got %v", cb.State())
+	}
+	if cb.FailureCount() != 0 {
+		t.Fatalf("expected 0 failures, got %d", cb.FailureCount())
+	}
+	if !cb.Allow() {
+		t.Fatal("should allow requests after reset")
+	}
+}
+
+// TestCircuitBreakerStatusVisible verifies circuit breaker state appears in daemon status output.
+func TestCircuitBreakerStatusVisible(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    50 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: 1 * time.Second,
+	}
+
+	d := New(cfg)
+	d.SetTestBackoffMultiplier(0)
+
+	// backendA always fails
+	d.AddBackendSyncFunc("backendA", func() error {
+		return fmt.Errorf("always fails")
+	})
+	// backendB always succeeds
+	d.AddBackendSyncFunc("backendB", func() error {
+		return nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for circuit to open on backendA
+	time.Sleep(300 * time.Millisecond)
+
+	// Check status via getBackendStatuses
+	statuses := d.getBackendStatuses()
+	if statuses == nil {
+		t.Fatal("expected backend statuses")
+	}
+
+	statusA := statuses["backendA"]
+	statusB := statuses["backendB"]
+	if statusA == nil || statusB == nil {
+		t.Fatal("expected statuses for both backends")
+	}
+
+	if statusA.CircuitState != CircuitOpen.String() {
+		t.Errorf("backendA status should show circuit Open, got %q", statusA.CircuitState)
+	}
+	if statusB.CircuitState != CircuitClosed.String() {
+		t.Errorf("backendB status should show circuit Closed, got %q", statusB.CircuitState)
+	}
+
+	d.Stop()
+	<-done
 }
 
 // TestForkOmitsTaskTimeoutWhenZero verifies that Fork omits --daemon-task-timeout when TaskTimeout is zero.

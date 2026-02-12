@@ -80,20 +80,22 @@ type Response struct {
 
 // BackendStatus represents the status of a backend for API responses.
 type BackendStatus struct {
-	SyncCount  int    `json:"sync_count"`
-	ErrorCount int    `json:"error_count"`
-	LastSync   string `json:"last_sync,omitempty"`
-	LastError  string `json:"last_error,omitempty"`
-	Healthy    bool   `json:"healthy"`
+	SyncCount    int    `json:"sync_count"`
+	ErrorCount   int    `json:"error_count"`
+	LastSync     string `json:"last_sync,omitempty"`
+	LastError    string `json:"last_error,omitempty"`
+	Healthy      bool   `json:"healthy"`
+	CircuitState string `json:"circuit_state,omitempty"` // Issue #114: Circuit breaker state
 }
 
 // BackendState holds the per-backend sync state (Issue #40).
 type BackendState struct {
-	Name       string    // Backend name
-	SyncCount  int       // Number of syncs performed
-	ErrorCount int       // Number of consecutive errors
-	LastSync   time.Time // Last successful sync time
-	LastError  string    // Last error message (if any)
+	Name         string    // Backend name
+	SyncCount    int       // Number of syncs performed
+	ErrorCount   int       // Number of consecutive errors
+	LastSync     time.Time // Last successful sync time
+	LastError    string    // Last error message (if any)
+	CircuitState string    // Circuit breaker state (Issue #114)
 }
 
 // backendEntry holds a backend's sync function and configuration.
@@ -117,9 +119,10 @@ type Daemon struct {
 	syncFunc  func() error // Function to call for sync operations (legacy single-backend)
 
 	// Multi-backend support (Issue #40)
-	backends      []*backendEntry          // List of backends with their sync functions
-	backendStates map[string]*BackendState // Per-backend state tracking
-	backendsMu    sync.RWMutex             // Protects backends and backendStates
+	backends        []*backendEntry            // List of backends with their sync functions
+	backendStates   map[string]*BackendState   // Per-backend state tracking
+	circuitBreakers map[string]*CircuitBreaker // Per-backend circuit breakers (Issue #114)
+	backendsMu      sync.RWMutex               // Protects backends, backendStates, and circuitBreakers
 
 	// Error loop prevention (Issue #82)
 	consecutiveErrors     int      // Consecutive sync errors for legacy single-backend
@@ -132,10 +135,11 @@ type Daemon struct {
 // New creates a new Daemon instance.
 func New(cfg *Config) *Daemon {
 	return &Daemon{
-		cfg:           cfg,
-		stopChan:      make(chan struct{}),
-		backends:      make([]*backendEntry, 0),
-		backendStates: make(map[string]*BackendState),
+		cfg:             cfg,
+		stopChan:        make(chan struct{}),
+		backends:        make([]*backendEntry, 0),
+		backendStates:   make(map[string]*BackendState),
+		circuitBreakers: make(map[string]*CircuitBreaker),
 	}
 }
 
@@ -197,10 +201,11 @@ func (d *Daemon) AddBackendSyncFuncWithInterval(name string, interval time.Durat
 	}
 	d.backends = append(d.backends, entry)
 
-	// Initialize state for this backend
+	// Initialize state and circuit breaker for this backend (Issue #114)
 	d.backendStates[name] = &BackendState{
 		Name: name,
 	}
+	d.circuitBreakers[name] = NewCircuitBreaker(DefaultCircuitBreakerThreshold, DefaultCircuitBreakerCooldown)
 }
 
 // AddBackendSyncFuncWithContext adds a context-aware backend sync function.
@@ -223,10 +228,11 @@ func (d *Daemon) AddBackendSyncFuncWithContextAndInterval(name string, interval 
 	}
 	d.backends = append(d.backends, entry)
 
-	// Initialize state for this backend
+	// Initialize state and circuit breaker for this backend (Issue #114)
 	d.backendStates[name] = &BackendState{
 		Name: name,
 	}
+	d.circuitBreakers[name] = NewCircuitBreaker(DefaultCircuitBreakerThreshold, DefaultCircuitBreakerCooldown)
 }
 
 // GetBackendState returns the state for a specific backend.
@@ -286,12 +292,20 @@ func (d *Daemon) getBackendStatuses() map[string]*BackendStatus {
 		if !state.LastSync.IsZero() {
 			lastSync = state.LastSync.Format(time.RFC3339)
 		}
+		// Issue #114: Include circuit breaker state
+		circuitState := state.CircuitState
+		if circuitState == "" {
+			if cb, ok := d.circuitBreakers[name]; ok {
+				circuitState = cb.State().String()
+			}
+		}
 		statuses[name] = &BackendStatus{
-			SyncCount:  state.SyncCount,
-			ErrorCount: state.ErrorCount,
-			LastSync:   lastSync,
-			LastError:  state.LastError,
-			Healthy:    state.ErrorCount == 0,
+			SyncCount:    state.SyncCount,
+			ErrorCount:   state.ErrorCount,
+			LastSync:     lastSync,
+			LastError:    state.LastError,
+			Healthy:      state.ErrorCount == 0,
+			CircuitState: circuitState,
 		}
 	}
 	return statuses
@@ -583,7 +597,8 @@ func (d *Daemon) performMultiBackendSync(globalCount int) (allFailed bool, anySy
 	taskTimeout := d.getTaskTimeout()
 
 	// Issue #100: Track whether all synced backends failed
-	var syncedCount, failedCount int
+	// Issue #114: Track backends blocked by circuit breaker
+	var syncedCount, failedCount, circuitBlockedCount, dueCount int
 
 	for _, be := range backends {
 		// Check if this backend should sync based on its interval.
@@ -595,10 +610,20 @@ func (d *Daemon) performMultiBackendSync(globalCount int) (allFailed bool, anySy
 
 		d.backendsMu.RLock()
 		lastSync := be.lastSync
+		cb := d.circuitBreakers[be.name]
 		d.backendsMu.RUnlock()
 
 		if !lastSync.IsZero() && now.Sub(lastSync) < interval {
 			continue // Skip this backend - not yet time to sync
+		}
+
+		dueCount++
+
+		// Issue #114: Check circuit breaker before attempting sync
+		if cb != nil && !cb.Allow() {
+			d.log("Backend %s circuit open, skipping sync", be.name)
+			circuitBlockedCount++
+			continue // Skip this backend - circuit is open
 		}
 
 		syncedCount++
@@ -607,7 +632,7 @@ func (d *Daemon) performMultiBackendSync(globalCount int) (allFailed bool, anySy
 		// Perform sync with timeout protection (Issue #84)
 		err := d.syncBackendWithTimeout(be, taskTimeout)
 
-		// Update backend state
+		// Update backend state and circuit breaker
 		d.backendsMu.Lock()
 		state := d.backendStates[be.name]
 		if state == nil {
@@ -620,6 +645,11 @@ func (d *Daemon) performMultiBackendSync(globalCount int) (allFailed bool, anySy
 			state.ErrorCount++
 			state.LastError = err.Error()
 			failedCount++
+			// Issue #114: Record failure in circuit breaker
+			if cb != nil {
+				cb.RecordFailure()
+				state.CircuitState = cb.State().String()
+			}
 			d.log("Backend %s sync error: %v (error count: %d)", be.name, err, state.ErrorCount)
 		} else {
 			// Success - reset error count
@@ -627,6 +657,11 @@ func (d *Daemon) performMultiBackendSync(globalCount int) (allFailed bool, anySy
 			state.ErrorCount = 0
 			state.LastError = ""
 			state.LastSync = now
+			// Issue #114: Record success in circuit breaker
+			if cb != nil {
+				cb.RecordSuccess()
+				state.CircuitState = cb.State().String()
+			}
 			d.log("Backend %s sync completed (sync count: %d)", be.name, state.SyncCount)
 		}
 
@@ -636,6 +671,11 @@ func (d *Daemon) performMultiBackendSync(globalCount int) (allFailed bool, anySy
 	}
 
 	// Issue #100: All backends failed → report as global sync failure
+	// Issue #114: If all due backends are circuit-blocked (none actually synced),
+	// treat it as a global failure so the daemon can still shut down.
+	if dueCount > 0 && syncedCount == 0 && circuitBlockedCount == dueCount {
+		return true, true // All due backends are circuit-blocked → global failure
+	}
 	anySynced = syncedCount > 0
 	allFailed = anySynced && failedCount == syncedCount
 	return allFailed, anySynced

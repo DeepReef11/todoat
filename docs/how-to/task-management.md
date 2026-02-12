@@ -98,6 +98,9 @@ todoat MyList -p low     # priorities 6-9
 # Tasks with a specific tag
 todoat MyList --tag urgent
 
+# Using --tags alias (equivalent to --tag)
+todoat MyList --tags urgent
+
 # Tasks with multiple tags (comma-separated)
 todoat MyList --tag "work,important"
 ```

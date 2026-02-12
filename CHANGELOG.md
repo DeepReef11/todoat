@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Documentation
+- Updated reminders docs to note `wall` fallback for headless Linux environments
+- Added `--tags` alias example to task management docs
 - Added documentation for calendar subscriptions (`list subscribe` / `list unsubscribe` commands)
 - Updated shell completion reference to include `subscribe`, `unsubscribe`, `share`, and `unshare` subcommands
 - Updated `logging.background_enabled` config reference with `config set` example
@@ -38,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `stuck_timeout` and `task_timeout` to `config get`/`config set` registries so documented commands work (#84)
 
 ### Added
+- Circuit breaker pattern for per-backend daemon sync errors (#114)
+  - Opens circuit after consecutive failures, preventing repeated requests to a failing backend
+  - Half-open state allows periodic probe requests to detect recovery
+  - Circuit breaker state visible in daemon status output
 - Field-level timestamp tests for merge conflict resolution (Issue #113)
 - Public link publishing for Nextcloud backend via OCS Share API (#95)
   - `list publish` command to generate a public read-only share URL for a task list

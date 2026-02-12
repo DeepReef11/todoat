@@ -115,7 +115,7 @@ reminder:
 
 Reminders can be delivered through two channels:
 
-- **OS Notifications**: Desktop notifications using your system's notification service (notify-send on Linux, osascript on macOS)
+- **OS Notifications**: Desktop notifications using your system's notification service (notify-send on Linux with wall fallback for headless environments, osascript on macOS)
 - **Log File**: Written to the notification log at `~/.local/share/todoat/notifications.log`
 
 View the notification log:
