@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - Clarified `list delete` behavior per backend: soft-delete on SQLite, permanent on most others, error on Nextcloud
 - Added documentation for Nextcloud list sharing via CalDAV (`list share` / `list unshare` commands)
+- Added error reference for Nextcloud list deletion not supported via CalDAV
 - Updated error reference for non-existent list behavior (now returns error instead of silently auto-creating)
 
 ### Changed

@@ -98,6 +98,20 @@ Suggestion: Valid options: TODO, IN-PROGRESS, DONE, CANCELLED
 
 ## Backend Errors
 
+### List Deletion Not Supported (Nextcloud)
+
+**Message**: `deleting calendars is not supported via CalDAV (would be permanent)`
+
+**Cause**: The Nextcloud backend does not support list deletion to prevent accidental data loss.
+
+**Example**:
+```bash
+$ todoat -b nextcloud list delete "Work"
+Error: deleting calendars is not supported via CalDAV (would be permanent)
+```
+
+**Fix**: Delete the calendar directly in the Nextcloud web interface if you need to remove it.
+
 ### Backend Not Configured
 
 **Message**: `todoist backend requires API token (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)`

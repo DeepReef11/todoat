@@ -227,7 +227,7 @@ todoat list [command]
 |---------|-------------|
 | (default) | View all lists (no subcommand) |
 | `create` | Create a new list |
-| `delete` | Delete a list (soft-delete on SQLite, permanent on other backends) |
+| `delete` | Delete a list (soft-delete on SQLite, error on Nextcloud, permanent on other backends) |
 | `update` | Update a list's properties |
 | `info` | Show list details |
 | `export` | Export a list to a file |
@@ -374,7 +374,7 @@ todoat list create "Work" --description "Work tasks" --color "#0066cc"
 # Update list name and color
 todoat list update "Work" --name "Work Tasks" --color "#00cc66"
 
-# Delete a list (moves to trash)
+# Delete a list (moves to trash on SQLite, error on Nextcloud, permanent on others)
 todoat list delete "Old List"
 
 # View trash
