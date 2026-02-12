@@ -3320,11 +3320,12 @@ func loadSyncConfigFromAppConfig(cfg *Config, appConfig *config.Config) {
 type syncAwareBackend struct {
 	backend.TaskManager
 	syncMgr            *SyncManager
-	cfg                *Config    // stored for auto-sync support
-	lastBackgroundSync time.Time  // last time a background sync was triggered (cooldown)
-	syncMutex          sync.Mutex // mutex for thread-safe access to sync state
-	pullSyncRunning    bool       // true if a pull sync operation is currently running
-	pushSyncRunning    bool       // true if a push sync operation is currently running
+	cfg                *Config        // stored for auto-sync support
+	lastBackgroundSync time.Time      // last time a background sync was triggered (cooldown)
+	syncMutex          sync.Mutex     // mutex for thread-safe access to sync state
+	pullSyncRunning    bool           // true if a pull sync operation is currently running
+	pushSyncRunning    bool           // true if a push sync operation is currently running
+	bgWG               sync.WaitGroup // tracks this backend's background goroutines for safe Close()
 }
 
 // triggerBackgroundPullSync triggers a background pull-only sync for read operations.
@@ -3388,8 +3389,10 @@ func (b *syncAwareBackend) triggerBackgroundPullSync() {
 	// Trigger pull-only sync in background goroutine
 	// Use WaitGroup to ensure sync completes before program exit (Issue #032)
 	backgroundSyncWG.Add(1)
+	b.bgWG.Add(1)
 	go func() {
 		defer backgroundSyncWG.Done()
+		defer b.bgWG.Done()
 		defer func() {
 			b.syncMutex.Lock()
 			b.pullSyncRunning = false
@@ -3446,8 +3449,10 @@ func (b *syncAwareBackend) triggerAutoSync() {
 	// Trigger sync in background goroutine (Issue #014)
 	// Use WaitGroup to ensure sync completes before program exit (Issue #032)
 	backgroundSyncWG.Add(1)
+	b.bgWG.Add(1)
 	go func() {
 		defer backgroundSyncWG.Done()
+		defer b.bgWG.Done()
 		defer func() {
 			b.syncMutex.Lock()
 			b.pushSyncRunning = false
@@ -3520,8 +3525,11 @@ func (b *syncAwareBackend) DeleteTask(ctx context.Context, listID, taskID string
 	return nil
 }
 
-// Close closes both the backend and sync manager
+// Close waits for background sync goroutines to finish, then closes
+// both the backend and sync manager. Waiting prevents SQLite deadlocks
+// caused by closing the database while background goroutines still access it.
 func (b *syncAwareBackend) Close() error {
+	b.bgWG.Wait()
 	_ = b.syncMgr.Close()
 	return b.TaskManager.Close()
 }
