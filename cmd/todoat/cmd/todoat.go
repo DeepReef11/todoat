@@ -178,8 +178,8 @@ func Execute(args []string, stdout, stderr io.Writer, cfg *Config) int {
 	}
 
 	if execErr != nil {
-		// Check if --json flag was passed to output error as JSON
-		jsonOutput := containsJSONFlag(args)
+		// Check if --json flag was passed or output_format is json to output error as JSON
+		jsonOutput := containsJSONFlag(args) || (cfg != nil && cfg.OutputFormat == "json")
 		if jsonOutput {
 			outputErrorJSON(execErr, stdout)
 		} else {
@@ -288,6 +288,15 @@ func containsJSONFlag(args []string) bool {
 	return false
 }
 
+// isJSONOutput returns true if JSON output is requested via the --json flag
+// or the output_format config setting.
+func isJSONOutput(cmd *cobra.Command, cfg *Config) bool {
+	if jsonFlag, _ := cmd.Flags().GetBool("json"); jsonFlag {
+		return true
+	}
+	return cfg != nil && cfg.OutputFormat == "json"
+}
+
 // NewTodoAt creates the root command with injectable IO
 func NewTodoAt(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 	if cfg == nil {
@@ -328,6 +337,17 @@ Examples:
 				cfg.Backend = backendFlag
 				utils.Debugf("Backend flag set to: %s", backendFlag)
 			}
+
+			// Load output_format from config file if not already set
+			if cfg.OutputFormat == "" {
+				configPath := cfg.ConfigPath
+				if configPath == "" {
+					configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
+				}
+				if appConfig, err := config.LoadFromPath(configPath); err == nil && appConfig != nil {
+					cfg.OutputFormat = appConfig.OutputFormat
+				}
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -351,7 +371,7 @@ Examples:
 				}
 				defer func() { _ = be.Close() }()
 
-				jsonOutput, _ := cmd.Flags().GetBool("json")
+				jsonOutput := isJSONOutput(cmd, cfg)
 				return doListView(context.Background(), be, cfg, stdout, jsonOutput)
 			}
 
@@ -406,7 +426,7 @@ Examples:
 			}
 
 			// Check for JSON output mode
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			// Execute the action
 			return executeAction(ctx, cmd, be, list, action, taskSummary, cfg, stdout, jsonOutput)
@@ -513,7 +533,7 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			}
 			defer func() { _ = be.Close() }()
 
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListView(context.Background(), be, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -560,7 +580,7 @@ func newListCreateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 			description, _ := cmd.Flags().GetString("description")
 			color, _ := cmd.Flags().GetString("color")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListCreate(context.Background(), be, args[0], description, color, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -943,7 +963,7 @@ func newListUpdateCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			color, _ := cmd.Flags().GetString("color")
 			description, _ := cmd.Flags().GetString("description")
 			descriptionSet := cmd.Flags().Changed("description")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListUpdate(context.Background(), be, args[0], newName, color, description, descriptionSet, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -1162,7 +1182,7 @@ func newListInfoCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			be, err := getBackend(cfg)
 			if err != nil {
@@ -1243,7 +1263,7 @@ func newListTrashCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			be, err := getBackend(cfg)
 			if err != nil {
@@ -1512,7 +1532,7 @@ func newListExportCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 			format, _ := cmd.Flags().GetString("format")
 			output, _ := cmd.Flags().GetString("output")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doListExport(context.Background(), be, args[0], format, output, cfg, stdout, jsonOutput)
 		},
@@ -1875,7 +1895,7 @@ func newListImportCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			defer func() { _ = be.Close() }()
 
 			format, _ := cmd.Flags().GetString("format")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doListImport(context.Background(), be, args[0], format, cfg, stdout, jsonOutput)
 		},
@@ -2342,7 +2362,7 @@ func newListStatsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 				listName = args[0]
 			}
 
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListStats(context.Background(), be, listName, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -2463,7 +2483,7 @@ func newListVacuumCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			}
 			defer func() { _ = be.Close() }()
 
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListVacuum(context.Background(), be, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -2548,7 +2568,7 @@ func newListShareCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 			user, _ := cmd.Flags().GetString("user")
 			permission, _ := cmd.Flags().GetString("permission")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListShare(context.Background(), be, args[0], user, permission, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -2631,7 +2651,7 @@ func newListUnshareCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			defer func() { _ = be.Close() }()
 
 			user, _ := cmd.Flags().GetString("user")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListUnshare(context.Background(), be, args[0], user, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -2710,7 +2730,7 @@ func newListSubscribeCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			}
 			defer func() { _ = be.Close() }()
 
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListSubscribe(context.Background(), be, args[0], cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -2780,7 +2800,7 @@ func newListUnsubscribeCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			}
 			defer func() { _ = be.Close() }()
 
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doListUnsubscribe(context.Background(), be, args[0], cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -4197,7 +4217,7 @@ func newViewListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doViewList(cfg, stdout, jsonOutput)
 		},
@@ -6490,7 +6510,7 @@ func newCredentialsGetCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command 
 		RunE: func(cmd *cobra.Command, args []string) error {
 			backend := args[0]
 			username := args[1]
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			manager := credentials.NewManager()
 			handler := credentials.NewCLIHandler(manager, nil, stdout, stderr)
@@ -6528,7 +6548,7 @@ func newCredentialsListCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command
 		Short: "List all backends with credential status",
 		Long:  "Show all configured backends and whether credentials are available for each.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			// Load configuration to get actual backend list
 			_, raw, err := config.LoadWithRaw(cfg.ConfigPath)
@@ -6634,7 +6654,7 @@ func newSyncStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 				cfg.NoPrompt = true
 			}
 			verbose, _ := cmd.Flags().GetBool("verbose")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doSyncStatus(cfg, stdout, verbose, jsonOutput)
 		},
@@ -7437,7 +7457,7 @@ func newSyncQueueCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doSyncQueueView(cfg, stdout, jsonOutput)
 		},
@@ -7568,7 +7588,7 @@ func newSyncConflictsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 				cfg.NoPrompt = true
 			}
 
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doSyncConflictsView(cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -8816,7 +8836,7 @@ func newNotificationLogCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doNotificationLogView(cfg, stdout, jsonOutput)
 		},
@@ -9032,7 +9052,7 @@ func newSyncDaemonStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doDaemonStatus(cfg, stdout, jsonOutput)
 		},
@@ -9932,7 +9952,7 @@ func newMigrateCmd(stdout, stderr io.Writer, cfg *Config) *cobra.Command {
 			listName, _ := cmd.Flags().GetString("list")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
 			targetInfo, _ := cmd.Flags().GetString("target-info")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			// Handle target-info mode
 			if targetInfo != "" {
@@ -10851,7 +10871,7 @@ func newReminderStatusCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doReminderStatus(cfg, stdout, jsonOutput)
 		},
@@ -10917,7 +10937,7 @@ func newReminderCheckCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doReminderCheck(cfg, stdout, jsonOutput)
 		},
@@ -11038,7 +11058,7 @@ func newReminderListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if noPrompt {
 				cfg.NoPrompt = true
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			return doReminderList(cfg, stdout, jsonOutput)
 		},
@@ -11517,7 +11537,7 @@ func newConfigGetCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			if len(args) > 0 {
 				key = args[0]
 			}
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doConfigGet(cmd, stdout, cfg, key, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -12392,7 +12412,7 @@ func newConfigPathCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 				configPath = filepath.Join(config.GetConfigDir(), "config.yaml")
 			}
 
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			if jsonOutput {
 				result := map[string]string{"path": configPath}
 				enc := json.NewEncoder(stdout)
@@ -12530,7 +12550,7 @@ func newVersionCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verbose, _ := cmd.Flags().GetBool("verbose")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 
 			info := VersionInfo{
 				Version:   Version,
@@ -12609,7 +12629,7 @@ func newTagsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 			defer func() { _ = be.Close() }()
 
 			listName, _ := cmd.Flags().GetString("list")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			return doTags(context.Background(), be, listName, cfg, stdout, jsonOutput)
 		},
 		SilenceUsage:  true,
@@ -12875,7 +12895,7 @@ func newAnalyticsStatsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 		Long:  "Display summary of command usage including counts and success rates.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			since, _ := cmd.Flags().GetString("since")
 
 			db, err := getAnalyticsDB(cfg)
@@ -12982,7 +13002,7 @@ func newAnalyticsBackendsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 		Long:  "Display performance metrics for each backend including usage count, average duration, and success rate.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			since, _ := cmd.Flags().GetString("since")
 
 			db, err := getAnalyticsDB(cfg)
@@ -13089,7 +13109,7 @@ func newAnalyticsErrorsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 		Long:  "Display the most common errors grouped by command and error type.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jsonOutput, _ := cmd.Flags().GetBool("json")
+			jsonOutput := isJSONOutput(cmd, cfg)
 			since, _ := cmd.Flags().GetString("since")
 			limit, _ := cmd.Flags().GetInt("limit")
 

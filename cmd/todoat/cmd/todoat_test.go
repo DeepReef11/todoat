@@ -4785,3 +4785,77 @@ func TestIssue110ConfigSetMissingKeys(t *testing.T) {
 		t.Error("setConfigValue(cache_ttl, notaduration) should return error for invalid duration")
 	}
 }
+
+// TestOutputFormatConfigJSON verifies that setting output_format to "json" in config
+// causes commands to output JSON without the --json flag (Issue #109).
+func TestOutputFormatConfigJSON(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	// Pass Config with OutputFormat set to "json" (simulates config file having output_format: json)
+	cfg := &Config{OutputFormat: "json"}
+
+	// Run "version" command WITHOUT --json flag
+	exitCode := Execute([]string{"version"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := strings.TrimSpace(stdout.String())
+
+	// Output should be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("with output_format=json, version should output JSON without --json flag, got: %s, error: %v", output, err)
+	}
+
+	// Check required fields exist
+	requiredFields := []string{"version", "commit", "build_date", "go_version", "platform"}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("JSON output should contain '%s' field, got: %v", field, result)
+		}
+	}
+}
+
+// TestOutputFormatConfigTextDefault verifies that output_format "text" (default) still outputs text.
+func TestOutputFormatConfigTextDefault(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	// Pass Config with OutputFormat set to "text" (default)
+	cfg := &Config{OutputFormat: "text"}
+
+	// Run "version" command WITHOUT --json flag
+	exitCode := Execute([]string{"version"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := strings.TrimSpace(stdout.String())
+
+	// Output should NOT be valid JSON (should be text)
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err == nil {
+		t.Errorf("with output_format=text, version should output text without --json flag, but got JSON: %s", output)
+	}
+}
+
+// TestOutputFormatJSONFlagOverridesConfig verifies --json flag works regardless of config setting.
+func TestOutputFormatJSONFlagOverridesConfig(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	// Config with text format, but --json flag passed
+	cfg := &Config{OutputFormat: "text"}
+
+	exitCode := Execute([]string{"--json", "version"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	output := strings.TrimSpace(stdout.String())
+
+	// Output should be valid JSON (flag overrides config)
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("--json flag should produce JSON output regardless of config, got: %s, error: %v", output, err)
+	}
+}
