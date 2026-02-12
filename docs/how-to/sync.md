@@ -117,7 +117,7 @@ When you start the daemon:
 4. Normal CLI operations (add, update, delete) send an IPC notification to the daemon, triggering an immediate sync
 5. If idle for the configured timeout period, the daemon exits automatically
 
-The daemon syncs all configured remote backends with per-backend failure isolation, so a problem with one backend does not block syncing of others.
+The daemon syncs all configured remote backends with per-backend failure isolation using a circuit breaker pattern. If one backend fails repeatedly, it is temporarily skipped while other backends continue syncing normally.
 
 ### Start Daemon
 
@@ -195,6 +195,21 @@ The daemon automatically handles transient errors with exponential backoff:
 - A successful sync resets the error counter
 
 This prevents the daemon from spinning in a tight loop when the remote backend is unavailable (e.g., network outage, server maintenance).
+
+### Per-Backend Circuit Breaker
+
+When using multiple backends, each backend has its own circuit breaker. After 3 consecutive sync failures for a backend, the circuit "opens" and that backend is temporarily skipped for 30 seconds. After the cooldown, a single probe sync is attempted:
+
+- **Success**: The circuit closes and normal syncing resumes
+- **Failure**: The circuit opens again for another cooldown period
+
+This means a flaky Nextcloud server won't prevent your Todoist tasks from syncing. You can see the circuit state per backend in the daemon status JSON output:
+
+```bash
+todoat --json sync daemon status
+```
+
+The `circuit_state` field shows `closed` (normal), `open` (skipping), or `half-open` (probing after cooldown).
 
 To restart the daemon after it shuts down due to errors:
 

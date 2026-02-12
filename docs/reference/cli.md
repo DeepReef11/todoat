@@ -63,7 +63,8 @@ These flags are available for all commands (unless noted):
 |------|------|-------------|
 | `-s, --status <status>` | string | Filter by status (comma-separated) |
 | `-p, --priority <filter>` | string | Filter by priority (see below) |
-| `--tag <tag>` | strings | Filter by tag (can specify multiple) |
+| `--tag <tag>` | strings | Filter by tag (can specify multiple or comma-separated) |
+| `--tags <tags>` | strings | Alias for --tag |
 | `-v, --view <name>` | string | View to use for displaying tasks (default, all, or custom view name) |
 | `--due-after <date>` | string | Filter tasks due on or after date (inclusive, see [Date Syntax](#date-syntax)) |
 | `--due-before <date>` | string | Filter tasks due before date (inclusive, see [Date Syntax](#date-syntax)) |

@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added error reference entries for sharing and subscription unsupported backend errors
 - Updated `cache_ttl` config reference to use `config set` command instead of manual file editing
 - Updated sync daemon docs with `config set` examples for `stuck_timeout` and `task_timeout`
+- Added per-backend circuit breaker documentation to sync how-to guide
+- Added `--tags` alias and comma-separated tag syntax to CLI reference
 - Updated shell completion reference to include `publish` and `unpublish` subcommands
 - Updated configuration reference with `config set` examples for `sync.daemon.stuck_timeout` and `sync.daemon.task_timeout`
 
