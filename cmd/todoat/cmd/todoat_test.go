@@ -2599,6 +2599,96 @@ func TestListTrashCommand(t *testing.T) {
 	}
 }
 
+// TestListTrashShowsTaskCount verifies the list trash command shows task count for deleted lists.
+func TestListTrashShowsTaskCount(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("default_backend: sqlite\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg := &Config{
+		DBPath:     dbPath,
+		ConfigPath: configPath,
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	// Create a list and add tasks to it
+	exitCode := Execute([]string{"list", "create", "TrashCountTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to create list: %s", stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	exitCode = Execute([]string{"TrashCountTest", "add", "Task 1"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to add task 1: %s", stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	exitCode = Execute([]string{"TrashCountTest", "add", "Task 2"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to add task 2: %s", stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	// Delete the list
+	exitCode = Execute([]string{"-y", "list", "delete", "TrashCountTest"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("failed to delete list: %s", stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	// View trash - text output should show task count
+	exitCode = Execute([]string{"list", "trash"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list trash failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "TASKS") {
+		t.Errorf("list trash should show TASKS column header, got: %s", output)
+	}
+	if !strings.Contains(output, "2") {
+		t.Errorf("list trash should show task count '2' for TrashCountTest, got: %s", output)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+
+	// View trash - JSON output should include task count
+	exitCode = Execute([]string{"--json", "list", "trash"}, &stdout, &stderr, cfg)
+	if exitCode != 0 {
+		t.Fatalf("list trash --json failed: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+
+	var result struct {
+		Lists []struct {
+			Name      string `json:"name"`
+			ID        string `json:"id"`
+			DeletedAt string `json:"deleted_at"`
+			Tasks     int    `json:"tasks"`
+		} `json:"lists"`
+	}
+	if err := json.Unmarshal([]byte(stdout.String()), &result); err != nil {
+		t.Fatalf("list trash --json should output valid JSON, got: %s, error: %v", stdout.String(), err)
+	}
+
+	if len(result.Lists) != 1 {
+		t.Fatalf("expected 1 list in trash, got %d", len(result.Lists))
+	}
+	if result.Lists[0].Tasks != 2 {
+		t.Errorf("expected task count 2 in JSON output, got %d", result.Lists[0].Tasks)
+	}
+}
+
 // TestListTrashRestoreCommand verifies the list trash restore command.
 func TestListTrashRestoreCommand(t *testing.T) {
 	tmpDir := t.TempDir()

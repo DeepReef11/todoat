@@ -1275,11 +1275,21 @@ func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, s
 		lists = remainingLists
 	}
 
+	// Fetch task counts for each trashed list
+	taskCounts := make(map[string]int, len(lists))
+	for _, l := range lists {
+		tasks, err := be.GetTasks(ctx, l.ID)
+		if err == nil {
+			taskCounts[l.ID] = len(tasks)
+		}
+	}
+
 	if jsonOutput {
 		type trashListJSON struct {
 			Name      string `json:"name"`
 			ID        string `json:"id"`
 			DeletedAt string `json:"deleted_at,omitempty"`
+			Tasks     int    `json:"tasks"`
 		}
 		type trashJSON struct {
 			Lists       []trashListJSON `json:"lists"`
@@ -1289,8 +1299,9 @@ func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, s
 		trashLists := make([]trashListJSON, 0, len(lists))
 		for _, l := range lists {
 			entry := trashListJSON{
-				Name: l.Name,
-				ID:   l.ID,
+				Name:  l.Name,
+				ID:    l.ID,
+				Tasks: taskCounts[l.ID],
 			}
 			if l.DeletedAt != nil {
 				entry.DeletedAt = l.DeletedAt.Format(time.RFC3339)
@@ -1327,14 +1338,14 @@ func doListTrashView(ctx context.Context, be backend.TaskManager, cfg *Config, s
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Deleted lists (%d):\n\n", len(lists))
-	_, _ = fmt.Fprintf(stdout, "%-20s %s\n", "NAME", "DELETED")
+	_, _ = fmt.Fprintf(stdout, "%-20s %-20s %s\n", "NAME", "DELETED", "TASKS")
 
 	for _, l := range lists {
 		deletedStr := ""
 		if l.DeletedAt != nil {
 			deletedStr = l.DeletedAt.Format("2006-01-02 15:04")
 		}
-		_, _ = fmt.Fprintf(stdout, "%-20s %s\n", l.Name, deletedStr)
+		_, _ = fmt.Fprintf(stdout, "%-20s %-20s %d\n", l.Name, deletedStr, taskCounts[l.ID])
 	}
 
 	return nil
