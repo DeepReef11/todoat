@@ -79,7 +79,6 @@ backends:
   todoist:
     type: todoist
     enabled: true
-    username: "token"
 
 default_backend: todoist
 ```

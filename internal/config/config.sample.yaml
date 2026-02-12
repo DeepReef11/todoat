@@ -22,7 +22,6 @@ backends:
   # todoist:
   #   type: todoist
   #   enabled: false
-  #   username: "token"  # Fixed value for Todoist authentication
   #   # API token: stored in keyring as TODOAT_TODOIST_TOKEN or set via env var
   #   # To set token in keyring: todoat credentials set todoist token --prompt
 
@@ -49,15 +48,7 @@ backends:
 default_backend: sqlite
 
 # Auto-detect backend based on current directory (e.g., use git backend in git repos)
-# Simple mode (boolean):
 auto_detect_backend: false
-# Extended mode (with priority list):
-# auto_detect_backend:
-#   enabled: true
-#   backend_priority:
-#     - git
-#     - nextcloud
-#     - sqlite
 
 # =============================================================================
 # Synchronization Settings

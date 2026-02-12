@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Documentation
+- Removed incorrect `username: "token"` field from Todoist backend configuration examples
+- Fixed `analytics.retention_days` description to show default of 365 and removed incorrect "0 = forever" claim
+- Added sync connectivity timeout troubleshooting tip for slow networks
+- Removed unused extended `auto_detect_backend` comments from sample config
 - Corrected `list info` CLI reference to show actual output fields (name, ID, description, color, task count)
 - Clarified `list delete` behavior per backend: soft-delete on SQLite, permanent on most others, error on Nextcloud
 - Added documentation for Nextcloud list sharing via CalDAV (`list share` / `list unshare` commands)

@@ -169,7 +169,7 @@ Restores the default configuration. Requires confirmation.
 | `sync.daemon.task_timeout` | string | Per-task timeout for sync operations (default: `5m`) |
 | `trash.retention_days` | int | Days to keep deleted items (default: `30`, 0 = forever) |
 | `analytics.enabled` | bool | Enable command usage tracking (default: `true`) |
-| `analytics.retention_days` | int | Days to keep analytics data (0 = forever) |
+| `analytics.retention_days` | int | Days to keep analytics data (default: `365`) |
 | `reminder.enabled` | bool | Enable task reminder notifications (default: `false`) |
 | `reminder.intervals` | list | Time before due to send reminders (default: `[]`, no intervals) |
 | `reminder.os_notification` | bool | Send reminders via OS notifications (default: `false`) |
@@ -202,7 +202,6 @@ Each backend has its own configuration keys under `backends.<name>`.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `backends.todoist.enabled` | bool | `false` | Enable Todoist backend |
-| `backends.todoist.username` | string | `"token"` | Fixed value for Todoist auth |
 
 ### Google Tasks
 
@@ -244,7 +243,7 @@ Configure local command usage analytics:
 ```yaml
 analytics:
   enabled: true           # Enable analytics tracking
-  retention_days: 365     # Auto-cleanup after this many days (0 = forever)
+  retention_days: 365     # Auto-cleanup after this many days
 ```
 
 Analytics data is stored locally at `~/.config/todoat/analytics.db` and is never transmitted. See [Analytics](../explanation/analytics.md) for details.

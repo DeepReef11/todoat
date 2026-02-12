@@ -118,7 +118,6 @@ todoat config set default_backend personal-nc
      todoist:
        type: todoist
        enabled: true
-       username: "token"
    ```
 
 3. Store the API token:

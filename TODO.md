@@ -266,3 +266,16 @@ The field-level timestamp tracking mentioned in ARCH-007 does not appear to be i
 
 **Asked**: 2026-02-12
 **Status**: unanswered
+
+### [FEAT-037] validBackends map missing google, mstodo, git, and file backends
+
+**Context**: The `validBackends` map in `internal/config/config.go:207` only includes `sqlite`, `todoist`, and `nextcloud`. Setting `default_backend` to `google`, `mstodo`, `git`, or `file` via `config set` will fail validation with "unknown default_backend" even though these backends are fully functional and documented. The `question-log.md` already identifies this as an action item ("Expand validation to all 7 backends") but it hasn't been implemented.
+
+**Options**:
+- [ ] Expand validBackends map - Add all 7 backends to the validation map
+- [ ] Dynamic validation - Build valid backend list from registered backends instead of a hardcoded map
+
+**Impact**: Users following documentation to configure google/mstodo/git/file as default backend will get a validation error. Workaround: edit config YAML directly instead of using `config set`.
+
+**Asked**: 2026-02-12
+**Status**: unanswered

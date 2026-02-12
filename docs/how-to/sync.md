@@ -532,7 +532,11 @@ Each remote backend gets a separate cache.
 1. Check network connectivity
 2. Verify credentials: `todoat credentials list`
 3. Check sync status: `todoat sync status --verbose`
-4. Retry: `todoat sync`
+4. If sync times out on slow networks, increase the timeout:
+   ```bash
+   todoat config set sync.connectivity_timeout 15s
+   ```
+5. Retry: `todoat sync`
 
 ### Stuck Operations
 
@@ -605,7 +609,6 @@ backends:
   personal:
     type: todoist
     enabled: true
-    username: "token"
 
 sync:
   enabled: true

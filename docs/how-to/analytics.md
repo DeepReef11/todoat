@@ -115,7 +115,7 @@ Set how long analytics data is kept:
 todoat config set analytics.retention_days 365
 ```
 
-Set to `0` for unlimited retention.
+The default is 365 days. Data older than the configured retention period is automatically cleaned up.
 
 ## Data Location
 
