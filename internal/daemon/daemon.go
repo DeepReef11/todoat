@@ -779,19 +779,8 @@ func (c *Client) sendAndReceive(msg Message) (*Response, error) {
 	return &resp, nil
 }
 
-// Fork spawns a new daemon process.
-func Fork(cfg *Config) error {
-	// Get the path to the executable
-	executable := cfg.Executable
-	if executable == "" {
-		var err error
-		executable, err = os.Executable()
-		if err != nil {
-			return fmt.Errorf("failed to get executable path: %w", err)
-		}
-	}
-
-	// Build arguments for daemon mode
+// buildForkArgs builds the CLI arguments for the forked daemon process.
+func buildForkArgs(cfg *Config) []string {
 	args := []string{
 		"--daemon-mode",
 		"--daemon-pid-path", cfg.PIDPath,
@@ -805,6 +794,10 @@ func Fork(cfg *Config) error {
 	// Stuck timeout settings (Issue #083)
 	if cfg.StuckTimeout > 0 {
 		args = append(args, "--daemon-stuck-timeout", strconv.FormatInt(int64(cfg.StuckTimeout.Minutes()), 10))
+	}
+	// Task timeout settings (Issue #98)
+	if cfg.TaskTimeout > 0 {
+		args = append(args, "--daemon-task-timeout", strconv.FormatInt(int64(cfg.TaskTimeout.Minutes()), 10))
 	}
 	// Heartbeat settings (Issue #74)
 	if cfg.HeartbeatPath != "" {
@@ -822,6 +815,23 @@ func Fork(cfg *Config) error {
 	if cfg.CachePath != "" {
 		args = append(args, "--cache-path", cfg.CachePath)
 	}
+	return args
+}
+
+// Fork spawns a new daemon process.
+func Fork(cfg *Config) error {
+	// Get the path to the executable
+	executable := cfg.Executable
+	if executable == "" {
+		var err error
+		executable, err = os.Executable()
+		if err != nil {
+			return fmt.Errorf("failed to get executable path: %w", err)
+		}
+	}
+
+	// Build arguments for daemon mode
+	args := buildForkArgs(cfg)
 
 	// Create the command
 	cmd := exec.Command(executable, args...)

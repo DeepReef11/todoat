@@ -1469,3 +1469,54 @@ func TestDaemonHeartbeatDisabled(t *testing.T) {
 	d.Stop()
 	<-done
 }
+
+// TestForkPassesTaskTimeout verifies that Fork passes --daemon-task-timeout when TaskTimeout is set.
+// Issue #98: Per-task timeout not passed to forked daemon process.
+func TestForkPassesTaskTimeout(t *testing.T) {
+	cfg := &Config{
+		PIDPath:     "/tmp/test.pid",
+		SocketPath:  "/tmp/test.sock",
+		LogPath:     "/tmp/test.log",
+		Interval:    5 * time.Minute,
+		TaskTimeout: 10 * time.Minute,
+	}
+
+	args := buildForkArgs(cfg)
+
+	// Verify --daemon-task-timeout is present with the correct value
+	found := false
+	for i, arg := range args {
+		if arg == "--daemon-task-timeout" {
+			if i+1 >= len(args) {
+				t.Fatal("--daemon-task-timeout flag has no value")
+			}
+			if args[i+1] != "10" {
+				t.Errorf("expected --daemon-task-timeout value '10', got '%s'", args[i+1])
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("--daemon-task-timeout not found in fork args: %v", args)
+	}
+}
+
+// TestForkOmitsTaskTimeoutWhenZero verifies that Fork omits --daemon-task-timeout when TaskTimeout is zero.
+// Issue #98: Per-task timeout not passed to forked daemon process.
+func TestForkOmitsTaskTimeoutWhenZero(t *testing.T) {
+	cfg := &Config{
+		PIDPath:    "/tmp/test.pid",
+		SocketPath: "/tmp/test.sock",
+		LogPath:    "/tmp/test.log",
+		Interval:   5 * time.Minute,
+	}
+
+	args := buildForkArgs(cfg)
+
+	for _, arg := range args {
+		if arg == "--daemon-task-timeout" {
+			t.Errorf("--daemon-task-timeout should not be in fork args when TaskTimeout is zero: %v", args)
+		}
+	}
+}

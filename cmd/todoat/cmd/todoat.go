@@ -8782,6 +8782,7 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 	idleTimeout := 5 * time.Minute             // Default
 	heartbeatInterval := 5 * time.Second       // Default heartbeat interval (Issue #74)
 	stuckTimeout := daemon.DefaultStuckTimeout // Default: 10 minutes (Issue #083)
+	taskTimeout := daemon.DefaultTaskTimeout   // Default: 5 minutes (Issue #84)
 	if cfg.DaemonStuckTimeout > 0 {
 		stuckTimeout = cfg.DaemonStuckTimeout
 	}
@@ -8806,6 +8807,11 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 			if stuckTimeoutMin > 0 {
 				stuckTimeout = time.Duration(stuckTimeoutMin) * time.Minute
 			}
+			// Issue #98: Get task timeout from config
+			taskTimeoutDur := appConfig.GetDaemonTaskTimeout()
+			if taskTimeoutDur > 0 {
+				taskTimeout = taskTimeoutDur
+			}
 		}
 	}
 
@@ -8819,6 +8825,7 @@ func doDaemonStart(cfg *Config, stdout io.Writer) error {
 		HeartbeatInterval: heartbeatInterval,
 		IdleTimeout:       idleTimeout,
 		StuckTimeout:      stuckTimeout,
+		TaskTimeout:       taskTimeout,
 		ConfigPath:        configPathForDaemon,
 		DBPath:            cfg.DBPath,
 		CachePath:         cfg.CachePath,
@@ -9301,7 +9308,7 @@ func isDaemonModeInvocation(args []string) bool {
 func runDaemonMode(args []string, stderr io.Writer) {
 	// Parse daemon-specific flags from args
 	var pidPath, socketPath, logPath, heartbeatPath, configPath, dbPath, cachePath string
-	var intervalSec, idleTimeoutSec, heartbeatIntervalSec, stuckTimeoutMin int
+	var intervalSec, idleTimeoutSec, heartbeatIntervalSec, stuckTimeoutMin, taskTimeoutMin int
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -9360,6 +9367,11 @@ func runDaemonMode(args []string, stderr io.Writer) {
 				stuckTimeoutMin, _ = strconv.Atoi(args[i+1])
 				i++
 			}
+		case "--daemon-task-timeout":
+			if i+1 < len(args) {
+				taskTimeoutMin, _ = strconv.Atoi(args[i+1])
+				i++
+			}
 		}
 	}
 
@@ -9381,6 +9393,7 @@ func runDaemonMode(args []string, stderr io.Writer) {
 		HeartbeatInterval: time.Duration(heartbeatIntervalSec) * time.Second,
 		IdleTimeout:       time.Duration(idleTimeoutSec) * time.Second,
 		StuckTimeout:      time.Duration(stuckTimeoutMin) * time.Minute,
+		TaskTimeout:       time.Duration(taskTimeoutMin) * time.Minute,
 		ConfigPath:        configPath,
 		DBPath:            dbPath,
 		CachePath:         cachePath,
