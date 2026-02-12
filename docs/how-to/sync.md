@@ -215,9 +215,6 @@ Configure the stuck timeout (default: 10 minutes):
 ```bash
 # Via CLI flag
 todoat sync daemon start --stuck-timeout 15
-
-# Via configuration
-todoat config set sync.daemon.stuck_timeout 15
 ```
 
 Or in `config.yaml`:
