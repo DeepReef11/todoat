@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Documentation
+- Corrected `list info` CLI reference to show actual output fields (name, ID, description, color, task count)
 - Clarified `list delete` behavior per backend: soft-delete on SQLite, permanent on most others, error on Nextcloud
 - Added documentation for Nextcloud list sharing via CalDAV (`list share` / `list unshare` commands)
 - Added error reference for Nextcloud list deletion not supported via CalDAV

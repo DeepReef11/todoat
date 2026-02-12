@@ -298,7 +298,7 @@ Display detailed information about a task list.
 todoat list info [name] [flags]
 ```
 
-Shows list name, description, color, task count, and creation date.
+Shows list name, ID, description, color, and task count.
 
 ### list trash
 
