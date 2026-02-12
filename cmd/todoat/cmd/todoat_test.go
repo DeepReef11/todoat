@@ -2677,7 +2677,7 @@ func TestListTrashShowsTaskCount(t *testing.T) {
 			Tasks     int    `json:"tasks"`
 		} `json:"lists"`
 	}
-	if err := json.Unmarshal([]byte(stdout.String()), &result); err != nil {
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("list trash --json should output valid JSON, got: %s, error: %v", stdout.String(), err)
 	}
 
