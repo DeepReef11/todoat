@@ -8047,8 +8047,10 @@ func (sm *SyncManager) GetStuckOperationsWithValidation(stuckTimeout time.Durati
 // - The heartbeat file contains a timestamp older than heartbeatStaleThreshold
 func (sm *SyncManager) isWorkerDead(workerID string, heartbeatDir string, heartbeatStaleThreshold time.Duration) bool {
 	if heartbeatDir == "" {
-		// No heartbeat directory configured - assume worker is dead if task is stuck
-		return true
+		// No heartbeat directory configured - assume worker is alive (Issue #101).
+		// Without heartbeat we cannot confirm worker death, so err on the side
+		// of caution to avoid false-positive stuck detection and duplicate syncs.
+		return false
 	}
 
 	heartbeatFile := filepath.Join(heartbeatDir, workerID+".heartbeat")

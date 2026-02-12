@@ -3873,3 +3873,63 @@ func TestStuckTaskWorkerValidation(t *testing.T) {
 		t.Errorf("Issue #083: expected 1 stuck task (stale heartbeat), got %d", len(stuckTasks))
 	}
 }
+
+// TestStuckTaskNoHeartbeatConfigured tests that when heartbeat is not configured
+// (heartbeatDir is empty), stuck task detection does NOT treat tasks as stuck.
+// Issue #101: Without heartbeat, workers should be assumed alive to prevent
+// false positive stuck detection and duplicate sync operations.
+func TestStuckTaskNoHeartbeatConfigured(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Create SyncManager
+	syncMgr, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
+	defer func() { _ = syncMgr.Close() }()
+
+	// Queue and claim an operation
+	err = syncMgr.QueueOperationByStringID("task-no-heartbeat-1", "No Heartbeat Task 1", "list-1", "create")
+	if err != nil {
+		t.Fatalf("QueueOperationByStringID failed: %v", err)
+	}
+
+	workerID := "daemon-pid-88888"
+	_, err = syncMgr.ClaimNextOperation(workerID)
+	if err != nil {
+		t.Fatalf("ClaimNextOperation failed: %v", err)
+	}
+
+	// Backdate the claimed_at to make it appear stuck
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	fifteenMinutesAgo := time.Now().UTC().Add(-15 * time.Minute).Format(time.RFC3339Nano)
+	_, err = db.Exec(`UPDATE sync_queue SET claimed_at = ?`, fifteenMinutesAgo)
+	if err != nil {
+		t.Fatalf("failed to backdate claimed_at: %v", err)
+	}
+
+	// With empty heartbeat dir (not configured), stuck detection should NOT
+	// consider these tasks as stuck - worker should be assumed alive.
+	stuckTasks, err := syncMgr.GetStuckOperationsWithValidation(10*time.Minute, "", 30*time.Second)
+	if err != nil {
+		t.Fatalf("GetStuckOperationsWithValidation failed: %v", err)
+	}
+	if len(stuckTasks) != 0 {
+		t.Errorf("Issue #101: expected 0 stuck tasks when heartbeat not configured (worker assumed alive), got %d", len(stuckTasks))
+	}
+
+	// RecoverStuckOperationsWithValidation should also recover 0 tasks
+	recovered, err := syncMgr.RecoverStuckOperationsWithValidation(10*time.Minute, "", 30*time.Second)
+	if err != nil {
+		t.Fatalf("RecoverStuckOperationsWithValidation failed: %v", err)
+	}
+	if recovered != 0 {
+		t.Errorf("Issue #101: expected 0 recovered tasks when heartbeat not configured, got %d", recovered)
+	}
+}
