@@ -50,6 +50,9 @@ default_backend: sqlite
 # Auto-detect backend based on current directory (e.g., use git backend in git repos)
 auto_detect_backend: false
 
+# Backend priority - ordered list of backends to try when auto-detecting
+# backend_priority: [nextcloud, git, sqlite]
+
 # =============================================================================
 # Synchronization Settings
 # =============================================================================
