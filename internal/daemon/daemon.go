@@ -530,9 +530,8 @@ func (d *Daemon) performSync() bool {
 
 	if hasBackends {
 		// Multi-backend sync (Issue #40)
-		// Multi-backend has its own error tracking per backend, doesn't trigger global shutdown
-		d.performMultiBackendSync(count)
-		syncFailed = false
+		// Issue #100: If ALL backends fail, report global failure for error loop prevention
+		syncFailed = d.performMultiBackendSync(count)
 	} else if d.syncFunc != nil {
 		// Legacy single-backend sync
 		if err := d.syncFunc(); err != nil {
@@ -554,7 +553,9 @@ func (d *Daemon) performSync() bool {
 // performMultiBackendSync iterates through all backends and syncs each one.
 // Failure in one backend does not affect others (failure isolation).
 // Issue #84: Each backend sync is wrapped in a context with timeout.
-func (d *Daemon) performMultiBackendSync(globalCount int) {
+// Issue #100: Returns true if ALL backends that were synced failed (for error loop prevention).
+// Returns false if no backends were synced or at least one succeeded.
+func (d *Daemon) performMultiBackendSync(globalCount int) bool {
 	d.backendsMu.Lock()
 	backends := make([]*backendEntry, len(d.backends))
 	copy(backends, d.backends)
@@ -563,6 +564,9 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 	now := time.Now()
 	globalInterval := d.cfg.Interval
 	taskTimeout := d.getTaskTimeout()
+
+	// Issue #100: Track whether all synced backends failed
+	var syncedCount, failedCount int
 
 	for _, be := range backends {
 		// Check if this backend should sync based on its interval.
@@ -580,6 +584,7 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 			continue // Skip this backend - not yet time to sync
 		}
 
+		syncedCount++
 		d.log("Syncing backend: %s", be.name)
 
 		// Perform sync with timeout protection (Issue #84)
@@ -597,6 +602,7 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 			// Record error but continue with other backends (failure isolation)
 			state.ErrorCount++
 			state.LastError = err.Error()
+			failedCount++
 			d.log("Backend %s sync error: %v (error count: %d)", be.name, err, state.ErrorCount)
 		} else {
 			// Success - reset error count
@@ -611,6 +617,9 @@ func (d *Daemon) performMultiBackendSync(globalCount int) {
 		be.lastSync = now
 		d.backendsMu.Unlock()
 	}
+
+	// Issue #100: All backends failed → report as global sync failure
+	return syncedCount > 0 && failedCount == syncedCount
 }
 
 // syncBackendWithTimeout executes a backend sync with timeout protection.

@@ -1502,6 +1502,120 @@ func TestForkPassesTaskTimeout(t *testing.T) {
 	}
 }
 
+// TestMultiBackendConsecutiveErrors verifies daemon shuts down after MaxConsecutiveErrors
+// when ALL backends fail consecutively in multi-backend mode.
+// Issue #100: Multi-backend daemon bypasses error loop prevention.
+func TestMultiBackendConsecutiveErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    10 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: 1 * time.Second,
+	}
+
+	d := New(cfg)
+
+	// Count sync attempts per backend
+	var backendASyncs int32
+	var backendBSyncs int32
+
+	// Both backends always fail
+	d.AddBackendSyncFunc("backendA", func() error {
+		atomic.AddInt32(&backendASyncs, 1)
+		return fmt.Errorf("backendA always fails")
+	})
+	d.AddBackendSyncFunc("backendB", func() error {
+		atomic.AddInt32(&backendBSyncs, 1)
+		return fmt.Errorf("backendB always fails")
+	})
+
+	d.SetTestBackoffMultiplier(0) // No actual sleep
+
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good - daemon exited due to all-backends-failing error loop prevention
+	case <-time.After(5 * time.Second):
+		t.Fatalf("daemon should have exited due to MaxConsecutiveErrors in multi-backend mode")
+		d.Stop()
+	}
+
+	// Both backends should have been attempted MaxConsecutiveErrors times
+	aSyncs := atomic.LoadInt32(&backendASyncs)
+	bSyncs := atomic.LoadInt32(&backendBSyncs)
+	if aSyncs != int32(MaxConsecutiveErrors) {
+		t.Errorf("expected backendA to sync %d times, got %d", MaxConsecutiveErrors, aSyncs)
+	}
+	if bSyncs != int32(MaxConsecutiveErrors) {
+		t.Errorf("expected backendB to sync %d times, got %d", MaxConsecutiveErrors, bSyncs)
+	}
+}
+
+// TestMultiBackendErrorResetOnPartialSuccess verifies that if at least one backend
+// succeeds, the consecutive error counter resets (no shutdown).
+// Issue #100: Multi-backend daemon bypasses error loop prevention.
+func TestMultiBackendErrorResetOnPartialSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:     filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath:  filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:     filepath.Join(tmpDir, "daemon.log"),
+		Interval:    10 * time.Millisecond,
+		IdleTimeout: 0,
+		TaskTimeout: 1 * time.Second,
+	}
+
+	d := New(cfg)
+
+	var totalSyncs int32
+
+	// backendA always fails, backendB always succeeds
+	d.AddBackendSyncFunc("backendA", func() error {
+		atomic.AddInt32(&totalSyncs, 1)
+		return fmt.Errorf("backendA always fails")
+	})
+	d.AddBackendSyncFunc("backendB", func() error {
+		atomic.AddInt32(&totalSyncs, 1)
+		return nil
+	})
+
+	d.SetTestBackoffMultiplier(0)
+
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for enough syncs to prove daemon doesn't shut down
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt32(&totalSyncs) >= int32(MaxConsecutiveErrors*2+4) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	d.Stop()
+	<-done
+
+	// Daemon should NOT have shut down on its own - it ran well past MaxConsecutiveErrors
+	syncs := atomic.LoadInt32(&totalSyncs)
+	if syncs < int32(MaxConsecutiveErrors*2+4) {
+		t.Errorf("expected daemon to keep running with partial success, but only got %d total syncs", syncs)
+	}
+}
+
 // TestForkOmitsTaskTimeoutWhenZero verifies that Fork omits --daemon-task-timeout when TaskTimeout is zero.
 // Issue #98: Per-task timeout not passed to forked daemon process.
 func TestForkOmitsTaskTimeoutWhenZero(t *testing.T) {
