@@ -217,8 +217,8 @@ todoat --json list trash
 ```json
 {
   "lists": [
-    {"id": "abc-123", "name": "Work Tasks", "tasks": 12, "color": "#0066cc"},
-    {"id": "def-456", "name": "Personal", "tasks": 5, "color": "#ff5733"}
+    {"id": "abc-123", "name": "Work Tasks", "tasks": 12, "color": "#0066cc", "modified": "2026-01-15T10:30:00Z"},
+    {"id": "def-456", "name": "Personal", "tasks": 5, "color": "#ff5733", "modified": "2026-01-10T08:00:00Z"}
   ],
   "result": "INFO_ONLY"
 }
@@ -240,7 +240,7 @@ todoat --json list trash
 ```json
 {
   "lists": [
-    {"name": "Old Project", "id": "xyz-789", "deleted_at": "2026-01-15T10:30:00Z"}
+    {"name": "Old Project", "id": "xyz-789", "deleted_at": "2026-01-15T10:30:00Z", "tasks": 8}
   ],
   "purged_count": 0,
   "result": "INFO_ONLY"
