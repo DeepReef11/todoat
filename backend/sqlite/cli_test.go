@@ -5103,6 +5103,9 @@ func TestIssue028ParentFlagAcceptsUIDSQLiteCLI(t *testing.T) {
 // but the actual CLI output is 'todoist backend requires API token' (no quoted name
 // on the default backend path).
 func TestIssue60_BackendErrorMessageMatchesDocs(t *testing.T) {
+	// Ensure no Todoist token is available so we get the "requires API token" error
+	t.Setenv("TODOAT_TODOIST_TOKEN", "")
+
 	cli := testutil.NewCLITest(t)
 
 	// Attempt to use todoist backend without API token

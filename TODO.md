@@ -187,3 +187,102 @@ The field-level timestamp tracking mentioned in ARCH-007 does not appear to be i
 
 **Asked**: 2026-02-08
 **Status**: unanswered
+
+### [ARCH-030] SetLastSyncTime references non-existent `updated_at` column in sync_metadata table
+
+**Context**: The `sync_metadata` table is created at `cmd/todoat/cmd/todoat.go:7548` with columns `(id, key, value)`. However, `SetLastSyncTime` at line 7683 executes `INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)` which references a non-existent `updated_at` column. The error is discarded with `_, _` so this INSERT silently fails every time. As a result, `GetLastSyncTime()` always returns the zero time, and `sync status` always shows "Last sync: Never" regardless of actual sync activity. Additionally, `doSync` at line 6505 calls `SetLastSyncTime` before the error check at line 6508, so even fixing the schema would record sync time for failed syncs.
+
+**Options**:
+- [ ] Fix schema - Remove `updated_at` from the INSERT statement to match the table definition `(key, value)`
+- [ ] Fix schema and move timing - Fix the INSERT and move `SetLastSyncTime` call to after the error check so only successful syncs are recorded
+
+**Impact**: `sync status` always reports "Last sync: Never" which misleads users into thinking sync has never run. This is a bug, not a design decision, but the fix approach needs a decision (option 2 changes behavior).
+
+**Asked**: 2026-02-12
+**Status**: unanswered
+
+### [ARCH-031] ClaimNextOperation uses BEGIN instead of BEGIN IMMEDIATE despite comment
+
+**Context**: Commit `34edf10` added atomic task claiming for the sync queue to prevent race conditions when multiple daemon instances coexist. The code at `cmd/todoat/cmd/todoat.go:7814-7815` has a comment saying "Use BEGIN IMMEDIATE to acquire exclusive write lock immediately" but calls `sm.db.Begin()`, which starts a deferred transaction in Go's `database/sql`. A deferred transaction only acquires the write lock on the first write statement, creating a window for SQLITE_BUSY errors. To achieve `BEGIN IMMEDIATE` semantics with `modernc.org/sqlite`, you would need `sm.db.BeginTx(ctx, &sql.TxOptions{})` with a pragma or execute `BEGIN IMMEDIATE` via raw SQL.
+
+**Options**:
+- [ ] Use raw SQL `BEGIN IMMEDIATE` - Execute `sm.db.Exec("BEGIN IMMEDIATE")` and manage the transaction manually
+- [ ] Accept deferred BEGIN - The current behavior is sufficient because concurrent daemons are short-lived and SQLITE_BUSY retries handle contention
+- [ ] Use BeginTx with serializable isolation - Use `sm.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})` if the driver supports it
+
+**Impact**: The atomicity guarantee from Issue #81 may not hold under concurrent daemon scenarios. The write lock acquisition window allows two daemons to both begin transactions before either writes.
+
+**Asked**: 2026-02-12
+**Status**: unanswered
+
+### [API-032] DeleteList interface says "soft-delete" but 5 of 7 backends hard-delete
+
+**Context**: The `TaskManager` interface at `backend/interface.go:64` defines `DeleteList` with the comment "Soft-delete (move to trash)". However, only SQLite implements soft-delete (sets `deleted_at`). Nextcloud returns an error ("would be permanent"). Todoist, Git, File, Google, and MS Todo all perform permanent hard deletes. The interface also defines `PurgeList` at line 70 as "Permanent delete", creating an unclear distinction when `DeleteList` is already permanent for most backends. A user on SQLite who deletes a list can restore it via `RestoreList`, but switching to any other backend and deleting a list loses data permanently with no warning.
+
+**Options**:
+- [ ] Update interface contract - Change comment to "Delete list (may be permanent depending on backend)" and add backend-specific documentation
+- [ ] Add CLI warning - Before `DeleteList` on non-SQLite backends, warn the user that deletion is permanent and require confirmation
+- [ ] Standardize to soft-delete - Implement soft-delete in all backends (may not be possible for API-based backends like Todoist/Google)
+- [ ] Keep as-is - Document the difference in backend docs, accept that behavior varies
+
+**Impact**: Silent data loss when users switch backends. A user accustomed to SQLite's trash/restore behavior will permanently lose data on other backends without warning.
+
+**Asked**: 2026-02-12
+**Status**: unanswered
+
+### [ARCH-033] Per-task timeout not passed to forked daemon process
+
+**Context**: The `Fork()` function in `internal/daemon/daemon.go:794-824` builds CLI arguments for the forked daemon process, passing `--daemon-interval`, `--daemon-idle-timeout`, `--daemon-stuck-timeout`, `--daemon-heartbeat-path`, and `--daemon-heartbeat-interval`. However, there is no `--daemon-task-timeout` argument, so the `TaskTimeout` config field is never propagated. Furthermore, `runDaemonMode` at `cmd/todoat/cmd/todoat.go:9263-9366` calls `doSync()` directly rather than using `syncBackendWithTimeout`, so the forked daemon never applies per-task timeout protection (Issue #84). The timeout only works via `AddBackendSyncFuncWithContext` which is used in tests, not in the forked production daemon.
+
+**Options**:
+- [ ] Wire TaskTimeout in Fork and runDaemonMode - Add `--daemon-task-timeout` flag and use `syncBackendWithTimeout` in the forked daemon's sync path
+- [ ] Accept limitation - Per-task timeout is only for the in-process daemon; forked daemon relies on stuck task recovery instead
+- [ ] Redesign - Move timeout enforcement into the sync queue processing layer so it applies regardless of daemon mode
+
+**Impact**: The per-task timeout feature (Issue #84) is effectively unreachable in the primary production use case (forked daemon). Users configuring `task_timeout` get no protection from hung syncs.
+
+**Asked**: 2026-02-12
+**Status**: unanswered
+
+### [ARCH-034] NewSyncManager silently discards initDB errors, causing silent sync data loss
+
+**Context**: `NewSyncManager` at `cmd/todoat/cmd/todoat.go:7500-7503` discards the error from `initDB()` with `_ = sm.initDB()`. If database initialization fails (permissions, disk full, corrupted file), the `SyncManager` is returned with `db == nil`. All subsequent operations (`QueueOperationByStringID`, `GetPendingCount`, etc.) check `if sm.db == nil` and silently return zero/nil. Additionally, `syncAwareBackend` at lines 3253, 3269, 3292 discards queue errors with `_ = b.syncMgr.QueueOperationByStringID(...)`. The combined effect: if the sync database is inaccessible, local task operations succeed but sync queue entries are silently lost. The user sees "task created" but the change never syncs to the remote backend.
+
+**Options**:
+- [ ] Return error from NewSyncManager - Change signature to `NewSyncManager(dbPath string) (*SyncManager, error)` and propagate to callers
+- [ ] Log warning on initDB failure - Keep current signature but log a visible warning so users know sync is degraded
+- [ ] Propagate queue errors in syncAwareBackend - Return errors from `QueueOperationByStringID` so the user knows their change won't sync
+
+**Impact**: Silent data sync loss. Users create/update/delete tasks locally, get success messages, but changes never reach the remote backend. No error or warning is shown.
+
+**Asked**: 2026-02-12
+**Status**: unanswered
+
+### [ARCH-035] Multi-backend daemon bypasses error loop prevention (consecutiveErrors never increments)
+
+**Context**: The daemon error loop prevention from commit `7c1d1ed` uses a `consecutiveErrors` counter at `internal/daemon/daemon.go:383` to shut down the daemon after repeated failures. However, when multi-backend sync is used (line 531-535), `performMultiBackendSync` always sets `syncFailed = false`, so `consecutiveErrors` never increments. Per-backend error tracking exists (`state.ErrorCount`) but there is no per-backend or global threshold that triggers daemon shutdown. If a backend has persistently invalid credentials or is permanently unreachable, the daemon retries forever with no backoff and no shutdown.
+
+**Options**:
+- [ ] Add per-backend error threshold - After N consecutive errors per backend, disable that backend and log a warning; shut down if all backends disabled
+- [ ] Apply global threshold to multi-backend - If all backends fail in a single sync cycle, increment `consecutiveErrors` normally
+- [ ] Accept current behavior - Multi-backend is designed to be resilient; one failing backend shouldn't affect others, and the daemon should keep running
+
+**Impact**: Resource consumption from infinite retry loops when backends are permanently unreachable. The error loop prevention feature from Issue #82 does not apply to the multi-backend path.
+
+**Asked**: 2026-02-12
+**Status**: unanswered
+
+### [ARCH-036] Stuck task recovery resets actively-processing tasks when heartbeat is disabled
+
+**Context**: `isWorkerDead` at `cmd/todoat/cmd/todoat.go:7998-8001` returns `true` when `heartbeatDir == ""` (heartbeat not configured). Since heartbeat settings are commented out in `config.sample.yaml`, this is the default. With default config (`stuck_timeout: 10m`, no heartbeat), if a sync operation takes longer than 10 minutes (slow network, large dataset), `GetStuckOperationsWithValidation` treats it as stuck and `RecoverStuckOperations` resets it to `pending`. The task is then re-processed, causing duplicate sync operations. The daemon heartbeat mechanism (commit `de7491d`) was designed to differentiate between actually-stuck tasks and slow-but-healthy ones, but it's disabled by default.
+
+**Options**:
+- [ ] Enable heartbeat by default - Set reasonable defaults for `heartbeat_path` and `heartbeat_interval` so stuck detection works correctly out of the box
+- [ ] Increase default stuck_timeout - Use a much larger default (e.g., 30m or 1h) to reduce false positives when heartbeat is disabled
+- [ ] Change isWorkerDead default - When heartbeat is not configured, assume worker is alive (return false) instead of dead; only enable stuck recovery when heartbeat is configured
+- [ ] Accept current behavior - 10 minutes is generous; if sync takes longer, the duplicate is a reasonable trade-off for recovering from actual stuck tasks
+
+**Impact**: False positive stuck detection causes duplicate sync operations, which could create duplicate tasks on remote backends or trigger unnecessary conflict resolution.
+
+**Asked**: 2026-02-12
+**Status**: unanswered

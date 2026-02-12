@@ -4579,7 +4579,7 @@ func TestSetLastSyncTimeRoundTrip(t *testing.T) {
 	if sm.db == nil {
 		t.Fatal("SyncManager db should not be nil after init")
 	}
-	defer sm.db.Close()
+	defer func() { _ = sm.db.Close() }()
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	sm.SetLastSyncTime(now)

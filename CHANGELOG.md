@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Empty path components (e.g., `//`) in subtask paths are now silently ignored instead of causing an error
+- Todoist backend migrated from REST API v2 / Sync API v9 to API v1 endpoints, with updated response parsing (`results` wrapper, `checked`/`added_at` fields)
+
+### Fixed
+- `TestIssue60_BackendErrorMessageMatchesDocs` now clears `TODOAT_TODOIST_TOKEN` env var to prevent false passes when the token is set
 
 ### Added
 - `ui.interactive_prompt_for_all_tasks` config option to include completed and cancelled tasks in interactive selection prompts

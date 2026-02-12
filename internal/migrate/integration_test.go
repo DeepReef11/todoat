@@ -75,7 +75,7 @@ func skipIfNoTodoistCredentials(t *testing.T) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	// First verify the API token is valid
-	getReq, err := http.NewRequest("GET", "https://api.todoist.com/rest/v2/projects", nil)
+	getReq, err := http.NewRequest("GET", "https://api.todoist.com/api/v1/projects", nil)
 	if err != nil {
 		t.Skipf("Skipping: Failed to create Todoist API request: %v", err)
 	}
@@ -95,7 +95,7 @@ func skipIfNoTodoistCredentials(t *testing.T) {
 
 	// Also verify we can create projects (needed for migration tests)
 	// Try to create a test project to check for project limit
-	createReq, err := http.NewRequest("POST", "https://api.todoist.com/rest/v2/projects", strings.NewReader(`{"name": "__todoat_test_skip_check__"}`))
+	createReq, err := http.NewRequest("POST", "https://api.todoist.com/api/v1/projects", strings.NewReader(`{"name": "__todoat_test_skip_check__"}`))
 	if err != nil {
 		return // Allow test to run, will fail naturally if there's an issue
 	}
@@ -118,7 +118,7 @@ func skipIfNoTodoistCredentials(t *testing.T) {
 			ID string `json:"id"`
 		}
 		if err := json.NewDecoder(createResp.Body).Decode(&result); err == nil && result.ID != "" {
-			delReq, _ := http.NewRequest("DELETE", "https://api.todoist.com/rest/v2/projects/"+result.ID, nil)
+			delReq, _ := http.NewRequest("DELETE", "https://api.todoist.com/api/v1/projects/"+result.ID, nil)
 			delReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 			delResp, _ := client.Do(delReq)
 			if delResp != nil {

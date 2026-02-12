@@ -1,4 +1,4 @@
-// Package todoist provides a backend implementation for the Todoist REST API v2.
+// Package todoist provides a backend implementation for the Todoist API v1.
 package todoist
 
 import (
@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// DefaultBaseURL is the Todoist REST API v2 base URL
+	// DefaultBaseURL is the Todoist API v1 base URL
 	DefaultBaseURL = "https://api.todoist.com"
 )
 
@@ -38,7 +38,7 @@ func ConfigFromEnv() Config {
 	}
 }
 
-// Backend implements backend.TaskManager using Todoist REST API v2
+// Backend implements backend.TaskManager using Todoist API v1
 type Backend struct {
 	config  Config
 	client  *http.Client
@@ -141,7 +141,7 @@ func (b *Backend) doRequest(ctx context.Context, method, path string, body inter
 
 // GetLists returns all Todoist projects
 func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
-	resp, err := b.doRequest(ctx, http.MethodGet, "/rest/v2/projects", nil)
+	resp, err := b.doRequest(ctx, http.MethodGet, "/api/v1/projects", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -155,18 +155,20 @@ func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
 		return nil, fmt.Errorf("failed to get projects: status %d", resp.StatusCode)
 	}
 
-	var projects []struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Color string `json:"color"`
+	var response struct {
+		Results []struct {
+			ID    string `json:"id"`
+			Name  string `json:"name"`
+			Color string `json:"color"`
+		} `json:"results"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&projects); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
 
-	lists := make([]backend.List, len(projects))
-	for i, p := range projects {
+	lists := make([]backend.List, len(response.Results))
+	for i, p := range response.Results {
 		lists[i] = backend.List{
 			ID:       p.ID,
 			Name:     p.Name,
@@ -180,7 +182,7 @@ func (b *Backend) GetLists(ctx context.Context) ([]backend.List, error) {
 
 // GetList returns a specific project by ID
 func (b *Backend) GetList(ctx context.Context, listID string) (*backend.List, error) {
-	resp, err := b.doRequest(ctx, http.MethodGet, "/rest/v2/projects/"+listID, nil)
+	resp, err := b.doRequest(ctx, http.MethodGet, "/api/v1/projects/"+listID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +227,7 @@ func (b *Backend) GetListByName(ctx context.Context, name string) (*backend.List
 func (b *Backend) CreateList(ctx context.Context, name string) (*backend.List, error) {
 	body := map[string]string{"name": name}
 
-	resp, err := b.doRequest(ctx, http.MethodPost, "/rest/v2/projects", body)
+	resp, err := b.doRequest(ctx, http.MethodPost, "/api/v1/projects", body)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +262,7 @@ func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.
 		body["color"] = list.Color
 	}
 
-	resp, err := b.doRequest(ctx, http.MethodPost, "/rest/v2/projects/"+list.ID, body)
+	resp, err := b.doRequest(ctx, http.MethodPost, "/api/v1/projects/"+list.ID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +292,7 @@ func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.
 
 // DeleteList deletes a Todoist project (permanent deletion)
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
-	resp, err := b.doRequest(ctx, http.MethodDelete, "/rest/v2/projects/"+listID, nil)
+	resp, err := b.doRequest(ctx, http.MethodDelete, "/api/v1/projects/"+listID, nil)
 	if err != nil {
 		return err
 	}
@@ -349,9 +351,9 @@ func (b *Backend) GetTasks(ctx context.Context, listID string) ([]backend.Task, 
 	return append(activeTasks, completedTasks...), nil
 }
 
-// getActiveTasks fetches active (non-completed) tasks from the REST API
+// getActiveTasks fetches active (non-completed) tasks from the API
 func (b *Backend) getActiveTasks(ctx context.Context, listID string) ([]backend.Task, error) {
-	path := "/rest/v2/tasks"
+	path := "/api/v1/tasks"
 	if listID != "" {
 		path += "?project_id=" + listID
 	}
@@ -366,34 +368,36 @@ func (b *Backend) getActiveTasks(ctx context.Context, listID string) ([]backend.
 		return nil, fmt.Errorf("failed to get tasks: status %d", resp.StatusCode)
 	}
 
-	var todoistTasks []struct {
-		ID          string   `json:"id"`
-		ProjectID   string   `json:"project_id"`
-		Content     string   `json:"content"`
-		Description string   `json:"description"`
-		IsCompleted bool     `json:"is_completed"`
-		Priority    int      `json:"priority"`
-		Labels      []string `json:"labels"`
-		ParentID    string   `json:"parent_id"`
-		CreatedAt   string   `json:"created_at"`
-		Due         *struct {
-			Date string `json:"date"`
-		} `json:"due"`
+	var response struct {
+		Results []struct {
+			ID          string   `json:"id"`
+			ProjectID   string   `json:"project_id"`
+			Content     string   `json:"content"`
+			Description string   `json:"description"`
+			Checked     bool     `json:"checked"`
+			Priority    int      `json:"priority"`
+			Labels      []string `json:"labels"`
+			ParentID    string   `json:"parent_id"`
+			AddedAt     string   `json:"added_at"`
+			Due         *struct {
+				Date string `json:"date"`
+			} `json:"due"`
+		} `json:"results"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&todoistTasks); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
 
-	tasks := make([]backend.Task, len(todoistTasks))
-	for i, t := range todoistTasks {
-		created, _ := time.Parse(time.RFC3339, t.CreatedAt)
+	tasks := make([]backend.Task, len(response.Results))
+	for i, t := range response.Results {
+		created, _ := time.Parse(time.RFC3339, t.AddedAt)
 
 		tasks[i] = backend.Task{
 			ID:          t.ID,
 			Summary:     t.Content,
 			Description: t.Description,
-			Status:      todoistToBackendStatus(t.IsCompleted),
+			Status:      todoistToBackendStatus(t.Checked),
 			Priority:    todoistToInternalPriority(t.Priority),
 			ListID:      t.ProjectID,
 			ParentID:    t.ParentID,
@@ -413,9 +417,9 @@ func (b *Backend) getActiveTasks(ctx context.Context, listID string) ([]backend.
 	return tasks, nil
 }
 
-// getCompletedTasks fetches completed tasks from the Sync API
+// getCompletedTasks fetches completed tasks from the API
 func (b *Backend) getCompletedTasks(ctx context.Context, listID string) ([]backend.Task, error) {
-	path := "/sync/v9/completed/get_all"
+	path := "/api/v1/tasks/completed"
 	if listID != "" {
 		path += "?project_id=" + listID
 	}
@@ -464,7 +468,7 @@ func (b *Backend) getCompletedTasks(ctx context.Context, listID string) ([]backe
 
 // GetTask returns a specific task by ID
 func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.Task, error) {
-	resp, err := b.doRequest(ctx, http.MethodGet, "/rest/v2/tasks/"+taskID, nil)
+	resp, err := b.doRequest(ctx, http.MethodGet, "/api/v1/tasks/"+taskID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -483,11 +487,11 @@ func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.
 		ProjectID   string   `json:"project_id"`
 		Content     string   `json:"content"`
 		Description string   `json:"description"`
-		IsCompleted bool     `json:"is_completed"`
+		Checked     bool     `json:"checked"`
 		Priority    int      `json:"priority"`
 		Labels      []string `json:"labels"`
 		ParentID    string   `json:"parent_id"`
-		CreatedAt   string   `json:"created_at"`
+		AddedAt     string   `json:"added_at"`
 		Due         *struct {
 			Date string `json:"date"`
 		} `json:"due"`
@@ -497,13 +501,13 @@ func (b *Backend) GetTask(ctx context.Context, listID, taskID string) (*backend.
 		return nil, err
 	}
 
-	created, _ := time.Parse(time.RFC3339, t.CreatedAt)
+	created, _ := time.Parse(time.RFC3339, t.AddedAt)
 
 	task := &backend.Task{
 		ID:          t.ID,
 		Summary:     t.Content,
 		Description: t.Description,
-		Status:      todoistToBackendStatus(t.IsCompleted),
+		Status:      todoistToBackendStatus(t.Checked),
 		Priority:    todoistToInternalPriority(t.Priority),
 		ListID:      t.ProjectID,
 		ParentID:    t.ParentID,
@@ -546,7 +550,7 @@ func (b *Backend) CreateTask(ctx context.Context, listID string, task *backend.T
 		body["due_date"] = task.DueDate.Format("2006-01-02")
 	}
 
-	resp, err := b.doRequest(ctx, http.MethodPost, "/rest/v2/tasks", body)
+	resp, err := b.doRequest(ctx, http.MethodPost, "/api/v1/tasks", body)
 	if err != nil {
 		return nil, err
 	}
@@ -596,7 +600,7 @@ func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.T
 		body["labels"] = categoriesToLabels(task.Categories)
 	}
 
-	resp, err := b.doRequest(ctx, http.MethodPost, "/rest/v2/tasks/"+task.ID, body)
+	resp, err := b.doRequest(ctx, http.MethodPost, "/api/v1/tasks/"+task.ID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -609,13 +613,13 @@ func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.T
 	// Handle status changes separately (Todoist uses close/reopen endpoints)
 	switch task.Status {
 	case backend.StatusCompleted:
-		resp, err = b.doRequest(ctx, http.MethodPost, "/rest/v2/tasks/"+task.ID+"/close", nil)
+		resp, err = b.doRequest(ctx, http.MethodPost, "/api/v1/tasks/"+task.ID+"/close", nil)
 		if err != nil {
 			return nil, err
 		}
 		_ = resp.Body.Close()
 	case backend.StatusNeedsAction:
-		resp, err = b.doRequest(ctx, http.MethodPost, "/rest/v2/tasks/"+task.ID+"/reopen", nil)
+		resp, err = b.doRequest(ctx, http.MethodPost, "/api/v1/tasks/"+task.ID+"/reopen", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -628,7 +632,7 @@ func (b *Backend) UpdateTask(ctx context.Context, listID string, task *backend.T
 
 // DeleteTask removes a task
 func (b *Backend) DeleteTask(ctx context.Context, listID, taskID string) error {
-	resp, err := b.doRequest(ctx, http.MethodDelete, "/rest/v2/tasks/"+taskID, nil)
+	resp, err := b.doRequest(ctx, http.MethodDelete, "/api/v1/tasks/"+taskID, nil)
 	if err != nil {
 		return err
 	}
@@ -684,7 +688,7 @@ func todoistToInternalPriority(todoist int) int {
 // Status Conversion Functions
 // =============================================================================
 
-// todoistToBackendStatus converts Todoist isCompleted to backend status
+// todoistToBackendStatus converts Todoist checked field to backend status
 func todoistToBackendStatus(isCompleted bool) backend.TaskStatus {
 	if isCompleted {
 		return backend.StatusCompleted

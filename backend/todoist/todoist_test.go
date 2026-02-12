@@ -19,7 +19,7 @@ import (
 // Todoist REST API Mock Server for Tests
 // =============================================================================
 
-// mockTodoistServer simulates the Todoist REST API v2
+// mockTodoistServer simulates the Todoist API v1
 type mockTodoistServer struct {
 	server      *httptest.Server
 	projects    map[string]*todoistProject
@@ -43,13 +43,13 @@ type todoistTask struct {
 	ProjectID   string   `json:"project_id"`
 	Content     string   `json:"content"`
 	Description string   `json:"description,omitempty"`
-	IsCompleted bool     `json:"is_completed"`
+	Checked     bool     `json:"checked"`
 	Priority    int      `json:"priority"` // Todoist: 1=normal, 4=urgent
 	DueDate     string   `json:"due_date,omitempty"`
 	Labels      []string `json:"labels,omitempty"`
 	ParentID    string   `json:"parent_id,omitempty"`
 	Order       int      `json:"order"`
-	CreatedAt   string   `json:"created_at"`
+	AddedAt     string   `json:"added_at"`
 }
 
 func newMockTodoistServer(apiToken string) *mockTodoistServer {
@@ -90,7 +90,7 @@ func (m *mockTodoistServer) AddTask(id, projectID, content string, priority int,
 		Priority:  priority,
 		Labels:    labels,
 		ParentID:  parentID,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		AddedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
@@ -129,32 +129,32 @@ func (m *mockTodoistServer) handler(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
 	switch {
-	case path == "/rest/v2/projects" && r.Method == http.MethodGet:
+	case path == "/api/v1/projects" && r.Method == http.MethodGet:
 		m.handleGetProjects(w, r)
-	case path == "/rest/v2/projects" && r.Method == http.MethodPost:
+	case path == "/api/v1/projects" && r.Method == http.MethodPost:
 		m.handleCreateProject(w, r)
-	case strings.HasPrefix(path, "/rest/v2/projects/") && r.Method == http.MethodGet:
-		m.handleGetProject(w, r, strings.TrimPrefix(path, "/rest/v2/projects/"))
-	case strings.HasPrefix(path, "/rest/v2/projects/") && r.Method == http.MethodDelete:
-		m.handleDeleteProject(w, r, strings.TrimPrefix(path, "/rest/v2/projects/"))
-	case path == "/rest/v2/tasks" && r.Method == http.MethodGet:
+	case strings.HasPrefix(path, "/api/v1/projects/") && r.Method == http.MethodGet:
+		m.handleGetProject(w, r, strings.TrimPrefix(path, "/api/v1/projects/"))
+	case strings.HasPrefix(path, "/api/v1/projects/") && r.Method == http.MethodDelete:
+		m.handleDeleteProject(w, r, strings.TrimPrefix(path, "/api/v1/projects/"))
+	case path == "/api/v1/tasks" && r.Method == http.MethodGet:
 		m.handleGetTasks(w, r)
-	case path == "/rest/v2/tasks" && r.Method == http.MethodPost:
+	case path == "/api/v1/tasks" && r.Method == http.MethodPost:
 		m.handleCreateTask(w, r)
-	case strings.HasPrefix(path, "/rest/v2/tasks/") && strings.HasSuffix(path, "/close") && r.Method == http.MethodPost:
-		taskID := strings.TrimSuffix(strings.TrimPrefix(path, "/rest/v2/tasks/"), "/close")
-		m.handleCloseTask(w, r, taskID)
-	case strings.HasPrefix(path, "/rest/v2/tasks/") && strings.HasSuffix(path, "/reopen") && r.Method == http.MethodPost:
-		taskID := strings.TrimSuffix(strings.TrimPrefix(path, "/rest/v2/tasks/"), "/reopen")
-		m.handleReopenTask(w, r, taskID)
-	case strings.HasPrefix(path, "/rest/v2/tasks/") && r.Method == http.MethodGet:
-		m.handleGetTask(w, r, strings.TrimPrefix(path, "/rest/v2/tasks/"))
-	case strings.HasPrefix(path, "/rest/v2/tasks/") && r.Method == http.MethodPost:
-		m.handleUpdateTask(w, r, strings.TrimPrefix(path, "/rest/v2/tasks/"))
-	case strings.HasPrefix(path, "/rest/v2/tasks/") && r.Method == http.MethodDelete:
-		m.handleDeleteTask(w, r, strings.TrimPrefix(path, "/rest/v2/tasks/"))
-	case path == "/sync/v9/completed/get_all" && r.Method == http.MethodGet:
+	case path == "/api/v1/tasks/completed" && r.Method == http.MethodGet:
 		m.handleGetCompletedTasks(w, r)
+	case strings.HasPrefix(path, "/api/v1/tasks/") && strings.HasSuffix(path, "/close") && r.Method == http.MethodPost:
+		taskID := strings.TrimSuffix(strings.TrimPrefix(path, "/api/v1/tasks/"), "/close")
+		m.handleCloseTask(w, r, taskID)
+	case strings.HasPrefix(path, "/api/v1/tasks/") && strings.HasSuffix(path, "/reopen") && r.Method == http.MethodPost:
+		taskID := strings.TrimSuffix(strings.TrimPrefix(path, "/api/v1/tasks/"), "/reopen")
+		m.handleReopenTask(w, r, taskID)
+	case strings.HasPrefix(path, "/api/v1/tasks/") && r.Method == http.MethodGet:
+		m.handleGetTask(w, r, strings.TrimPrefix(path, "/api/v1/tasks/"))
+	case strings.HasPrefix(path, "/api/v1/tasks/") && r.Method == http.MethodPost:
+		m.handleUpdateTask(w, r, strings.TrimPrefix(path, "/api/v1/tasks/"))
+	case strings.HasPrefix(path, "/api/v1/tasks/") && r.Method == http.MethodDelete:
+		m.handleDeleteTask(w, r, strings.TrimPrefix(path, "/api/v1/tasks/"))
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -169,8 +169,12 @@ func (m *mockTodoistServer) handleGetProjects(w http.ResponseWriter, r *http.Req
 		projects = append(projects, p)
 	}
 
+	response := struct {
+		Results []*todoistProject `json:"results"`
+	}{Results: projects}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(projects)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (m *mockTodoistServer) handleGetProject(w http.ResponseWriter, r *http.Request, id string) {
@@ -233,7 +237,7 @@ func (m *mockTodoistServer) handleGetTasks(w http.ResponseWriter, r *http.Reques
 	var tasks []*todoistTask
 	for _, t := range m.tasks {
 		// Real Todoist API only returns active (non-completed) tasks
-		if t.IsCompleted {
+		if t.Checked {
 			continue
 		}
 		if projectID == "" || t.ProjectID == projectID {
@@ -241,8 +245,12 @@ func (m *mockTodoistServer) handleGetTasks(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	response := struct {
+		Results []*todoistTask `json:"results"`
+	}{Results: tasks}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(tasks)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (m *mockTodoistServer) handleGetTask(w http.ResponseWriter, r *http.Request, id string) {
@@ -286,7 +294,7 @@ func (m *mockTodoistServer) handleCreateTask(w http.ResponseWriter, r *http.Requ
 		Priority:    input.Priority,
 		Labels:      input.Labels,
 		ParentID:    input.ParentID,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		AddedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
 	m.tasks[id] = task
 
@@ -357,7 +365,7 @@ func (m *mockTodoistServer) handleCloseTask(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	task.IsCompleted = true
+	task.Checked = true
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -371,18 +379,18 @@ func (m *mockTodoistServer) handleReopenTask(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	task.IsCompleted = false
+	task.Checked = false
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleGetCompletedTasks returns completed tasks via Sync API endpoint
+// handleGetCompletedTasks returns completed tasks via API v1 endpoint
 func (m *mockTodoistServer) handleGetCompletedTasks(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	projectID := r.URL.Query().Get("project_id")
 
-	// Response format matches Todoist Sync API v9 completed/get_all
+	// Response format matches Todoist API v1 /tasks/completed
 	type completedItem struct {
 		ID          string `json:"id"`
 		TaskID      string `json:"task_id"`
@@ -393,7 +401,7 @@ func (m *mockTodoistServer) handleGetCompletedTasks(w http.ResponseWriter, r *ht
 
 	var items []completedItem
 	for _, t := range m.tasks {
-		if !t.IsCompleted {
+		if !t.Checked {
 			continue
 		}
 		if projectID != "" && t.ProjectID != projectID {
