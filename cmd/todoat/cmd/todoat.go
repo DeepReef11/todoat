@@ -11813,6 +11813,13 @@ func configToMap(c *config.Config) map[string]interface{} {
 			"enabled":        c.Analytics.Enabled,
 			"retention_days": c.GetAnalyticsRetentionDays(),
 		},
+		"cache_ttl": c.GetCacheTTL(),
+		"ui": map[string]interface{}{
+			"interactive_prompt_for_all_tasks": c.UI.InteractivePromptForAllTasks,
+		},
+		"logging": map[string]interface{}{
+			"background_enabled": c.IsBackgroundLoggingEnabled(),
+		},
 	}
 }
 
@@ -11975,6 +11982,28 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 			return c.Reminder.OSNotification, nil
 		case "log_notification":
 			return c.Reminder.LogNotification, nil
+		}
+	case "cache_ttl":
+		return c.GetCacheTTL(), nil
+	case "ui":
+		if len(parts) < 2 {
+			return map[string]interface{}{
+				"interactive_prompt_for_all_tasks": c.UI.InteractivePromptForAllTasks,
+			}, nil
+		}
+		switch parts[1] {
+		case "interactive_prompt_for_all_tasks":
+			return c.UI.InteractivePromptForAllTasks, nil
+		}
+	case "logging":
+		if len(parts) < 2 {
+			return map[string]interface{}{
+				"background_enabled": c.IsBackgroundLoggingEnabled(),
+			}, nil
+		}
+		switch parts[1] {
+		case "background_enabled":
+			return c.IsBackgroundLoggingEnabled(), nil
 		}
 	}
 

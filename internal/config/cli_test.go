@@ -1024,3 +1024,91 @@ no_prompt: true
 		}
 	})
 }
+
+// --- Config Get Missing Keys Tests (Issue #111) ---
+
+// TestConfigGetCacheTTLCLI verifies 'todoat config get cache_ttl' works
+func TestConfigGetCacheTTLCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+cache_ttl: "5m"
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "cache_ttl")
+	testutil.AssertContains(t, stdout, "5m")
+}
+
+// TestConfigGetUIInteractivePromptCLI verifies 'todoat config get ui.interactive_prompt_for_all_tasks' works
+func TestConfigGetUIInteractivePromptCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+ui:
+  interactive_prompt_for_all_tasks: true
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "ui.interactive_prompt_for_all_tasks")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigGetUISectionCLI verifies 'todoat config get ui' returns the UI section
+func TestConfigGetUISectionCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+ui:
+  interactive_prompt_for_all_tasks: true
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "ui")
+	testutil.AssertNotContains(t, stdout, "map[")
+	testutil.AssertContains(t, stdout, "interactive_prompt_for_all_tasks:")
+}
+
+// TestConfigGetLoggingBackgroundEnabledCLI verifies 'todoat config get logging.background_enabled' works
+func TestConfigGetLoggingBackgroundEnabledCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+logging:
+  background_enabled: true
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "logging.background_enabled")
+	testutil.AssertContains(t, stdout, "true")
+}
+
+// TestConfigGetLoggingSectionCLI verifies 'todoat config get logging' returns the logging section
+func TestConfigGetLoggingSectionCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+logging:
+  background_enabled: false
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "logging")
+	testutil.AssertNotContains(t, stdout, "map[")
+	testutil.AssertContains(t, stdout, "background_enabled:")
+}
