@@ -21,7 +21,7 @@ todoat MyList
 
 ### Default View
 
-Shows: status, summary, priority (excludes completed tasks)
+Shows: status, summary, priority, due date, tags, and recurrence indicator (excludes DONE tasks)
 
 ```bash
 todoat MyList
@@ -29,11 +29,12 @@ todoat MyList
 
 Output:
 ```
-TODO         Buy groceries                              1 (High)
-IN-PROGRESS  Write documentation                        5 (Medium)
+[TODO]       Buy groceries                              [P1]  Jan 15       {shopping}
+[IN-PROGRESS] Write documentation                             Feb 01       {work,dev}     [R]
+[CANCELLED]  Old task
 ```
 
-Note: The default view filters out DONE tasks. Use `-v all` to see completed tasks.
+Note: The default view filters out DONE tasks but still shows CANCELLED tasks. Use `-v all` to see all tasks including completed ones.
 
 ### All View
 
