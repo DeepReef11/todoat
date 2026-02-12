@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -86,9 +87,34 @@ func (e *realCommandExecutor) Execute(cmd string, args ...string) error {
 	return exec.Command(cmd, args...).Run()
 }
 
-// sendLinux sends notification using notify-send
+// isExecNotFound returns true if the error indicates the executable was not found
+func isExecNotFound(err error) bool {
+	var execErr *exec.Error
+	if errors.As(err, &execErr) {
+		return errors.Is(execErr.Err, exec.ErrNotFound)
+	}
+	return false
+}
+
+// sendLinux sends notification using notify-send, falling back to wall if notify-send
+// is not installed (e.g., headless servers, Docker containers). If both fail, the error
+// is silently ignored since the log channel still captures the notification.
 func (c *osNotificationChannel) sendLinux(n Notification) error {
-	return c.executor.Execute("notify-send", n.Title, n.Message)
+	err := c.executor.Execute("notify-send", n.Title, n.Message)
+	if err == nil {
+		return nil
+	}
+	if !isExecNotFound(err) {
+		return err
+	}
+
+	// notify-send not found; fall back to wall
+	msg := fmt.Sprintf("%s: %s", n.Title, n.Message)
+	_ = c.executor.Execute("wall", msg)
+
+	// Return nil regardless - the notification was logged by the log channel,
+	// and OS notification delivery is best-effort on headless systems
+	return nil
 }
 
 // escapeAppleScript escapes a string for safe use in AppleScript double-quoted strings.

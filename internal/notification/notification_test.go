@@ -2,6 +2,7 @@ package notification_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -108,6 +109,56 @@ func TestOSNotificationLinux(t *testing.T) {
 	}
 	if !strings.Contains(argsStr, "Synced 5 tasks") {
 		t.Errorf("expected args to contain message, got %v", executedArgs)
+	}
+}
+
+// TestOSNotificationLinuxFallbackToWall tests that when notify-send is not found,
+// sendLinux falls back to wall command instead of returning a hard error (Issue #112)
+func TestOSNotificationLinuxFallbackToWall(t *testing.T) {
+	var executedCmds []string
+
+	mock := &notification.MockCommandExecutor{
+		ExecuteFunc: func(cmd string, args ...string) error {
+			executedCmds = append(executedCmds, cmd)
+			if cmd == "notify-send" {
+				return &exec.Error{Name: "notify-send", Err: exec.ErrNotFound}
+			}
+			return nil
+		},
+	}
+
+	channel := notification.NewOSNotificationChannel(
+		&notification.OSNotificationConfig{
+			Enabled:        true,
+			OnSyncComplete: true,
+			OnSyncError:    true,
+			OnConflict:     true,
+		},
+		notification.WithCommandExecutor(mock),
+		notification.WithPlatform("linux"),
+	)
+
+	n := notification.Notification{
+		Type:      notification.NotifyTest,
+		Title:     "Test",
+		Message:   "Test notification",
+		Timestamp: time.Now(),
+	}
+
+	err := channel.Send(n)
+	if err != nil {
+		t.Fatalf("expected no error when notify-send is missing (should fallback), got %v", err)
+	}
+
+	// Should have tried notify-send first, then fallen back to wall
+	if len(executedCmds) < 2 {
+		t.Fatalf("expected at least 2 commands (notify-send then wall), got %v", executedCmds)
+	}
+	if executedCmds[0] != "notify-send" {
+		t.Errorf("expected first command to be notify-send, got %q", executedCmds[0])
+	}
+	if executedCmds[1] != "wall" {
+		t.Errorf("expected second command to be wall, got %q", executedCmds[1])
 	}
 }
 
