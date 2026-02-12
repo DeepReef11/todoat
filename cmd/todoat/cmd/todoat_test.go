@@ -4752,3 +4752,36 @@ func TestSetLastSyncTimeRoundTrip(t *testing.T) {
 		t.Errorf("GetLastSyncTime = %v, want %v (diff: %v)", got, now, diff)
 	}
 }
+
+// TestIssue110ConfigSetMissingKeys verifies that config set supports cache_ttl,
+// logging.background_enabled, and ui.interactive_prompt_for_all_tasks keys.
+// Issue #110: these keys exist in the config struct but are not registered in setConfigValue.
+func TestIssue110ConfigSetMissingKeys(t *testing.T) {
+	cfg := config.DefaultConfig()
+
+	tests := []struct {
+		key   string
+		value string
+	}{
+		{"cache_ttl", "2m"},
+		{"logging.background_enabled", "true"},
+		{"logging.background_enabled", "false"},
+		{"ui.interactive_prompt_for_all_tasks", "true"},
+		{"ui.interactive_prompt_for_all_tasks", "false"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key+"="+tt.value, func(t *testing.T) {
+			err := setConfigValue(cfg, tt.key, tt.value)
+			if err != nil {
+				t.Errorf("setConfigValue(%q, %q) returned error: %v", tt.key, tt.value, err)
+			}
+		})
+	}
+
+	// Verify invalid cache_ttl is rejected
+	err := setConfigValue(cfg, "cache_ttl", "notaduration")
+	if err == nil {
+		t.Error("setConfigValue(cache_ttl, notaduration) should return error for invalid duration")
+	}
+}

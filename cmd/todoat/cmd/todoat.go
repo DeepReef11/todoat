@@ -12102,6 +12102,40 @@ func setConfigValue(c *config.Config, key, value string) error {
 			c.Reminder.Intervals = intervals
 			return nil
 		}
+	case "cache_ttl":
+		// Validate duration format
+		_, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid duration for cache_ttl: %s (use format like 5m, 30s, 10m)", value)
+		}
+		c.CacheTTL = value
+		return nil
+	case "logging":
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid key: %s (use logging.<setting>)", key)
+		}
+		switch parts[1] {
+		case "background_enabled":
+			boolVal, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid value for logging.background_enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+			}
+			c.Logging.BackgroundEnabled = &boolVal
+			return nil
+		}
+	case "ui":
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid key: %s (use ui.<setting>)", key)
+		}
+		switch parts[1] {
+		case "interactive_prompt_for_all_tasks":
+			boolVal, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid value for ui.interactive_prompt_for_all_tasks: %s (valid: true, false, yes, no, 1, 0)", value)
+			}
+			c.UI.InteractivePromptForAllTasks = boolVal
+			return nil
+		}
 	}
 
 	return fmt.Errorf("unknown config key: %s", key)
@@ -12122,7 +12156,9 @@ func isBoolConfigKey(key string) bool {
 		"analytics.enabled",
 		"reminder.enabled",
 		"reminder.os_notification",
-		"reminder.log_notification":
+		"reminder.log_notification",
+		"logging.background_enabled",
+		"ui.interactive_prompt_for_all_tasks":
 		return true
 	default:
 		return false
