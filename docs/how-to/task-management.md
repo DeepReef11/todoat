@@ -483,7 +483,7 @@ todoat MyList add "Task A1" -P "Feature A"
 
 # Complete all release tasks at once
 todoat MyList complete "Release v2.0/**"
-# Output: Completed 4 tasks under "Release v2.0"
+# Output: Completed 3 tasks under "Release v2.0"
 ```
 
 ### Bulk Update
