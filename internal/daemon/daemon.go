@@ -376,10 +376,12 @@ func (d *Daemon) Start() error {
 			return nil
 
 		case <-ticker.C:
-			syncFailed := d.performSync()
+			result := d.performSync()
 
 			// Error loop prevention (Issue #82)
-			if syncFailed {
+			// syncNoOp means no backends were due to sync - don't affect error tracking
+			switch result {
+			case syncFailed:
 				d.consecutiveErrors++
 				d.log("Consecutive errors: %d/%d", d.consecutiveErrors, MaxConsecutiveErrors)
 
@@ -395,12 +397,13 @@ func (d *Daemon) Start() error {
 					d.log("Backing off for %v before next sync", backoff)
 					time.Sleep(backoff)
 				}
-			} else {
+			case syncSuccess:
 				// Reset consecutive error count on success
 				if d.consecutiveErrors > 0 {
 					d.log("Sync succeeded, resetting consecutive error count (was %d)", d.consecutiveErrors)
 				}
 				d.consecutiveErrors = 0
+				// syncNoOp: no action needed, preserve current error count
 			}
 
 			// Reset idle timer
@@ -506,9 +509,17 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 	_ = encoder.Encode(resp)
 }
 
-// performSync executes a sync operation and returns whether it failed.
-// Returns true if the sync failed (for error tracking), false on success.
-func (d *Daemon) performSync() bool {
+// syncResult represents the outcome of a sync operation.
+type syncResult int
+
+const (
+	syncSuccess syncResult = iota // At least one backend synced successfully (or legacy sync succeeded)
+	syncFailed                    // All synced backends failed (or legacy sync failed)
+	syncNoOp                      // No backends were due to sync this tick (all skipped by interval check)
+)
+
+// performSync executes a sync operation and returns the result.
+func (d *Daemon) performSync() syncResult {
 	// Serialize concurrent performSync calls (Issue #52).
 	// The ticker and IPC notify handler can both trigger performSync.
 	d.syncMu.Lock()
@@ -521,7 +532,7 @@ func (d *Daemon) performSync() bool {
 
 	d.log("Starting sync (count: %d)", count)
 
-	var syncFailed bool
+	var result syncResult
 
 	// Check if we have multi-backend configuration
 	d.backendsMu.RLock()
@@ -531,15 +542,21 @@ func (d *Daemon) performSync() bool {
 	if hasBackends {
 		// Multi-backend sync (Issue #40)
 		// Issue #100: If ALL backends fail, report global failure for error loop prevention
-		syncFailed = d.performMultiBackendSync(count)
+		allFailed, anySynced := d.performMultiBackendSync(count)
+		if !anySynced {
+			// No backends were due to sync this tick - don't affect error tracking
+			return syncNoOp
+		}
+		if allFailed {
+			result = syncFailed
+		}
 	} else if d.syncFunc != nil {
 		// Legacy single-backend sync
 		if err := d.syncFunc(); err != nil {
 			d.log("Sync error (count: %d): %v", count, err)
-			syncFailed = true
+			result = syncFailed
 		} else {
 			d.log("Sync completed (count: %d)", count)
-			syncFailed = false
 		}
 	}
 
@@ -547,15 +564,15 @@ func (d *Daemon) performSync() bool {
 	d.lastSync = time.Now()
 	d.mu.Unlock()
 
-	return syncFailed
+	return result
 }
 
 // performMultiBackendSync iterates through all backends and syncs each one.
 // Failure in one backend does not affect others (failure isolation).
 // Issue #84: Each backend sync is wrapped in a context with timeout.
-// Issue #100: Returns true if ALL backends that were synced failed (for error loop prevention).
-// Returns false if no backends were synced or at least one succeeded.
-func (d *Daemon) performMultiBackendSync(globalCount int) bool {
+// Issue #100: Returns (allFailed, anySynced) for error loop prevention.
+// allFailed is true only when anySynced is true and every synced backend failed.
+func (d *Daemon) performMultiBackendSync(globalCount int) (allFailed bool, anySynced bool) {
 	d.backendsMu.Lock()
 	backends := make([]*backendEntry, len(d.backends))
 	copy(backends, d.backends)
@@ -619,7 +636,9 @@ func (d *Daemon) performMultiBackendSync(globalCount int) bool {
 	}
 
 	// Issue #100: All backends failed → report as global sync failure
-	return syncedCount > 0 && failedCount == syncedCount
+	anySynced = syncedCount > 0
+	allFailed = anySynced && failedCount == syncedCount
+	return allFailed, anySynced
 }
 
 // syncBackendWithTimeout executes a backend sync with timeout protection.
