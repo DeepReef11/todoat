@@ -422,7 +422,11 @@ The cache TTL controls how long list metadata (names, descriptions, colors) is c
 | `5m` (default) | Most use cases |
 | `10m` - `30m` | Slow connections, metered data |
 
-To modify, edit `config.yaml` directly using `todoat config edit`.
+To modify:
+
+```bash
+todoat config set cache_ttl 5m
+```
 
 ## Logging Configuration
 

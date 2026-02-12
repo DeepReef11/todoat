@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added error reference for Nextcloud list deletion not supported via CalDAV
 - Updated error reference for non-existent list behavior (now returns error instead of silently auto-creating)
 - Added error reference entries for sharing and subscription unsupported backend errors
+- Updated `cache_ttl` config reference to use `config set` command instead of manual file editing
 
 ### Changed
 - Empty path components (e.g., `//`) in subtask paths are now silently ignored instead of causing an error
