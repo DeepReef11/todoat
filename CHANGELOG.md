@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Documentation
+- Added documentation for calendar subscriptions (`list subscribe` / `list unsubscribe` commands)
+- Updated shell completion reference to include `subscribe`, `unsubscribe`, `share`, and `unshare` subcommands
+- Updated `logging.background_enabled` config reference with `config set` example
 - Removed incorrect `username: "token"` field from Todoist backend configuration examples
 - Fixed `analytics.retention_days` description to show default of 365 and removed incorrect "0 = forever" claim
 - Added sync connectivity timeout troubleshooting tip for slow networks
@@ -26,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TestIssue60_BackendErrorMessageMatchesDocs` now clears `TODOAT_TODOIST_TOKEN` env var to prevent false passes when the token is set
 
 ### Added
+- Calendar subscription support for Nextcloud backend via CalDAV MKCALENDAR (#94)
+  - `list subscribe` command to subscribe to external calendar feeds as read-only task lists
+  - `list unsubscribe` command to remove calendar subscriptions
+  - `ListSubscriber` interface in `backend/interface.go` for backends to implement subscription support
+  - Subscriptions are read-only; refresh is handled server-side by Nextcloud
 - `ui.interactive_prompt_for_all_tasks` config option to include completed and cancelled tasks in interactive selection prompts
 - Per-task timeout protection for sync operations (#84)
   - `task_timeout` config option under `sync.daemon` section (default: 5 minutes)

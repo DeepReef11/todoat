@@ -532,6 +532,8 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	listCmd.AddCommand(newListVacuumCmd(stdout, cfg))
 	listCmd.AddCommand(newListShareCmd(stdout, cfg))
 	listCmd.AddCommand(newListUnshareCmd(stdout, cfg))
+	listCmd.AddCommand(newListSubscribeCmd(stdout, cfg))
+	listCmd.AddCommand(newListUnsubscribeCmd(stdout, cfg))
 
 	return listCmd
 }
@@ -2683,6 +2685,152 @@ func doListUnshare(ctx context.Context, be backend.TaskManager, name, user strin
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Removed sharing of list '%s' from user '%s'\n", list.Name, user)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListSubscribeCmd creates the 'list subscribe' subcommand
+func newListSubscribeCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "subscribe [url]",
+		Short: "Subscribe to an external calendar feed",
+		Long:  "Subscribe to a read-only task list via URL. Uses CalDAV MKCALENDAR. Requires a Nextcloud backend.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListSubscribe(context.Background(), be, args[0], cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	return cmd
+}
+
+// doListSubscribe subscribes to an external calendar feed
+func doListSubscribe(ctx context.Context, be backend.TaskManager, sourceURL string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	subscriber, ok := be.(backend.ListSubscriber)
+	if !ok {
+		return fmt.Errorf("subscriptions are not supported by this backend (requires Nextcloud)")
+	}
+
+	list, err := subscriber.SubscribeList(ctx, sourceURL)
+	if err != nil {
+		return err
+	}
+
+	invalidateListCache(cfg)
+
+	if jsonOutput {
+		type subscribeJSON struct {
+			Result string `json:"result"`
+			Action string `json:"action"`
+			List   string `json:"list"`
+			URL    string `json:"url"`
+		}
+		output := subscribeJSON{
+			Result: ResultActionCompleted,
+			Action: "subscribed",
+			List:   list.Name,
+			URL:    sourceURL,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Subscribed to '%s' as list '%s'\n", sourceURL, list.Name)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListUnsubscribeCmd creates the 'list unsubscribe' subcommand
+func newListUnsubscribeCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "unsubscribe [name]",
+		Short: "Remove a calendar subscription",
+		Long:  "Remove a subscription to an external calendar feed. Requires a Nextcloud backend.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListUnsubscribe(context.Background(), be, args[0], cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	return cmd
+}
+
+// doListUnsubscribe removes a calendar subscription
+func doListUnsubscribe(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	subscriber, ok := be.(backend.ListSubscriber)
+	if !ok {
+		return fmt.Errorf("subscriptions are not supported by this backend (requires Nextcloud)")
+	}
+
+	// Find the list by name
+	list, err := be.GetListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		return fmt.Errorf("list '%s' not found", name)
+	}
+
+	if err := subscriber.UnsubscribeList(ctx, list.ID); err != nil {
+		return err
+	}
+
+	invalidateListCache(cfg)
+
+	if jsonOutput {
+		type unsubscribeJSON struct {
+			Result string `json:"result"`
+			Action string `json:"action"`
+			List   string `json:"list"`
+		}
+		output := unsubscribeJSON{
+			Result: ResultActionCompleted,
+			Action: "unsubscribed",
+			List:   list.Name,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Unsubscribed from list '%s'\n", list.Name)
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}

@@ -235,6 +235,8 @@ todoat list [command]
 | `trash` | View and manage deleted lists |
 | `share` | Share a list with another user (Nextcloud only) |
 | `unshare` | Remove sharing from a user (Nextcloud only) |
+| `subscribe` | Subscribe to an external calendar feed (Nextcloud only) |
+| `unsubscribe` | Remove a calendar subscription (Nextcloud only) |
 | `stats` | Show database statistics |
 | `vacuum` | Compact the database |
 
@@ -339,6 +341,24 @@ todoat list unshare [name] [flags]
 |------|------|-------------|
 | `--user` | string | (required) Username to remove sharing from |
 
+### list subscribe
+
+Subscribe to a read-only task list via URL. Nextcloud backend only.
+
+```bash
+todoat list subscribe [url] [flags]
+```
+
+Uses CalDAV MKCALENDAR to add an external calendar feed to your Nextcloud instance. The subscription is refreshed periodically by Nextcloud.
+
+### list unsubscribe
+
+Remove a calendar subscription. Nextcloud backend only.
+
+```bash
+todoat list unsubscribe [name] [flags]
+```
+
 ### list stats
 
 Display statistics about the database including task counts, status breakdown, and storage usage.
@@ -397,6 +417,12 @@ todoat list share "Work" --user colleague --permission write
 
 # Remove sharing
 todoat list unshare "Work" --user colleague
+
+# Subscribe to an external calendar feed (Nextcloud only)
+todoat list subscribe "https://example.com/calendar/ical"
+
+# Remove a calendar subscription (Nextcloud only)
+todoat list unsubscribe "External Calendar"
 
 # JSON output for list info and trash
 todoat --json list info "Work"

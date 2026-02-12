@@ -130,7 +130,8 @@ todoat <TAB>
 
 ```bash
 todoat list <TAB>
-# Shows: create, delete, export, import, info, stats, trash, update, vacuum
+# Shows: create, delete, export, import, info, share, stats, subscribe,
+#        trash, unshare, unsubscribe, update, vacuum
 ```
 
 ### Flags

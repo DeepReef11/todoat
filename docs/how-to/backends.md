@@ -78,6 +78,16 @@ backends:
 
 Nextcloud supports sharing task lists with other users. See [List Management - Sharing](list-management.md#sharing-lists-nextcloud) for details.
 
+### Calendar Subscriptions
+
+Subscribe to external calendar feeds as read-only task lists:
+
+```bash
+todoat list subscribe "https://example.com/calendar/ical"
+```
+
+See [List Management - Calendar Subscriptions](list-management.md#calendar-subscriptions-nextcloud) for details.
+
 ### Multiple Nextcloud Accounts
 
 ```yaml

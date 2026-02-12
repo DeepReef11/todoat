@@ -179,6 +179,24 @@ todoat list unshare "Project Alpha" --user alice
 
 **Note**: Sharing requires the Nextcloud backend. Other backends do not support list sharing.
 
+## Calendar Subscriptions (Nextcloud)
+
+Subscribe to external calendar feeds as read-only task lists. This feature is only available with the Nextcloud backend.
+
+### Subscribe to a Calendar
+
+```bash
+todoat list subscribe "https://example.com/calendar/ical"
+```
+
+The subscription is added to your Nextcloud instance and refreshed periodically.
+
+### Remove a Subscription
+
+```bash
+todoat list unsubscribe "External Calendar"
+```
+
 ## List Properties
 
 | Property | Description | Example |

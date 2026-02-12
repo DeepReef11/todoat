@@ -174,6 +174,7 @@ Restores the default configuration. Requires confirmation.
 | `reminder.intervals` | list | Time before due to send reminders (default: `[]`, no intervals) |
 | `reminder.os_notification` | bool | Send reminders via OS notifications (default: `false`) |
 | `reminder.log_notification` | bool | Log reminders to notification log (default: `false`) |
+| `logging.background_enabled` | bool | Create log files for background processes (default: `true`) |
 | `cache_ttl` | string | List metadata cache TTL, e.g., `5m`, `30s`, `10m` (default: `5m`) |
 
 ## Backend Configuration
@@ -440,10 +441,10 @@ logging:
 
 When background logging is enabled, background processes (like the sync daemon) create log files at `/tmp/todoat-{PID}.log`. Set to `false` to disable these log files.
 
-To modify logging settings, edit `config.yaml` directly or use:
+To modify logging settings:
 
 ```bash
-todoat config edit
+todoat config set logging.background_enabled false
 ```
 
 ## Examples

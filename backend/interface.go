@@ -95,6 +95,18 @@ type ListSharer interface {
 	UnshareList(ctx context.Context, listID string, username string) error
 }
 
+// ListSubscriber is an optional interface that backends can implement to support
+// subscribing to external read-only task lists via URL. Currently only supported
+// by the Nextcloud backend via CalDAV MKCALENDAR with source URL property.
+type ListSubscriber interface {
+	// SubscribeList subscribes to an external calendar feed at the given URL.
+	// The calendar is added as a read-only list; refresh is handled server-side.
+	SubscribeList(ctx context.Context, sourceURL string) (*List, error)
+
+	// UnsubscribeList removes a subscription (deletes the subscribed calendar).
+	UnsubscribeList(ctx context.Context, listID string) error
+}
+
 // FindListByName searches for a list by name (case-insensitive) in a slice of lists.
 // Returns nil if no match is found. This helper reduces code duplication across backends.
 func FindListByName(lists []List, name string) *List {

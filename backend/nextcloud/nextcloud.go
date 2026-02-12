@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -458,6 +459,114 @@ func permissionToCalDAVAccess(permission string) string {
 
 // Verify ListSharer interface compliance at compile time
 var _ backend.ListSharer = (*Backend)(nil)
+
+// =============================================================================
+// Calendar Subscriptions (CalDAV MKCALENDAR with source URL)
+// =============================================================================
+
+// SubscribeList subscribes to an external calendar feed via MKCALENDAR.
+// The subscription is read-only; refresh is handled server-side by Nextcloud.
+func (b *Backend) SubscribeList(ctx context.Context, sourceURL string) (*backend.List, error) {
+	if sourceURL == "" {
+		return nil, fmt.Errorf("subscription URL is required")
+	}
+
+	// Validate URL format
+	parsedURL, err := url.Parse(sourceURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid subscription URL: %w", err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("subscription URL must use http or https scheme, got %q", parsedURL.Scheme)
+	}
+
+	// Derive calendar name from URL
+	calName := deriveCalendarName(parsedURL)
+	calendarURL := b.baseURL + calName + "/"
+
+	// Build MKCALENDAR body with source URL property
+	mkcalBody := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<cal:mkcalendar xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/">
+  <d:set>
+    <d:prop>
+      <d:displayname>%s</d:displayname>
+      <cal:supported-calendar-component-set>
+        <cal:comp name="VTODO"/>
+      </cal:supported-calendar-component-set>
+      <cs:source>
+        <d:href>%s</d:href>
+      </cs:source>
+    </d:prop>
+  </d:set>
+</cal:mkcalendar>`, calName, sourceURL)
+
+	resp, err := b.doRequest(ctx, "MKCALENDAR", calendarURL, []byte(mkcalBody))
+	if err != nil {
+		return nil, fmt.Errorf("MKCALENDAR request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusConflict {
+		return nil, fmt.Errorf("calendar %q already exists", calName)
+	}
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return nil, fmt.Errorf("MKCALENDAR failed with status %d", resp.StatusCode)
+	}
+
+	return &backend.List{
+		ID:   calName,
+		Name: calName,
+	}, nil
+}
+
+// UnsubscribeList removes a subscription by deleting the calendar via CalDAV DELETE.
+func (b *Backend) UnsubscribeList(ctx context.Context, listID string) error {
+	if listID == "" {
+		return fmt.Errorf("list ID is required for unsubscribe")
+	}
+
+	calendarURL := b.baseURL + listID + "/"
+
+	resp, err := b.doRequest(ctx, "DELETE", calendarURL, nil)
+	if err != nil {
+		return fmt.Errorf("DELETE request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("calendar %q not found", listID)
+	}
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("DELETE failed with status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// deriveCalendarName derives a calendar slug from a URL for use as the calendar ID.
+func deriveCalendarName(u *url.URL) string {
+	path := strings.TrimSuffix(u.Path, "/")
+	if path == "" || path == "/" {
+		return "subscription"
+	}
+
+	// Get the last path segment
+	parts := strings.Split(path, "/")
+	name := parts[len(parts)-1]
+
+	// Remove common extensions
+	name = strings.TrimSuffix(name, ".ics")
+	name = strings.TrimSuffix(name, ".ical")
+
+	if name == "" {
+		return "subscription"
+	}
+
+	return name
+}
+
+// Verify ListSubscriber interface compliance at compile time
+var _ backend.ListSubscriber = (*Backend)(nil)
 
 // =============================================================================
 // Status Conversion Functions
