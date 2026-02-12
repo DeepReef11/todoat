@@ -4571,11 +4571,75 @@ func TestViewListCommandJSON(t *testing.T) {
 // TestSetLastSyncTimeRoundTrip verifies that SetLastSyncTime persists correctly
 // and GetLastSyncTime retrieves it. Reproduces issue #96 where updated_at column
 // reference caused silent INSERT failure.
+// TestIssue097_NewSyncManagerReturnsErrorOnInitFailure verifies that NewSyncManager
+// propagates initDB errors instead of silently discarding them.
+func TestIssue097_NewSyncManagerReturnsErrorOnInitFailure(t *testing.T) {
+	// Create a path where db creation will fail (read-only parent directory)
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	// Use a subdirectory under the read-only dir so MkdirAll will fail
+	dbPath := filepath.Join(readOnlyDir, "subdir", "sync.db")
+
+	sm, err := NewSyncManager(dbPath)
+	if err == nil {
+		if sm != nil && sm.db != nil {
+			sm.db.Close()
+		}
+		t.Fatal("NewSyncManager should return error when database directory is not writable")
+	}
+	if sm != nil && sm.db != nil {
+		sm.db.Close()
+		t.Fatal("NewSyncManager should not return a SyncManager with initialized db on error")
+	}
+}
+
+// TestIssue097_NewSyncManagerSucceeds verifies that NewSyncManager works with valid path.
+func TestIssue097_NewSyncManagerSucceeds(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "sync.db")
+
+	sm, err := NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager should succeed with valid path: %v", err)
+	}
+	if sm == nil || sm.db == nil {
+		t.Fatal("SyncManager should have initialized db")
+	}
+	defer sm.db.Close()
+}
+
+// TestIssue097_QueueOperationByStringIDReturnsErrorWhenDBNil verifies that
+// QueueOperationByStringID returns an error when db is nil.
+func TestIssue097_QueueOperationByStringIDReturnsErrorWhenDBNil(t *testing.T) {
+	sm := &SyncManager{dbPath: "/nonexistent/path.db"}
+	// db is nil - should return error, not silently succeed
+	err := sm.QueueOperationByStringID("task1", "test task", "list1", "create")
+	if err == nil {
+		t.Fatal("QueueOperationByStringID should return error when db is nil")
+	}
+}
+
+// TestIssue097_QueueOperationReturnsErrorWhenDBNil verifies that
+// QueueOperation returns an error when db is nil.
+func TestIssue097_QueueOperationReturnsErrorWhenDBNil(t *testing.T) {
+	sm := &SyncManager{dbPath: "/nonexistent/path.db"}
+	err := sm.QueueOperation(1, "uid", "test task", 1, "create")
+	if err == nil {
+		t.Fatal("QueueOperation should return error when db is nil")
+	}
+}
+
 func TestSetLastSyncTimeRoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "sync.db")
 
-	sm := NewSyncManager(dbPath)
+	sm, err := NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	if sm.db == nil {
 		t.Fatal("SyncManager db should not be nil after init")
 	}

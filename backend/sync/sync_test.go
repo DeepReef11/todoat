@@ -2948,7 +2948,10 @@ default_backend: sqlite
 	}
 
 	// Get the pending operations to find their IDs
-	syncMgr := cmd.NewSyncManager(filepath.Join(tmpDir, "test.db"))
+	syncMgr, err := cmd.NewSyncManager(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	ops, err := syncMgr.GetPendingOperations()
@@ -3381,11 +3384,14 @@ func TestSyncQueueAtomicClaiming(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create SyncManager and queue an operation
-	syncMgr := cmd.NewSyncManager(dbPath)
+	syncMgr, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	// Queue a test operation
-	err := syncMgr.QueueOperationByStringID("task-123", "Test Task", "list-1", "create")
+	err = syncMgr.QueueOperationByStringID("task-123", "Test Task", "list-1", "create")
 	if err != nil {
 		t.Fatalf("QueueOperationByStringID failed: %v", err)
 	}
@@ -3469,19 +3475,28 @@ func TestDuplicateClaimPrevention(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create SyncManager and queue a single operation
-	syncMgr := cmd.NewSyncManager(dbPath)
+	syncMgr, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
-	err := syncMgr.QueueOperationByStringID("task-race", "Race Test Task", "list-1", "update")
+	err = syncMgr.QueueOperationByStringID("task-race", "Race Test Task", "list-1", "update")
 	if err != nil {
 		t.Fatalf("QueueOperationByStringID failed: %v", err)
 	}
 
 	// Create multiple SyncManagers (simulating multiple daemon instances)
-	syncMgr1 := cmd.NewSyncManager(dbPath)
+	syncMgr1, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	defer func() { _ = syncMgr1.Close() }()
 
-	syncMgr2 := cmd.NewSyncManager(dbPath)
+	syncMgr2, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	defer func() { _ = syncMgr2.Close() }()
 
 	// Use channels to collect results from concurrent claims
@@ -3554,11 +3569,14 @@ func TestStuckTaskDetection(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create SyncManager
-	syncMgr := cmd.NewSyncManager(dbPath)
+	syncMgr, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	// Queue and claim an operation
-	err := syncMgr.QueueOperationByStringID("task-stuck-1", "Stuck Task 1", "list-1", "create")
+	err = syncMgr.QueueOperationByStringID("task-stuck-1", "Stuck Task 1", "list-1", "create")
 	if err != nil {
 		t.Fatalf("QueueOperationByStringID failed: %v", err)
 	}
@@ -3631,7 +3649,10 @@ func TestStuckTaskRecovery(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create SyncManager
-	syncMgr := cmd.NewSyncManager(dbPath)
+	syncMgr, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	// Queue and claim multiple operations
@@ -3722,11 +3743,14 @@ func TestStuckTaskWorkerValidation(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create SyncManager
-	syncMgr := cmd.NewSyncManager(dbPath)
+	syncMgr, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	// Queue and claim an operation
-	err := syncMgr.QueueOperationByStringID("task-validate-1", "Validate Task 1", "list-1", "create")
+	err = syncMgr.QueueOperationByStringID("task-validate-1", "Validate Task 1", "list-1", "create")
 	if err != nil {
 		t.Fatalf("QueueOperationByStringID failed: %v", err)
 	}

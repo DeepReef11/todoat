@@ -2553,9 +2553,13 @@ func getBackend(cfg *Config) (backend.TaskManager, error) {
 		if err != nil {
 			return nil, err
 		}
+		syncMgr, err := getSyncManager(cfg)
+		if err != nil {
+			utils.Debugf("Warning: sync database initialization failed, sync will be degraded: %v", err)
+		}
 		return &syncAwareBackend{
 			TaskManager: be,
-			syncMgr:     getSyncManager(cfg),
+			syncMgr:     syncMgr,
 			cfg:         cfg,
 		}, nil
 	}
@@ -2725,9 +2729,13 @@ func createBackendWithSyncFallback(cfg *Config, backendName string, dbPath strin
 
 	// Backend is available, wrap it in syncAwareBackend for sync support
 	utils.Debugf("Online mode: using remote backend '%s' directly", backendName)
+	syncMgr, err := getSyncManager(cfg)
+	if err != nil {
+		utils.Debugf("Warning: sync database initialization failed, sync will be degraded: %v", err)
+	}
 	return &syncAwareBackend{
 		TaskManager: be,
-		syncMgr:     getSyncManager(cfg),
+		syncMgr:     syncMgr,
 		cfg:         cfg,
 	}, nil
 }
@@ -2740,9 +2748,13 @@ func createSyncFallbackBackend(cfg *Config, dbPath string, backendName string) (
 	if err != nil {
 		return nil, err
 	}
+	syncMgr, err := getSyncManager(cfg)
+	if err != nil {
+		utils.Debugf("Warning: sync database initialization failed, sync will be degraded: %v", err)
+	}
 	return &syncAwareBackend{
 		TaskManager: be,
-		syncMgr:     getSyncManager(cfg),
+		syncMgr:     syncMgr,
 		cfg:         cfg,
 	}, nil
 }
@@ -3250,7 +3262,9 @@ func (b *syncAwareBackend) CreateTask(ctx context.Context, listID string, task *
 	}
 
 	// Queue create operation
-	_ = b.syncMgr.QueueOperationByStringID(created.ID, created.Summary, listID, "create")
+	if err := b.syncMgr.QueueOperationByStringID(created.ID, created.Summary, listID, "create"); err != nil {
+		utils.Debugf("Warning: failed to queue sync operation for created task: %v", err)
+	}
 
 	// Trigger auto-sync if enabled
 	b.triggerAutoSync()
@@ -3266,7 +3280,9 @@ func (b *syncAwareBackend) UpdateTask(ctx context.Context, listID string, task *
 	}
 
 	// Queue update operation
-	_ = b.syncMgr.QueueOperationByStringID(updated.ID, updated.Summary, listID, "update")
+	if err := b.syncMgr.QueueOperationByStringID(updated.ID, updated.Summary, listID, "update"); err != nil {
+		utils.Debugf("Warning: failed to queue sync operation for updated task: %v", err)
+	}
 
 	// Trigger auto-sync if enabled
 	b.triggerAutoSync()
@@ -3289,7 +3305,9 @@ func (b *syncAwareBackend) DeleteTask(ctx context.Context, listID, taskID string
 	}
 
 	// Queue delete operation
-	_ = b.syncMgr.QueueOperationByStringID(taskID, summary, listID, "delete")
+	if err := b.syncMgr.QueueOperationByStringID(taskID, summary, listID, "delete"); err != nil {
+		utils.Debugf("Warning: failed to queue sync operation for deleted task: %v", err)
+	}
 
 	// Trigger auto-sync if enabled
 	b.triggerAutoSync()
@@ -6394,7 +6412,10 @@ func doSync(cfg *Config, stdout, stderr io.Writer) error {
 	}
 
 	// Get sync manager to access pending operations
-	syncMgr := getSyncManager(cfg)
+	syncMgr, err := getSyncManager(cfg)
+	if err != nil {
+		return fmt.Errorf("sync database unavailable: %w", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	// Get pending operations
@@ -6868,7 +6889,10 @@ func syncPullFromRemote(ctx context.Context, localBE, remoteBE backend.TaskManag
 // doSyncStatus displays sync status for all backends
 func doSyncStatus(cfg *Config, stdout io.Writer, verbose bool, jsonOutput bool) error {
 	// Get sync manager
-	syncMgr := getSyncManager(cfg)
+	syncMgr, err := getSyncManager(cfg)
+	if err != nil {
+		return fmt.Errorf("sync database unavailable: %w", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	// Get offline mode from config
@@ -7058,7 +7082,10 @@ func newSyncQueueCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 // doSyncQueueView displays pending sync operations
 func doSyncQueueView(cfg *Config, stdout io.Writer, jsonOutput bool) error {
-	syncMgr := getSyncManager(cfg)
+	syncMgr, err := getSyncManager(cfg)
+	if err != nil {
+		return fmt.Errorf("sync database unavailable: %w", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	ops, err := syncMgr.GetPendingOperations()
@@ -7141,7 +7168,10 @@ func newSyncQueueClearCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 // doSyncQueueClear removes all pending sync operations
 func doSyncQueueClear(cfg *Config, stdout io.Writer) error {
-	syncMgr := getSyncManager(cfg)
+	syncMgr, err := getSyncManager(cfg)
+	if err != nil {
+		return fmt.Errorf("sync database unavailable: %w", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	count, err := syncMgr.ClearQueue()
@@ -7182,7 +7212,10 @@ func newSyncConflictsCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 // doSyncConflictsView displays sync conflicts
 func doSyncConflictsView(cfg *Config, stdout io.Writer, jsonOutput bool) error {
-	syncMgr := getSyncManager(cfg)
+	syncMgr, err := getSyncManager(cfg)
+	if err != nil {
+		return fmt.Errorf("sync database unavailable: %w", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	conflicts, err := syncMgr.GetConflicts()
@@ -7255,7 +7288,10 @@ func newSyncConflictsResolveCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 
 // doSyncConflictResolve resolves a specific sync conflict
 func doSyncConflictResolve(cfg *Config, stdout io.Writer, taskUID string, strategy string) error {
-	syncMgr := getSyncManager(cfg)
+	syncMgr, err := getSyncManager(cfg)
+	if err != nil {
+		return fmt.Errorf("sync database unavailable: %w", err)
+	}
 	defer func() { _ = syncMgr.Close() }()
 
 	// Validate strategy
@@ -7451,7 +7487,7 @@ func applyConflictResolutionStrategy(be backend.TaskManager, syncMgr *SyncManage
 }
 
 // getSyncManager returns a SyncManager for the current configuration
-func getSyncManager(cfg *Config) *SyncManager {
+func getSyncManager(cfg *Config) (*SyncManager, error) {
 	dbPath := cfg.DBPath
 	if dbPath == "" {
 		home, _ := os.UserHomeDir()
@@ -7497,10 +7533,12 @@ type SyncConflict struct {
 }
 
 // NewSyncManager creates a new SyncManager
-func NewSyncManager(dbPath string) *SyncManager {
+func NewSyncManager(dbPath string) (*SyncManager, error) {
 	sm := &SyncManager{dbPath: dbPath}
-	_ = sm.initDB()
-	return sm
+	if err := sm.initDB(); err != nil {
+		return sm, fmt.Errorf("sync database initialization failed: %w", err)
+	}
+	return sm, nil
 }
 
 // initDB initializes the sync database tables
@@ -7889,7 +7927,7 @@ func (sm *SyncManager) ClaimNextOperation(workerID string) (*SyncOperation, erro
 // QueueOperation adds an operation to the sync queue
 func (sm *SyncManager) QueueOperation(taskID int64, taskUID string, taskSummary string, listID int64, opType string) error {
 	if sm.db == nil {
-		return nil
+		return fmt.Errorf("sync database not initialized")
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -7903,7 +7941,7 @@ func (sm *SyncManager) QueueOperation(taskID int64, taskUID string, taskSummary 
 // QueueOperationByStringID adds an operation to the sync queue using string IDs
 func (sm *SyncManager) QueueOperationByStringID(taskID string, taskSummary string, listID string, opType string) error {
 	if sm.db == nil {
-		return nil
+		return fmt.Errorf("sync database not initialized")
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
