@@ -3806,9 +3806,35 @@ func (b *syncAwareBackend) CreateTask(ctx context.Context, listID string, task *
 
 // UpdateTask updates a task and queues a sync operation
 func (b *syncAwareBackend) UpdateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
+	// Get old task state before update for field-level timestamp tracking (Issue #113)
+	oldTask, _ := b.TaskManager.GetTask(ctx, listID, task.ID)
+
 	updated, err := b.TaskManager.UpdateTask(ctx, listID, task)
 	if err != nil {
 		return nil, err
+	}
+
+	// Track field-level timestamps for changed fields (Issue #113)
+	if oldTask != nil {
+		var changedFields []string
+		if updated.Summary != oldTask.Summary {
+			changedFields = append(changedFields, "summary")
+		}
+		if updated.Description != oldTask.Description {
+			changedFields = append(changedFields, "description")
+		}
+		if updated.Status != oldTask.Status {
+			changedFields = append(changedFields, "status")
+		}
+		if updated.Priority != oldTask.Priority {
+			changedFields = append(changedFields, "priority")
+		}
+		if updated.Categories != oldTask.Categories {
+			changedFields = append(changedFields, "categories")
+		}
+		if len(changedFields) > 0 {
+			b.syncMgr.UpdateFieldTimestamps(updated.ID, changedFields)
+		}
 	}
 
 	// Queue update operation
@@ -7977,18 +8003,77 @@ func applyConflictResolutionStrategy(be backend.TaskManager, syncMgr *SyncManage
 		return err
 
 	case "merge":
-		// Merge non-conflicting fields: prefer remote for most fields but keep local modifications
-		// Strategy: use remote as base, but preserve local priority and categories if they differ
-		task := &backend.Task{
-			ID:          conflict.TaskUID,
-			Summary:     remoteTask.Summary, // Use remote summary
-			Description: remoteTask.Description,
-			Priority:    localTask.Priority,   // Keep local priority
-			Categories:  localTask.Categories, // Keep local categories
+		// Merge fields using per-field timestamps when available (Issue #113).
+		// When timestamps exist, the most recently modified value wins per field.
+		// When timestamps are unavailable, fall back to: remote summary/description/status, local priority/categories.
+		var localFT, remoteFT map[string]string
+		if conflict.LocalFieldTimestamps != "" {
+			_ = json.Unmarshal([]byte(conflict.LocalFieldTimestamps), &localFT)
 		}
-		if remoteTask.Status != "" {
-			task.Status = backend.TaskStatus(remoteTask.Status)
+		if conflict.RemoteFieldTimestamps != "" {
+			_ = json.Unmarshal([]byte(conflict.RemoteFieldTimestamps), &remoteFT)
 		}
+
+		// Helper: returns true if local field timestamp is newer than remote for a given field.
+		// If either side lacks a timestamp, returns the fallback value.
+		localNewer := func(field string, fallback bool) bool {
+			lt, lok := localFT[field]
+			rt, rok := remoteFT[field]
+			if lok && rok {
+				lTime, _ := time.Parse(time.RFC3339Nano, lt)
+				rTime, _ := time.Parse(time.RFC3339Nano, rt)
+				return lTime.After(rTime)
+			}
+			if lok && !rok {
+				return true // Only local has timestamp -> local wins
+			}
+			if !lok && rok {
+				return false // Only remote has timestamp -> remote wins
+			}
+			return fallback // Neither has timestamp -> use fallback
+		}
+
+		task := &backend.Task{ID: conflict.TaskUID}
+
+		// Summary: fallback = remote wins (false)
+		if localNewer("summary", false) {
+			task.Summary = localTask.Summary
+		} else {
+			task.Summary = remoteTask.Summary
+		}
+
+		// Description: fallback = remote wins (false)
+		if localNewer("description", false) {
+			task.Description = localTask.Description
+		} else {
+			task.Description = remoteTask.Description
+		}
+
+		// Priority: fallback = local wins (true)
+		if localNewer("priority", true) {
+			task.Priority = localTask.Priority
+		} else {
+			task.Priority = remoteTask.Priority
+		}
+
+		// Categories: fallback = local wins (true)
+		if localNewer("categories", true) {
+			task.Categories = localTask.Categories
+		} else {
+			task.Categories = remoteTask.Categories
+		}
+
+		// Status: fallback = remote wins (false)
+		if localNewer("status", false) {
+			if localTask.Status != "" {
+				task.Status = backend.TaskStatus(localTask.Status)
+			}
+		} else {
+			if remoteTask.Status != "" {
+				task.Status = backend.TaskStatus(remoteTask.Status)
+			}
+		}
+
 		_, err := be.UpdateTask(ctx, listID, task)
 		return err
 
@@ -8064,16 +8149,18 @@ type SyncOperation struct {
 
 // SyncConflict represents a sync conflict between local and remote versions
 type SyncConflict struct {
-	ID             int64     `json:"id"`
-	TaskUID        string    `json:"task_uid"`
-	TaskSummary    string    `json:"task_summary"`
-	ListID         int64     `json:"list_id"`
-	LocalVersion   string    `json:"local_version"`  // JSON serialized local task state
-	RemoteVersion  string    `json:"remote_version"` // JSON serialized remote task state
-	LocalModified  time.Time `json:"local_modified"`
-	RemoteModified time.Time `json:"remote_modified"`
-	DetectedAt     time.Time `json:"detected_at"`
-	Status         string    `json:"status"` // "pending", "resolved"
+	ID                    int64     `json:"id"`
+	TaskUID               string    `json:"task_uid"`
+	TaskSummary           string    `json:"task_summary"`
+	ListID                int64     `json:"list_id"`
+	LocalVersion          string    `json:"local_version"`            // JSON serialized local task state
+	RemoteVersion         string    `json:"remote_version"`           // JSON serialized remote task state
+	LocalModified         time.Time `json:"local_modified"`
+	RemoteModified        time.Time `json:"remote_modified"`
+	DetectedAt            time.Time `json:"detected_at"`
+	Status                string    `json:"status"`                    // "pending", "resolved"
+	LocalFieldTimestamps  string    `json:"local_field_timestamps"`   // JSON map of field->RFC3339Nano timestamp
+	RemoteFieldTimestamps string    `json:"remote_field_timestamps"`  // JSON map of field->RFC3339Nano timestamp
 }
 
 // NewSyncManager creates a new SyncManager
@@ -8143,7 +8230,9 @@ func (sm *SyncManager) initDB() error {
 			local_modified TEXT NOT NULL,
 			remote_modified TEXT NOT NULL,
 			detected_at TEXT NOT NULL,
-			status TEXT DEFAULT 'pending'
+			status TEXT DEFAULT 'pending',
+			local_field_timestamps TEXT DEFAULT '',
+			remote_field_timestamps TEXT DEFAULT ''
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_sync_queue_task ON sync_queue(task_id);
@@ -8160,6 +8249,11 @@ func (sm *SyncManager) initDB() error {
 	// This MUST run before creating indexes on the new columns
 	if err := sm.migrateSyncQueueSchema(); err != nil {
 		return fmt.Errorf("failed to migrate sync_queue schema: %w", err)
+	}
+
+	// Migrate existing databases: add field timestamp columns (Issue #113)
+	if err := sm.migrateSyncConflictsSchema(); err != nil {
+		return fmt.Errorf("failed to migrate sync_conflicts schema: %w", err)
 	}
 
 	// Create indexes on columns that may have been added by migration (Issue #086)
@@ -8220,6 +8314,42 @@ func (sm *SyncManager) migrateSyncQueueSchema() error {
 	return nil
 }
 
+// migrateSyncConflictsSchema adds field timestamp columns to sync_conflicts for existing databases (Issue #113).
+func (sm *SyncManager) migrateSyncConflictsSchema() error {
+	rows, err := sm.db.Query("PRAGMA table_info(sync_conflicts)")
+	if err != nil {
+		return err
+	}
+
+	columnExists := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue interface{}
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		columnExists[name] = true
+	}
+	_ = rows.Close()
+
+	if !columnExists["local_field_timestamps"] {
+		if _, err := sm.db.Exec("ALTER TABLE sync_conflicts ADD COLUMN local_field_timestamps TEXT DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	if !columnExists["remote_field_timestamps"] {
+		if _, err := sm.db.Exec("ALTER TABLE sync_conflicts ADD COLUMN remote_field_timestamps TEXT DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Close closes the database connection
 func (sm *SyncManager) Close() error {
 	if sm.db != nil {
@@ -8266,6 +8396,74 @@ func (sm *SyncManager) SetLastSyncTime(t time.Time) {
 		INSERT OR REPLACE INTO sync_metadata (key, value)
 		VALUES ('last_sync', ?)
 	`, timeStr)
+}
+
+// GetFieldTimestamps returns per-field modification timestamps for a task (Issue #113).
+func (sm *SyncManager) GetFieldTimestamps(taskUID string) (map[string]time.Time, error) {
+	if sm.db == nil {
+		return nil, nil
+	}
+
+	var valueStr string
+	err := sm.db.QueryRow("SELECT value FROM sync_metadata WHERE key = ?",
+		"field_timestamps:"+taskUID).Scan(&valueStr)
+	if err != nil {
+		return nil, nil
+	}
+
+	var raw map[string]string
+	if err := json.Unmarshal([]byte(valueStr), &raw); err != nil {
+		return nil, nil
+	}
+
+	result := make(map[string]time.Time, len(raw))
+	for field, ts := range raw {
+		if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+			result[field] = t
+		}
+	}
+	return result, nil
+}
+
+// SetFieldTimestamps stores per-field modification timestamps for a task (Issue #113).
+func (sm *SyncManager) SetFieldTimestamps(taskUID string, timestamps map[string]time.Time) {
+	if sm.db == nil {
+		return
+	}
+
+	raw := make(map[string]string, len(timestamps))
+	for field, t := range timestamps {
+		raw[field] = t.UTC().Format(time.RFC3339Nano)
+	}
+
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return
+	}
+
+	_, _ = sm.db.Exec(`
+		INSERT OR REPLACE INTO sync_metadata (key, value)
+		VALUES (?, ?)
+	`, "field_timestamps:"+taskUID, string(data))
+}
+
+// UpdateFieldTimestamps updates per-field modification timestamps for changed fields (Issue #113).
+func (sm *SyncManager) UpdateFieldTimestamps(taskUID string, changedFields []string) {
+	if sm.db == nil || len(changedFields) == 0 {
+		return
+	}
+
+	existing, _ := sm.GetFieldTimestamps(taskUID)
+	if existing == nil {
+		existing = make(map[string]time.Time)
+	}
+
+	now := time.Now().UTC()
+	for _, field := range changedFields {
+		existing[field] = now
+	}
+
+	sm.SetFieldTimestamps(taskUID, existing)
 }
 
 // GetConnectionStatus returns the current connection status
@@ -8746,7 +8944,8 @@ func (sm *SyncManager) GetConflicts() ([]SyncConflict, error) {
 
 	rows, err := sm.db.Query(`
 		SELECT id, task_uid, task_summary, list_id, local_version, remote_version,
-		       local_modified, remote_modified, detected_at, status
+		       local_modified, remote_modified, detected_at, status,
+		       local_field_timestamps, remote_field_timestamps
 		FROM sync_conflicts
 		WHERE status = 'pending'
 		ORDER BY detected_at DESC
@@ -8760,10 +8959,11 @@ func (sm *SyncManager) GetConflicts() ([]SyncConflict, error) {
 	for rows.Next() {
 		var c SyncConflict
 		var localModStr, remoteModStr, detectedStr sql.NullString
+		var localFTStr, remoteFTStr sql.NullString
 
 		err := rows.Scan(&c.ID, &c.TaskUID, &c.TaskSummary, &c.ListID,
 			&c.LocalVersion, &c.RemoteVersion, &localModStr, &remoteModStr,
-			&detectedStr, &c.Status)
+			&detectedStr, &c.Status, &localFTStr, &remoteFTStr)
 		if err != nil {
 			continue
 		}
@@ -8776,6 +8976,12 @@ func (sm *SyncManager) GetConflicts() ([]SyncConflict, error) {
 		}
 		if detectedStr.Valid {
 			c.DetectedAt, _ = time.Parse(time.RFC3339Nano, detectedStr.String)
+		}
+		if localFTStr.Valid {
+			c.LocalFieldTimestamps = localFTStr.String
+		}
+		if remoteFTStr.Valid {
+			c.RemoteFieldTimestamps = remoteFTStr.String
 		}
 
 		conflicts = append(conflicts, c)
@@ -8809,15 +9015,17 @@ func (sm *SyncManager) GetConflictByUID(taskUID string) (*SyncConflict, error) {
 
 	var c SyncConflict
 	var localModStr, remoteModStr, detectedStr sql.NullString
+	var localFTStr, remoteFTStr sql.NullString
 
 	err := sm.db.QueryRow(`
 		SELECT id, task_uid, task_summary, list_id, local_version, remote_version,
-		       local_modified, remote_modified, detected_at, status
+		       local_modified, remote_modified, detected_at, status,
+		       local_field_timestamps, remote_field_timestamps
 		FROM sync_conflicts
 		WHERE task_uid = ? AND status = 'pending'
 	`, taskUID).Scan(&c.ID, &c.TaskUID, &c.TaskSummary, &c.ListID,
 		&c.LocalVersion, &c.RemoteVersion, &localModStr, &remoteModStr,
-		&detectedStr, &c.Status)
+		&detectedStr, &c.Status, &localFTStr, &remoteFTStr)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("conflict not found: %s", taskUID)
@@ -8834,6 +9042,12 @@ func (sm *SyncManager) GetConflictByUID(taskUID string) (*SyncConflict, error) {
 	}
 	if detectedStr.Valid {
 		c.DetectedAt, _ = time.Parse(time.RFC3339Nano, detectedStr.String)
+	}
+	if localFTStr.Valid {
+		c.LocalFieldTimestamps = localFTStr.String
+	}
+	if remoteFTStr.Valid {
+		c.RemoteFieldTimestamps = remoteFTStr.String
 	}
 
 	return &c, nil
@@ -8873,10 +9087,11 @@ func (sm *SyncManager) AddConflict(c *SyncConflict) error {
 
 	_, err := sm.db.Exec(`
 		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
-		                            local_modified, remote_modified, detected_at, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+		                            local_modified, remote_modified, detected_at, status,
+		                            local_field_timestamps, remote_field_timestamps)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
 	`, c.TaskUID, c.TaskSummary, c.ListID, c.LocalVersion, c.RemoteVersion,
-		localMod, remoteMod, now)
+		localMod, remoteMod, now, c.LocalFieldTimestamps, c.RemoteFieldTimestamps)
 
 	return err
 }
@@ -11894,6 +12109,8 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 					"smart_timing":       c.Sync.Daemon.SmartTiming,
 					"debounce_ms":        c.Sync.Daemon.DebounceMs,
 					"heartbeat_interval": c.Sync.Daemon.HeartbeatInterval,
+					"stuck_timeout":      c.Sync.Daemon.StuckTimeout,
+					"task_timeout":       c.Sync.Daemon.TaskTimeout,
 				},
 			}, nil
 		}
@@ -11922,6 +12139,8 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 					"smart_timing":       c.Sync.Daemon.SmartTiming,
 					"debounce_ms":        c.Sync.Daemon.DebounceMs,
 					"heartbeat_interval": c.Sync.Daemon.HeartbeatInterval,
+					"stuck_timeout":      c.Sync.Daemon.StuckTimeout,
+					"task_timeout":       c.Sync.Daemon.TaskTimeout,
 				}, nil
 			}
 			switch parts[2] {
@@ -11939,6 +12158,10 @@ func getConfigValue(c *config.Config, key string) (interface{}, error) {
 				return c.Sync.Daemon.DebounceMs, nil
 			case "heartbeat_interval":
 				return c.Sync.Daemon.HeartbeatInterval, nil
+			case "stuck_timeout":
+				return c.Sync.Daemon.StuckTimeout, nil
+			case "task_timeout":
+				return c.Sync.Daemon.TaskTimeout, nil
 			}
 		}
 	case "trash":
@@ -12382,6 +12605,16 @@ func setConfigValue(c *config.Config, key, value string) error {
 					return fmt.Errorf("invalid value for sync.daemon.heartbeat_interval: %s (must be a non-negative integer)", value)
 				}
 				c.Sync.Daemon.HeartbeatInterval = intVal
+				return nil
+			case "stuck_timeout":
+				intVal, err := strconv.Atoi(value)
+				if err != nil || intVal < 0 {
+					return fmt.Errorf("invalid value for sync.daemon.stuck_timeout: %s (must be a non-negative integer)", value)
+				}
+				c.Sync.Daemon.StuckTimeout = intVal
+				return nil
+			case "task_timeout":
+				c.Sync.Daemon.TaskTimeout = value
 				return nil
 			}
 		}

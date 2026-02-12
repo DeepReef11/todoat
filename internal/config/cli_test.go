@@ -779,6 +779,92 @@ sync:
 	testutil.AssertContains(t, stdout, "3600")
 }
 
+// TestConfigGetSyncDaemonStuckTimeoutCLI verifies 'todoat config get sync.daemon.stuck_timeout' works
+func TestConfigGetSyncDaemonStuckTimeoutCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    stuck_timeout: 15
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "sync.daemon.stuck_timeout")
+	testutil.AssertContains(t, stdout, "15")
+}
+
+// TestConfigSetSyncDaemonStuckTimeoutCLI verifies 'todoat config set sync.daemon.stuck_timeout 20' works
+func TestConfigSetSyncDaemonStuckTimeoutCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    stuck_timeout: 10
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.daemon.stuck_timeout", "20")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	stdout = cli.MustExecute("-y", "config", "get", "sync.daemon.stuck_timeout")
+	testutil.AssertContains(t, stdout, "20")
+}
+
+// TestConfigGetSyncDaemonTaskTimeoutCLI verifies 'todoat config get sync.daemon.task_timeout' works
+func TestConfigGetSyncDaemonTaskTimeoutCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    task_timeout: "10m"
+`)
+
+	stdout := cli.MustExecute("-y", "config", "get", "sync.daemon.task_timeout")
+	testutil.AssertContains(t, stdout, "10m")
+}
+
+// TestConfigSetSyncDaemonTaskTimeoutCLI verifies 'todoat config set sync.daemon.task_timeout 15m' works
+func TestConfigSetSyncDaemonTaskTimeoutCLI(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+sync:
+  enabled: true
+  daemon:
+    enabled: true
+    task_timeout: "5m"
+`)
+
+	stdout := cli.MustExecute("-y", "config", "set", "sync.daemon.task_timeout", "15m")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	stdout = cli.MustExecute("-y", "config", "get", "sync.daemon.task_timeout")
+	testutil.AssertContains(t, stdout, "15m")
+}
+
 // TestConfigGetSyncBackgroundPullCooldownCLI verifies 'todoat config get sync.background_pull_cooldown' works
 func TestConfigGetSyncBackgroundPullCooldownCLI(t *testing.T) {
 	cli := testutil.NewCLITestWithConfig(t)
