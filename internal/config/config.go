@@ -97,6 +97,10 @@ type BackendsConfig struct {
 	SQLite    SQLiteConfig    `yaml:"sqlite"`
 	Todoist   TodoistConfig   `yaml:"todoist"`
 	Nextcloud NextcloudConfig `yaml:"nextcloud"`
+	Google    GoogleConfig    `yaml:"google"`
+	MSTodo    MSTodoConfig    `yaml:"mstodo"`
+	Git       GitConfig       `yaml:"git"`
+	File      FileConfig      `yaml:"file"`
 }
 
 // TodoistConfig holds Todoist backend configuration
@@ -106,7 +110,34 @@ type TodoistConfig struct {
 
 // NextcloudConfig holds Nextcloud backend configuration
 type NextcloudConfig struct {
+	Enabled            bool   `yaml:"enabled"`
+	Host               string `yaml:"host"`
+	Username           string `yaml:"username"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
+	AllowHTTP          bool   `yaml:"allow_http"`
+}
+
+// GoogleConfig holds Google Tasks backend configuration
+type GoogleConfig struct {
 	Enabled bool `yaml:"enabled"`
+}
+
+// MSTodoConfig holds Microsoft To Do backend configuration
+type MSTodoConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// GitConfig holds Git backend configuration
+type GitConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	File       string `yaml:"file"`
+	AutoCommit bool   `yaml:"auto_commit"`
+}
+
+// FileConfig holds File backend configuration
+type FileConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path"`
 }
 
 // SQLiteConfig holds SQLite backend configuration

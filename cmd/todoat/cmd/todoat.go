@@ -12503,6 +12503,89 @@ func setConfigValue(c *config.Config, key, value string) error {
 				c.Backends.Todoist.Enabled = boolVal
 				return nil
 			}
+		case "nextcloud":
+			switch parts[2] {
+			case "enabled":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.nextcloud.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.Nextcloud.Enabled = boolVal
+				return nil
+			case "host":
+				c.Backends.Nextcloud.Host = value
+				return nil
+			case "username":
+				c.Backends.Nextcloud.Username = value
+				return nil
+			case "insecure_skip_verify":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.nextcloud.insecure_skip_verify: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.Nextcloud.InsecureSkipVerify = boolVal
+				return nil
+			case "allow_http":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.nextcloud.allow_http: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.Nextcloud.AllowHTTP = boolVal
+				return nil
+			}
+		case "google":
+			switch parts[2] {
+			case "enabled":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.google.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.Google.Enabled = boolVal
+				return nil
+			}
+		case "mstodo":
+			switch parts[2] {
+			case "enabled":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.mstodo.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.MSTodo.Enabled = boolVal
+				return nil
+			}
+		case "git":
+			switch parts[2] {
+			case "enabled":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.git.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.Git.Enabled = boolVal
+				return nil
+			case "file":
+				c.Backends.Git.File = value
+				return nil
+			case "auto_commit":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.git.auto_commit: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.Git.AutoCommit = boolVal
+				return nil
+			}
+		case "file":
+			switch parts[2] {
+			case "enabled":
+				boolVal, err := parseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for backends.file.enabled: %s (valid: true, false, yes, no, 1, 0)", value)
+				}
+				c.Backends.File.Enabled = boolVal
+				return nil
+			case "path":
+				c.Backends.File.Path = config.ExpandPath(value)
+				return nil
+			}
 		}
 	case "sync":
 		if len(parts) < 2 {
@@ -12734,6 +12817,14 @@ func isBoolConfigKey(key string) bool {
 		"auto_detect_backend",
 		"backends.sqlite.enabled",
 		"backends.todoist.enabled",
+		"backends.nextcloud.enabled",
+		"backends.nextcloud.insecure_skip_verify",
+		"backends.nextcloud.allow_http",
+		"backends.google.enabled",
+		"backends.mstodo.enabled",
+		"backends.git.enabled",
+		"backends.git.auto_commit",
+		"backends.file.enabled",
 		"sync.enabled",
 		"sync.auto_sync_after_operation",
 		"sync.daemon.enabled",

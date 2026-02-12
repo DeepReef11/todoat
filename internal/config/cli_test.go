@@ -1198,3 +1198,45 @@ logging:
 	testutil.AssertNotContains(t, stdout, "map[")
 	testutil.AssertContains(t, stdout, "background_enabled:")
 }
+
+// TestConfigSetBackendKeysCLI verifies 'config set' works for all backend-specific keys (issue #119)
+func TestConfigSetBackendKeysCLI(t *testing.T) {
+	tests := []struct {
+		key   string
+		value string
+	}{
+		// Nextcloud keys
+		{"backends.nextcloud.enabled", "true"},
+		{"backends.nextcloud.host", "test.example.com"},
+		{"backends.nextcloud.username", "testuser"},
+		{"backends.nextcloud.insecure_skip_verify", "true"},
+		{"backends.nextcloud.allow_http", "true"},
+		// Google keys
+		{"backends.google.enabled", "true"},
+		// MSTodo keys
+		{"backends.mstodo.enabled", "true"},
+		// Git keys
+		{"backends.git.enabled", "true"},
+		{"backends.git.file", "TODO.md"},
+		{"backends.git.auto_commit", "false"},
+		// File keys
+		{"backends.file.enabled", "true"},
+		{"backends.file.path", "~/tasks.md"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			cli := testutil.NewCLITestWithConfig(t)
+
+			cli.SetFullConfig(`
+backends:
+  sqlite:
+    enabled: true
+default_backend: sqlite
+`)
+
+			stdout := cli.MustExecute("-y", "config", "set", tt.key, tt.value)
+			testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+		})
+	}
+}
