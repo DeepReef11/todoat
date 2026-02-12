@@ -112,6 +112,40 @@ Error: deleting calendars is not supported via CalDAV (would be permanent)
 
 **Fix**: Delete the calendar directly in the Nextcloud web interface if you need to remove it.
 
+### Sharing Not Supported
+
+**Message**: `sharing is not supported by this backend (requires Nextcloud)`
+
+**Cause**: The `list share` or `list unshare` command was used with a backend that does not support list sharing.
+
+**Example**:
+```bash
+$ todoat -b sqlite list share "Work" --user alice
+Error: sharing is not supported by this backend (requires Nextcloud)
+```
+
+**Fix**: Use the Nextcloud backend for list sharing:
+```bash
+todoat -b nextcloud list share "Work" --user alice --permission write
+```
+
+### Subscriptions Not Supported
+
+**Message**: `subscriptions are not supported by this backend (requires Nextcloud)`
+
+**Cause**: The `list subscribe` or `list unsubscribe` command was used with a backend that does not support calendar subscriptions.
+
+**Example**:
+```bash
+$ todoat -b sqlite list subscribe "https://example.com/calendar.ics"
+Error: subscriptions are not supported by this backend (requires Nextcloud)
+```
+
+**Fix**: Use the Nextcloud backend for calendar subscriptions:
+```bash
+todoat -b nextcloud list subscribe "https://example.com/calendar.ics"
+```
+
 ### Backend Not Configured
 
 **Message**: `todoist backend requires API token (use 'credentials set todoist token' or set TODOAT_TODOIST_TOKEN)`
