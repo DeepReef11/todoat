@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -567,6 +568,203 @@ func deriveCalendarName(u *url.URL) string {
 
 // Verify ListSubscriber interface compliance at compile time
 var _ backend.ListSubscriber = (*Backend)(nil)
+
+// =============================================================================
+// Public Link Publishing (Nextcloud OCS Share API)
+// =============================================================================
+
+// ocsBaseURL returns the OCS Share API base URL derived from the CalDAV base URL.
+func (b *Backend) ocsBaseURL() string {
+	// baseURL format: https://host/remote.php/dav/calendars/username/
+	// OCS API base:   https://host/ocs/v2.php/apps/files_sharing/api/v1/shares
+	u, err := url.Parse(b.baseURL)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s://%s/ocs/v2.php/apps/files_sharing/api/v1/shares", u.Scheme, u.Host)
+}
+
+// calendarDAVPath returns the CalDAV path for a calendar, used as the "path" parameter
+// in OCS Share API requests.
+func (b *Backend) calendarDAVPath(listID string) string {
+	return fmt.Sprintf("/remote.php/dav/calendars/%s/%s/", b.username, listID)
+}
+
+// doOCSRequest performs an authenticated OCS API request with JSON response format.
+func (b *Backend) doOCSRequest(ctx context.Context, method, ocsURL string, body []byte) (*http.Response, error) {
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, ocsURL, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+
+	req.SetBasicAuth(b.config.Username, b.config.Password)
+	req.Header.Set("OCS-APIRequest", "true")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	req.Header.Set("Accept", "application/json")
+
+	return b.client.Do(req)
+}
+
+// ocsResponse represents the JSON response from the Nextcloud OCS API.
+type ocsResponse struct {
+	OCS struct {
+		Meta struct {
+			Status     string `json:"status"`
+			StatusCode int    `json:"statuscode"`
+			Message    string `json:"message"`
+		} `json:"meta"`
+		Data json.RawMessage `json:"data"`
+	} `json:"ocs"`
+}
+
+// ocsShareData represents a share entry in OCS API responses.
+type ocsShareData struct {
+	ID        int    `json:"id"`
+	ShareType int    `json:"share_type"`
+	Path      string `json:"path"`
+	Token     string `json:"token"`
+	URL       string `json:"url"`
+}
+
+// PublishList creates a public share link for a calendar via the Nextcloud OCS Share API.
+// Returns the public URL accessible without authentication.
+func (b *Backend) PublishList(ctx context.Context, listID string) (string, error) {
+	if listID == "" {
+		return "", fmt.Errorf("list ID is required for publishing")
+	}
+
+	ocsBase := b.ocsBaseURL()
+	calPath := b.calendarDAVPath(listID)
+
+	// Create a public link share (shareType=3, permissions=1 for read-only)
+	formData := fmt.Sprintf("path=%s&shareType=3&permissions=1",
+		url.QueryEscape(calPath))
+
+	resp, err := b.doOCSRequest(ctx, "POST", ocsBase, []byte(formData))
+	if err != nil {
+		return "", fmt.Errorf("publish request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read publish response: %w", err)
+	}
+
+	var ocsResp ocsResponse
+	if err := json.Unmarshal(bodyBytes, &ocsResp); err != nil {
+		return "", fmt.Errorf("failed to parse OCS response: %w", err)
+	}
+
+	if ocsResp.OCS.Meta.StatusCode == 403 {
+		return "", fmt.Errorf("list is already published via public link")
+	}
+	if ocsResp.OCS.Meta.StatusCode == 404 {
+		return "", fmt.Errorf("publish request failed: calendar not found")
+	}
+	if ocsResp.OCS.Meta.Status != "ok" {
+		return "", fmt.Errorf("publish request failed: %s", ocsResp.OCS.Meta.Message)
+	}
+
+	var shareData ocsShareData
+	if err := json.Unmarshal(ocsResp.OCS.Data, &shareData); err != nil {
+		return "", fmt.Errorf("failed to parse share data: %w", err)
+	}
+
+	if shareData.URL == "" {
+		return "", fmt.Errorf("OCS response did not include a share URL")
+	}
+
+	return shareData.URL, nil
+}
+
+// UnpublishList removes the public share link for a calendar via the Nextcloud OCS Share API.
+// It first queries for existing public link shares, then deletes them.
+func (b *Backend) UnpublishList(ctx context.Context, listID string) error {
+	if listID == "" {
+		return fmt.Errorf("list ID is required for unpublishing")
+	}
+
+	ocsBase := b.ocsBaseURL()
+	calPath := b.calendarDAVPath(listID)
+
+	// First, find existing public link shares for this calendar
+	queryURL := fmt.Sprintf("%s?path=%s", ocsBase, url.QueryEscape(calPath))
+
+	resp, err := b.doOCSRequest(ctx, "GET", queryURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to query shares: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read shares response: %w", err)
+	}
+
+	var ocsResp ocsResponse
+	if err := json.Unmarshal(bodyBytes, &ocsResp); err != nil {
+		return fmt.Errorf("failed to parse OCS response: %w", err)
+	}
+
+	if ocsResp.OCS.Meta.Status != "ok" {
+		return fmt.Errorf("failed to query shares: %s", ocsResp.OCS.Meta.Message)
+	}
+
+	var shares []ocsShareData
+	if err := json.Unmarshal(ocsResp.OCS.Data, &shares); err != nil {
+		return fmt.Errorf("failed to parse shares data: %w", err)
+	}
+
+	// Find public link shares (shareType=3)
+	var publicShareID int
+	found := false
+	for _, share := range shares {
+		if share.ShareType == 3 {
+			publicShareID = share.ID
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("list is not published via public link")
+	}
+
+	// Delete the public share
+	deleteURL := fmt.Sprintf("%s/%d", ocsBase, publicShareID)
+	delResp, err := b.doOCSRequest(ctx, "DELETE", deleteURL, nil)
+	if err != nil {
+		return fmt.Errorf("unpublish request failed: %w", err)
+	}
+	defer func() { _ = delResp.Body.Close() }()
+
+	delBody, err := io.ReadAll(delResp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read unpublish response: %w", err)
+	}
+
+	var delOcsResp ocsResponse
+	if err := json.Unmarshal(delBody, &delOcsResp); err != nil {
+		return fmt.Errorf("failed to parse unpublish response: %w", err)
+	}
+
+	if delOcsResp.OCS.Meta.Status != "ok" {
+		return fmt.Errorf("unpublish request failed: %s", delOcsResp.OCS.Meta.Message)
+	}
+
+	return nil
+}
+
+// Verify ListPublisher interface compliance at compile time
+var _ backend.ListPublisher = (*Backend)(nil)
 
 // =============================================================================
 // Status Conversion Functions

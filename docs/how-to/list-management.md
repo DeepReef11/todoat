@@ -179,6 +179,26 @@ todoat list unshare "Project Alpha" --user alice
 
 **Note**: Sharing requires the Nextcloud backend. Other backends do not support list sharing.
 
+## Public Links (Nextcloud)
+
+Generate a public read-only URL for a task list. This feature is only available with the Nextcloud backend.
+
+### Publish a List
+
+```bash
+todoat list publish "Work Tasks"
+```
+
+Creates a public share link via the Nextcloud OCS Share API. The returned URL is accessible without authentication.
+
+### Remove Public Link
+
+```bash
+todoat list unpublish "Work Tasks"
+```
+
+**Note**: Publishing requires the Nextcloud backend. Other backends do not support public links.
+
 ## Calendar Subscriptions (Nextcloud)
 
 Subscribe to external calendar feeds as read-only task lists. This feature is only available with the Nextcloud backend.

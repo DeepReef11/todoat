@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed unused extended `auto_detect_backend` comments from sample config
 - Corrected `list info` CLI reference to show actual output fields (name, ID, description, color, task count)
 - Clarified `list delete` behavior per backend: soft-delete on SQLite, permanent on most others, error on Nextcloud
+- Added documentation for public link publishing (`list publish` / `list unpublish` commands)
+- Added error reference for publishing unsupported backend error
 - Added documentation for Nextcloud list sharing via CalDAV (`list share` / `list unshare` commands)
 - Added error reference for Nextcloud list deletion not supported via CalDAV
 - Updated error reference for non-existent list behavior (now returns error instead of silently auto-creating)
@@ -31,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TestIssue60_BackendErrorMessageMatchesDocs` now clears `TODOAT_TODOIST_TOKEN` env var to prevent false passes when the token is set
 
 ### Added
+- Public link publishing for Nextcloud backend via OCS Share API (#95)
+  - `list publish` command to generate a public read-only share URL for a task list
+  - `list unpublish` command to remove the public share link
+  - `ListPublisher` interface in `backend/interface.go` for backends to implement public link support
 - Calendar subscription support for Nextcloud backend via CalDAV MKCALENDAR (#94)
   - `list subscribe` command to subscribe to external calendar feeds as read-only task lists
   - `list unsubscribe` command to remove calendar subscriptions

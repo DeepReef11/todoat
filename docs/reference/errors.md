@@ -129,6 +129,23 @@ Error: sharing is not supported by this backend (requires Nextcloud)
 todoat -b nextcloud list share "Work" --user alice --permission write
 ```
 
+### Publishing Not Supported
+
+**Message**: `publishing is not supported by this backend (requires Nextcloud)`
+
+**Cause**: The `list publish` or `list unpublish` command was used with a backend that does not support public link publishing.
+
+**Example**:
+```bash
+$ todoat -b sqlite list publish "Work"
+Error: publishing is not supported by this backend (requires Nextcloud)
+```
+
+**Fix**: Use the Nextcloud backend for public link publishing:
+```bash
+todoat -b nextcloud list publish "Work"
+```
+
 ### Subscriptions Not Supported
 
 **Message**: `subscriptions are not supported by this backend (requires Nextcloud)`

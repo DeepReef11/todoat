@@ -554,6 +554,8 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	listCmd.AddCommand(newListUnshareCmd(stdout, cfg))
 	listCmd.AddCommand(newListSubscribeCmd(stdout, cfg))
 	listCmd.AddCommand(newListUnsubscribeCmd(stdout, cfg))
+	listCmd.AddCommand(newListPublishCmd(stdout, cfg))
+	listCmd.AddCommand(newListUnpublishCmd(stdout, cfg))
 
 	return listCmd
 }
@@ -2851,6 +2853,158 @@ func doListUnsubscribe(ctx context.Context, be backend.TaskManager, name string,
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Unsubscribed from list '%s'\n", list.Name)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListPublishCmd creates the 'list publish' subcommand
+func newListPublishCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "publish [name]",
+		Short: "Generate a public share link for a list",
+		Long:  "Generate a public read-only URL for a task list via Nextcloud OCS Share API. Requires a Nextcloud backend.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			jsonOutput := isJSONOutput(cmd, cfg)
+			return doListPublish(context.Background(), be, args[0], cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	return cmd
+}
+
+// doListPublish publishes a list via public link
+func doListPublish(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	publisher, ok := be.(backend.ListPublisher)
+	if !ok {
+		return fmt.Errorf("publishing is not supported by this backend (requires Nextcloud)")
+	}
+
+	// Find the list by name
+	list, err := be.GetListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		return fmt.Errorf("list '%s' not found", name)
+	}
+
+	publicURL, err := publisher.PublishList(ctx, list.ID)
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		type publishJSON struct {
+			Result string `json:"result"`
+			Action string `json:"action"`
+			List   string `json:"list"`
+			URL    string `json:"url"`
+		}
+		output := publishJSON{
+			Result: ResultActionCompleted,
+			Action: "published",
+			List:   list.Name,
+			URL:    publicURL,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Published list '%s'\n", list.Name)
+	_, _ = fmt.Fprintf(stdout, "Public URL: %s\n", publicURL)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListUnpublishCmd creates the 'list unpublish' subcommand
+func newListUnpublishCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "unpublish [name]",
+		Short: "Remove the public share link for a list",
+		Long:  "Remove the public share link for a task list via Nextcloud OCS Share API. Requires a Nextcloud backend.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			jsonOutput := isJSONOutput(cmd, cfg)
+			return doListUnpublish(context.Background(), be, args[0], cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	return cmd
+}
+
+// doListUnpublish removes the public share link for a list
+func doListUnpublish(ctx context.Context, be backend.TaskManager, name string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	publisher, ok := be.(backend.ListPublisher)
+	if !ok {
+		return fmt.Errorf("publishing is not supported by this backend (requires Nextcloud)")
+	}
+
+	// Find the list by name
+	list, err := be.GetListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		return fmt.Errorf("list '%s' not found", name)
+	}
+
+	if err := publisher.UnpublishList(ctx, list.ID); err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		type unpublishJSON struct {
+			Result string `json:"result"`
+			Action string `json:"action"`
+			List   string `json:"list"`
+		}
+		output := unpublishJSON{
+			Result: ResultActionCompleted,
+			Action: "unpublished",
+			List:   list.Name,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Unpublished list '%s'\n", list.Name)
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}

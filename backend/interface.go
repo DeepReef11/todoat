@@ -95,6 +95,17 @@ type ListSharer interface {
 	UnshareList(ctx context.Context, listID string, username string) error
 }
 
+// ListPublisher is an optional interface that backends can implement to support
+// generating public read-only share links for task lists. Currently only supported
+// by the Nextcloud backend via OCS Share API.
+type ListPublisher interface {
+	// PublishList creates a public share link for a task list and returns the URL.
+	PublishList(ctx context.Context, listID string) (string, error)
+
+	// UnpublishList removes the public share link for a task list.
+	UnpublishList(ctx context.Context, listID string) error
+}
+
 // ListSubscriber is an optional interface that backends can implement to support
 // subscribing to external read-only task lists via URL. Currently only supported
 // by the Nextcloud backend via CalDAV MKCALENDAR with source URL property.

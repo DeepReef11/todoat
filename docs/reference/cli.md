@@ -235,6 +235,8 @@ todoat list [command]
 | `trash` | View and manage deleted lists |
 | `share` | Share a list with another user (Nextcloud only) |
 | `unshare` | Remove sharing from a user (Nextcloud only) |
+| `publish` | Generate a public share link (Nextcloud only) |
+| `unpublish` | Remove the public share link (Nextcloud only) |
 | `subscribe` | Subscribe to an external calendar feed (Nextcloud only) |
 | `unsubscribe` | Remove a calendar subscription (Nextcloud only) |
 | `stats` | Show database statistics |
@@ -341,6 +343,22 @@ todoat list unshare [name] [flags]
 |------|------|-------------|
 | `--user` | string | (required) Username to remove sharing from |
 
+### list publish
+
+Generate a public read-only URL for a task list via Nextcloud OCS Share API. Nextcloud backend only.
+
+```bash
+todoat list publish [name] [flags]
+```
+
+### list unpublish
+
+Remove the public share link for a task list. Nextcloud backend only.
+
+```bash
+todoat list unpublish [name] [flags]
+```
+
 ### list subscribe
 
 Subscribe to a read-only task list via URL. Nextcloud backend only.
@@ -417,6 +435,12 @@ todoat list share "Work" --user colleague --permission write
 
 # Remove sharing
 todoat list unshare "Work" --user colleague
+
+# Generate a public share link (Nextcloud only)
+todoat list publish "Work"
+
+# Remove the public share link (Nextcloud only)
+todoat list unpublish "Work"
 
 # Subscribe to an external calendar feed (Nextcloud only)
 todoat list subscribe "https://example.com/calendar/ical"
