@@ -4567,3 +4567,34 @@ func TestViewListCommandJSON(t *testing.T) {
 		}
 	}
 }
+
+// TestSetLastSyncTimeRoundTrip verifies that SetLastSyncTime persists correctly
+// and GetLastSyncTime retrieves it. Reproduces issue #96 where updated_at column
+// reference caused silent INSERT failure.
+func TestSetLastSyncTimeRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "sync.db")
+
+	sm := NewSyncManager(dbPath)
+	if sm.db == nil {
+		t.Fatal("SyncManager db should not be nil after init")
+	}
+	defer sm.db.Close()
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	sm.SetLastSyncTime(now)
+
+	got := sm.GetLastSyncTime()
+	if got.IsZero() {
+		t.Fatal("GetLastSyncTime returned zero time; SetLastSyncTime likely failed silently")
+	}
+
+	// Compare with tolerance for RFC3339Nano round-trip
+	diff := got.Sub(now)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > time.Millisecond {
+		t.Errorf("GetLastSyncTime = %v, want %v (diff: %v)", got, now, diff)
+	}
+}

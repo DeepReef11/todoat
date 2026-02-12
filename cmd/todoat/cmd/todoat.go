@@ -7681,9 +7681,9 @@ func (sm *SyncManager) SetLastSyncTime(t time.Time) {
 
 	timeStr := t.UTC().Format(time.RFC3339Nano)
 	_, _ = sm.db.Exec(`
-		INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
-		VALUES ('last_sync', ?, ?)
-	`, timeStr, timeStr)
+		INSERT OR REPLACE INTO sync_metadata (key, value)
+		VALUES ('last_sync', ?)
+	`, timeStr)
 }
 
 // GetConnectionStatus returns the current connection status
