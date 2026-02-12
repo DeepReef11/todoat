@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated error reference for non-existent list behavior (now returns error instead of silently auto-creating)
 - Added error reference entries for sharing and subscription unsupported backend errors
 - Updated `cache_ttl` config reference to use `config set` command instead of manual file editing
-- Removed incorrect `config set sync.daemon.stuck_timeout` example from sync daemon docs (setting is not supported via `config set`)
+- Updated sync daemon docs with `config set` examples for `stuck_timeout` and `task_timeout`
+- Updated shell completion reference to include `publish` and `unpublish` subcommands
+- Updated configuration reference with `config set` examples for `sync.daemon.stuck_timeout` and `sync.daemon.task_timeout`
 
 ### Changed
 - Empty path components (e.g., `//`) in subtask paths are now silently ignored instead of causing an error
@@ -32,8 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `TestIssue60_BackendErrorMessageMatchesDocs` now clears `TODOAT_TODOIST_TOKEN` env var to prevent false passes when the token is set
+- Fixed `syncAwareBackend.UpdateTask` to use sync-aware `GetTask` for field timestamp tracking (Issue #113)
+- Added `stuck_timeout` and `task_timeout` to `config get`/`config set` registries so documented commands work (#84)
 
 ### Added
+- Field-level timestamp tests for merge conflict resolution (Issue #113)
 - Public link publishing for Nextcloud backend via OCS Share API (#95)
   - `list publish` command to generate a public read-only share URL for a task list
   - `list unpublish` command to remove the public share link

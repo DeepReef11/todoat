@@ -3807,7 +3807,7 @@ func (b *syncAwareBackend) CreateTask(ctx context.Context, listID string, task *
 // UpdateTask updates a task and queues a sync operation
 func (b *syncAwareBackend) UpdateTask(ctx context.Context, listID string, task *backend.Task) (*backend.Task, error) {
 	// Get old task state before update for field-level timestamp tracking (Issue #113)
-	oldTask, _ := b.TaskManager.GetTask(ctx, listID, task.ID)
+	oldTask, _ := b.GetTask(ctx, listID, task.ID)
 
 	updated, err := b.TaskManager.UpdateTask(ctx, listID, task)
 	if err != nil {
@@ -8153,14 +8153,14 @@ type SyncConflict struct {
 	TaskUID               string    `json:"task_uid"`
 	TaskSummary           string    `json:"task_summary"`
 	ListID                int64     `json:"list_id"`
-	LocalVersion          string    `json:"local_version"`            // JSON serialized local task state
-	RemoteVersion         string    `json:"remote_version"`           // JSON serialized remote task state
+	LocalVersion          string    `json:"local_version"`  // JSON serialized local task state
+	RemoteVersion         string    `json:"remote_version"` // JSON serialized remote task state
 	LocalModified         time.Time `json:"local_modified"`
 	RemoteModified        time.Time `json:"remote_modified"`
 	DetectedAt            time.Time `json:"detected_at"`
-	Status                string    `json:"status"`                    // "pending", "resolved"
-	LocalFieldTimestamps  string    `json:"local_field_timestamps"`   // JSON map of field->RFC3339Nano timestamp
-	RemoteFieldTimestamps string    `json:"remote_field_timestamps"`  // JSON map of field->RFC3339Nano timestamp
+	Status                string    `json:"status"`                  // "pending", "resolved"
+	LocalFieldTimestamps  string    `json:"local_field_timestamps"`  // JSON map of field->RFC3339Nano timestamp
+	RemoteFieldTimestamps string    `json:"remote_field_timestamps"` // JSON map of field->RFC3339Nano timestamp
 }
 
 // NewSyncManager creates a new SyncManager

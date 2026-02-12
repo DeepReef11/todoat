@@ -3929,3 +3929,304 @@ func TestStuckTaskNoHeartbeatConfigured(t *testing.T) {
 		t.Errorf("Issue #101: expected 0 recovered tasks when heartbeat not configured, got %d", recovered)
 	}
 }
+
+// =============================================================================
+// Field-Level Timestamps for Merge Conflict Resolution (Issue #113)
+// =============================================================================
+
+// TestMergeFieldTimestampResolution tests that when both local and remote modify
+// different fields, the most recently modified value wins for each field.
+// This is the core feature of Issue #113.
+func TestMergeFieldTimestampResolution(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfigWithStrategy(t, tmpDir, true, "merge")
+
+	// Add a task locally
+	cli.MustExecute("-y", "Work", "add", "Timestamp merge task", "-p", "3")
+
+	// Get the task UID
+	stdout := cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task, got none")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	// Get the database path from the test config
+	dbPath := cli.Config().DBPath
+
+	// Ensure sync tables exist
+	cli.MustExecute("-y", "sync", "status")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Set up field timestamps in sync metadata:
+	// - Local modified summary more recently (10 min ago)
+	// - Remote modified priority more recently (5 min ago)
+	// - Local modified categories more recently (2 min ago)
+	now := time.Now().UTC()
+	localFieldTimestamps := map[string]string{
+		"summary":    now.Add(-10 * time.Minute).Format(time.RFC3339Nano), // Local summary is NEWER than remote
+		"priority":   now.Add(-30 * time.Minute).Format(time.RFC3339Nano), // Local priority is OLDER
+		"categories": now.Add(-2 * time.Minute).Format(time.RFC3339Nano),  // Local categories is NEWER
+	}
+	remoteFieldTimestamps := map[string]string{
+		"summary":  now.Add(-20 * time.Minute).Format(time.RFC3339Nano), // Remote summary is OLDER
+		"priority": now.Add(-5 * time.Minute).Format(time.RFC3339Nano),  // Remote priority is NEWER
+		"status":   now.Add(-3 * time.Minute).Format(time.RFC3339Nano),  // Remote status is NEWER (no local timestamp)
+	}
+
+	localTSJSON, _ := json.Marshal(localFieldTimestamps)
+	remoteTSJSON, _ := json.Marshal(remoteFieldTimestamps)
+
+	// Insert conflict with field_timestamps
+	localVersion := `{"id":"` + taskUID + `","summary":"Local Summary","priority":1,"categories":"local-cat"}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Remote Summary","priority":5,"status":"IN-PROGRESS","categories":"remote-cat"}`
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status,
+		                            local_field_timestamps, remote_field_timestamps)
+		VALUES (?, 'Timestamp merge task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending', ?, ?)
+	`, taskUID, localVersion, remoteVersion, string(localTSJSON), string(remoteTSJSON))
+	if err != nil {
+		t.Fatalf("failed to insert conflict with field timestamps: %v", err)
+	}
+
+	// Resolve with merge strategy
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", taskUID, "--strategy", "merge")
+	if exitCode != 0 {
+		t.Fatalf("resolve failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	// Verify the merged result:
+	// - Summary should be LOCAL (local timestamp newer)
+	// - Priority should be REMOTE (remote timestamp newer)
+	// - Categories should be LOCAL (local timestamp newer)
+	// - Status should be REMOTE (only remote has timestamp for this field)
+	stdout = cli.MustExecute("-y", "--json", "Work", "-v", "all")
+
+	var resultOutput struct {
+		Tasks []struct {
+			UID      string   `json:"uid"`
+			Summary  string   `json:"summary"`
+			Priority int      `json:"priority"`
+			Status   string   `json:"status"`
+			Tags     []string `json:"tags"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resultOutput); err != nil {
+		t.Fatalf("failed to parse merged task JSON: %v", err)
+	}
+
+	var found bool
+	for _, task := range resultOutput.Tasks {
+		if task.UID == taskUID {
+			found = true
+			// Summary: local is newer -> use local
+			if task.Summary != "Local Summary" {
+				t.Errorf("Issue #113: expected summary='Local Summary' (local timestamp newer), got '%s'", task.Summary)
+			}
+			// Priority: remote is newer -> use remote
+			if task.Priority != 5 {
+				t.Errorf("Issue #113: expected priority=5 (remote timestamp newer), got %d", task.Priority)
+			}
+			// Categories: local is newer -> use local (output as "tags" in JSON)
+			tagsStr := strings.Join(task.Tags, ",")
+			if tagsStr != "local-cat" {
+				t.Errorf("Issue #113: expected tags='local-cat' (local timestamp newer), got '%s'", tagsStr)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("task %s not found after merge resolve", taskUID)
+	}
+}
+
+// TestMergeFieldTimestampFallback tests that when field timestamps are unavailable,
+// the merge strategy falls back to current behavior (remote summary/description/status,
+// local priority/categories).
+func TestMergeFieldTimestampFallback(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfigWithStrategy(t, tmpDir, true, "merge")
+
+	// Add a task locally
+	cli.MustExecute("-y", "Work", "add", "Fallback merge task", "-p", "1")
+
+	// Get the task UID
+	stdout := cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task, got none")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	dbPath := cli.Config().DBPath
+	cli.MustExecute("-y", "sync", "status")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Insert a conflict WITHOUT field timestamps (legacy data / first sync)
+	localVersion := `{"id":"` + taskUID + `","summary":"Local Fallback","priority":1,"categories":"local-tags"}`
+	remoteVersion := `{"id":"` + taskUID + `","summary":"Remote Fallback","priority":5,"status":"IN-PROGRESS","categories":"remote-tags"}`
+
+	_, err = db.Exec(`
+		INSERT INTO sync_conflicts (task_uid, task_summary, list_id, local_version, remote_version,
+		                            local_modified, remote_modified, detected_at, status)
+		VALUES (?, 'Fallback merge task', 0, ?, ?, datetime('now'), datetime('now'), datetime('now'), 'pending')
+	`, taskUID, localVersion, remoteVersion)
+	if err != nil {
+		t.Fatalf("failed to insert conflict: %v", err)
+	}
+
+	// Resolve with merge strategy
+	stdout, stderr, exitCode := cli.Execute("-y", "sync", "conflicts", "resolve", taskUID, "--strategy", "merge")
+	if exitCode != 0 {
+		t.Fatalf("resolve failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	// Verify fallback behavior: remote summary/description/status, local priority/categories
+	stdout = cli.MustExecute("-y", "--json", "Work", "-v", "all")
+
+	var resultOutput struct {
+		Tasks []struct {
+			UID      string   `json:"uid"`
+			Summary  string   `json:"summary"`
+			Priority int      `json:"priority"`
+			Tags     []string `json:"tags"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resultOutput); err != nil {
+		t.Fatalf("failed to parse merged task JSON: %v", err)
+	}
+
+	var found bool
+	for _, task := range resultOutput.Tasks {
+		if task.UID == taskUID {
+			found = true
+			// Fallback: remote wins for summary
+			if task.Summary != "Remote Fallback" {
+				t.Errorf("Issue #113 fallback: expected summary='Remote Fallback', got '%s'", task.Summary)
+			}
+			// Fallback: local wins for priority
+			if task.Priority != 1 {
+				t.Errorf("Issue #113 fallback: expected priority=1, got %d", task.Priority)
+			}
+			// Fallback: local wins for categories (output as "tags" in JSON)
+			tagsStr := strings.Join(task.Tags, ",")
+			if tagsStr != "local-tags" {
+				t.Errorf("Issue #113 fallback: expected tags='local-tags', got '%s'", tagsStr)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("task %s not found after fallback merge resolve", taskUID)
+	}
+}
+
+// TestFieldTimestampTracking tests that per-field modification times are recorded
+// when tasks are updated through the sync-aware backend.
+func TestFieldTimestampTracking(t *testing.T) {
+	cli, tmpDir := newSyncTestCLI(t)
+	createSyncConfig(t, tmpDir, true)
+
+	// Add a task
+	cli.MustExecute("-y", "Work", "add", "Tracking task", "-p", "3")
+
+	// Get the task UID
+	stdout := cli.MustExecute("-y", "--json", "Work", "get")
+	var tasksOutput struct {
+		Tasks []struct {
+			UID      string `json:"uid"`
+			Summary  string `json:"summary"`
+			Priority int    `json:"priority"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasksOutput); err != nil {
+		t.Fatalf("failed to parse task JSON: %v", err)
+	}
+	if len(tasksOutput.Tasks) == 0 {
+		t.Fatalf("expected at least one task, got none")
+	}
+	taskUID := tasksOutput.Tasks[0].UID
+
+	dbPath := cli.Config().DBPath
+
+	// Update priority only
+	cli.MustExecute("-y", "Work", "update", "Tracking task", "-p", "1")
+
+	// Small delay to ensure timestamps differ
+	time.Sleep(10 * time.Millisecond)
+
+	// Update summary (rename)
+	cli.MustExecute("-y", "Work", "update", "Tracking task", "--summary", "Tracking task renamed")
+
+	// Check field timestamps in sync metadata
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var timestampsJSON string
+	err = db.QueryRow(`SELECT value FROM sync_metadata WHERE key = ?`,
+		"field_timestamps:"+taskUID).Scan(&timestampsJSON)
+	if err != nil {
+		t.Fatalf("Issue #113: field timestamps not found in sync_metadata for task %s: %v", taskUID, err)
+	}
+
+	var fieldTimestamps map[string]string
+	if err := json.Unmarshal([]byte(timestampsJSON), &fieldTimestamps); err != nil {
+		t.Fatalf("failed to parse field timestamps JSON: %v", err)
+	}
+
+	// Priority should have a timestamp (was updated first)
+	if _, ok := fieldTimestamps["priority"]; !ok {
+		t.Errorf("Issue #113: expected field timestamp for 'priority' after update")
+	}
+
+	// Summary should have a timestamp (was updated second)
+	if _, ok := fieldTimestamps["summary"]; !ok {
+		t.Errorf("Issue #113: expected field timestamp for 'summary' after update")
+	}
+
+	// Summary timestamp should be AFTER priority timestamp (updated later)
+	if summaryTS, ok1 := fieldTimestamps["summary"]; ok1 {
+		if priorityTS, ok2 := fieldTimestamps["priority"]; ok2 {
+			sTime, _ := time.Parse(time.RFC3339Nano, summaryTS)
+			pTime, _ := time.Parse(time.RFC3339Nano, priorityTS)
+			if !sTime.After(pTime) {
+				t.Errorf("Issue #113: summary timestamp (%s) should be after priority timestamp (%s)",
+					summaryTS, priorityTS)
+			}
+		}
+	}
+}

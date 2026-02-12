@@ -215,6 +215,9 @@ Configure the stuck timeout (default: 10 minutes):
 ```bash
 # Via CLI flag
 todoat sync daemon start --stuck-timeout 15
+
+# Via config set
+todoat config set sync.daemon.stuck_timeout 15
 ```
 
 Or in `config.yaml`:
@@ -230,6 +233,12 @@ sync:
 Each individual sync operation has a configurable timeout to prevent hung operations from blocking the sync queue indefinitely. If a task exceeds the timeout, it's cancelled and retried later.
 
 Configure the per-task timeout (default: 5 minutes):
+
+```bash
+todoat config set sync.daemon.task_timeout "5m"
+```
+
+Or in `config.yaml`:
 
 ```yaml
 sync:

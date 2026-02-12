@@ -97,6 +97,8 @@ todoat config set sync.offline_mode auto
 todoat config set sync.daemon.enabled true
 todoat config set sync.daemon.interval 60
 todoat config set sync.daemon.heartbeat_interval 10
+todoat config set sync.daemon.stuck_timeout 10
+todoat config set sync.daemon.task_timeout "5m"
 
 # Set background pull cooldown
 todoat config set sync.background_pull_cooldown "1m"

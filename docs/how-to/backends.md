@@ -78,6 +78,16 @@ backends:
 
 Nextcloud supports sharing task lists with other users. See [List Management - Sharing](list-management.md#sharing-lists-nextcloud) for details.
 
+### Public Links
+
+Generate public read-only URLs for task lists:
+
+```bash
+todoat list publish "Work Tasks"
+```
+
+See [List Management - Public Links](list-management.md#public-links-nextcloud) for details.
+
 ### Calendar Subscriptions
 
 Subscribe to external calendar feeds as read-only task lists:
