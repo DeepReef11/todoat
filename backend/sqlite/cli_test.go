@@ -1551,6 +1551,23 @@ func TestFilterTagCombinedSQLiteCLI(t *testing.T) {
 	testutil.AssertNotContains(t, stdout, "Home TODO task")
 }
 
+// TestFilterByTagsAlias verifies that `todoat -y MyList --tags work` filters identically to --tag
+func TestFilterByTagsAliasSQLiteCLI(t *testing.T) {
+	cli := testutil.NewCLITest(t)
+
+	// Add tasks with different tags
+	cli.MustExecute("-y", "Work", "add", "Work task", "--tag", "work")
+	cli.MustExecute("-y", "Work", "add", "Home task", "--tag", "home")
+	cli.MustExecute("-y", "Work", "add", "No tag task")
+
+	// Filter using --tags (plural alias) instead of --tag
+	stdout := cli.MustExecute("-y", "Work", "--tags", "work")
+
+	testutil.AssertContains(t, stdout, "Work task")
+	testutil.AssertNotContains(t, stdout, "Home task")
+	testutil.AssertNotContains(t, stdout, "No tag task")
+}
+
 // =============================================================================
 // List Management Tests (013-list-management)
 // =============================================================================

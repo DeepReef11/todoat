@@ -3975,6 +3975,8 @@ func executeAction(ctx context.Context, cmd *cobra.Command, be backend.TaskManag
 			return err
 		}
 		tagFilter, _ := cmd.Flags().GetStringSlice("tag")
+		tagsAlias, _ := cmd.Flags().GetStringSlice("tags")
+		tagFilter = append(tagFilter, tagsAlias...)
 		tagFilter = normalizeTagSlice(tagFilter)
 		viewName, _ := cmd.Flags().GetString("view")
 		// Apply default view from config if -v flag was not explicitly provided
