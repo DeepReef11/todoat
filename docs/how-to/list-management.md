@@ -137,6 +137,48 @@ Shows:
 - Task count
 - Created date
 
+## Sharing Lists (Nextcloud)
+
+Share task lists with other Nextcloud users via CalDAV. This feature is only available with the Nextcloud backend.
+
+### Share a List
+
+```bash
+todoat list share "Work Tasks" --user colleague --permission write
+```
+
+### Permission Levels
+
+| Permission | Description |
+|------------|-------------|
+| `read` | View tasks (default) |
+| `write` | View and edit tasks |
+| `admin` | Full control including sharing |
+
+### Remove Sharing
+
+```bash
+todoat list unshare "Work Tasks" --user colleague
+```
+
+### Examples
+
+```bash
+# Share with read-only access (default)
+todoat list share "Project Alpha" --user alice
+
+# Share with write access
+todoat list share "Project Alpha" --user bob --permission write
+
+# Share with admin access
+todoat list share "Project Alpha" --user carol --permission admin
+
+# Remove a user's access
+todoat list unshare "Project Alpha" --user alice
+```
+
+**Note**: Sharing requires the Nextcloud backend. Other backends do not support list sharing.
+
 ## List Properties
 
 | Property | Description | Example |

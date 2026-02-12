@@ -233,6 +233,8 @@ todoat list [command]
 | `export` | Export a list to a file |
 | `import` | Import a list from a file |
 | `trash` | View and manage deleted lists |
+| `share` | Share a list with another user (Nextcloud only) |
+| `unshare` | Remove sharing from a user (Nextcloud only) |
 | `stats` | Show database statistics |
 | `vacuum` | Compact the database |
 
@@ -312,6 +314,31 @@ todoat list trash [command]
 | `restore` | Restore a list from trash |
 | `purge` | Permanently delete a list and all its tasks from trash |
 
+### list share
+
+Share a task list with another user via CalDAV. Nextcloud backend only.
+
+```bash
+todoat list share [name] [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--user` | string | (required) | Username to share with |
+| `--permission` | string | `read` | Permission level: read, write, admin |
+
+### list unshare
+
+Remove sharing of a task list from a user. Nextcloud backend only.
+
+```bash
+todoat list unshare [name] [flags]
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--user` | string | (required) Username to remove sharing from |
+
 ### list stats
 
 Display statistics about the database including task counts, status breakdown, and storage usage.
@@ -364,6 +391,12 @@ todoat list export MyList --format ical --output tasks.ics
 
 # Import from file
 todoat list import tasks.json
+
+# Share a list with a user (Nextcloud only)
+todoat list share "Work" --user colleague --permission write
+
+# Remove sharing
+todoat list unshare "Work" --user colleague
 
 # JSON output for list info and trash
 todoat --json list info "Work"

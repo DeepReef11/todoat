@@ -74,6 +74,10 @@ backends:
     allow_http: true              # Allow HTTP connections
 ```
 
+### Sharing Lists
+
+Nextcloud supports sharing task lists with other users. See [List Management - Sharing](list-management.md#sharing-lists-nextcloud) for details.
+
 ### Multiple Nextcloud Accounts
 
 ```yaml

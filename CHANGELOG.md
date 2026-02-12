@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 - Clarified `list delete` behavior per backend: soft-delete on SQLite, permanent on most others, error on Nextcloud
+- Added documentation for Nextcloud list sharing via CalDAV (`list share` / `list unshare` commands)
+- Updated error reference for non-existent list behavior (now returns error instead of silently auto-creating)
 
 ### Changed
 - Empty path components (e.g., `//`) in subtask paths are now silently ignored instead of causing an error

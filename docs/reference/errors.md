@@ -24,15 +24,19 @@ Error: no task found matching 'nonexistent task'
 
 ### List Not Found
 
-**Note**: Accessing a non-existent list does not produce an error. The CLI treats it as an empty list and returns exit code 0.
+**Message**: `list not found: <list name>`
+
+**Cause**: The specified list does not exist.
 
 **Example**:
 ```bash
 $ todoat work
-No tasks in list 'work'
+Error: list not found: work
+
+Suggestion: Create the list with 'todoat list create work'
 ```
 
-To create a named list explicitly, use `todoat list create <name>`.
+**Note**: The `add` action auto-creates the list if it does not exist, so `todoat work add "task"` will create the list and add the task in one step.
 
 ### No Lists Available
 
