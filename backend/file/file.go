@@ -201,10 +201,13 @@ func (b *Backend) RestoreList(ctx context.Context, listID string) error {
 	return fmt.Errorf("restore not supported in file backend")
 }
 
-// PurgeList permanently deletes a list (not supported)
+// PurgeList permanently deletes a list (not supported - deletion is already permanent)
 func (b *Backend) PurgeList(ctx context.Context, listID string) error {
 	return fmt.Errorf("purge not supported in file backend")
 }
+
+// SupportsTrash returns false because file backend deletion is permanent.
+func (b *Backend) SupportsTrash() bool { return false }
 
 // =============================================================================
 // Task Operations

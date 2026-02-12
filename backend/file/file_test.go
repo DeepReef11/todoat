@@ -1585,3 +1585,15 @@ func TestFileBackendInterfaceCompliance(t *testing.T) {
 	// Verify Backend implements TaskManager interface at compile time
 	var _ backend.TaskManager = (*file.Backend)(nil)
 }
+
+func TestFileBackendSupportsTrash(t *testing.T) {
+	filePath, cleanup := testFile(t, "")
+	defer cleanup()
+	be, err := file.New(file.Config{FilePath: filePath})
+	if err != nil {
+		t.Fatalf("failed to create backend: %v", err)
+	}
+	if be.SupportsTrash() {
+		t.Error("file backend should not support trash")
+	}
+}

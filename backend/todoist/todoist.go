@@ -290,6 +290,9 @@ func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.
 	}, nil
 }
 
+// SupportsTrash returns false because Todoist deletion is permanent.
+func (b *Backend) SupportsTrash() bool { return false }
+
 // DeleteList deletes a Todoist project (permanent deletion)
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	resp, err := b.doRequest(ctx, http.MethodDelete, "/api/v1/projects/"+listID, nil)

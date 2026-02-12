@@ -395,6 +395,9 @@ func (b *Backend) UpdateList(ctx context.Context, list *backend.List) (*backend.
 	return list, nil
 }
 
+// SupportsTrash returns true because SQLite supports soft-delete with restore.
+func (b *Backend) SupportsTrash() bool { return true }
+
 // DeleteList soft-deletes a task list (moves to trash) for this backend
 func (b *Backend) DeleteList(ctx context.Context, listID string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)

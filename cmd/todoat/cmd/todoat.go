@@ -9878,6 +9878,8 @@ func (m *MockBackend) PurgeList(ctx context.Context, listID string) error {
 	return fmt.Errorf("not supported")
 }
 
+func (m *MockBackend) SupportsTrash() bool { return false }
+
 func (m *MockBackend) GetTasks(ctx context.Context, listID string) ([]backend.Task, error) {
 	return m.tasks[listID], nil
 }

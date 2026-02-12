@@ -402,10 +402,13 @@ func (b *Backend) RestoreList(ctx context.Context, listID string) error {
 	return fmt.Errorf("restoring task lists is not supported by Microsoft To Do")
 }
 
-// PurgeList permanently deletes a list (not supported - already permanent)
+// PurgeList permanently deletes a list (not supported - deletion is already permanent)
 func (b *Backend) PurgeList(ctx context.Context, listID string) error {
 	return fmt.Errorf("purging task lists is not supported by Microsoft To Do (deletion is already permanent)")
 }
+
+// SupportsTrash returns false because Microsoft To Do deletion is permanent.
+func (b *Backend) SupportsTrash() bool { return false }
 
 // =============================================================================
 // Task Operations

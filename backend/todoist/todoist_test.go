@@ -939,6 +939,13 @@ func TestBackendImplementsInterface(t *testing.T) {
 	var _ backend.TaskManager = (*Backend)(nil)
 }
 
+func TestSupportsTrash(t *testing.T) {
+	be := &Backend{}
+	if be.SupportsTrash() {
+		t.Error("Todoist backend should not support trash")
+	}
+}
+
 func TestGetList(t *testing.T) {
 	server := newMockTodoistServer("test-token")
 	defer server.Close()

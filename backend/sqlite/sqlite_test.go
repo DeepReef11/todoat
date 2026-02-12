@@ -63,6 +63,14 @@ func TestBackendImplementsInterface(t *testing.T) {
 	var _ backend.TaskManager = (*Backend)(nil)
 }
 
+// TestSupportsTrash verifies SQLite backend reports trash support.
+func TestSupportsTrash(t *testing.T) {
+	b, _ := mustNewBackend(t)
+	if !b.SupportsTrash() {
+		t.Error("SQLite backend should support trash")
+	}
+}
+
 // TestCreateAndGetList tests creating and retrieving a task list.
 func TestCreateAndGetList(t *testing.T) {
 	b, ctx := mustNewBackend(t)

@@ -61,13 +61,13 @@ type TaskManager interface {
 	GetListByName(ctx context.Context, name string) (*List, error)
 	CreateList(ctx context.Context, name string) (*List, error)
 	UpdateList(ctx context.Context, list *List) (*List, error)
-	DeleteList(ctx context.Context, listID string) error // Soft-delete (move to trash)
+	DeleteList(ctx context.Context, listID string) error // Delete list; soft-delete if SupportsTrash(), permanent otherwise
 
-	// Trash operations
+	// Trash operations (only functional when SupportsTrash() returns true)
 	GetDeletedLists(ctx context.Context) ([]List, error)
 	GetDeletedListByName(ctx context.Context, name string) (*List, error)
 	RestoreList(ctx context.Context, listID string) error
-	PurgeList(ctx context.Context, listID string) error // Permanent delete
+	PurgeList(ctx context.Context, listID string) error // Permanently delete a soft-deleted list
 
 	// Task operations
 	GetTasks(ctx context.Context, listID string) ([]Task, error)
@@ -75,6 +75,9 @@ type TaskManager interface {
 	CreateTask(ctx context.Context, listID string, task *Task) (*Task, error)
 	UpdateTask(ctx context.Context, listID string, task *Task) (*Task, error)
 	DeleteTask(ctx context.Context, listID, taskID string) error
+
+	// Backend capabilities
+	SupportsTrash() bool // Returns true if DeleteList is a soft-delete with restore support
 
 	// Connection management
 	Close() error
