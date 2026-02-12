@@ -363,6 +363,103 @@ func (b *Backend) DeleteTask(ctx context.Context, listID, taskID string) error {
 }
 
 // =============================================================================
+// Calendar Sharing (CalDAV SHARE-RESOURCE)
+// =============================================================================
+
+// validPermissions defines the allowed permission levels for calendar sharing
+var validPermissions = map[string]bool{
+	"read":  true,
+	"write": true,
+	"admin": true,
+}
+
+// ShareList shares a calendar with another user via CalDAV POST (share-resource).
+// Uses the CalDAV sharing protocol as supported by Nextcloud.
+// Permission must be one of: "read", "write", "admin".
+func (b *Backend) ShareList(ctx context.Context, listID string, username string, permission string) error {
+	if username == "" {
+		return fmt.Errorf("username is required for sharing")
+	}
+	if !validPermissions[permission] {
+		return fmt.Errorf("invalid permission %q: must be one of read, write, admin", permission)
+	}
+
+	calendarURL := b.baseURL + listID + "/"
+
+	// Build the CalDAV share XML body
+	accessLevel := permissionToCalDAVAccess(permission)
+	principalURL := fmt.Sprintf("/remote.php/dav/principals/users/%s/", username)
+
+	shareBody := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<cs:share xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
+  <cs:set>
+    <d:href>%s</d:href>
+    <cs:summary>Shared calendar</cs:summary>
+    <cs:access>
+      <cs:%s/>
+    </cs:access>
+  </cs:set>
+</cs:share>`, principalURL, accessLevel)
+
+	resp, err := b.doRequest(ctx, "POST", calendarURL, []byte(shareBody))
+	if err != nil {
+		return fmt.Errorf("share request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("share request failed with status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// UnshareList removes sharing of a calendar from a user via CalDAV POST.
+func (b *Backend) UnshareList(ctx context.Context, listID string, username string) error {
+	if username == "" {
+		return fmt.Errorf("username is required for unsharing")
+	}
+
+	calendarURL := b.baseURL + listID + "/"
+
+	principalURL := fmt.Sprintf("/remote.php/dav/principals/users/%s/", username)
+
+	unshareBody := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<cs:share xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
+  <cs:remove>
+    <d:href>%s</d:href>
+  </cs:remove>
+</cs:share>`, principalURL)
+
+	resp, err := b.doRequest(ctx, "POST", calendarURL, []byte(unshareBody))
+	if err != nil {
+		return fmt.Errorf("unshare request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("unshare request failed with status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// permissionToCalDAVAccess converts a permission string to CalDAV access element name
+func permissionToCalDAVAccess(permission string) string {
+	switch permission {
+	case "write":
+		return "read-write"
+	case "admin":
+		return "all"
+	default:
+		return "read"
+	}
+}
+
+// Verify ListSharer interface compliance at compile time
+var _ backend.ListSharer = (*Backend)(nil)
+
+// =============================================================================
 // Status Conversion Functions
 // =============================================================================
 

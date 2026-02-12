@@ -83,6 +83,18 @@ type TaskManager interface {
 	Close() error
 }
 
+// ListSharer is an optional interface that backends can implement to support
+// sharing task lists with other users. Currently only supported by the Nextcloud
+// backend via CalDAV sharing protocol.
+type ListSharer interface {
+	// ShareList shares a task list with another user at the given permission level.
+	// Supported permissions: "read", "write", "admin".
+	ShareList(ctx context.Context, listID string, username string, permission string) error
+
+	// UnshareList removes sharing of a task list from a user.
+	UnshareList(ctx context.Context, listID string, username string) error
+}
+
 // FindListByName searches for a list by name (case-insensitive) in a slice of lists.
 // Returns nil if no match is found. This helper reduces code duplication across backends.
 func FindListByName(lists []List, name string) *List {

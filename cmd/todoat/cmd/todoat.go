@@ -518,6 +518,8 @@ func newListCmd(stdout io.Writer, cfg *Config) *cobra.Command {
 	listCmd.AddCommand(newListImportCmd(stdout, cfg))
 	listCmd.AddCommand(newListStatsCmd(stdout, cfg))
 	listCmd.AddCommand(newListVacuumCmd(stdout, cfg))
+	listCmd.AddCommand(newListShareCmd(stdout, cfg))
+	listCmd.AddCommand(newListUnshareCmd(stdout, cfg))
 
 	return listCmd
 }
@@ -2478,6 +2480,170 @@ func doListVacuum(ctx context.Context, be backend.TaskManager, cfg *Config, stdo
 		_, _ = fmt.Fprintf(stdout, "Reclaimed:   %s\n", formatBytes(result.Reclaimed))
 	}
 
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListShareCmd creates the 'list share' subcommand
+func newListShareCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "share [name]",
+		Short: "Share a list with another user",
+		Long:  "Share a task list with another user via CalDAV sharing. Requires a Nextcloud backend.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			user, _ := cmd.Flags().GetString("user")
+			permission, _ := cmd.Flags().GetString("permission")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListShare(context.Background(), be, args[0], user, permission, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.Flags().String("user", "", "Username to share with (required)")
+	cmd.Flags().String("permission", "read", "Permission level: read, write, or admin")
+	_ = cmd.MarkFlagRequired("user")
+	return cmd
+}
+
+// doListShare shares a list with a user
+func doListShare(ctx context.Context, be backend.TaskManager, name, user, permission string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check if backend supports sharing
+	sharer, ok := be.(backend.ListSharer)
+	if !ok {
+		return fmt.Errorf("sharing is not supported by this backend (requires Nextcloud)")
+	}
+
+	// Find the list by name
+	list, err := be.GetListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		return fmt.Errorf("list '%s' not found", name)
+	}
+
+	if err := sharer.ShareList(ctx, list.ID, user, permission); err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		type shareJSON struct {
+			Result     string `json:"result"`
+			Action     string `json:"action"`
+			List       string `json:"list"`
+			User       string `json:"user"`
+			Permission string `json:"permission"`
+		}
+		output := shareJSON{
+			Result:     ResultActionCompleted,
+			Action:     "shared",
+			List:       list.Name,
+			User:       user,
+			Permission: permission,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Shared list '%s' with user '%s' (permission: %s)\n", list.Name, user, permission)
+	if cfg != nil && cfg.NoPrompt {
+		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
+	}
+	return nil
+}
+
+// newListUnshareCmd creates the 'list unshare' subcommand
+func newListUnshareCmd(stdout io.Writer, cfg *Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "unshare [name]",
+		Short: "Remove sharing of a list from a user",
+		Long:  "Remove sharing of a task list from a user via CalDAV sharing. Requires a Nextcloud backend.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noPrompt, _ := cmd.Flags().GetBool("no-prompt")
+			if noPrompt {
+				cfg.NoPrompt = true
+			}
+
+			be, err := getBackend(cfg)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = be.Close() }()
+
+			user, _ := cmd.Flags().GetString("user")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			return doListUnshare(context.Background(), be, args[0], user, cfg, stdout, jsonOutput)
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.Flags().String("user", "", "Username to remove sharing from (required)")
+	_ = cmd.MarkFlagRequired("user")
+	return cmd
+}
+
+// doListUnshare removes sharing of a list from a user
+func doListUnshare(ctx context.Context, be backend.TaskManager, name, user string, cfg *Config, stdout io.Writer, jsonOutput bool) error {
+	// Check if backend supports sharing
+	sharer, ok := be.(backend.ListSharer)
+	if !ok {
+		return fmt.Errorf("sharing is not supported by this backend (requires Nextcloud)")
+	}
+
+	// Find the list by name
+	list, err := be.GetListByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if list == nil {
+		return fmt.Errorf("list '%s' not found", name)
+	}
+
+	if err := sharer.UnshareList(ctx, list.ID, user); err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		type unshareJSON struct {
+			Result string `json:"result"`
+			Action string `json:"action"`
+			List   string `json:"list"`
+			User   string `json:"user"`
+		}
+		output := unshareJSON{
+			Result: ResultActionCompleted,
+			Action: "unshared",
+			List:   list.Name,
+			User:   user,
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stdout, string(jsonBytes))
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Removed sharing of list '%s' from user '%s'\n", list.Name, user)
 	if cfg != nil && cfg.NoPrompt {
 		_, _ = fmt.Fprintln(stdout, ResultActionCompleted)
 	}
