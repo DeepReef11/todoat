@@ -7848,20 +7848,31 @@ func (sm *SyncManager) ClaimNextOperation(workerID string) (*SyncOperation, erro
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	ctx := context.Background()
 
-	// Use BEGIN IMMEDIATE to acquire exclusive write lock immediately
-	tx, err := sm.db.Begin()
+	// Use a dedicated connection to manually execute BEGIN IMMEDIATE,
+	// which acquires an exclusive write lock immediately rather than
+	// deferring lock acquisition to the first write statement.
+	conn, err := sm.db.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
+
+	// BEGIN IMMEDIATE acquires the reserved lock immediately
+	_, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE")
+	if err != nil {
+		return nil, err
+	}
+	committed := false
 	defer func() {
-		if tx != nil {
-			_ = tx.Rollback()
+		if !committed {
+			_, _ = conn.ExecContext(ctx, "ROLLBACK")
 		}
 	}()
 
 	// Atomic claim: UPDATE with subquery to get the oldest pending operation
-	result, err := tx.Exec(`
+	result, err := conn.ExecContext(ctx, `
 		UPDATE sync_queue
 		SET status = 'processing',
 		    worker_id = ?,
@@ -7884,15 +7895,15 @@ func (sm *SyncManager) ClaimNextOperation(workerID string) (*SyncOperation, erro
 
 	// No pending operations available
 	if rowsAffected == 0 {
-		_ = tx.Rollback()
-		tx = nil
+		_, _ = conn.ExecContext(ctx, "ROLLBACK")
+		committed = true
 		return nil, nil
 	}
 
 	// Fetch the claimed operation's details
 	var op SyncOperation
 	var lastAttemptStr, createdAtStr, taskSummary sql.NullString
-	err = tx.QueryRow(`
+	err = conn.QueryRowContext(ctx, `
 		SELECT id, task_id, task_uid, list_id, operation_type,
 		       retry_count, last_attempt_at, created_at, task_summary
 		FROM sync_queue
@@ -7916,10 +7927,11 @@ func (sm *SyncManager) ClaimNextOperation(workerID string) (*SyncOperation, erro
 		op.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAtStr.String)
 	}
 
-	if err := tx.Commit(); err != nil {
+	_, err = conn.ExecContext(ctx, "COMMIT")
+	if err != nil {
 		return nil, err
 	}
-	tx = nil
+	committed = true
 
 	return &op, nil
 }

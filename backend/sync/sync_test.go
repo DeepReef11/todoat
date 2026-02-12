@@ -3558,6 +3558,56 @@ func TestDuplicateClaimPrevention(t *testing.T) {
 	}
 }
 
+// TestClaimNextOperationUsesBeginImmediate verifies that ClaimNextOperation
+// uses BEGIN IMMEDIATE rather than a deferred BEGIN. When another connection
+// holds a write lock via BEGIN IMMEDIATE, a second BEGIN IMMEDIATE should
+// fail with SQLITE_BUSY rather than silently succeeding (as deferred BEGIN would).
+// Issue #099
+func TestClaimNextOperationUsesBeginImmediate(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Create SyncManager and queue an operation
+	syncMgr, err := cmd.NewSyncManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewSyncManager failed: %v", err)
+	}
+	defer func() { _ = syncMgr.Close() }()
+
+	err = syncMgr.QueueOperationByStringID("task-099", "Test Task", "list-1", "create")
+	if err != nil {
+		t.Fatalf("QueueOperationByStringID failed: %v", err)
+	}
+
+	// Open a separate connection and hold an exclusive write lock
+	blockingDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open blocking db: %v", err)
+	}
+	defer func() { _ = blockingDB.Close() }()
+
+	// Start BEGIN IMMEDIATE on the blocking connection to hold write lock
+	_, err = blockingDB.Exec("BEGIN IMMEDIATE")
+	if err != nil {
+		t.Fatalf("failed to start blocking transaction: %v", err)
+	}
+
+	// ClaimNextOperation should fail with SQLITE_BUSY because the write
+	// lock is already held. If it uses deferred BEGIN, it would succeed
+	// here and only fail later on the UPDATE.
+	_, claimErr := syncMgr.ClaimNextOperation("worker-099")
+
+	// Release the blocking lock
+	_, _ = blockingDB.Exec("ROLLBACK")
+
+	// The claim should have returned an error (SQLITE_BUSY) since the
+	// write lock was held. A deferred BEGIN would NOT return an error here.
+	if claimErr == nil {
+		t.Error("Issue #099: ClaimNextOperation succeeded despite write lock being held; " +
+			"expected SQLITE_BUSY error indicating BEGIN IMMEDIATE is used")
+	}
+}
+
 // =============================================================================
 // Issue #083: Stuck Task Detection and Recovery for Sync Queue
 // =============================================================================
