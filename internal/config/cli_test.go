@@ -1240,3 +1240,64 @@ default_backend: sqlite
 		})
 	}
 }
+
+// TestConfigSetPreservesCommentsForCommentedOutKeys verifies that 'config set' preserves
+// comments when setting a key that only exists as a comment in the config file (issue #120).
+// The fallback path (saveConfig) must not strip comments via yaml.Marshal.
+func TestConfigSetPreservesCommentsForCommentedOutKeys(t *testing.T) {
+	cli := testutil.NewCLITestWithConfig(t)
+
+	configWithComments := `backends:
+  # SQLite backend - local database storage (recommended default)
+  sqlite:
+    type: sqlite
+    enabled: true
+    # path: "~/.local/share/todoat/tasks.db"  # Optional: custom database path
+
+  # Nextcloud backend - sync with Nextcloud Tasks via CalDAV
+  # nextcloud:
+  #   type: nextcloud
+  #   enabled: false
+
+# Default backend when multiple are enabled
+default_backend: sqlite
+
+# Disable interactive prompts (for scripting)
+no_prompt: false
+
+sync:
+  enabled: false
+  # offline_mode: auto  # Options: auto | online | offline
+
+# cache_ttl: "5m"  # List metadata cache TTL
+`
+	cli.SetFullConfig(configWithComments)
+
+	// Set cache_ttl which only exists as a commented-out key
+	stdout := cli.MustExecute("-y", "config", "set", "cache_ttl", "10m")
+	testutil.AssertResultCode(t, stdout, testutil.ResultActionCompleted)
+
+	// Read the config file after set
+	content, err := os.ReadFile(cli.ConfigPath())
+	if err != nil {
+		t.Fatalf("failed to read config file: %v", err)
+	}
+	result := string(content)
+
+	// All comments must be preserved even when the key was only in a comment
+	if !strings.Contains(result, "# SQLite backend - local database storage (recommended default)") {
+		t.Errorf("config set destroyed SQLite backend comment.\nFile contents after set:\n%s", result)
+	}
+	if !strings.Contains(result, "# Nextcloud backend - sync with Nextcloud Tasks via CalDAV") {
+		t.Errorf("config set destroyed Nextcloud backend comment.\nFile contents after set:\n%s", result)
+	}
+	if !strings.Contains(result, "# Default backend when multiple are enabled") {
+		t.Errorf("config set destroyed default_backend comment.\nFile contents after set:\n%s", result)
+	}
+	if !strings.Contains(result, "# Disable interactive prompts (for scripting)") {
+		t.Errorf("config set destroyed no_prompt comment.\nFile contents after set:\n%s", result)
+	}
+	if !strings.Contains(result, "# offline_mode: auto") {
+		t.Errorf("config set destroyed offline_mode sample comment.\nFile contents after set:\n%s", result)
+	}
+}

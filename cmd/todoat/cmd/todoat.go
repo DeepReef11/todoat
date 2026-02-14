@@ -12283,15 +12283,12 @@ func doConfigSet(stdout, stderr io.Writer, cfg *Config, key, value string) error
 	}
 
 	updated, ok := updateYAMLValue(string(rawContent), key, value)
-	if ok {
-		if err := writeConfigAtomic(configPath, updated); err != nil {
-			return err
-		}
-	} else {
-		// Fallback: full rewrite if in-place update couldn't find the key
-		if err := saveConfig(configPath, appConfig); err != nil {
-			return err
-		}
+	if !ok {
+		// Fallback: insert the key into the raw YAML content, preserving comments
+		updated = insertYAMLValue(string(rawContent), key, formatYAMLValue(value))
+	}
+	if err := writeConfigAtomic(configPath, updated); err != nil {
+		return err
 	}
 
 	_, _ = fmt.Fprintf(stdout, "Set %s = %s\n", key, value)
@@ -12391,6 +12388,80 @@ func updateYAMLValue(content, key, value string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// insertYAMLValue inserts a key-value pair into raw YAML content, preserving all comments
+// and formatting. Used as a fallback when updateYAMLValue can't find the key (e.g., because
+// it only exists as a comment). For top-level keys, appends at the end. For nested keys,
+// inserts under the appropriate parent section.
+func insertYAMLValue(content, key, value string) string {
+	key = strings.ToLower(key)
+	parts := strings.Split(key, ".")
+
+	if len(parts) == 1 {
+		// Top-level key: append at end of file
+		content = strings.TrimRight(content, "\n")
+		return content + "\n" + parts[0] + ": " + value + "\n"
+	}
+
+	// Nested key: find or create parent sections, then insert the leaf key
+	lines := strings.Split(content, "\n")
+	leafKey := parts[len(parts)-1]
+	parentSections := parts[:len(parts)-1]
+	targetIndent := strings.Repeat("  ", len(parts)-1)
+
+	// Navigate to the deepest existing parent section
+	parentDepth := 0
+	insertIdx := -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		if parentDepth < len(parentSections) {
+			expected := parentSections[parentDepth]
+			expectedIndent := strings.Repeat("  ", parentDepth)
+			if strings.HasPrefix(line, expectedIndent+expected+":") &&
+				!strings.HasPrefix(line, expectedIndent+"  ") {
+				parentDepth++
+				if parentDepth == len(parentSections) {
+					// Found deepest parent; scan for end of this section
+					insertIdx = i + 1
+					sectionIndentLen := len(targetIndent)
+					for j := i + 1; j < len(lines); j++ {
+						jTrimmed := strings.TrimSpace(lines[j])
+						if jTrimmed == "" || strings.HasPrefix(jTrimmed, "#") {
+							continue
+						}
+						jIndent := len(lines[j]) - len(strings.TrimLeft(lines[j], " "))
+						if jIndent < sectionIndentLen {
+							break
+						}
+						insertIdx = j + 1
+					}
+				}
+			}
+		}
+	}
+
+	newLine := targetIndent + leafKey + ": " + value
+	if insertIdx >= 0 && insertIdx <= len(lines) {
+		// Insert at the end of the parent section
+		result := make([]string, 0, len(lines)+1)
+		result = append(result, lines[:insertIdx]...)
+		result = append(result, newLine)
+		result = append(result, lines[insertIdx:]...)
+		return strings.Join(result, "\n")
+	}
+
+	// Parent section not found: create the full path at end of file
+	content = strings.TrimRight(content, "\n") + "\n"
+	for i, section := range parentSections {
+		content += strings.Repeat("  ", i) + section + ":\n"
+	}
+	content += newLine + "\n"
+	return content
 }
 
 // findInlineCommentIndex finds the index of an inline comment in a YAML value string.
