@@ -364,7 +364,7 @@ todoat list import ~/backup/work.json
 todoat list import ~/backup/tasks.txt --format csv
 ```
 
-Imported tasks receive new unique IDs, so you can safely reimport a previously exported list (e.g., after deleting and recreating it) without ID conflicts.
+**Note**: Import requires that no list with the same name already exists. If you want to reimport a previously exported list, delete the existing list first (`todoat list delete "List Name"`). Imported tasks receive new unique IDs, so there are no ID conflicts when reimporting after deletion.
 
 ## Database Maintenance
 
