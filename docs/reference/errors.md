@@ -50,18 +50,14 @@ Suggestion: Create the list with 'todoat list create work'
 
 ### Invalid Priority
 
-**Message**: `invalid priority: <value>`
+**Message**: `priority must be between 0 and 9, got: <value>`
 
-**Cause**: The priority value is outside the valid range.
-
-**Suggestion**: Priority must be between 0 and 9 (1 = highest, 9 = lowest, 0 = none).
+**Cause**: The priority value is outside the valid range (1 = highest, 9 = lowest, 0 = none).
 
 **Example**:
 ```bash
 $ todoat MyList add "task" -p 15
-Error: invalid priority: 15
-
-Suggestion: Priority must be between 0 and 9
+Error: priority must be between 0 and 9, got: 15
 ```
 
 ### Invalid Date
@@ -82,18 +78,14 @@ Suggestion: Use date format YYYY-MM-DD (e.g., 2026-01-15)
 
 ### Invalid Status
 
-**Message**: `invalid status: <status>`
+**Message**: `invalid status "<status>": valid values are TODO, IN-PROGRESS, DONE, CANCELLED`
 
-**Cause**: The provided status is not a valid option.
-
-**Suggestion**: Use one of the valid status values: `TODO`, `IN-PROGRESS`, `DONE`, `CANCELLED`.
+**Cause**: The provided status is not a valid option. Valid values are `TODO`, `IN-PROGRESS`, `DONE`, `CANCELLED` (and their aliases/abbreviations).
 
 **Example**:
 ```bash
 $ todoat MyList update "task" -s "pending"
-Error: invalid status: pending
-
-Suggestion: Valid options: TODO, IN-PROGRESS, DONE, CANCELLED
+Error: invalid status "pending": valid values are TODO, IN-PROGRESS, DONE, CANCELLED
 ```
 
 ## Backend Errors
