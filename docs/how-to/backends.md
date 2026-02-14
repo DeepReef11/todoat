@@ -47,6 +47,14 @@ todoat config set backends.sqlite.path "~/my-tasks/tasks.db"
        username: "myuser"
    ```
 
+   Or use the CLI:
+
+   ```bash
+   todoat config set backends.nextcloud.enabled true
+   todoat config set backends.nextcloud.host "nextcloud.example.com"
+   todoat config set backends.nextcloud.username "myuser"
+   ```
+
 2. Store your password:
 
    ```bash
@@ -72,6 +80,13 @@ backends:
     username: "admin"
     insecure_skip_verify: true    # Accept self-signed certs
     allow_http: true              # Allow HTTP connections
+```
+
+Or via CLI:
+
+```bash
+todoat config set backends.nextcloud.insecure_skip_verify true
+todoat config set backends.nextcloud.allow_http true
 ```
 
 ### Sharing Lists
@@ -283,6 +298,14 @@ backends:
     auto_commit: false
 ```
 
+Or via CLI:
+
+```bash
+todoat config set backends.git.enabled true
+todoat config set backends.git.file "TODO.md"
+todoat config set backends.git.auto_commit false
+```
+
 ### Setup
 
 1. Create a markdown file with the todoat marker in your repository:
@@ -323,6 +346,13 @@ backends:
     type: file
     enabled: true
     path: "~/tasks.md"
+```
+
+Or via CLI:
+
+```bash
+todoat config set backends.file.enabled true
+todoat config set backends.file.path "~/tasks.md"
 ```
 
 ### Usage

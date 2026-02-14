@@ -18,6 +18,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"todoat/internal/notification"
 )
 
 // MaxConsecutiveErrors is the number of consecutive sync failures before the daemon shuts down.
@@ -130,6 +131,9 @@ type Daemon struct {
 
 	// Per-task timeout (Issue #84)
 	onTaskTimeout func(backendName string, duration time.Duration) // Callback for timeout events
+
+	// Notification integration (Issue #115)
+	notifyMgr notification.NotificationManager
 }
 
 // New creates a new Daemon instance.
@@ -148,6 +152,12 @@ func New(cfg *Config) *Daemon {
 // use AddBackendSyncFunc instead.
 func (d *Daemon) SetSyncFunc(f func() error) {
 	d.syncFunc = f
+}
+
+// SetNotificationManager sets the notification manager for sync event notifications.
+// Issue #115: Daemon sends notifications on sync complete/error.
+func (d *Daemon) SetNotificationManager(mgr notification.NotificationManager) {
+	d.notifyMgr = mgr
 }
 
 // SetTestBackoffMultiplier sets a multiplier for backoff duration (for testing).
@@ -391,6 +401,9 @@ func (d *Daemon) Start() error {
 
 		case <-ticker.C:
 			result := d.performSync()
+
+			// Issue #115: Send notifications for sync events
+			d.sendSyncNotification(result)
 
 			// Error loop prevention (Issue #82)
 			// syncNoOp means no backends were due to sync - don't affect error tracking
@@ -975,6 +988,36 @@ func GetSocketPath() string {
 		return filepath.Join(runtimeDir, "todoat", "daemon.sock")
 	}
 	return fmt.Sprintf("/tmp/todoat-daemon-%d.sock", os.Getuid())
+}
+
+// sendSyncNotification sends a notification based on the sync result.
+// Issue #115: Uses SendAsync for fire-and-forget delivery.
+func (d *Daemon) sendSyncNotification(result syncResult) {
+	if d.notifyMgr == nil {
+		return
+	}
+
+	d.mu.RLock()
+	count := d.syncCount
+	d.mu.RUnlock()
+
+	switch result {
+	case syncSuccess:
+		d.notifyMgr.SendAsync(notification.Notification{
+			Type:      notification.NotifySyncComplete,
+			Title:     "todoat sync",
+			Message:   fmt.Sprintf("Sync completed (count: %d)", count),
+			Timestamp: time.Now(),
+		})
+	case syncFailed:
+		d.notifyMgr.SendAsync(notification.Notification{
+			Type:      notification.NotifySyncError,
+			Title:     "todoat sync",
+			Message:   fmt.Sprintf("Sync failed (count: %d)", count),
+			Timestamp: time.Now(),
+		})
+	}
+	// syncNoOp: no notification needed
 }
 
 // RunDaemonMode is called when the executable is invoked with --daemon-mode.

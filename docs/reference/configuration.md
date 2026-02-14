@@ -107,6 +107,17 @@ todoat config set sync.background_pull_cooldown "1m"
 todoat config set reminder.enabled true
 todoat config set reminder.os_notification false
 todoat config set reminder.intervals "1d,1h,at due time"
+
+# Set backend-specific configuration
+todoat config set backends.nextcloud.host "nextcloud.example.com"
+todoat config set backends.nextcloud.username "myuser"
+todoat config set backends.nextcloud.insecure_skip_verify true
+todoat config set backends.nextcloud.allow_http false
+todoat config set backends.google.enabled true
+todoat config set backends.mstodo.enabled true
+todoat config set backends.git.file "TODO.md"
+todoat config set backends.git.auto_commit true
+todoat config set backends.file.path "/path/to/tasks.txt"
 ```
 
 ### Validation

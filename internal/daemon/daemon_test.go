@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"todoat/internal/notification"
 )
 
 // =============================================================================
@@ -1902,5 +1903,191 @@ func TestForkOmitsTaskTimeoutWhenZero(t *testing.T) {
 		if arg == "--daemon-task-timeout" {
 			t.Errorf("--daemon-task-timeout should not be in fork args when TaskTimeout is zero: %v", args)
 		}
+	}
+}
+
+// =============================================================================
+// Issue #115: Daemon Notification Integration with NotificationManager
+// =============================================================================
+
+// mockNotificationManager implements notification.NotificationManager for testing.
+type mockNotificationManager struct {
+	mu       sync.Mutex
+	received []notification.Notification
+	enabled  bool
+	wg       sync.WaitGroup
+}
+
+func (m *mockNotificationManager) Send(n notification.Notification) error {
+	if !m.enabled {
+		return nil
+	}
+	m.mu.Lock()
+	m.received = append(m.received, n)
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *mockNotificationManager) SendAsync(n notification.Notification) {
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		_ = m.Send(n)
+	}()
+}
+
+func (m *mockNotificationManager) Close() error {
+	m.wg.Wait()
+	return nil
+}
+
+func (m *mockNotificationManager) ChannelCount() int { return 1 }
+
+func (m *mockNotificationManager) notifications() []notification.Notification {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]notification.Notification, len(m.received))
+	copy(out, m.received)
+	return out
+}
+
+func TestDaemonSendsNotificationOnSyncComplete(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:    filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath: filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:    filepath.Join(tmpDir, "daemon.log"),
+		Interval:   100 * time.Millisecond,
+	}
+
+	d := New(cfg)
+	d.SetSyncFunc(func() error { return nil })
+
+	mgr := &mockNotificationManager{enabled: true}
+	d.SetNotificationManager(mgr)
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for at least one sync cycle
+	time.Sleep(250 * time.Millisecond)
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	// Wait for async sends
+	_ = mgr.Close()
+
+	// Should have received at least one sync complete notification
+	received := mgr.notifications()
+	var syncCompleteCount int
+	for _, n := range received {
+		if n.Type == notification.NotifySyncComplete {
+			syncCompleteCount++
+			if n.Title != "todoat sync" {
+				t.Errorf("expected title 'todoat sync', got %q", n.Title)
+			}
+		}
+	}
+	if syncCompleteCount == 0 {
+		t.Errorf("expected at least one NotifySyncComplete notification, got none")
+	}
+}
+
+func TestDaemonSendsNotificationOnSyncError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:    filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath: filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:    filepath.Join(tmpDir, "daemon.log"),
+		Interval:   100 * time.Millisecond,
+	}
+
+	d := New(cfg)
+	// Use zero backoff so test runs fast
+	zero := 0.0
+	d.testBackoffMultiplier = &zero
+	d.SetSyncFunc(func() error { return fmt.Errorf("sync failed") })
+
+	mgr := &mockNotificationManager{enabled: true}
+	d.SetNotificationManager(mgr)
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for at least one sync cycle
+	time.Sleep(250 * time.Millisecond)
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	// Wait for async sends
+	_ = mgr.Close()
+
+	// Should have received at least one sync error notification
+	received := mgr.notifications()
+	var syncErrorCount int
+	for _, n := range received {
+		if n.Type == notification.NotifySyncError {
+			syncErrorCount++
+			if n.Title != "todoat sync" {
+				t.Errorf("expected title 'todoat sync', got %q", n.Title)
+			}
+		}
+	}
+	if syncErrorCount == 0 {
+		t.Errorf("expected at least one NotifySyncError notification, got none")
+	}
+}
+
+func TestDaemonNotificationDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		PIDPath:    filepath.Join(tmpDir, "daemon.pid"),
+		SocketPath: filepath.Join(tmpDir, "daemon.sock"),
+		LogPath:    filepath.Join(tmpDir, "daemon.log"),
+		Interval:   100 * time.Millisecond,
+	}
+
+	d := New(cfg)
+	d.SetSyncFunc(func() error { return nil })
+
+	// Create mock with enabled=false to simulate disabled notifications
+	mgr := &mockNotificationManager{enabled: false}
+	d.SetNotificationManager(mgr)
+
+	// Start daemon
+	done := make(chan struct{})
+	go func() {
+		_ = d.Start()
+		close(done)
+	}()
+
+	// Wait for a sync cycle
+	time.Sleep(250 * time.Millisecond)
+
+	// Stop daemon
+	d.Stop()
+	<-done
+
+	_ = mgr.Close()
+
+	// Should have no notifications since manager is disabled
+	received := mgr.notifications()
+	if len(received) != 0 {
+		t.Errorf("expected no notifications when disabled, got %d", len(received))
 	}
 }

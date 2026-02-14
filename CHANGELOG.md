@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Daemon notification integration: sync complete/error events are sent via `NotificationManager` (Issue #115)
+
 ### Documentation
+- Added CLI `config set` examples for Nextcloud, Git, and File backend configuration in backends guide
+- Added backend-specific `config set` examples to configuration reference
 - Updated reminders docs to note `wall` fallback for headless Linux environments
 - Added `--tags` alias example to task management docs
 - Added documentation for calendar subscriptions (`list subscribe` / `list unsubscribe` commands)
