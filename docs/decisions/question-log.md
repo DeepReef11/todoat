@@ -34,6 +34,9 @@ For current design decisions, see `docs/explanation/`.
 | FEAT-022 | 2026-02-08 | Should reminder.enabled default to true in DefaultConfig()? | Add Reminder: ReminderConfig{Enabled: true} to DefaultConfig() |
 | FEAT-027 | 2026-02-08 | Update docs/explanation/background-deamon.md: Stuck Task Detection is now implemented | Update explanation doc |
 | FEAT-028 | 2026-02-08 | Update docs/explanation/background-deamon.md: Per-Task Timeout is now implemented | Update explanation doc |
+| ARCH-030 | 2026-02-12 | SetLastSyncTime references non-existent `updated_at` column in sync_metadata table | Resolved - Fixed in commit `6d6ca8d` |
+| ARCH-033 | 2026-02-12 | Per-task timeout not passed to forked daemon process | Resolved - Fixed in commit `7ee8945` (#98) |
+| ARCH-034 | 2026-02-12 | NewSyncManager silently discards initDB errors | Resolved - Fixed in commit `1e6a483` (#97) |
 
 ---
 
@@ -596,3 +599,45 @@ The explanation doc has been updated to describe the actual file-based heartbeat
 **Impact**: Explanation doc accuracy. User-facing docs are now complete.
 
 **Status**: answered
+
+---
+
+### [ARCH-030] SetLastSyncTime references non-existent `updated_at` column in sync_metadata table
+
+**Asked**: 2026-02-12
+**Resolved**: 2026-02-12
+**Documented in**: N/A (bug fix, no explanation doc needed)
+
+**Context**: SetLastSyncTime referenced a non-existent `updated_at` column in the sync_metadata table INSERT statement.
+
+**Resolution**: Fixed in commit `6d6ca8d` - removed non-existent `updated_at` column from SetLastSyncTime INSERT statement.
+
+**Status**: resolved (2026-02-12)
+
+---
+
+### [ARCH-033] Per-task timeout not passed to forked daemon process
+
+**Asked**: 2026-02-12
+**Resolved**: 2026-02-12
+**Documented in**: N/A (bug fix, no explanation doc needed)
+
+**Context**: The per-task timeout was not being passed to the forked daemon process, meaning the timeout configuration was ignored by the daemon subprocess.
+
+**Resolution**: Fixed in commit `7ee8945` (#98) - `Fork()` now passes `--daemon-task-timeout` to the forked daemon process, and `runDaemonMode` parses and applies it.
+
+**Status**: resolved (2026-02-12)
+
+---
+
+### [ARCH-034] NewSyncManager silently discards initDB errors
+
+**Asked**: 2026-02-12
+**Resolved**: 2026-02-12
+**Documented in**: N/A (bug fix, no explanation doc needed)
+
+**Context**: `NewSyncManager` silently discarded `initDB` errors, meaning database initialization failures would go undetected and cause cryptic failures later.
+
+**Resolution**: Fixed in commit `1e6a483` (#97) - `NewSyncManager` now returns `(*SyncManager, error)`, queue operations return errors when db is nil, and `syncAwareBackend` logs warnings when queue operations fail.
+
+**Status**: resolved (2026-02-12)

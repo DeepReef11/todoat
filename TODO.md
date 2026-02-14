@@ -188,13 +188,6 @@ The field-level timestamp tracking mentioned in ARCH-007 does not appear to be i
 **Asked**: 2026-02-08
 **Status**: unanswered
 
-### [ARCH-030] ~~SetLastSyncTime references non-existent `updated_at` column in sync_metadata table~~
-
-**Resolved**: Fixed in commit `6d6ca8d` - removed non-existent `updated_at` column from SetLastSyncTime INSERT statement.
-
-**Asked**: 2026-02-12
-**Status**: resolved (2026-02-12)
-
 ### [ARCH-031] ClaimNextOperation uses BEGIN instead of BEGIN IMMEDIATE despite comment
 
 **Context**: Commit `34edf10` added atomic task claiming for the sync queue to prevent race conditions when multiple daemon instances coexist. The code at `cmd/todoat/cmd/todoat.go:7814-7815` has a comment saying "Use BEGIN IMMEDIATE to acquire exclusive write lock immediately" but calls `sm.db.Begin()`, which starts a deferred transaction in Go's `database/sql`. A deferred transaction only acquires the write lock on the first write statement, creating a window for SQLITE_BUSY errors. To achieve `BEGIN IMMEDIATE` semantics with `modernc.org/sqlite`, you would need `sm.db.BeginTx(ctx, &sql.TxOptions{})` with a pragma or execute `BEGIN IMMEDIATE` via raw SQL.
@@ -223,20 +216,6 @@ The field-level timestamp tracking mentioned in ARCH-007 does not appear to be i
 
 **Asked**: 2026-02-12
 **Status**: unanswered
-
-### [ARCH-033] ~~Per-task timeout not passed to forked daemon process~~
-
-**Resolved**: Fixed in commit `7ee8945` (#98) - `Fork()` now passes `--daemon-task-timeout` to the forked daemon process, and `runDaemonMode` parses and applies it.
-
-**Asked**: 2026-02-12
-**Status**: resolved (2026-02-12)
-
-### [ARCH-034] ~~NewSyncManager silently discards initDB errors~~
-
-**Resolved**: Fixed in commit `1e6a483` (#97) - `NewSyncManager` now returns `(*SyncManager, error)`, queue operations return errors when db is nil, and `syncAwareBackend` logs warnings when queue operations fail.
-
-**Asked**: 2026-02-12
-**Status**: resolved (2026-02-12)
 
 ### [ARCH-035] Multi-backend daemon bypasses error loop prevention (consecutiveErrors never increments)
 
@@ -278,4 +257,74 @@ The field-level timestamp tracking mentioned in ARCH-007 does not appear to be i
 **Impact**: Users following documentation to configure google/mstodo/git/file as default backend will get a validation error. Workaround: edit config YAML directly instead of using `config set`.
 
 **Asked**: 2026-02-12
+**Status**: unanswered
+
+### [ARCH-038] Circuit breaker half-open state allows unlimited probes (docs say "single probe")
+
+**Context**: The circuit breaker documentation at `docs/how-to/sync.md:201` states "a single probe sync is attempted" after the cooldown expires. However, the implementation at `internal/daemon/circuitbreaker.go:80-82` allows ALL requests through in half-open state (`case CircuitHalfOpen: return true`). There is no counter limiting half-open to a single probe. If multiple sync triggers fire during the half-open window (e.g., ticker + IPC notify), all of them proceed, potentially overwhelming a recovering backend.
+
+**Options**:
+- [ ] Limit to single probe - Add a counter so only one request passes in half-open; subsequent requests are blocked until the probe resolves
+- [ ] Keep unlimited half-open - The sync mutex (`syncMu` in daemon.go:552) already serializes concurrent syncs, so multiple probes can't actually happen simultaneously
+- [ ] Update documentation - Change "single probe" to reflect actual behavior
+
+**Impact**: Documentation accuracy and backend recovery behavior. The sync mutex may already prevent the thundering herd concern, making this a documentation-only fix.
+
+**Asked**: 2026-02-14
+**Status**: unanswered
+
+### [FEAT-039] Circuit breaker threshold and cooldown are hardcoded, not configurable
+
+**Context**: The circuit breaker at `internal/daemon/circuitbreaker.go:13,17` uses hardcoded constants: `DefaultCircuitBreakerThreshold = 3` failures and `DefaultCircuitBreakerCooldown = 30s`. These values are not exposed in the config registry (`cmd/todoat/cmd/todoat.go` config set section has no circuit breaker entries) and cannot be changed via `config set` or the YAML file. Users with flaky networks may need a higher threshold (5+ failures), and users on stable corporate networks may want tighter settings (2 failures, 15s cooldown).
+
+**Options**:
+- [ ] Add config options - Add `sync.daemon.circuit_breaker_threshold` and `sync.daemon.circuit_breaker_cooldown` to config struct, sample config, and config set registry
+- [ ] Keep hardcoded - The defaults are reasonable for most users; adding config complexity is not worth it for an internal resilience mechanism
+- [ ] Add config but keep current defaults - Wire the config but don't document heavily; power users can discover it
+
+**Impact**: Affects daemon resilience tuning. Users with specific network conditions cannot adjust circuit breaker sensitivity without code changes.
+
+**Asked**: 2026-02-14
+**Status**: unanswered
+
+### [FEAT-040] backend_priority in sample config has no Config struct field
+
+**Context**: The sample config at `internal/config/config.sample.yaml:54` documents `backend_priority: [nextcloud, git, sqlite]` and commit `ae74316` added it. However, there is no `BackendPriority` field in the Config struct at `internal/config/config.go`. Setting this value in config YAML is silently ignored. The feature implies backends should be tried in a specific order during auto-detection or multi-backend sync, but no code reads this setting.
+
+**Options**:
+- [ ] Implement backend_priority - Add `BackendPriority []string` to Config struct and wire it into auto-detection and/or multi-backend sync order
+- [ ] Remove from sample config - The setting is aspirational and misleading; remove until implemented
+- [ ] Document as planned - Add a comment in sample config noting it's not yet implemented
+
+**Impact**: Users setting `backend_priority` expect it to affect behavior. Silent no-op creates false confidence in backend ordering.
+
+**Asked**: 2026-02-14
+**Status**: unanswered
+
+### [ARCH-041] Documentation uses ParentUID but code uses ParentID
+
+**Context**: The Task struct at `backend/interface.go:30` defines the field as `ParentID string`. However, all explanation docs consistently use `ParentUID`: `docs/explanation/task-management.md:121,1285`, `docs/explanation/subtasks-hierarchy.md:284-416`, `docs/explanation/synchronization.md:734`, `docs/explanation/backend-system.md:477`, and `docs/explanation/README.md:88`. This naming inconsistency means developers reading docs will look for `ParentUID` in code and not find it.
+
+**Options**:
+- [ ] Rename code field to ParentUID - Aligns with docs; "UID" is more accurate for CalDAV-based backends where IDs are UUIDs
+- [ ] Update docs to ParentID - Aligns with code; simpler name, consistent with other ID fields (ListID, ID)
+- [ ] Keep both - Add `ParentUID` as an alias comment on the struct field; update docs to mention both names
+
+**Impact**: Developer confusion when cross-referencing docs and code. No runtime impact since the field works regardless of name.
+
+**Asked**: 2026-02-14
+**Status**: unanswered
+
+### [UX-042] Multi-backend partial failure sends "sync completed" notification
+
+**Context**: When multi-backend sync runs and some backends succeed while others fail, `performSync()` at `internal/daemon/daemon.go:569-579` sets `result` to `syncSuccess` (zero value) because `allFailed` is false. The notification at line 1006 then sends "Sync completed" even though one or more backends failed. For example, if Nextcloud succeeds but Todoist fails due to expired token, the user sees "Sync completed" and has no indication of the Todoist failure. The `syncFailed` notification only fires when ALL backends fail.
+
+**Options**:
+- [ ] Add partial failure notification - Introduce `syncPartial` result type that sends "Sync completed with errors (1 of 3 backends failed)" notification
+- [ ] Keep current behavior - Users can check `daemon status` for per-backend errors; notifications should only alert on total failure
+- [ ] Add per-backend failure notification - Send individual "Backend X sync failed" notifications for each failing backend, in addition to the overall result
+
+**Impact**: Users may miss persistent backend failures masked by other backends succeeding. Particularly risky when the failing backend contains the user's primary task data.
+
+**Asked**: 2026-02-14
 **Status**: unanswered
