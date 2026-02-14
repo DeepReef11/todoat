@@ -88,7 +88,12 @@ todoat --json tags
 ```bash
 # Tasks with "urgent" tag
 todoat MyList --tag urgent
+
+# Using --tags alias (equivalent)
+todoat MyList --tags urgent
 ```
+
+Both `--tag` and `--tags` work identically for filtering.
 
 ### Using Views
 
