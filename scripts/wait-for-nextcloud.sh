@@ -7,6 +7,8 @@ set -e
 MAX_RETRIES=${MAX_RETRIES:-40}
 RETRY_INTERVAL=${RETRY_INTERVAL:-2}
 NEXTCLOUD_URL=${NEXTCLOUD_URL:-http://localhost:8080}
+NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER:-admin}
+NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD:-admin123}
 
 echo "Waiting for Nextcloud to be ready at $NEXTCLOUD_URL..."
 
@@ -38,7 +40,7 @@ echo "Nextcloud is responding"
 
 # Verify CalDAV endpoint
 echo "Verifying CalDAV endpoint..."
-if curl -u admin:admin123 -X PROPFIND "$NEXTCLOUD_URL/remote.php/dav/calendars/admin/" \
+if curl -u "$NEXTCLOUD_ADMIN_USER:$NEXTCLOUD_ADMIN_PASSWORD" -X PROPFIND "$NEXTCLOUD_URL/remote.php/dav/calendars/$NEXTCLOUD_ADMIN_USER/" \
      -H "Depth: 1" -s -o /dev/null -w "%{http_code}" | grep -q "207"; then
     echo "CalDAV endpoint is accessible"
 else
@@ -57,7 +59,7 @@ else
 fi
 
 # Check if we can authenticate
-if curl -u admin:admin123 -f -s "$NEXTCLOUD_URL/ocs/v1.php/cloud/users/admin" -H "OCS-APIRequest: true" > /dev/null 2>&1; then
+if curl -u "$NEXTCLOUD_ADMIN_USER:$NEXTCLOUD_ADMIN_PASSWORD" -f -s "$NEXTCLOUD_URL/ocs/v1.php/cloud/users/$NEXTCLOUD_ADMIN_USER" -H "OCS-APIRequest: true" > /dev/null 2>&1; then
     echo "Admin authentication successful"
 else
     echo "Warning: Admin authentication failed"
