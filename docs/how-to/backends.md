@@ -89,6 +89,14 @@ todoat config set backends.nextcloud.insecure_skip_verify true
 todoat config set backends.nextcloud.allow_http true
 ```
 
+**Security warning**: When `insecure_skip_verify` is enabled, todoat prints a `[WARN]` message to stderr on each connection:
+
+```
+[WARN] TLS certificate verification is disabled (insecure_skip_verify: true). Connections are vulnerable to man-in-the-middle attacks.
+```
+
+This is expected for development setups. For production, use properly signed certificates instead.
+
 ### Sharing Lists
 
 Nextcloud supports sharing task lists with other users. See [List Management - Sharing](list-management.md#sharing-lists-nextcloud) for details.

@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `--tags` alias and comma-separated tag syntax to CLI reference
 - Updated shell completion reference to include `publish` and `unpublish` subcommands
 - Updated configuration reference with `config set` examples for `sync.daemon.stuck_timeout` and `sync.daemon.task_timeout`
+- Documented `insecure_skip_verify` security warning behavior in backends guide and configuration reference
 
 ### Changed
 - Empty path components (e.g., `//`) in subtask paths are now silently ignored instead of causing an error

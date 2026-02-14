@@ -208,7 +208,7 @@ Each backend has its own configuration keys under `backends.<name>`.
 | `backends.nextcloud.enabled` | bool | `false` | Enable Nextcloud backend |
 | `backends.nextcloud.host` | string | | Nextcloud server hostname |
 | `backends.nextcloud.username` | string | | CalDAV username |
-| `backends.nextcloud.insecure_skip_verify` | bool | `false` | Accept self-signed certificates |
+| `backends.nextcloud.insecure_skip_verify` | bool | `false` | Accept self-signed certificates (prints security warning to stderr) |
 | `backends.nextcloud.allow_http` | bool | `false` | Allow HTTP (non-HTTPS) connections |
 
 ### Todoist
