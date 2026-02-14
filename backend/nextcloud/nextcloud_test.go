@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -1011,6 +1012,62 @@ func TestHTTPClientConfig(t *testing.T) {
 
 	if !transport.TLSClientConfig.InsecureSkipVerify {
 		t.Error("Expected InsecureSkipVerify=true")
+	}
+}
+
+// TestInsecureSkipVerifyWarning verifies that a warning is logged to stderr
+// when InsecureSkipVerify is enabled. Issue #124.
+func TestInsecureSkipVerifyWarning(t *testing.T) {
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	os.Stderr = w
+
+	createHTTPClient(Config{InsecureSkipVerify: true})
+
+	// Restore stderr and read captured output
+	_ = w.Close()
+	os.Stderr = oldStderr
+
+	var buf [4096]byte
+	n, _ := r.Read(buf[:])
+	output := string(buf[:n])
+	_ = r.Close()
+
+	if !strings.Contains(output, "WARN") {
+		t.Errorf("Expected [WARN] in stderr output, got: %q", output)
+	}
+	if !strings.Contains(output, "insecure_skip_verify") {
+		t.Errorf("Expected 'insecure_skip_verify' in warning message, got: %q", output)
+	}
+}
+
+// TestNoWarningWhenInsecureSkipVerifyDisabled verifies no warning when InsecureSkipVerify is false.
+func TestNoWarningWhenInsecureSkipVerifyDisabled(t *testing.T) {
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	os.Stderr = w
+
+	createHTTPClient(Config{InsecureSkipVerify: false})
+
+	// Restore stderr and read captured output
+	_ = w.Close()
+	os.Stderr = oldStderr
+
+	var buf [4096]byte
+	n, _ := r.Read(buf[:])
+	output := string(buf[:n])
+	_ = r.Close()
+
+	if strings.Contains(output, "insecure_skip_verify") {
+		t.Errorf("Expected no warning when InsecureSkipVerify is false, but got: %q", output)
 	}
 }
 

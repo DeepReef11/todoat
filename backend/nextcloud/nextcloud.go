@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"todoat/backend"
+	"todoat/internal/utils"
 )
 
 // iCalendarDateFormat is the standard iCalendar date-time format (UTC)
@@ -94,6 +95,10 @@ func New(cfg Config) (*Backend, error) {
 
 // createHTTPClient creates an HTTP client with proper connection pooling
 func createHTTPClient(cfg Config) *http.Client {
+	if cfg.InsecureSkipVerify {
+		utils.Warnf("TLS certificate verification is disabled (insecure_skip_verify: true). Connections are vulnerable to man-in-the-middle attacks.")
+	}
+
 	transport := &http.Transport{
 		MaxIdleConns:        10,
 		MaxIdleConnsPerHost: 2,
